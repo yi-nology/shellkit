@@ -79,3 +79,14 @@ code=$(
   printf '%s\n' "$?"
 )
 assert_eq "42" "$code" "exit status survives cleanup"
+
+# 回归：子 shell 里「trap -p EXIT 看得见、却不会执行」的残影不能骗过幂等判断。
+# bash 5 起子 shell 里 trap -p EXIT 仍显示父 shell 设的 trap（实测 5.3：看得见、
+# 子 shell 退出时不执行），bash 3.2 显示为空。这里直接造出这种形态：
+# 先放一个同名处理器痕迹，再调 trap_install —— 必须仍然真的装上、退出时真的跑。
+out=$(
+  trap '_sk_trap_on_exit' EXIT
+  trap_push 'printf "child-cleanup\n"'
+  trap_install
+)
+assert_contains "$out" "child-cleanup"

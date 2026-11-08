@@ -163,15 +163,21 @@ _sk_trap_on_hup() {
 
 # trap_install —— 安装 EXIT / INT / TERM / HUP 处理器；可重复调用
 #
-# 幂等性靠「查当前 shell 里真的有这个 trap」判断，不用标志位：
-# 子 shell 会继承变量，却不会继承已捕获的 trap（POSIX 规定重置为默认），
-# 所以标志位会导致「以为装过了、其实没装」，退出时清理不执行。
+# 幂等性不能用标志位：子 shell 会继承变量，却不会继承「会执行」的 trap，
+# 于是「以为装过了、其实没装」，退出时清理不执行。
+#
+# 也不能只靠「当前 shell 里有没有这个 trap」判断 —— bash 5 起，子 shell 里
+# `trap -p EXIT` 仍会显示父 shell 设的 trap（实测 5.3：看得见、但子 shell 退出时
+# 不执行），而 bash 3.2 显示为空。只查 trap -p 会在 bash 5 的子 shell 里静默漏装，
+# 表现为「( ... ) 里的 lock_acquire 拿到锁却没在退出时释放」。
+# 所以：我们自己装的 trap（含子 shell 里的残影）一律重装一遍（重装同处理器无害），
+# 并且绝不把它当成「调用方原有的 handler」捕获下来，否则清理时会自噬。
 trap_install() {
   _sk_trap_read EXIT || true
   case "${_SK_TRAP_CUR:-}" in
-    *"_sk_trap_on_exit"*) return 0 ;;
+    *"_sk_trap_on_exit"*) ;;
+    *) _sk_trap_capture EXIT ;;
   esac
-  _sk_trap_capture EXIT
   trap '_sk_trap_on_exit' EXIT
   trap '_sk_trap_on_int' INT
   trap '_sk_trap_on_term' TERM
