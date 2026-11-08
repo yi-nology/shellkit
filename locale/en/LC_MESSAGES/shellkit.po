@@ -4,7 +4,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: shellkit\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-11-08 20:18+0800\n"
+"POT-Creation-Date: 2026-11-08 21:00+0800\n"
 "PO-Revision-Date: 2026-11-08 00:00+0800\n"
 "Last-Translator: shellkit contributors\n"
 "Language-Team: shellkit contributors\n"
@@ -15,7 +15,7 @@ msgstr ""
 "Plural-Forms: nplurals=2; plural=(n != 1);\n"
 
 #: /Users/zhangyi/shellkit/lib/core/cli.sh:29
-#: /Users/zhangyi/shellkit/shellkit:118 /Users/zhangyi/shellkit/shellkit:130
+#: /Users/zhangyi/shellkit/shellkit:121 /Users/zhangyi/shellkit/shellkit:133
 msgid "invalid command name"
 msgstr ""
 
@@ -23,81 +23,81 @@ msgstr ""
 msgid "duplicate command"
 msgstr ""
 
-#: /Users/zhangyi/shellkit/lib/core/cli.sh:66
-#: /Users/zhangyi/shellkit/lib/core/cli.sh:68
-#: /Users/zhangyi/shellkit/lib/core/cli.sh:74
-#: /Users/zhangyi/shellkit/lib/core/cli.sh:81
+#: /Users/zhangyi/shellkit/lib/core/cli.sh:67
+#: /Users/zhangyi/shellkit/lib/core/cli.sh:69
+#: /Users/zhangyi/shellkit/lib/core/cli.sh:75
+#: /Users/zhangyi/shellkit/lib/core/cli.sh:83
 msgid "Usage"
 msgstr ""
 
-#: /Users/zhangyi/shellkit/lib/core/cli.sh:82
+#: /Users/zhangyi/shellkit/lib/core/cli.sh:84
 msgid "Commands"
 msgstr ""
 
-#: /Users/zhangyi/shellkit/lib/core/cli.sh:101
+#: /Users/zhangyi/shellkit/lib/core/cli.sh:103
 msgid "Options"
 msgstr ""
 
-#: /Users/zhangyi/shellkit/lib/core/cli.sh:102
+#: /Users/zhangyi/shellkit/lib/core/cli.sh:104
 msgid "show this help"
 msgstr ""
 
-#: /Users/zhangyi/shellkit/lib/core/cli.sh:103
+#: /Users/zhangyi/shellkit/lib/core/cli.sh:105
 msgid "show version"
 msgstr ""
 
-#: /Users/zhangyi/shellkit/lib/core/cli.sh:104
+#: /Users/zhangyi/shellkit/lib/core/cli.sh:106
 msgid "enable debug output"
 msgstr ""
 
-#: /Users/zhangyi/shellkit/lib/core/cli.sh:105
+#: /Users/zhangyi/shellkit/lib/core/cli.sh:107
 msgid "disable colored output"
 msgstr ""
 
-#: /Users/zhangyi/shellkit/lib/core/cli.sh:106
+#: /Users/zhangyi/shellkit/lib/core/cli.sh:108
 msgid "non-interactive, use defaults"
 msgstr ""
 
-#: /Users/zhangyi/shellkit/lib/core/cli.sh:124
+#: /Users/zhangyi/shellkit/lib/core/cli.sh:126
 msgid "Did you mean"
 msgstr ""
 
-#: /Users/zhangyi/shellkit/lib/core/cli.sh:165
-#: /Users/zhangyi/shellkit/lib/core/cli.sh:170
-#: /Users/zhangyi/shellkit/lib/core/cli.sh:311
-#: /Users/zhangyi/shellkit/lib/core/cli.sh:321
-#: /Users/zhangyi/shellkit/lib/core/cli.sh:340
-#: /Users/zhangyi/shellkit/shellkit:136 /Users/zhangyi/shellkit/shellkit:326
-#: /Users/zhangyi/shellkit/shellkit:407
+#: /Users/zhangyi/shellkit/lib/core/cli.sh:167
+#: /Users/zhangyi/shellkit/lib/core/cli.sh:172
+#: /Users/zhangyi/shellkit/lib/core/cli.sh:315
+#: /Users/zhangyi/shellkit/lib/core/cli.sh:325
+#: /Users/zhangyi/shellkit/lib/core/cli.sh:344
+#: /Users/zhangyi/shellkit/shellkit:139 /Users/zhangyi/shellkit/shellkit:331
+#: /Users/zhangyi/shellkit/shellkit:422 /Users/zhangyi/shellkit/shellkit:487
 msgid "unknown option"
 msgstr ""
 
-#: /Users/zhangyi/shellkit/lib/core/cli.sh:188
+#: /Users/zhangyi/shellkit/lib/core/cli.sh:190
 msgid "no such command"
 msgstr ""
 
-#: /Users/zhangyi/shellkit/lib/core/cli.sh:195
+#: /Users/zhangyi/shellkit/lib/core/cli.sh:197
 msgid "command has no handler"
 msgstr ""
 
-#: /Users/zhangyi/shellkit/lib/core/cli.sh:235
+#: /Users/zhangyi/shellkit/lib/core/cli.sh:238
 #: /Users/zhangyi/shellkit/lib/core/prompt.sh:67
 #: /Users/zhangyi/shellkit/lib/core/prompt.sh:81
 #: /Users/zhangyi/shellkit/lib/core/prompt.sh:115
 msgid "invalid variable name"
 msgstr ""
 
-#: /Users/zhangyi/shellkit/lib/core/cli.sh:241
+#: /Users/zhangyi/shellkit/lib/core/cli.sh:244
 msgid "long option must start with --"
 msgstr ""
 
-#: /Users/zhangyi/shellkit/lib/core/cli.sh:249
+#: /Users/zhangyi/shellkit/lib/core/cli.sh:252
 msgid "short option must be a single dash and one letter"
 msgstr ""
 
-#: /Users/zhangyi/shellkit/lib/core/cli.sh:327
-#: /Users/zhangyi/shellkit/lib/core/cli.sh:346
-#: /Users/zhangyi/shellkit/shellkit:110 /Users/zhangyi/shellkit/shellkit:394
+#: /Users/zhangyi/shellkit/lib/core/cli.sh:331
+#: /Users/zhangyi/shellkit/lib/core/cli.sh:350
+#: /Users/zhangyi/shellkit/shellkit:113 /Users/zhangyi/shellkit/shellkit:474
 msgid "option requires a value"
 msgstr ""
 
@@ -135,8 +135,53 @@ msgstr ""
 msgid "Bash version is too old"
 msgstr ""
 
-#: /Users/zhangyi/shellkit/lib/core/fs.sh:85
+#: /Users/zhangyi/shellkit/lib/core/fs.sh:87
+msgid "line must not be empty"
+msgstr ""
+
+#: /Users/zhangyi/shellkit/lib/core/fs.sh:91
+msgid "line must not contain a newline"
+msgstr ""
+
+#: /Users/zhangyi/shellkit/lib/core/fs.sh:123
+msgid "block markers must not be empty"
+msgstr ""
+
+#: /Users/zhangyi/shellkit/lib/core/fs.sh:127
+msgid "block markers must differ"
+msgstr ""
+
+#: /Users/zhangyi/shellkit/lib/core/fs.sh:131
+msgid "block markers must be single lines"
+msgstr ""
+
+#: /Users/zhangyi/shellkit/lib/core/fs.sh:190
+msgid "fs_ensure_symlink requires TARGET and LINK"
+msgstr ""
+
+#: /Users/zhangyi/shellkit/lib/core/fs.sh:201
+msgid "refusing to replace a non-symlink"
+msgstr ""
+
+#: /Users/zhangyi/shellkit/lib/core/fs.sh:234
 msgid "refusing to use a symlinked temporary directory"
+msgstr ""
+
+#: /Users/zhangyi/shellkit/lib/core/lock.sh:134
+#: /Users/zhangyi/shellkit/lib/core/lock.sh:168
+msgid "invalid lock name"
+msgstr ""
+
+#: /Users/zhangyi/shellkit/lib/core/lock.sh:151
+msgid "removing stale lock"
+msgstr ""
+
+#: /Users/zhangyi/shellkit/lib/core/lock.sh:156
+msgid "another instance is running"
+msgstr ""
+
+#: /Users/zhangyi/shellkit/lib/core/lock.sh:177
+msgid "lock is held by another process"
 msgstr ""
 
 #: /Users/zhangyi/shellkit/lib/core/net.sh:11
@@ -224,6 +269,40 @@ msgstr ""
 msgid "invalid choice"
 msgstr ""
 
+#: /Users/zhangyi/shellkit/lib/core/retry.sh:30
+msgid "usage: retry ATTEMPTS COMMAND..."
+msgstr ""
+
+#: /Users/zhangyi/shellkit/lib/core/retry.sh:37
+#: /Users/zhangyi/shellkit/lib/core/retry.sh:42
+msgid "invalid retry count"
+msgstr ""
+
+#: /Users/zhangyi/shellkit/lib/core/retry.sh:66
+msgid "attempt failed, retrying"
+msgstr ""
+
+#: /Users/zhangyi/shellkit/lib/core/retry.sh:78
+msgid "giving up after retries"
+msgstr ""
+
+#: /Users/zhangyi/shellkit/lib/core/run.sh:20
+msgid "run requires a command"
+msgstr ""
+
+#: /Users/zhangyi/shellkit/lib/core/run.sh:29
+msgid "command failed"
+msgstr ""
+
+#: /Users/zhangyi/shellkit/lib/core/trap.sh:22
+msgid "trap_push requires a command"
+msgstr ""
+
+#: /Users/zhangyi/shellkit/lib/core/trap.sh:64
+#: /Users/zhangyi/shellkit/lib/core/trap.sh:76
+msgid "cleanup step failed"
+msgstr ""
+
 #: /Users/zhangyi/shellkit/lib/core/validate.sh:18
 msgid "value must not be empty"
 msgstr ""
@@ -290,158 +369,194 @@ msgid "sync the library into an existing project"
 msgstr ""
 
 #: /Users/zhangyi/shellkit/shellkit:30
-msgid "installation"
+msgid "documentation"
 msgstr ""
 
 #: /Users/zhangyi/shellkit/shellkit:31
+msgid "regenerate the API reference"
+msgstr ""
+
+#: /Users/zhangyi/shellkit/shellkit:32
+msgid "installation"
+msgstr ""
+
+#: /Users/zhangyi/shellkit/shellkit:33
 msgid "install shellkit into PATH"
 msgstr ""
 
-#: /Users/zhangyi/shellkit/shellkit:76
+#: /Users/zhangyi/shellkit/shellkit:79
 msgid "path exists and is not a directory"
 msgstr ""
 
-#: /Users/zhangyi/shellkit/shellkit:81
+#: /Users/zhangyi/shellkit/shellkit:84
 msgid "target directory is not empty"
 msgstr ""
 
-#: /Users/zhangyi/shellkit/shellkit:141 /Users/zhangyi/shellkit/shellkit:331
+#: /Users/zhangyi/shellkit/shellkit:144 /Users/zhangyi/shellkit/shellkit:336
 msgid "only one target directory is allowed"
 msgstr ""
 
-#: /Users/zhangyi/shellkit/shellkit:151 /Users/zhangyi/shellkit/shellkit:341
+#: /Users/zhangyi/shellkit/shellkit:154 /Users/zhangyi/shellkit/shellkit:346
 msgid "target directory is required"
 msgstr ""
 
-#: /Users/zhangyi/shellkit/shellkit:159
+#: /Users/zhangyi/shellkit/shellkit:162
 msgid "invalid project name"
 msgstr ""
 
-#: /Users/zhangyi/shellkit/shellkit:169
+#: /Users/zhangyi/shellkit/shellkit:172
 msgid "creating"
 msgstr ""
 
-#: /Users/zhangyi/shellkit/shellkit:178 /Users/zhangyi/shellkit/shellkit:379
+#: /Users/zhangyi/shellkit/shellkit:181 /Users/zhangyi/shellkit/shellkit:384
 msgid "vendored library"
 msgstr ""
 
-#: /Users/zhangyi/shellkit/shellkit:187
+#: /Users/zhangyi/shellkit/shellkit:190
 msgid "added command"
 msgstr ""
 
-#: /Users/zhangyi/shellkit/shellkit:202
+#: /Users/zhangyi/shellkit/shellkit:205
 msgid "project created"
 msgstr ""
 
-#: /Users/zhangyi/shellkit/shellkit:203
+#: /Users/zhangyi/shellkit/shellkit:206
 msgid "next steps"
 msgstr ""
 
-#: /Users/zhangyi/shellkit/shellkit:222
+#: /Users/zhangyi/shellkit/shellkit:225
 msgid "environment check"
 msgstr ""
 
-#: /Users/zhangyi/shellkit/shellkit:228
+#: /Users/zhangyi/shellkit/shellkit:231
 msgid "needs 3.2 or newer"
 msgstr ""
 
-#: /Users/zhangyi/shellkit/shellkit:235
+#: /Users/zhangyi/shellkit/shellkit:238
 msgid "sha256sum or shasum is required"
 msgstr ""
 
-#: /Users/zhangyi/shellkit/shellkit:242
+#: /Users/zhangyi/shellkit/shellkit:245
 msgid "curl or wget is needed for downloads"
 msgstr ""
 
-#: /Users/zhangyi/shellkit/shellkit:249
+#: /Users/zhangyi/shellkit/shellkit:252
 msgid "translations disabled, English only"
 msgstr ""
 
-#: /Users/zhangyi/shellkit/shellkit:256
+#: /Users/zhangyi/shellkit/shellkit:259
 msgid "xgettext and msgfmt are needed to update translations"
 msgstr ""
 
-#: /Users/zhangyi/shellkit/shellkit:263
+#: /Users/zhangyi/shellkit/shellkit:266
 msgid "not installed, lint will be skipped"
 msgstr ""
 
-#: /Users/zhangyi/shellkit/shellkit:270
+#: /Users/zhangyi/shellkit/shellkit:273
 msgid "not installed, format check will be skipped"
 msgstr ""
 
-#: /Users/zhangyi/shellkit/shellkit:279
+#: /Users/zhangyi/shellkit/shellkit:282
 msgid "required tooling is missing"
 msgstr ""
 
-#: /Users/zhangyi/shellkit/shellkit:283
+#: /Users/zhangyi/shellkit/shellkit:286
 msgid "optional tooling is missing; core features still work"
 msgstr ""
 
-#: /Users/zhangyi/shellkit/shellkit:286
+#: /Users/zhangyi/shellkit/shellkit:289
 msgid "all checks passed"
 msgstr ""
 
-#: /Users/zhangyi/shellkit/shellkit:294
+#: /Users/zhangyi/shellkit/shellkit:297
 msgid "library modules"
 msgstr ""
 
-#: /Users/zhangyi/shellkit/shellkit:298
+#: /Users/zhangyi/shellkit/shellkit:301
 msgid "templates"
 msgstr ""
 
-#: /Users/zhangyi/shellkit/shellkit:304
+#: /Users/zhangyi/shellkit/shellkit:307
 msgid "commands"
 msgstr ""
 
-#: /Users/zhangyi/shellkit/shellkit:346
+#: /Users/zhangyi/shellkit/shellkit:351
 msgid "target directory does not exist"
 msgstr ""
 
-#: /Users/zhangyi/shellkit/shellkit:355
+#: /Users/zhangyi/shellkit/shellkit:360
 msgid "vendored library is out of date"
 msgstr ""
 
-#: /Users/zhangyi/shellkit/shellkit:360
+#: /Users/zhangyi/shellkit/shellkit:365
 msgid "run without --check to update"
 msgstr ""
 
-#: /Users/zhangyi/shellkit/shellkit:363
+#: /Users/zhangyi/shellkit/shellkit:368
 msgid "vendored library is up to date"
 msgstr ""
 
-#: /Users/zhangyi/shellkit/shellkit:369
+#: /Users/zhangyi/shellkit/shellkit:374
 msgid "refusing to overwrite a directory that is not a shellkit vendor"
 msgstr ""
 
-#: /Users/zhangyi/shellkit/shellkit:373
+#: /Users/zhangyi/shellkit/shellkit:378
 msgid "syncing"
 msgstr ""
 
-#: /Users/zhangyi/shellkit/shellkit:375
+#: /Users/zhangyi/shellkit/shellkit:380
 msgid "failed to sync the vendored library"
 msgstr ""
 
-#: /Users/zhangyi/shellkit/shellkit:380
+#: /Users/zhangyi/shellkit/shellkit:385
 msgid "load it from your scripts"
 msgstr ""
 
-#: /Users/zhangyi/shellkit/shellkit:420
+#: /Users/zhangyi/shellkit/shellkit:399
+msgid "public function has no doc comment"
+msgstr ""
+
+#: /Users/zhangyi/shellkit/shellkit:432
+msgid "failed to render the reference"
+msgstr ""
+
+#: /Users/zhangyi/shellkit/shellkit:439
+msgid "reference is missing"
+msgstr ""
+
+#: /Users/zhangyi/shellkit/shellkit:442
+msgid "reference is out of date"
+msgstr ""
+
+#: /Users/zhangyi/shellkit/shellkit:443
+msgid "run to regenerate"
+msgstr ""
+
+#: /Users/zhangyi/shellkit/shellkit:448
+msgid "reference is up to date"
+msgstr ""
+
+#: /Users/zhangyi/shellkit/shellkit:461
+msgid "wrote"
+msgstr ""
+
+#: /Users/zhangyi/shellkit/shellkit:500
 msgid "no write permission"
 msgstr ""
 
-#: /Users/zhangyi/shellkit/shellkit:421
+#: /Users/zhangyi/shellkit/shellkit:501
 msgid "try a writable prefix"
 msgstr ""
 
-#: /Users/zhangyi/shellkit/shellkit:425
+#: /Users/zhangyi/shellkit/shellkit:505
 msgid "installing"
 msgstr ""
 
-#: /Users/zhangyi/shellkit/shellkit:435
+#: /Users/zhangyi/shellkit/shellkit:515
 msgid "failed to create symlink"
 msgstr ""
 
-#: /Users/zhangyi/shellkit/shellkit:438
+#: /Users/zhangyi/shellkit/shellkit:518
 msgid "installed"
 msgstr ""
 

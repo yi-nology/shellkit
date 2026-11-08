@@ -4,7 +4,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: shellkit\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-11-08 20:18+0800\n"
+"POT-Creation-Date: 2026-11-08 21:00+0800\n"
 "PO-Revision-Date: 2026-11-08 00:00+0800\n"
 "Last-Translator: shellkit contributors\n"
 "Language-Team: shellkit contributors\n"
@@ -15,7 +15,7 @@ msgstr ""
 "Plural-Forms: nplurals=1; plural=0;\n"
 
 #: /Users/zhangyi/shellkit/lib/core/cli.sh:29
-#: /Users/zhangyi/shellkit/shellkit:118 /Users/zhangyi/shellkit/shellkit:130
+#: /Users/zhangyi/shellkit/shellkit:121 /Users/zhangyi/shellkit/shellkit:133
 msgid "invalid command name"
 msgstr "非法的命令名"
 
@@ -23,81 +23,81 @@ msgstr "非法的命令名"
 msgid "duplicate command"
 msgstr "命令重复注册"
 
-#: /Users/zhangyi/shellkit/lib/core/cli.sh:66
-#: /Users/zhangyi/shellkit/lib/core/cli.sh:68
-#: /Users/zhangyi/shellkit/lib/core/cli.sh:74
-#: /Users/zhangyi/shellkit/lib/core/cli.sh:81
+#: /Users/zhangyi/shellkit/lib/core/cli.sh:67
+#: /Users/zhangyi/shellkit/lib/core/cli.sh:69
+#: /Users/zhangyi/shellkit/lib/core/cli.sh:75
+#: /Users/zhangyi/shellkit/lib/core/cli.sh:83
 msgid "Usage"
 msgstr "用法"
 
-#: /Users/zhangyi/shellkit/lib/core/cli.sh:82
+#: /Users/zhangyi/shellkit/lib/core/cli.sh:84
 msgid "Commands"
 msgstr "命令"
 
-#: /Users/zhangyi/shellkit/lib/core/cli.sh:101
+#: /Users/zhangyi/shellkit/lib/core/cli.sh:103
 msgid "Options"
 msgstr "选项"
 
-#: /Users/zhangyi/shellkit/lib/core/cli.sh:102
+#: /Users/zhangyi/shellkit/lib/core/cli.sh:104
 msgid "show this help"
 msgstr "显示本帮助"
 
-#: /Users/zhangyi/shellkit/lib/core/cli.sh:103
+#: /Users/zhangyi/shellkit/lib/core/cli.sh:105
 msgid "show version"
 msgstr "显示版本"
 
-#: /Users/zhangyi/shellkit/lib/core/cli.sh:104
+#: /Users/zhangyi/shellkit/lib/core/cli.sh:106
 msgid "enable debug output"
 msgstr "打开调试输出"
 
-#: /Users/zhangyi/shellkit/lib/core/cli.sh:105
+#: /Users/zhangyi/shellkit/lib/core/cli.sh:107
 msgid "disable colored output"
 msgstr "关闭彩色输出"
 
-#: /Users/zhangyi/shellkit/lib/core/cli.sh:106
+#: /Users/zhangyi/shellkit/lib/core/cli.sh:108
 msgid "non-interactive, use defaults"
 msgstr "非交互模式，全部取默认值"
 
-#: /Users/zhangyi/shellkit/lib/core/cli.sh:124
+#: /Users/zhangyi/shellkit/lib/core/cli.sh:126
 msgid "Did you mean"
 msgstr "你是不是想用"
 
-#: /Users/zhangyi/shellkit/lib/core/cli.sh:165
-#: /Users/zhangyi/shellkit/lib/core/cli.sh:170
-#: /Users/zhangyi/shellkit/lib/core/cli.sh:311
-#: /Users/zhangyi/shellkit/lib/core/cli.sh:321
-#: /Users/zhangyi/shellkit/lib/core/cli.sh:340
-#: /Users/zhangyi/shellkit/shellkit:136 /Users/zhangyi/shellkit/shellkit:326
-#: /Users/zhangyi/shellkit/shellkit:407
+#: /Users/zhangyi/shellkit/lib/core/cli.sh:167
+#: /Users/zhangyi/shellkit/lib/core/cli.sh:172
+#: /Users/zhangyi/shellkit/lib/core/cli.sh:315
+#: /Users/zhangyi/shellkit/lib/core/cli.sh:325
+#: /Users/zhangyi/shellkit/lib/core/cli.sh:344
+#: /Users/zhangyi/shellkit/shellkit:139 /Users/zhangyi/shellkit/shellkit:331
+#: /Users/zhangyi/shellkit/shellkit:422 /Users/zhangyi/shellkit/shellkit:487
 msgid "unknown option"
 msgstr "未知选项"
 
-#: /Users/zhangyi/shellkit/lib/core/cli.sh:188
+#: /Users/zhangyi/shellkit/lib/core/cli.sh:190
 msgid "no such command"
 msgstr "没有这个命令"
 
-#: /Users/zhangyi/shellkit/lib/core/cli.sh:195
+#: /Users/zhangyi/shellkit/lib/core/cli.sh:197
 msgid "command has no handler"
 msgstr "命令没有对应的处理函数"
 
-#: /Users/zhangyi/shellkit/lib/core/cli.sh:235
+#: /Users/zhangyi/shellkit/lib/core/cli.sh:238
 #: /Users/zhangyi/shellkit/lib/core/prompt.sh:67
 #: /Users/zhangyi/shellkit/lib/core/prompt.sh:81
 #: /Users/zhangyi/shellkit/lib/core/prompt.sh:115
 msgid "invalid variable name"
 msgstr "非法的变量名"
 
-#: /Users/zhangyi/shellkit/lib/core/cli.sh:241
+#: /Users/zhangyi/shellkit/lib/core/cli.sh:244
 msgid "long option must start with --"
 msgstr "长选项必须以 -- 开头"
 
-#: /Users/zhangyi/shellkit/lib/core/cli.sh:249
+#: /Users/zhangyi/shellkit/lib/core/cli.sh:252
 msgid "short option must be a single dash and one letter"
 msgstr "短选项必须是「-」加一个字母"
 
-#: /Users/zhangyi/shellkit/lib/core/cli.sh:327
-#: /Users/zhangyi/shellkit/lib/core/cli.sh:346
-#: /Users/zhangyi/shellkit/shellkit:110 /Users/zhangyi/shellkit/shellkit:394
+#: /Users/zhangyi/shellkit/lib/core/cli.sh:331
+#: /Users/zhangyi/shellkit/lib/core/cli.sh:350
+#: /Users/zhangyi/shellkit/shellkit:113 /Users/zhangyi/shellkit/shellkit:474
 msgid "option requires a value"
 msgstr "选项需要一个值"
 
@@ -135,9 +135,54 @@ msgstr "找不到必需的文件"
 msgid "Bash version is too old"
 msgstr "Bash 版本过低"
 
-#: /Users/zhangyi/shellkit/lib/core/fs.sh:85
+#: /Users/zhangyi/shellkit/lib/core/fs.sh:87
+msgid "line must not be empty"
+msgstr "内容不能为空"
+
+#: /Users/zhangyi/shellkit/lib/core/fs.sh:91
+msgid "line must not contain a newline"
+msgstr "内容不能包含换行"
+
+#: /Users/zhangyi/shellkit/lib/core/fs.sh:123
+msgid "block markers must not be empty"
+msgstr "块标记不能为空"
+
+#: /Users/zhangyi/shellkit/lib/core/fs.sh:127
+msgid "block markers must differ"
+msgstr "块标记不能相同"
+
+#: /Users/zhangyi/shellkit/lib/core/fs.sh:131
+msgid "block markers must be single lines"
+msgstr "块标记必须是单行"
+
+#: /Users/zhangyi/shellkit/lib/core/fs.sh:190
+msgid "fs_ensure_symlink requires TARGET and LINK"
+msgstr "fs_ensure_symlink 需要目标与链接路径"
+
+#: /Users/zhangyi/shellkit/lib/core/fs.sh:201
+msgid "refusing to replace a non-symlink"
+msgstr "拒绝覆盖非符号链接文件"
+
+#: /Users/zhangyi/shellkit/lib/core/fs.sh:234
 msgid "refusing to use a symlinked temporary directory"
 msgstr "拒绝使用符号链接指向的临时目录"
+
+#: /Users/zhangyi/shellkit/lib/core/lock.sh:134
+#: /Users/zhangyi/shellkit/lib/core/lock.sh:168
+msgid "invalid lock name"
+msgstr "非法的锁名"
+
+#: /Users/zhangyi/shellkit/lib/core/lock.sh:151
+msgid "removing stale lock"
+msgstr "回收残留锁"
+
+#: /Users/zhangyi/shellkit/lib/core/lock.sh:156
+msgid "another instance is running"
+msgstr "已有另一个实例在运行"
+
+#: /Users/zhangyi/shellkit/lib/core/lock.sh:177
+msgid "lock is held by another process"
+msgstr "锁被另一个进程持有"
 
 #: /Users/zhangyi/shellkit/lib/core/net.sh:11
 msgid "no checksum configured for"
@@ -224,6 +269,40 @@ msgstr "默认值不在备选项里"
 msgid "invalid choice"
 msgstr "无效的选择"
 
+#: /Users/zhangyi/shellkit/lib/core/retry.sh:30
+msgid "usage: retry ATTEMPTS COMMAND..."
+msgstr "用法: retry 次数 命令..."
+
+#: /Users/zhangyi/shellkit/lib/core/retry.sh:37
+#: /Users/zhangyi/shellkit/lib/core/retry.sh:42
+msgid "invalid retry count"
+msgstr "非法的重试次数"
+
+#: /Users/zhangyi/shellkit/lib/core/retry.sh:66
+msgid "attempt failed, retrying"
+msgstr "本次尝试失败，正在重试"
+
+#: /Users/zhangyi/shellkit/lib/core/retry.sh:78
+msgid "giving up after retries"
+msgstr "重试次数用尽"
+
+#: /Users/zhangyi/shellkit/lib/core/run.sh:20
+msgid "run requires a command"
+msgstr "run 需要一条命令"
+
+#: /Users/zhangyi/shellkit/lib/core/run.sh:29
+msgid "command failed"
+msgstr "命令执行失败"
+
+#: /Users/zhangyi/shellkit/lib/core/trap.sh:22
+msgid "trap_push requires a command"
+msgstr "trap_push 需要一条命令"
+
+#: /Users/zhangyi/shellkit/lib/core/trap.sh:64
+#: /Users/zhangyi/shellkit/lib/core/trap.sh:76
+msgid "cleanup step failed"
+msgstr "清理步骤失败"
+
 #: /Users/zhangyi/shellkit/lib/core/validate.sh:18
 msgid "value must not be empty"
 msgstr "值不能为空"
@@ -290,158 +369,194 @@ msgid "sync the library into an existing project"
 msgstr "把库同步进既有工程"
 
 #: /Users/zhangyi/shellkit/shellkit:30
+msgid "documentation"
+msgstr "文档"
+
+#: /Users/zhangyi/shellkit/shellkit:31
+msgid "regenerate the API reference"
+msgstr "重新生成 API 参考"
+
+#: /Users/zhangyi/shellkit/shellkit:32
 msgid "installation"
 msgstr "安装"
 
-#: /Users/zhangyi/shellkit/shellkit:31
+#: /Users/zhangyi/shellkit/shellkit:33
 msgid "install shellkit into PATH"
 msgstr "把 shellkit 装进 PATH"
 
-#: /Users/zhangyi/shellkit/shellkit:76
+#: /Users/zhangyi/shellkit/shellkit:79
 msgid "path exists and is not a directory"
 msgstr "路径已存在且不是目录"
 
-#: /Users/zhangyi/shellkit/shellkit:81
+#: /Users/zhangyi/shellkit/shellkit:84
 msgid "target directory is not empty"
 msgstr "目标目录非空"
 
-#: /Users/zhangyi/shellkit/shellkit:141 /Users/zhangyi/shellkit/shellkit:331
+#: /Users/zhangyi/shellkit/shellkit:144 /Users/zhangyi/shellkit/shellkit:336
 msgid "only one target directory is allowed"
 msgstr "只能指定一个目标目录"
 
-#: /Users/zhangyi/shellkit/shellkit:151 /Users/zhangyi/shellkit/shellkit:341
+#: /Users/zhangyi/shellkit/shellkit:154 /Users/zhangyi/shellkit/shellkit:346
 msgid "target directory is required"
 msgstr "必须提供目标目录"
 
-#: /Users/zhangyi/shellkit/shellkit:159
+#: /Users/zhangyi/shellkit/shellkit:162
 msgid "invalid project name"
 msgstr "非法的工程名"
 
-#: /Users/zhangyi/shellkit/shellkit:169
+#: /Users/zhangyi/shellkit/shellkit:172
 msgid "creating"
 msgstr "正在创建"
 
-#: /Users/zhangyi/shellkit/shellkit:178 /Users/zhangyi/shellkit/shellkit:379
+#: /Users/zhangyi/shellkit/shellkit:181 /Users/zhangyi/shellkit/shellkit:384
 msgid "vendored library"
 msgstr "已内置库"
 
-#: /Users/zhangyi/shellkit/shellkit:187
+#: /Users/zhangyi/shellkit/shellkit:190
 msgid "added command"
 msgstr "已添加命令"
 
-#: /Users/zhangyi/shellkit/shellkit:202
+#: /Users/zhangyi/shellkit/shellkit:205
 msgid "project created"
 msgstr "工程已生成"
 
-#: /Users/zhangyi/shellkit/shellkit:203
+#: /Users/zhangyi/shellkit/shellkit:206
 msgid "next steps"
 msgstr "下一步"
 
-#: /Users/zhangyi/shellkit/shellkit:222
+#: /Users/zhangyi/shellkit/shellkit:225
 msgid "environment check"
 msgstr "环境检查"
 
-#: /Users/zhangyi/shellkit/shellkit:228
+#: /Users/zhangyi/shellkit/shellkit:231
 msgid "needs 3.2 or newer"
 msgstr "需要 3.2 或更新"
 
-#: /Users/zhangyi/shellkit/shellkit:235
+#: /Users/zhangyi/shellkit/shellkit:238
 msgid "sha256sum or shasum is required"
 msgstr "需要 sha256sum 或 shasum"
 
-#: /Users/zhangyi/shellkit/shellkit:242
+#: /Users/zhangyi/shellkit/shellkit:245
 msgid "curl or wget is needed for downloads"
 msgstr "下载功能需要 curl 或 wget"
 
-#: /Users/zhangyi/shellkit/shellkit:249
+#: /Users/zhangyi/shellkit/shellkit:252
 msgid "translations disabled, English only"
 msgstr "未装 gettext，只输出英文"
 
-#: /Users/zhangyi/shellkit/shellkit:256
+#: /Users/zhangyi/shellkit/shellkit:259
 msgid "xgettext and msgfmt are needed to update translations"
 msgstr "更新译文需要 xgettext 与 msgfmt"
 
-#: /Users/zhangyi/shellkit/shellkit:263
+#: /Users/zhangyi/shellkit/shellkit:266
 msgid "not installed, lint will be skipped"
 msgstr "未安装，lint 会被跳过"
 
-#: /Users/zhangyi/shellkit/shellkit:270
+#: /Users/zhangyi/shellkit/shellkit:273
 msgid "not installed, format check will be skipped"
 msgstr "未安装，格式检查会被跳过"
 
-#: /Users/zhangyi/shellkit/shellkit:279
+#: /Users/zhangyi/shellkit/shellkit:282
 msgid "required tooling is missing"
 msgstr "缺少必需的工具"
 
-#: /Users/zhangyi/shellkit/shellkit:283
+#: /Users/zhangyi/shellkit/shellkit:286
 msgid "optional tooling is missing; core features still work"
 msgstr "缺少可选工具，核心功能不受影响"
 
-#: /Users/zhangyi/shellkit/shellkit:286
+#: /Users/zhangyi/shellkit/shellkit:289
 msgid "all checks passed"
 msgstr "全部检查通过"
 
-#: /Users/zhangyi/shellkit/shellkit:294
+#: /Users/zhangyi/shellkit/shellkit:297
 msgid "library modules"
 msgstr "库模块"
 
-#: /Users/zhangyi/shellkit/shellkit:298
+#: /Users/zhangyi/shellkit/shellkit:301
 msgid "templates"
 msgstr "模板"
 
-#: /Users/zhangyi/shellkit/shellkit:304
+#: /Users/zhangyi/shellkit/shellkit:307
 msgid "commands"
 msgstr "命令"
 
-#: /Users/zhangyi/shellkit/shellkit:346
+#: /Users/zhangyi/shellkit/shellkit:351
 msgid "target directory does not exist"
 msgstr "目标目录不存在"
 
-#: /Users/zhangyi/shellkit/shellkit:355
+#: /Users/zhangyi/shellkit/shellkit:360
 msgid "vendored library is out of date"
 msgstr "工程里的库副本已过期"
 
-#: /Users/zhangyi/shellkit/shellkit:360
+#: /Users/zhangyi/shellkit/shellkit:365
 msgid "run without --check to update"
 msgstr "去掉 --check 重跑即可更新"
 
-#: /Users/zhangyi/shellkit/shellkit:363
+#: /Users/zhangyi/shellkit/shellkit:368
 msgid "vendored library is up to date"
 msgstr "工程里的库副本已是最新"
 
-#: /Users/zhangyi/shellkit/shellkit:369
+#: /Users/zhangyi/shellkit/shellkit:374
 msgid "refusing to overwrite a directory that is not a shellkit vendor"
 msgstr "拒绝覆盖不是 shellkit 副本的目录"
 
-#: /Users/zhangyi/shellkit/shellkit:373
+#: /Users/zhangyi/shellkit/shellkit:378
 msgid "syncing"
 msgstr "正在同步"
 
-#: /Users/zhangyi/shellkit/shellkit:375
+#: /Users/zhangyi/shellkit/shellkit:380
 msgid "failed to sync the vendored library"
 msgstr "同步库副本失败"
 
-#: /Users/zhangyi/shellkit/shellkit:380
+#: /Users/zhangyi/shellkit/shellkit:385
 msgid "load it from your scripts"
 msgstr "在脚本里这样加载"
 
-#: /Users/zhangyi/shellkit/shellkit:420
+#: /Users/zhangyi/shellkit/shellkit:399
+msgid "public function has no doc comment"
+msgstr "公开函数缺少文档注释"
+
+#: /Users/zhangyi/shellkit/shellkit:432
+msgid "failed to render the reference"
+msgstr "生成参考文档失败"
+
+#: /Users/zhangyi/shellkit/shellkit:439
+msgid "reference is missing"
+msgstr "参考文档不存在"
+
+#: /Users/zhangyi/shellkit/shellkit:442
+msgid "reference is out of date"
+msgstr "参考文档已过期"
+
+#: /Users/zhangyi/shellkit/shellkit:443
+msgid "run to regenerate"
+msgstr "运行以重新生成"
+
+#: /Users/zhangyi/shellkit/shellkit:448
+msgid "reference is up to date"
+msgstr "参考文档已是最新"
+
+#: /Users/zhangyi/shellkit/shellkit:461
+msgid "wrote"
+msgstr "已写入"
+
+#: /Users/zhangyi/shellkit/shellkit:500
 msgid "no write permission"
 msgstr "没有写权限"
 
-#: /Users/zhangyi/shellkit/shellkit:421
+#: /Users/zhangyi/shellkit/shellkit:501
 msgid "try a writable prefix"
 msgstr "换一个可写的前缀"
 
-#: /Users/zhangyi/shellkit/shellkit:425
+#: /Users/zhangyi/shellkit/shellkit:505
 msgid "installing"
 msgstr "正在安装"
 
-#: /Users/zhangyi/shellkit/shellkit:435
+#: /Users/zhangyi/shellkit/shellkit:515
 msgid "failed to create symlink"
 msgstr "创建符号链接失败"
 
-#: /Users/zhangyi/shellkit/shellkit:438
+#: /Users/zhangyi/shellkit/shellkit:518
 msgid "installed"
 msgstr "已安装"
 
