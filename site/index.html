@@ -22,7 +22,7 @@
   <div class="cmd"><span class="prompt">$</span> <code>curl -fsSL https://github.com/yi-nology/shellkit/releases/latest/download/install.sh | bash</code></div>
   <div class="cta"><a class="btn primary" href="#install">一键安装</a>
   <a class="btn" href="#start">三十秒上手</a>
-  <a class="btn" href="https://github.com/yi-nology/shellkit/releases/latest">下载 0.4.1</a></div>
+  <a class="btn" href="https://github.com/yi-nology/shellkit/releases/latest">下载 0.5.0</a></div>
 </section>
 
 <section id="install" class="start">
@@ -35,7 +35,7 @@ curl -fsSL https://github.com/yi-nology/shellkit/releases/latest/download/instal
 
 <span class="c"># 指定目录 / 指定版本 / 走内网镜像</span>
 curl -fsSL .../install.sh | PREFIX="$HOME/.local" bash
-curl -fsSL .../install.sh | VERSION=0.4.0 bash
+curl -fsSL .../install.sh | VERSION=0.5.0 bash
 curl -fsSL .../install.sh | SHELLKIT_RELEASE_BASE=https://mirror.example/shellkit bash</code></pre>
   <p>装完后 <code>$PREFIX/bin/shellkit</code> 里就这些：</p>
 <pre><code>shellkit update            <span class="c"># 更新到最新 release，sha256 对不上就不装</span>

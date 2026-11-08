@@ -29,7 +29,7 @@
 
 ## 门禁
 
-    make check     # syntax + test + lint + docs-check + check-docs + examples + fmt，CI 也是这组
+    make check     # syntax + test + lint + docs-check + check-docs + messages-check + examples + fmt，CI 也是这组
 
 `docs-check` 会拦两种事：公开函数缺注释、`docs/` 里的生成物与源码不一致。
 `lint` 是 `shellcheck -S warning -x`，模板会先渲染再检查（占位符不是合法语法）。

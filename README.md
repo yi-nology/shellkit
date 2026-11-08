@@ -63,7 +63,7 @@ curl -fsSL https://github.com/yi-nology/shellkit/releases/latest/download/instal
 
 ```bash
 curl -fsSL .../install.sh | PREFIX="$HOME/.local" bash   # 换目录
-curl -fsSL .../install.sh | VERSION=0.4.1 bash           # 钉版本
+curl -fsSL .../install.sh | VERSION=0.5.0 bash           # 钉版本
 ./install.sh --prefix /opt/shellkit                     # 在检出目录里直接跑，装当前工作树
 ```
 
@@ -244,7 +244,7 @@ cmd_deploy() {
 cli_run "$@"
 ```
 
-错误只报一次：`log_error` 把消息记进 `SK_ERRMSG`，`cli_run` 兜底补印，不会重复刷屏。
+错误只报一次：`log_error` 打印一次并记进 `SK_ERRMSG`（最后一条错误），不会重复刷屏。
 未知命令按前缀给候选（`Did you mean: deploy`）。
 
 ## 国际化
@@ -287,7 +287,7 @@ net_download() {
 门禁有两层，都会拦住「文档写着、代码里没有」：
 
 ```bash
-make check     # syntax + test + lint + docs-check + check-docs + fmt
+make check     # syntax + test + lint + docs-check + check-docs + messages-check + examples + fmt
 ```
 
 - `docs-check`：公开函数缺注释、生成物与源码不一致 ⇒ 红。

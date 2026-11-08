@@ -19,7 +19,7 @@ help:
 	  'make docs        重新生成 REFERENCE.md / AGENTS.md / SKILL.md' \
 	  'make shots       按 docs/shots/*.shot 真跑命令并渲染 SVG 截图' \
 	  'make examples    跑 examples/ 下每个工程的测试' \
-	  'make check       依次跑 syntax / test / lint / docs-check / check-docs / examples / fmt'
+	  'make check       依次跑 syntax / test / lint / docs-check / check-docs / messages-check / examples / fmt'
 
 test:
 	@bash tests/run.sh

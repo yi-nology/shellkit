@@ -4,7 +4,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: shellkit\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-11-09 02:15+0800\n"
+"POT-Creation-Date: 2026-11-09 02:32+0800\n"
 "PO-Revision-Date: 2026-11-08 00:00+0800\n"
 "Last-Translator: shellkit contributors\n"
 "Language-Team: shellkit contributors\n"
@@ -64,9 +64,9 @@ msgstr "你是不是想用"
 
 #: /Users/zhangyi/shellkit/lib/core/cli.sh:167
 #: /Users/zhangyi/shellkit/lib/core/cli.sh:172
-#: /Users/zhangyi/shellkit/lib/core/cli.sh:323
-#: /Users/zhangyi/shellkit/lib/core/cli.sh:338
-#: /Users/zhangyi/shellkit/lib/core/cli.sh:357
+#: /Users/zhangyi/shellkit/lib/core/cli.sh:322
+#: /Users/zhangyi/shellkit/lib/core/cli.sh:337
+#: /Users/zhangyi/shellkit/lib/core/cli.sh:356
 #: /Users/zhangyi/shellkit/shellkit:161 /Users/zhangyi/shellkit/shellkit:358
 #: /Users/zhangyi/shellkit/shellkit:483 /Users/zhangyi/shellkit/shellkit:634
 #: /Users/zhangyi/shellkit/shellkit:709 /Users/zhangyi/shellkit/shellkit:907
@@ -81,32 +81,32 @@ msgstr "没有这个命令"
 msgid "command has no handler"
 msgstr "命令没有对应的处理函数"
 
-#: /Users/zhangyi/shellkit/lib/core/cli.sh:235
+#: /Users/zhangyi/shellkit/lib/core/cli.sh:234
 #: /Users/zhangyi/shellkit/lib/core/prompt.sh:67
 #: /Users/zhangyi/shellkit/lib/core/prompt.sh:81
 #: /Users/zhangyi/shellkit/lib/core/prompt.sh:115
 msgid "invalid variable name"
 msgstr "非法的变量名"
 
-#: /Users/zhangyi/shellkit/lib/core/cli.sh:241
+#: /Users/zhangyi/shellkit/lib/core/cli.sh:240
 msgid "long option must start with --"
 msgstr "长选项必须以 -- 开头"
 
-#: /Users/zhangyi/shellkit/lib/core/cli.sh:249
+#: /Users/zhangyi/shellkit/lib/core/cli.sh:248
 msgid "short option must be a single dash and one letter"
 msgstr "短选项必须是「-」加一个字母"
 
-#: /Users/zhangyi/shellkit/lib/core/cli.sh:256
-#: /Users/zhangyi/shellkit/lib/core/cli.sh:260
+#: /Users/zhangyi/shellkit/lib/core/cli.sh:255
+#: /Users/zhangyi/shellkit/lib/core/cli.sh:259
 msgid "duplicate option"
 msgstr "选项重复注册"
 
-#: /Users/zhangyi/shellkit/lib/core/cli.sh:328
+#: /Users/zhangyi/shellkit/lib/core/cli.sh:327
 msgid "option does not take a value"
 msgstr "该选项不接受值"
 
-#: /Users/zhangyi/shellkit/lib/core/cli.sh:344
-#: /Users/zhangyi/shellkit/lib/core/cli.sh:363
+#: /Users/zhangyi/shellkit/lib/core/cli.sh:343
+#: /Users/zhangyi/shellkit/lib/core/cli.sh:362
 #: /Users/zhangyi/shellkit/shellkit:135 /Users/zhangyi/shellkit/shellkit:621
 #: /Users/zhangyi/shellkit/shellkit:698 /Users/zhangyi/shellkit/shellkit:888
 msgid "option requires a value"

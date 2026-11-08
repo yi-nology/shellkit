@@ -104,6 +104,29 @@ shellkit vendor . --check    # 只比对，不写盘
 
 （CI 里没有 `shellkit` 命令时，用 `diff -r` 直接比等价内容也行。）
 
+### 0.4.x → 0.5.0：会改变结果的行为变化
+
+0.5.0 修了 19 个缺陷。其中七处会让既有代码算出不一样的结果，升级后**先跑一遍你自己的测试**，
+下面逐条给判据：
+
+| 变化 | 以前 | 现在 | 你会在哪里撞到 |
+|---|---|---|---|
+| `conf_get` 区分空值与缺失 | 键存在但值为空时回落到默认值 | 只有键不存在才回落默认值 | 以前靠「空值→默认值」兜底的代码，现在拿到空串 |
+| `validate_ip` | 接受 `010.1.1.1`、`1.2.3.256` | 只接受 0-255 且无前导零 | 带前导零的历史配置会被判非法 |
+| `die` / `fail` 校验退出码 | `die abc` 以 255 退出 | 非法码按用法错 `2` 退出 | CI 里断言过 255 的地方要改 |
+| `trap_install` 接管 INT/TERM/HUP | 只保留 EXIT | 三个信号也接管：先清理栈、再跑你的 handler、最后 `exit 128+sig` | 自己另装信号 handler 的，改走 `trap_push` 或接受这个顺序 |
+| `cli_opt` 查重 | 重名静默只命中最后一个 | 报 `duplicate option` 并返回 2 | 原来靠「后注册覆盖前一个」的用法会当场失败 |
+| `cli_opts` 布尔选项带值 | `--verbose=1` 静默写进变量 | 报 `option does not take a value` 并返回 2 | 给开关传值的调用方要删掉 `=值` |
+| `fs_backup` 校验保留份数 | 非数字时 bash 报错且静默不轮转 | 报 `invalid keep count` 并返回 2 | 传 `$KEEP` 前先确认是纯数字 |
+
+不会改变结果的修复（可以直接升）：`fs_ensure_line` / `fs_ensure_block` 对含反斜杠的文本不再
+重复追加；`net_wait_port` 不再关调用方的 fd 3、也不再永久改掉 stderr；`_tn` 的复数分支真的
+走 gettext 了；`shellkit list` 列全 9 个子命令；`docs --check` 缺 `tools/coverage.awk` 时
+不再静默变绿；`install-self` 补装 `tools/`、`docs/`、`AGENTS.md`。`cli_run` 里那段「补印
+`SK_ERRMSG`」的死代码删掉了 —— `log_error` 本来就打印过，这份永远不触发，`SK_ERRMSG` 仍然
+保留为「最后一条错误」。
+
+新增门禁：`make messages-check`（pot 与源码一致性，缺 `xgettext` 时跳过）已并入 `make check` 与 CI。
 ## 渐进迁移：5 步，每步都能单独上线
 
 顺序按"收益 / 风险"排，**不要跳着一次全换**。
@@ -177,8 +200,8 @@ cmd_deploy() {
 cli_run "$@"
 ```
 
-**收益**：`--help` 自动生成、未知命令按前缀给候选、`log_error` 只报一次
-（`cli_run` 兜底补印），新增命令零改分发器——命令名甚至可以带短横，
+**收益**：`--help` 自动生成、未知命令按前缀给候选、`log_error` 只报一次（打印即记录），
+新增命令零改分发器——命令名甚至可以带短横，
 `install-self` 会自动派发到 `cmd_install_self`。
 
 **代价**：退出码语义要统一。如果你的旧脚本用 `exit 1` 表示"用法错"，
