@@ -14,6 +14,9 @@
     tests/                    自研断言 + 逐文件执行器 + 每个模块一个测试
     tools/                    shdoc.awk / coverage.awk / ai_doc.sh / check_docs.sh / term_shot.py
     docs/                     README 之外的深度文档；REFERENCE.md 与 AGENTS.md 是生成物
+    docs/shots/*.shot         截图源：每行 `$ ` 是真要跑的命令，svg 由 make shots 渲染
+    examples/                 两个能直接跑的工程，测试全程走真实二进制
+    site/                     GitHub Pages 站点（Actions 构建，产物不进 git 历史）
     locale/{en,zh_CN,zh_Hant} gettext 目录，msgid 一律英文
 
 ## 加一个模块要改四处，少一处就红
@@ -25,7 +28,7 @@
 
 ## 门禁
 
-    make check     # syntax + test + lint + docs-check + fmt，CI 跑的是同一组
+    make check     # syntax + test + lint + docs-check + check-docs + examples + fmt，CI 也是这组
 
 `docs-check` 会拦两种事：公开函数缺注释、`docs/` 里的生成物与源码不一致。
 `lint` 是 `shellcheck -S warning -x`，模板会先渲染再检查（占位符不是合法语法）。
