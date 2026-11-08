@@ -1,0 +1,36 @@
+name: quality
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  test:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          # macOS 的 /bin/bash 是 3.2，基线只有这里能真正验证
+          - os: macos-latest
+            shell: /bin/bash
+          - os: ubuntu-latest
+            shell: bash
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: syntax
+        shell: ${{ matrix.shell }}
+        run: make syntax
+
+      - name: test
+        shell: ${{ matrix.shell }}
+        run: make test
+
+      - name: shellcheck
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq shellcheck
+          make lint

@@ -1,0 +1,347 @@
+#!/usr/bin/env bash
+#
+# shellkit 生成器。它自己 source lib/bootstrap.sh —— 库的每个约束在这里先被用一遍。
+#
+#   shellkit new ./deploy-tool --cmd start --cmd stop
+#   shellkit doctor
+#   shellkit list
+#   shellkit install-self [--prefix DIR]
+set -euo pipefail
+
+SELF_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" &>/dev/null && pwd)"
+. "$SELF_DIR/lib/bootstrap.sh"
+
+# 供 lib/core/cli.sh 生成 usage 前缀；跨文件使用，shellcheck 看不到
+# shellcheck disable=SC2034
+SK_PROG=shellkit
+SK_TPL_DIR="$SELF_DIR/templates"
+
+if ! require_bash 3 2; then
+  exit "$SK_PRECOND"
+fi
+
+cli_group "$(_t 'project generation')"
+cli_cmd new "$(_t 'create a new project skeleton')" "new <dir> [--name NAME] [--cmd NAME]..."
+cli_group "$(_t 'environment')"
+cli_cmd doctor "$(_t 'check the runtime environment')" "doctor"
+cli_cmd list "$(_t 'list templates and library modules')" "list"
+cli_group "$(_t 'installation')"
+cli_cmd install-self "$(_t 'install shellkit into PATH')" "install-self [--prefix DIR]"
+
+# _sk_render SRC DST NAME VERSION [CMD]
+#   占位符用双花括号形式，避免和 shell 的美元大括号混淆。
+_sk_render() {
+  local __src=$1 __dst=$2 __name=$3 __ver=$4
+  local __cmd=""
+  if [ "$#" -ge 5 ]; then
+    __cmd=$5
+  fi
+  sed -e "s|{{NAME}}|$__name|g" \
+    -e "s|{{SHELLKIT_VERSION}}|$__ver|g" \
+    -e "s|{{CMD}}|$__cmd|g" \
+    "$__src" >"$__dst"
+}
+
+# _sk_check_dir DEST —— 目标不存在或为空目录才允许生成
+_sk_check_dir() {
+  local __d=$1 __entry
+  if [ ! -e "$__d" ]; then
+    return 0
+  fi
+  if [ ! -d "$__d" ]; then
+    log_error "$(_t 'path exists and is not a directory'): $__d"
+    return "$SK_PRECOND"
+  fi
+  for __entry in "$__d"/*; do
+    if [ -e "$__entry" ]; then
+      log_error "$(_t 'target directory is not empty'): $__d"
+      return "$SK_PRECOND"
+    fi
+  done
+  return 0
+}
+
+# _sk_valid_name NAME —— 可执行文件名
+_sk_valid_name() {
+  case "${1:-}" in
+    '' | [!A-Za-z0-9]* | *[!A-Za-z0-9_.-]*) return 1 ;;
+  esac
+  return 0
+}
+
+cmd_new() {
+  local __dir="" __name="" __opt="" __val="" __cmd=""
+  local -a __cmds=()
+
+  while [ "$#" -gt 0 ]; do
+    case "$1" in
+      -h | --help)
+        cli_usage_cmd new
+        return "$SK_OK"
+        ;;
+      --name | --cmd)
+        __opt=$1
+        shift
+        if [ "$#" -eq 0 ]; then
+          log_error "$(_t 'option requires a value'): $__opt"
+          return "$SK_USAGE"
+        fi
+        __val=$1
+        if [ "$__opt" = "--name" ]; then
+          __name=$__val
+        else
+          if ! _sk_valid_name "$__val"; then
+            log_error "$(_t 'invalid command name'): $__val"
+            return "$SK_USAGE"
+          fi
+          __cmds[${#__cmds[@]}]=$__val
+        fi
+        ;;
+      --name=*)
+        __name="${1#*=}"
+        ;;
+      --cmd=*)
+        __val="${1#*=}"
+        if ! _sk_valid_name "$__val"; then
+          log_error "$(_t 'invalid command name'): $__val"
+          return "$SK_USAGE"
+        fi
+        __cmds[${#__cmds[@]}]=$__val
+        ;;
+      --?*)
+        log_error "$(_t 'unknown option'): $1"
+        return "$SK_USAGE"
+        ;;
+      *)
+        if [ -n "$__dir" ]; then
+          log_error "$(_t 'only one target directory is allowed'): $1"
+          return "$SK_USAGE"
+        fi
+        __dir=$1
+        ;;
+    esac
+    shift
+  done
+
+  if [ -z "$__dir" ]; then
+    log_error "$(_t 'target directory is required')"
+    cli_usage_cmd new
+    return "$SK_USAGE"
+  fi
+  if [ -z "$__name" ]; then
+    __name=$(basename "$__dir")
+  fi
+  if ! _sk_valid_name "$__name"; then
+    log_error "$(_t 'invalid project name'): $__name"
+    return "$SK_USAGE"
+  fi
+  if [ "${#__cmds[@]}" -eq 0 ]; then
+    __cmds[0]=run
+  fi
+  if ! _sk_check_dir "$__dir"; then
+    return "$SK_PRECOND"
+  fi
+
+  log_section "$(_t 'creating'): $__dir"
+  fs_ensure_dir "$__dir/bin" 755
+  fs_ensure_dir "$__dir/lib" 755
+  fs_ensure_dir "$__dir/commands" 755
+  fs_ensure_dir "$__dir/tests" 755
+  fs_ensure_dir "$__dir/vendor/shellkit" 755
+
+  # 库随工程一起走，生成出来的工程不依赖本机装没装 shellkit
+  cp -R "$SELF_DIR/lib" "$__dir/vendor/shellkit/lib"
+  cp -R "$SELF_DIR/locale" "$__dir/vendor/shellkit/locale"
+  cp "$SELF_DIR/VERSION" "$__dir/vendor/shellkit/VERSION"
+  log_info "$(_t 'vendored library'): vendor/shellkit ($SK_VERSION)"
+
+  _sk_render "$SK_TPL_DIR/bin/__NAME__" "$__dir/bin/$__name" "$__name" "$SK_VERSION"
+  chmod 755 "$__dir/bin/$__name"
+
+  _sk_render "$SK_TPL_DIR/lib/app.sh" "$__dir/lib/app.sh" "$__name" "$SK_VERSION"
+
+  for __cmd in "${__cmds[@]}"; do
+    _sk_render "$SK_TPL_DIR/commands/__CMD__.sh" "$__dir/commands/$__cmd.sh" "$__name" "$SK_VERSION" "$__cmd"
+    log_info "$(_t 'added command'): $__cmd"
+  done
+
+  _sk_render "$SK_TPL_DIR/config.example" "$__dir/config.example" "$__name" "$SK_VERSION"
+  _sk_render "$SK_TPL_DIR/tests/test_smoke.sh" "$__dir/tests/test_smoke.sh" "$__name" "$SK_VERSION" "${__cmds[0]}"
+  chmod 755 "$__dir/tests/test_smoke.sh"
+  _sk_render "$SK_TPL_DIR/README.md" "$__dir/README.md" "$__name" "$SK_VERSION"
+  cp "$SK_TPL_DIR/.shellcheckrc" "$__dir/.shellcheckrc"
+  cp "$SK_TPL_DIR/Makefile" "$__dir/Makefile"
+
+  cp "$SELF_DIR/tests/test_helper.sh" "$__dir/tests/test_helper.sh"
+  cp "$SELF_DIR/tests/run.sh" "$__dir/tests/run.sh"
+  chmod 755 "$__dir/tests/run.sh"
+
+  printf '\n'
+  log_ok "$(_t 'project created'): $__dir"
+  printf '  %s\n' "$(_t 'next steps')"
+  printf '    cd %s\n' "$__dir"
+  printf '    make test\n'
+  return "$SK_OK"
+}
+
+# ---------- doctor ----------
+
+_sk_doctor_row() {
+  local __status=$1 __name=$2
+  local __detail=""
+  if [ "$#" -ge 3 ]; then
+    __detail=$3
+  fi
+  printf '  %-6s %-12s %s\n' "$__status" "$__name" "$__detail"
+}
+
+cmd_doctor() {
+  local __missing=0 __optional_missing=0 __ver
+  printf '%s\n' "$(_t 'environment check')"
+
+  __ver="${BASH_VERSION:-unknown}"
+  if require_bash 3 2 >/dev/null 2>&1; then
+    _sk_doctor_row "OK" "bash" "$__ver"
+  else
+    _sk_doctor_row "FAIL" "bash" "$__ver ($(_t 'needs 3.2 or newer'))"
+    __missing=1
+  fi
+
+  if os_has_cmd sha256sum || os_has_cmd shasum; then
+    _sk_doctor_row "OK" "sha256" "$(command -v sha256sum 2>/dev/null || command -v shasum)"
+  else
+    _sk_doctor_row "FAIL" "sha256" "$(_t 'sha256sum or shasum is required')"
+    __missing=1
+  fi
+
+  if os_has_cmd curl || os_has_cmd wget; then
+    _sk_doctor_row "OK" "download" "$(command -v curl 2>/dev/null || command -v wget)"
+  else
+    _sk_doctor_row "WARN" "download" "$(_t 'curl or wget is needed for downloads')"
+    __optional_missing=1
+  fi
+
+  if [ -n "${SK_GETTEXT:-}" ]; then
+    _sk_doctor_row "OK" "gettext" "$SK_GETTEXT"
+  else
+    _sk_doctor_row "WARN" "gettext" "$(_t 'translations disabled, English only')"
+    __optional_missing=1
+  fi
+
+  if os_has_cmd msgfmt && os_has_cmd xgettext; then
+    _sk_doctor_row "OK" "po tools" "$(command -v msgfmt)"
+  else
+    _sk_doctor_row "WARN" "po tools" "$(_t 'xgettext and msgfmt are needed to update translations')"
+    __optional_missing=1
+  fi
+
+  if os_has_cmd shellcheck; then
+    _sk_doctor_row "OK" "shellcheck" "$(command -v shellcheck)"
+  else
+    _sk_doctor_row "WARN" "shellcheck" "$(_t 'not installed, lint will be skipped')"
+    __optional_missing=1
+  fi
+
+  if os_has_cmd shfmt; then
+    _sk_doctor_row "OK" "shfmt" "$(command -v shfmt)"
+  else
+    _sk_doctor_row "WARN" "shfmt" "$(_t 'not installed, format check will be skipped')"
+    __optional_missing=1
+  fi
+
+  _sk_doctor_row "INFO" "os" "$(os_name)/$(os_arch)"
+  _sk_doctor_row "INFO" "shellkit" "$SK_VERSION"
+
+  printf '\n'
+  if [ "$__missing" -ne 0 ]; then
+    log_error "$(_t 'required tooling is missing')"
+    return "$SK_PRECOND"
+  fi
+  if [ "$__optional_missing" -ne 0 ]; then
+    log_warn "$(_t 'optional tooling is missing; core features still work')"
+    return "$SK_OK"
+  fi
+  log_ok "$(_t 'all checks passed')"
+  return "$SK_OK"
+}
+
+# ---------- list ----------
+
+cmd_list() {
+  local __f
+  printf '%s:\n' "$(_t 'library modules')"
+  for __f in "$SHELLKIT_HOME"/lib/core/*.sh; do
+    printf '  %s\n' "$(basename "$__f" .sh)"
+  done
+  printf '\n%s:\n' "$(_t 'templates')"
+  for __f in "$SK_TPL_DIR"/*; do
+    if [ -f "$__f" ]; then
+      printf '  %s\n' "$(basename "$__f")"
+    fi
+  done
+  printf '\n%s:\n' "$(_t 'commands')"
+  printf '  %s\n' "shellkit new <dir> [--cmd NAME]..."
+  printf '  %s\n' "shellkit doctor"
+  printf '  %s\n' "shellkit list"
+  printf '  %s\n' "shellkit install-self [--prefix DIR]"
+  return "$SK_OK"
+}
+
+# ---------- install-self ----------
+
+cmd_install_self() {
+  local __prefix="/usr/local" __dest __bin
+  while [ "$#" -gt 0 ]; do
+    case "$1" in
+      --prefix)
+        shift
+        if [ "$#" -eq 0 ]; then
+          log_error "$(_t 'option requires a value'): --prefix"
+          return "$SK_USAGE"
+        fi
+        __prefix=$1
+        ;;
+      --prefix=*)
+        __prefix="${1#*=}"
+        ;;
+      -h | --help)
+        cli_usage_cmd install-self
+        return "$SK_OK"
+        ;;
+      *)
+        log_error "$(_t 'unknown option'): $1"
+        return "$SK_USAGE"
+        ;;
+    esac
+    shift
+  done
+
+  __dest="$__prefix/share/shellkit"
+  __bin="$__prefix/bin/shellkit"
+  fs_ensure_dir "$__prefix/bin" 755 || return "$SK_PRECOND"
+  fs_ensure_dir "$__dest" 755 || return "$SK_PRECOND"
+
+  if [ ! -w "$__prefix/bin" ]; then
+    log_error "$(_t 'no write permission'): $__prefix/bin"
+    log_info "$(_t 'try a writable prefix'): --prefix ~/.local"
+    return "$SK_PRECOND"
+  fi
+
+  log_section "$(_t 'installing'): $__dest"
+  cp -R "$SELF_DIR/lib" "$__dest/lib"
+  cp -R "$SELF_DIR/templates" "$__dest/templates"
+  cp -R "$SELF_DIR/locale" "$__dest/locale"
+  cp "$SELF_DIR/VERSION" "$__dest/VERSION"
+  cp "$SELF_DIR/shellkit" "$__dest/shellkit"
+  chmod 755 "$__dest/shellkit"
+
+  rm -f "$__bin"
+  if ! ln -s "$__dest/shellkit" "$__bin"; then
+    log_error "$(_t 'failed to create symlink'): $__bin"
+    return "$SK_ERR"
+  fi
+  log_ok "$(_t 'installed'): $__bin"
+  return "$SK_OK"
+}
+
+cli_run "$@"

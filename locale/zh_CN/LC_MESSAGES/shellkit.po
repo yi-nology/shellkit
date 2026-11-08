@@ -1,0 +1,425 @@
+# shellkit 的 zh_CN 译文。
+# 生成/更新：bash po/messages.sh（xgettext -> msgmerge -> msgfmt）
+msgid ""
+msgstr ""
+"Project-Id-Version: shellkit\n"
+"Report-Msgid-Bugs-To: \n"
+"POT-Creation-Date: 2026-11-08 20:03+0800\n"
+"PO-Revision-Date: 2026-11-08 00:00+0800\n"
+"Last-Translator: shellkit contributors\n"
+"Language-Team: shellkit contributors\n"
+"Language: zh_CN\n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=UTF-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+"Plural-Forms: nplurals=1; plural=0;\n"
+
+#: /Users/zhangyi/shellkit/lib/core/cli.sh:29
+#: /Users/zhangyi/shellkit/shellkit:92 /Users/zhangyi/shellkit/shellkit:104
+msgid "invalid command name"
+msgstr "非法的命令名"
+
+#: /Users/zhangyi/shellkit/lib/core/cli.sh:33
+msgid "duplicate command"
+msgstr "命令重复注册"
+
+#: /Users/zhangyi/shellkit/lib/core/cli.sh:66
+#: /Users/zhangyi/shellkit/lib/core/cli.sh:68
+#: /Users/zhangyi/shellkit/lib/core/cli.sh:74
+#: /Users/zhangyi/shellkit/lib/core/cli.sh:81
+msgid "Usage"
+msgstr "用法"
+
+#: /Users/zhangyi/shellkit/lib/core/cli.sh:82
+msgid "Commands"
+msgstr "命令"
+
+#: /Users/zhangyi/shellkit/lib/core/cli.sh:101
+msgid "Options"
+msgstr "选项"
+
+#: /Users/zhangyi/shellkit/lib/core/cli.sh:102
+msgid "show this help"
+msgstr "显示本帮助"
+
+#: /Users/zhangyi/shellkit/lib/core/cli.sh:103
+msgid "show version"
+msgstr "显示版本"
+
+#: /Users/zhangyi/shellkit/lib/core/cli.sh:104
+msgid "enable debug output"
+msgstr "打开调试输出"
+
+#: /Users/zhangyi/shellkit/lib/core/cli.sh:105
+msgid "disable colored output"
+msgstr "关闭彩色输出"
+
+#: /Users/zhangyi/shellkit/lib/core/cli.sh:106
+msgid "non-interactive, use defaults"
+msgstr "非交互模式，全部取默认值"
+
+#: /Users/zhangyi/shellkit/lib/core/cli.sh:124
+msgid "Did you mean"
+msgstr "你是不是想用"
+
+#: /Users/zhangyi/shellkit/lib/core/cli.sh:163
+#: /Users/zhangyi/shellkit/lib/core/cli.sh:168
+#: /Users/zhangyi/shellkit/lib/core/cli.sh:309
+#: /Users/zhangyi/shellkit/lib/core/cli.sh:319
+#: /Users/zhangyi/shellkit/lib/core/cli.sh:338
+#: /Users/zhangyi/shellkit/shellkit:110 /Users/zhangyi/shellkit/shellkit:310
+msgid "unknown option"
+msgstr "未知选项"
+
+#: /Users/zhangyi/shellkit/lib/core/cli.sh:186
+msgid "no such command"
+msgstr "没有这个命令"
+
+#: /Users/zhangyi/shellkit/lib/core/cli.sh:193
+msgid "command has no handler"
+msgstr "命令没有对应的处理函数"
+
+#: /Users/zhangyi/shellkit/lib/core/cli.sh:233
+#: /Users/zhangyi/shellkit/lib/core/prompt.sh:67
+#: /Users/zhangyi/shellkit/lib/core/prompt.sh:81
+#: /Users/zhangyi/shellkit/lib/core/prompt.sh:115
+msgid "invalid variable name"
+msgstr "非法的变量名"
+
+#: /Users/zhangyi/shellkit/lib/core/cli.sh:239
+msgid "long option must start with --"
+msgstr "长选项必须以 -- 开头"
+
+#: /Users/zhangyi/shellkit/lib/core/cli.sh:247
+msgid "short option must be a single dash and one letter"
+msgstr "短选项必须是「-」加一个字母"
+
+#: /Users/zhangyi/shellkit/lib/core/cli.sh:325
+#: /Users/zhangyi/shellkit/lib/core/cli.sh:344
+#: /Users/zhangyi/shellkit/shellkit:84 /Users/zhangyi/shellkit/shellkit:297
+msgid "option requires a value"
+msgstr "选项需要一个值"
+
+#: /Users/zhangyi/shellkit/lib/core/config.sh:12
+msgid "configuration file path is required"
+msgstr "必须提供配置文件路径"
+
+#: /Users/zhangyi/shellkit/lib/core/config.sh:83
+#: /Users/zhangyi/shellkit/lib/core/validate.sh:35
+#: /Users/zhangyi/shellkit/lib/core/validate.sh:41
+msgid "invalid configuration key"
+msgstr "非法的配置键名"
+
+#: /Users/zhangyi/shellkit/lib/core/config.sh:87
+msgid "configuration value must be a single line"
+msgstr "配置值只能是单行"
+
+#: /Users/zhangyi/shellkit/lib/core/config.sh:91
+msgid "configuration file is not initialized"
+msgstr "配置文件尚未初始化"
+
+#: /Users/zhangyi/shellkit/lib/core/error.sh:25
+msgid "Required command not found"
+msgstr "找不到必需的命令"
+
+#: /Users/zhangyi/shellkit/lib/core/error.sh:37
+msgid "This action must be run as root"
+msgstr "这个操作需要 root 权限"
+
+#: /Users/zhangyi/shellkit/lib/core/error.sh:46
+msgid "Required file not found"
+msgstr "找不到必需的文件"
+
+#: /Users/zhangyi/shellkit/lib/core/error.sh:63
+msgid "Bash version is too old"
+msgstr "Bash 版本过低"
+
+#: /Users/zhangyi/shellkit/lib/core/fs.sh:85
+msgid "refusing to use a symlinked temporary directory"
+msgstr "拒绝使用符号链接指向的临时目录"
+
+#: /Users/zhangyi/shellkit/lib/core/net.sh:11
+msgid "no checksum configured for"
+msgstr "没有为该文件配置校验和"
+
+#: /Users/zhangyi/shellkit/lib/core/net.sh:15
+msgid "cannot compute checksum for"
+msgstr "无法计算校验和"
+
+#: /Users/zhangyi/shellkit/lib/core/net.sh:19
+msgid "checksum mismatch for"
+msgstr "校验和不匹配"
+
+#: /Users/zhangyi/shellkit/lib/core/net.sh:33
+msgid "curl or wget is required to download"
+msgstr "下载需要 curl 或 wget"
+
+#: /Users/zhangyi/shellkit/lib/core/net.sh:45
+#: /Users/zhangyi/shellkit/lib/core/net.sh:49
+msgid "using cached file"
+msgstr "使用已缓存的文件"
+
+#: /Users/zhangyi/shellkit/lib/core/net.sh:52
+msgid "cached file is invalid, re-downloading"
+msgstr "缓存文件已失效，重新下载"
+
+#: /Users/zhangyi/shellkit/lib/core/net.sh:56
+msgid "downloading"
+msgstr "正在下载"
+
+#: /Users/zhangyi/shellkit/lib/core/net.sh:65
+msgid "retrying via mirror"
+msgstr "改用镜像重试"
+
+#: /Users/zhangyi/shellkit/lib/core/net.sh:68
+#: /Users/zhangyi/shellkit/lib/core/net.sh:74
+#: /Users/zhangyi/shellkit/lib/core/net.sh:80
+msgid "download failed"
+msgstr "下载失败"
+
+#: /Users/zhangyi/shellkit/lib/core/net.sh:114
+msgid "curl is required for HTTP probing"
+msgstr "HTTP 探测需要 curl"
+
+#: /Users/zhangyi/shellkit/lib/core/os.sh:67
+#: /Users/zhangyi/shellkit/lib/core/os.sh:83
+msgid "no supported package manager found"
+msgstr "找不到支持的包管理器"
+
+#: /Users/zhangyi/shellkit/lib/core/prompt.sh:34
+msgid "Non-interactive mode requires a default value"
+msgstr "非交互模式必须有默认值"
+
+#: /Users/zhangyi/shellkit/lib/core/prompt.sh:38
+msgid "Non-interactive, using default"
+msgstr "非交互模式，使用默认值"
+
+#: /Users/zhangyi/shellkit/lib/core/prompt.sh:45
+msgid "Input timed out and no default is set"
+msgstr "输入超时且没有默认值"
+
+#: /Users/zhangyi/shellkit/lib/core/prompt.sh:48
+msgid "Input timed out, using default"
+msgstr "输入超时，使用默认值"
+
+#: /Users/zhangyi/shellkit/lib/core/prompt.sh:53
+msgid "Input closed unexpectedly"
+msgstr "输入被意外关闭"
+
+#: /Users/zhangyi/shellkit/lib/core/prompt.sh:72
+#: /Users/zhangyi/shellkit/lib/core/prompt.sh:129
+msgid "default"
+msgstr "默认"
+
+#: /Users/zhangyi/shellkit/lib/core/prompt.sh:106
+msgid "please answer y or n"
+msgstr "请回答 y 或 n"
+
+#: /Users/zhangyi/shellkit/lib/core/prompt.sh:122
+msgid "default value is not one of the choices"
+msgstr "默认值不在备选项里"
+
+#: /Users/zhangyi/shellkit/lib/core/prompt.sh:140
+msgid "invalid choice"
+msgstr "无效的选择"
+
+#: /Users/zhangyi/shellkit/lib/core/validate.sh:16
+msgid "value must not be empty"
+msgstr "值不能为空"
+
+#: /Users/zhangyi/shellkit/lib/core/validate.sh:23
+msgid "value must be a single line"
+msgstr "值只能是单行"
+
+#: /Users/zhangyi/shellkit/lib/core/validate.sh:53
+msgid "port must be a number"
+msgstr "端口必须是数字"
+
+#: /Users/zhangyi/shellkit/lib/core/validate.sh:60
+msgid "port out of range"
+msgstr "端口超出范围"
+
+#: /Users/zhangyi/shellkit/lib/core/validate.sh:67
+#: /Users/zhangyi/shellkit/lib/core/validate.sh:72
+msgid "invalid IPv4 address"
+msgstr "非法的 IPv4 地址"
+
+#: /Users/zhangyi/shellkit/lib/core/validate.sh:85
+msgid "invalid version"
+msgstr "非法的版本号"
+
+#: /Users/zhangyi/shellkit/lib/core/validate.sh:93
+msgid "path must be absolute"
+msgstr "路径必须是绝对路径"
+
+#: /Users/zhangyi/shellkit/lib/core/validate.sh:102
+msgid "invalid URL"
+msgstr "非法的 URL"
+
+#: /Users/zhangyi/shellkit/lib/core/validate.sh:111
+msgid "value not in allowed set"
+msgstr "值不在允许的集合里"
+
+#: /Users/zhangyi/shellkit/shellkit:21
+msgid "project generation"
+msgstr "生成工程"
+
+#: /Users/zhangyi/shellkit/shellkit:22
+msgid "create a new project skeleton"
+msgstr "生成一个新工程骨架"
+
+#: /Users/zhangyi/shellkit/shellkit:23
+msgid "environment"
+msgstr "环境"
+
+#: /Users/zhangyi/shellkit/shellkit:24
+msgid "check the runtime environment"
+msgstr "检查运行环境"
+
+#: /Users/zhangyi/shellkit/shellkit:25
+msgid "list templates and library modules"
+msgstr "列出模板与库模块"
+
+#: /Users/zhangyi/shellkit/shellkit:26
+msgid "installation"
+msgstr "安装"
+
+#: /Users/zhangyi/shellkit/shellkit:27
+msgid "install shellkit into PATH"
+msgstr "把 shellkit 装进 PATH"
+
+#: /Users/zhangyi/shellkit/shellkit:50
+msgid "path exists and is not a directory"
+msgstr "路径已存在且不是目录"
+
+#: /Users/zhangyi/shellkit/shellkit:55
+msgid "target directory is not empty"
+msgstr "目标目录非空"
+
+#: /Users/zhangyi/shellkit/shellkit:115
+msgid "only one target directory is allowed"
+msgstr "只能指定一个目标目录"
+
+#: /Users/zhangyi/shellkit/shellkit:125
+msgid "target directory is required"
+msgstr "必须提供目标目录"
+
+#: /Users/zhangyi/shellkit/shellkit:133
+msgid "invalid project name"
+msgstr "非法的工程名"
+
+#: /Users/zhangyi/shellkit/shellkit:143
+msgid "creating"
+msgstr "正在创建"
+
+#: /Users/zhangyi/shellkit/shellkit:154
+msgid "vendored library"
+msgstr "已内置库"
+
+#: /Users/zhangyi/shellkit/shellkit:163
+msgid "added command"
+msgstr "已添加命令"
+
+#: /Users/zhangyi/shellkit/shellkit:178
+msgid "project created"
+msgstr "工程已生成"
+
+#: /Users/zhangyi/shellkit/shellkit:179
+msgid "next steps"
+msgstr "下一步"
+
+#: /Users/zhangyi/shellkit/shellkit:198
+msgid "environment check"
+msgstr "环境检查"
+
+#: /Users/zhangyi/shellkit/shellkit:204
+msgid "needs 3.2 or newer"
+msgstr "需要 3.2 或更新"
+
+#: /Users/zhangyi/shellkit/shellkit:211
+msgid "sha256sum or shasum is required"
+msgstr "需要 sha256sum 或 shasum"
+
+#: /Users/zhangyi/shellkit/shellkit:218
+msgid "curl or wget is needed for downloads"
+msgstr "下载功能需要 curl 或 wget"
+
+#: /Users/zhangyi/shellkit/shellkit:225
+msgid "translations disabled, English only"
+msgstr "未装 gettext，只输出英文"
+
+#: /Users/zhangyi/shellkit/shellkit:232
+msgid "xgettext and msgfmt are needed to update translations"
+msgstr "更新译文需要 xgettext 与 msgfmt"
+
+#: /Users/zhangyi/shellkit/shellkit:239
+msgid "not installed, lint will be skipped"
+msgstr "未安装，lint 会被跳过"
+
+#: /Users/zhangyi/shellkit/shellkit:246
+msgid "not installed, format check will be skipped"
+msgstr "未安装，格式检查会被跳过"
+
+#: /Users/zhangyi/shellkit/shellkit:255
+msgid "required tooling is missing"
+msgstr "缺少必需的工具"
+
+#: /Users/zhangyi/shellkit/shellkit:259
+msgid "optional tooling is missing; core features still work"
+msgstr "缺少可选工具，核心功能不受影响"
+
+#: /Users/zhangyi/shellkit/shellkit:262
+msgid "all checks passed"
+msgstr "全部检查通过"
+
+#: /Users/zhangyi/shellkit/shellkit:270
+msgid "library modules"
+msgstr "库模块"
+
+#: /Users/zhangyi/shellkit/shellkit:274
+msgid "templates"
+msgstr "模板"
+
+#: /Users/zhangyi/shellkit/shellkit:280
+msgid "commands"
+msgstr "命令"
+
+#: /Users/zhangyi/shellkit/shellkit:323
+msgid "no write permission"
+msgstr "没有写权限"
+
+#: /Users/zhangyi/shellkit/shellkit:324
+msgid "try a writable prefix"
+msgstr "换一个可写的前缀"
+
+#: /Users/zhangyi/shellkit/shellkit:328
+msgid "installing"
+msgstr "正在安装"
+
+#: /Users/zhangyi/shellkit/shellkit:338
+msgid "failed to create symlink"
+msgstr "创建符号链接失败"
+
+#: /Users/zhangyi/shellkit/shellkit:341
+msgid "installed"
+msgstr "已安装"
+
+#: /Users/zhangyi/shellkit/templates/commands/__CMD__.sh:19
+msgid "running"
+msgstr "正在执行"
+
+#: /Users/zhangyi/shellkit/templates/commands/__CMD__.sh:20
+msgid "target"
+msgstr "目标"
+
+#: /Users/zhangyi/shellkit/templates/commands/__CMD__.sh:22
+msgid "force flag is set"
+msgstr "已开启强制模式"
+
+#: /Users/zhangyi/shellkit/templates/commands/__CMD__.sh:26
+msgid "finished"
+msgstr "完成"
+
+#: /Users/zhangyi/shellkit/templates/commands/__CMD__.sh:30
+msgid "{{CMD}} command"
+msgstr "{{CMD}} 子命令"

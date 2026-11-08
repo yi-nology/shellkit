@@ -1,0 +1,16 @@
+#!/usr/bin/env bash
+#
+# {{NAME}} 入口。只做三件事：定位自身、加载库与应用、交给 cli_run。
+# 库在 vendor/shellkit 里，跟着工程走，不依赖本机是否装过 shellkit。
+set -euo pipefail
+
+APP_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." &>/dev/null && pwd)"
+export APP_ROOT
+
+. "$APP_ROOT/vendor/shellkit/lib/bootstrap.sh"
+. "$APP_ROOT/lib/app.sh"
+
+# 供 lib/core/cli.sh 生成 usage 前缀；跨文件使用，shellcheck 单文件看不到
+# shellcheck disable=SC2034
+SK_PROG={{NAME}}
+cli_run "$@"
