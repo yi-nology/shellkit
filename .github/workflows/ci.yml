@@ -33,7 +33,9 @@ jobs:
           sudo locale-gen zh_CN.UTF-8
           locale -a | grep -i zh_CN
 
+      # macOS runner 没有 go，装了也白装；Linux 上装真 shfmt，别让格式检查静默跳过
       - name: shfmt
+        if: runner.os == 'Linux'
         run: |
           go install mvdan.cc/sh/v3/cmd/shfmt@latest
           echo "$(go env GOPATH)/bin" >> "$GITHUB_PATH"

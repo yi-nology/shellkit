@@ -31,7 +31,7 @@ jobs:
           name="shellkit-$version"
           mkdir -p "dist/$name"
           # 只放跑起来需要的东西：生成器、库、模板、语言包、文档、测试
-          cp -R shellkit lib templates locale po tools tests docs "dist/$name/"
+          cp -R shellkit lib templates locale po tools tests docs skills examples "dist/$name/"
           cp README.md AGENTS.md VERSION LICENSE Makefile "dist/$name/"
           rm -rf "dist/$name/docs/superpowers"
           chmod +x "dist/$name/shellkit"
