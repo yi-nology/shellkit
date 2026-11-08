@@ -20,4 +20,5 @@ after=$(set -o | awk '$1 == "pipefail" { print $2 }')
 assert_eq "$before" "$after" "bootstrap must not change shell options"
 
 # 常量
-assert_eq "0.1.0" "$SK_VERSION" "SK_VERSION"
+# 对磁盘上的 VERSION 取真值：bump 版本不该弄红门禁
+assert_eq "$(tr -d '[:space:]' <"$TEST_ROOT/VERSION")" "$SK_VERSION" "SK_VERSION"

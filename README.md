@@ -110,8 +110,12 @@ if ask_yn ok "确认?" y; then :; fi
 | `log` | `log_info` `log_ok` `log_warn` `log_error` `log_debug` `log_section` | 全部 stderr，彩色可关 |
 | `str` | `str_trim` `str_lower` `str_upper` `str_contains` `str_starts_with` `str_ends_with` `str_repeat` | 3.2 无大小写变换，用 `tr` 兜底 |
 | `validate` | `validate_*`（not_empty / single_line / key / port / ip / version / abs_path / url / enum） | 失败原因写 `SK_VALIDATE_ERR` |
-| `fs` | `fs_atomic_write` `fs_backup` `fs_ensure_dir` `fs_tmpdir` `fs_tmp_init` | 原子写；备份按名升序保留最新 N 份 |
+| `fs` | `fs_atomic_write` `fs_backup` `fs_ensure_dir` `fs_tmpdir` `fs_tmp_init` `fs_ensure_line` `fs_ensure_block` `fs_ensure_symlink` | 原子写；备份按名升序保留最新 N 份；`ensure_*` 幂等改文件 |
 | `os` | `os_name` `os_arch` `os_is_root` `os_has_cmd` `os_pkg_*` `os_sed_i` `os_md5` `os_sha256` | Darwin/Linux 差异只在这里 |
+| `trap` | `trap_push` `trap_pop` `trap_cleanup` `trap_install` `trap_list` | 清理栈：LIFO、幂等、退出码保真、链式保留已有 EXIT trap |
+| `run` | `run` | 跑命令失败即 `die`（消息带命令原文与退出码）；`SHELLKIT_DRY_RUN=1` 只打印 |
+| `retry` | `retry` | 退避重试；用法错与校验失败默认不重试 |
+| `lock` | `lock_acquire` `lock_release` `lock_held` | mkdir 原子锁（macOS 无 flock），拿到即挂进清理栈 |
 | `net` | `net_download` `net_verify` `net_wait_port` `net_wait_http` | 下载带 sha256 缓存校验与镜像回退 |
 | `config` | `conf_init` `conf_get` `conf_get_any` `conf_has` `conf_set` `conf_unset` `conf_disable` `conf_keys` | `KEY=VALUE`；值未变不写盘 |
 | `prompt` | `ask` `ask_yn` `ask_choice` `confirm` | 超时回退默认值；EOF 与超时区分处理 |
@@ -133,6 +137,36 @@ if ask_yn ok "确认?" y; then :; fi
 `SHELLKIT_DEBUG=1`、`SHELLKIT_COLOR=auto|always|never`、`SHELLKIT_NONINTERACTIVE=1`
 （等价 `-y`）、`SHELLKIT_TMP_KEEP=1`、`SHELLKIT_NO_GETTEXT=1`、
 `SHELLKIT_MIRROR_FROM`/`SHELLKIT_MIRROR_TO`（下载源镜像前缀替换）。
+
+新增（0.2）：`SHELLKIT_DRY_RUN=1`（`run` 只打印不执行）、
+`SHELLKIT_RETRY_DELAY`/`SHELLKIT_RETRY_BACKOFF`/`SHELLKIT_RETRY_MAX_DELAY`/`SHELLKIT_RETRY_ON`、
+`SHELLKIT_LOCK_DIR`（默认 `${TMPDIR:-/tmp}`）、`SHELLKIT_LOCK_STALE`（秒，超时视为僵锁）。
+
+## 清理、幂等、重试、单实例
+
+四件事在运维脚本里天天要写，以前每个工程各写一遍且写法各异，现在是库的一部分：
+
+`@bash
+trap_push 'rm -rf "$workdir"'   # LIFO；退出/INT/TERM/HUP 都会跑；单个失败不中断其余
+trap_install                    # 链式保留你已有的 EXIT trap，幂等
+
+run systemctl restart nginx     # 失败即 die，消息含命令原文 + 退出码
+retry 5 curl -fsS "$url" -o x   # 默认 1s 起、指数退避 2x、上限 30s
+
+lock_acquire deploy 30          # mkdir 原子锁；超时返回 SK_PRECOND
+                                # 拿到即进清理栈，脚本退出自动释放
+`@
+
+改文件不想写成「删了重加」：
+
+`@bash
+fs_ensure_line /etc/hosts '10.0.0.5 db'   # 没有才追加；有则一字不动
+fs_ensure_block /etc/ssh/sshd_config SSHCFG 'Port 2222' 'PermitRootLogin no'
+fs_ensure_symlink /usr/local/bin/tool /opt/tool/bin/tool
+`@
+
+`ensure_*` 全部走原子写（临时文件 + `mv -f`），且`cp -p` 保住原文件权限 ——
+直接 `echo >>` 遇到权限 600 的文件会被静默改成 644。
 
 ## CLI 框架
 
@@ -166,8 +200,31 @@ msgid 一律英文，译文放 `locale/<lang>/LC_MESSAGES/shellkit.po`：
 bash po/messages.sh     # xgettext → msgmerge → msgfmt，产出 .mo
 `@
 
-已带 `zh_CN`、`zh_Hant`（各 97 条全译）；`locale/en` 的 msgstr 留空，回退英文。
+已带 `zh_CN`、`zh_Hant`（各 135 条全译）；`locale/en` 的 msgstr 留空，回退英文。
 **没装 gettext 不会失败**，只是输出英文——这一点和上游硬装 gettext 的做法相反。
+
+## 文档
+
+API 文档从源码注释生成，不手写、不同步：
+
+`@bash
+shellkit docs            # 重新生成 docs/REFERENCE.md
+shellkit docs --check    # 只校验是否最新 / 公开函数是否都有注释，不一致返回 5
+`@
+
+约定是「注释块首行即摘要」，不需要额外标签：
+
+`@bash
+# 下载到指定路径，带 sha256 校验与镜像回退。
+# @param 1  目标 URL
+# @param 2  保存路径
+# @param 3  sha256（可选）
+# @exitcode 0 成功；4 网络失败；5 校验失败
+net_download() { ... }
+`@
+
+被 `@internal` 标记或以 `_` 开头的私有函数不会出现在文档里。覆盖率检查是
+「每个公开函数上方必须紧邻注释行」，缺一条 `make check` 就红。
 
 ## 测试与门禁
 
@@ -175,11 +232,11 @@ bash po/messages.sh     # xgettext → msgmerge → msgfmt，产出 .mo
 `tests/run.sh` 逐个 `bash` 执行，不依赖 bats：
 
 `@bash
-make test       # 12 个测试文件
+make test       # 18 个测试文件
 make syntax     # bash -n 全部脚本
 make lint       # shellcheck -S warning -x（含"渲染模板后再检查"）
 make fmt        # shfmt -d -i 2 -ci（只检查不改）
-make check      # 以上全跑
+make check      # 以上全跑，外加 docs-check
 `@
 
 CI：`macos-latest`（真 Bash 3.2）+ `ubuntu-latest` 双矩阵。
@@ -192,16 +249,18 @@ CI：`macos-latest`（真 Bash 3.2）+ `ubuntu-latest` 双矩阵。
 `[[ -v var ]]`、空数组展开（3.2 在 `set -u` 下会报错）。
 
 替代手法：子命令用 `declare -F` 动态分发；出参用 `printf -v`；大小写用 `tr`；
-数组追加用 `arr[${#arr[@]}]=x`。
+数组追加用 `arr[${#arr[@]}]=x`；遍历可能为空的数组一律写
+`${arr[@]+"${arr[@]}"}`，否则 3.2 在 `set -u` 下直接报 unbound variable。
 
 ## 目录
 
 `@
 shellkit                  生成器入口（也 source 自己的库）
 lib/bootstrap.sh          唯一入口，按拓扑序加载
-lib/core/*.sh             11 个模块
+lib/core/*.sh             15 个模块
 templates/                shellkit new 的模板
-tests/                    断言库 + 逐文件执行器 + 12 个测试
+tests/                    断言库 + 逐文件执行器 + 18 个测试
+tools/                    注释即文档：shdoc.awk 渲染 + coverage.awk 查漏
 po/messages.sh            msgid 抽取与 .mo 编译
 locale/{en,zh_CN,zh_Hant}
 docs/superpowers/specs/   设计文档（决策、契约、与上游差异账）

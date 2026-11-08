@@ -47,7 +47,7 @@ assert_contains "$help_out" "greet"
 assert_contains "$help_out" "Demo"
 assert_contains "$help_out" "--verbose"
 
-assert_eq "0.1.0" "$(cli_run --version 2>/dev/null)" "version output"
+assert_eq "$(tr -d '[:space:]' <"$TEST_ROOT/VERSION")" "$(cli_run --version 2>/dev/null)" "version output"
 
 assert_exit_code 2 cli_run nope 2>/dev/null
 
