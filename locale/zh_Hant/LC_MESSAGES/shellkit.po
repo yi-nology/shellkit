@@ -4,7 +4,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: shellkit\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-11-08 23:05+0800\n"
+"POT-Creation-Date: 2026-11-09 00:35+0800\n"
 "PO-Revision-Date: 2026-11-08 00:00+0800\n"
 "Last-Translator: shellkit contributors\n"
 "Language-Team: shellkit contributors\n"
@@ -15,7 +15,7 @@ msgstr ""
 "Plural-Forms: nplurals=1; plural=0;\n"
 
 #: /Users/zhangyi/shellkit/lib/core/cli.sh:29
-#: /Users/zhangyi/shellkit/shellkit:121 /Users/zhangyi/shellkit/shellkit:133
+#: /Users/zhangyi/shellkit/shellkit:139 /Users/zhangyi/shellkit/shellkit:151
 msgid "invalid command name"
 msgstr "非法的指令名稱"
 
@@ -67,8 +67,9 @@ msgstr "您是不是想用"
 #: /Users/zhangyi/shellkit/lib/core/cli.sh:315
 #: /Users/zhangyi/shellkit/lib/core/cli.sh:325
 #: /Users/zhangyi/shellkit/lib/core/cli.sh:344
-#: /Users/zhangyi/shellkit/shellkit:139 /Users/zhangyi/shellkit/shellkit:333
-#: /Users/zhangyi/shellkit/shellkit:449 /Users/zhangyi/shellkit/shellkit:525
+#: /Users/zhangyi/shellkit/shellkit:157 /Users/zhangyi/shellkit/shellkit:351
+#: /Users/zhangyi/shellkit/shellkit:467 /Users/zhangyi/shellkit/shellkit:609
+#: /Users/zhangyi/shellkit/shellkit:672 /Users/zhangyi/shellkit/shellkit:868
 msgid "unknown option"
 msgstr "未知選項"
 
@@ -97,7 +98,8 @@ msgstr "短選項必須是「-」加一個字母"
 
 #: /Users/zhangyi/shellkit/lib/core/cli.sh:331
 #: /Users/zhangyi/shellkit/lib/core/cli.sh:350
-#: /Users/zhangyi/shellkit/shellkit:113 /Users/zhangyi/shellkit/shellkit:512
+#: /Users/zhangyi/shellkit/shellkit:131 /Users/zhangyi/shellkit/shellkit:596
+#: /Users/zhangyi/shellkit/shellkit:661 /Users/zhangyi/shellkit/shellkit:849
 msgid "option requires a value"
 msgstr "選項需要一個值"
 
@@ -340,225 +342,350 @@ msgstr "非法的 URL"
 msgid "value not in allowed set"
 msgstr "值不在允許的集合中"
 
-#: /Users/zhangyi/shellkit/shellkit:23
+#: /Users/zhangyi/shellkit/shellkit:39
 msgid "project generation"
 msgstr "產生專案"
 
-#: /Users/zhangyi/shellkit/shellkit:24
+#: /Users/zhangyi/shellkit/shellkit:40
 msgid "create a new project skeleton"
 msgstr "產生新專案骨架"
 
-#: /Users/zhangyi/shellkit/shellkit:25
+#: /Users/zhangyi/shellkit/shellkit:41
 msgid "environment"
 msgstr "環境"
 
-#: /Users/zhangyi/shellkit/shellkit:26
+#: /Users/zhangyi/shellkit/shellkit:42
 msgid "check the runtime environment"
 msgstr "檢查執行環境"
 
-#: /Users/zhangyi/shellkit/shellkit:27
+#: /Users/zhangyi/shellkit/shellkit:43
 msgid "list templates and library modules"
 msgstr "列出樣板與程式庫模組"
 
-#: /Users/zhangyi/shellkit/shellkit:28
+#: /Users/zhangyi/shellkit/shellkit:44
 msgid "existing projects"
 msgstr "既有專案"
 
-#: /Users/zhangyi/shellkit/shellkit:29
+#: /Users/zhangyi/shellkit/shellkit:45
 msgid "sync the library into an existing project"
 msgstr "將程式庫同步進既有專案"
 
-#: /Users/zhangyi/shellkit/shellkit:30
+#: /Users/zhangyi/shellkit/shellkit:46
 msgid "documentation"
 msgstr "文件"
 
-#: /Users/zhangyi/shellkit/shellkit:31
+#: /Users/zhangyi/shellkit/shellkit:47
 msgid "regenerate the API reference"
 msgstr "重新產生 API 參考"
 
-#: /Users/zhangyi/shellkit/shellkit:32
+#: /Users/zhangyi/shellkit/shellkit:48
 msgid "installation"
 msgstr "安裝"
 
-#: /Users/zhangyi/shellkit/shellkit:33
+#: /Users/zhangyi/shellkit/shellkit:49
 msgid "install shellkit into PATH"
 msgstr "將 shellkit 裝進 PATH"
 
-#: /Users/zhangyi/shellkit/shellkit:79
+#: /Users/zhangyi/shellkit/shellkit:50
+msgid "remove an installed shellkit"
+msgstr "卸載已安裝的 shellkit"
+
+#: /Users/zhangyi/shellkit/shellkit:51
+msgid "update an installed shellkit"
+msgstr "更新已安裝的 shellkit"
+
+#: /Users/zhangyi/shellkit/shellkit:97
 msgid "path exists and is not a directory"
 msgstr "路徑已存在且不是目錄"
 
-#: /Users/zhangyi/shellkit/shellkit:84
+#: /Users/zhangyi/shellkit/shellkit:102
 msgid "target directory is not empty"
 msgstr "目標目錄不是空的"
 
-#: /Users/zhangyi/shellkit/shellkit:144 /Users/zhangyi/shellkit/shellkit:338
+#: /Users/zhangyi/shellkit/shellkit:162 /Users/zhangyi/shellkit/shellkit:356
 msgid "only one target directory is allowed"
 msgstr "只能指定一個目標目錄"
 
-#: /Users/zhangyi/shellkit/shellkit:154 /Users/zhangyi/shellkit/shellkit:348
+#: /Users/zhangyi/shellkit/shellkit:172 /Users/zhangyi/shellkit/shellkit:366
 msgid "target directory is required"
 msgstr "必須提供目標目錄"
 
-#: /Users/zhangyi/shellkit/shellkit:162
+#: /Users/zhangyi/shellkit/shellkit:180
 msgid "invalid project name"
 msgstr "非法的專案名稱"
 
-#: /Users/zhangyi/shellkit/shellkit:172
+#: /Users/zhangyi/shellkit/shellkit:190
 msgid "creating"
 msgstr "正在建立"
 
-#: /Users/zhangyi/shellkit/shellkit:181 /Users/zhangyi/shellkit/shellkit:386
+#: /Users/zhangyi/shellkit/shellkit:199 /Users/zhangyi/shellkit/shellkit:404
 msgid "vendored library"
 msgstr "已內嵌程式庫"
 
-#: /Users/zhangyi/shellkit/shellkit:190
+#: /Users/zhangyi/shellkit/shellkit:208
 msgid "added command"
 msgstr "已加入指令"
 
-#: /Users/zhangyi/shellkit/shellkit:207
+#: /Users/zhangyi/shellkit/shellkit:225
 msgid "project created"
 msgstr "專案已產生"
 
-#: /Users/zhangyi/shellkit/shellkit:208
+#: /Users/zhangyi/shellkit/shellkit:226
 msgid "next steps"
 msgstr "下一步"
 
-#: /Users/zhangyi/shellkit/shellkit:227
+#: /Users/zhangyi/shellkit/shellkit:245
 msgid "environment check"
 msgstr "環境檢查"
 
-#: /Users/zhangyi/shellkit/shellkit:233
+#: /Users/zhangyi/shellkit/shellkit:251
 msgid "needs 3.2 or newer"
 msgstr "需要 3.2 或更新"
 
-#: /Users/zhangyi/shellkit/shellkit:240
+#: /Users/zhangyi/shellkit/shellkit:258
 msgid "sha256sum or shasum is required"
 msgstr "需要 sha256sum 或 shasum"
 
-#: /Users/zhangyi/shellkit/shellkit:247
+#: /Users/zhangyi/shellkit/shellkit:265
 msgid "curl or wget is needed for downloads"
 msgstr "下載功能需要 curl 或 wget"
 
-#: /Users/zhangyi/shellkit/shellkit:254
+#: /Users/zhangyi/shellkit/shellkit:272
 msgid "translations disabled, English only"
 msgstr "未安裝 gettext，只輸出英文"
 
-#: /Users/zhangyi/shellkit/shellkit:261
+#: /Users/zhangyi/shellkit/shellkit:279
 msgid "xgettext and msgfmt are needed to update translations"
 msgstr "更新翻譯需要 xgettext 與 msgfmt"
 
-#: /Users/zhangyi/shellkit/shellkit:268
+#: /Users/zhangyi/shellkit/shellkit:286
 msgid "not installed, lint will be skipped"
 msgstr "未安裝，lint 會被略過"
 
-#: /Users/zhangyi/shellkit/shellkit:275
+#: /Users/zhangyi/shellkit/shellkit:293
 msgid "not installed, format check will be skipped"
 msgstr "未安裝，格式檢查會被略過"
 
-#: /Users/zhangyi/shellkit/shellkit:284
+#: /Users/zhangyi/shellkit/shellkit:302
 msgid "required tooling is missing"
 msgstr "缺少必要的工具"
 
-#: /Users/zhangyi/shellkit/shellkit:288
+#: /Users/zhangyi/shellkit/shellkit:306
 msgid "optional tooling is missing; core features still work"
 msgstr "缺少選用工具，核心功能不受影響"
 
-#: /Users/zhangyi/shellkit/shellkit:291
+#: /Users/zhangyi/shellkit/shellkit:309
 msgid "all checks passed"
 msgstr "全部檢查通過"
 
-#: /Users/zhangyi/shellkit/shellkit:299
+#: /Users/zhangyi/shellkit/shellkit:317
 msgid "library modules"
 msgstr "程式庫模組"
 
-#: /Users/zhangyi/shellkit/shellkit:303
+#: /Users/zhangyi/shellkit/shellkit:321
 msgid "templates"
 msgstr "樣板"
 
-#: /Users/zhangyi/shellkit/shellkit:309
+#: /Users/zhangyi/shellkit/shellkit:327
 msgid "commands"
 msgstr "指令"
 
-#: /Users/zhangyi/shellkit/shellkit:353
+#: /Users/zhangyi/shellkit/shellkit:371
 msgid "target directory does not exist"
 msgstr "目標目錄不存在"
 
-#: /Users/zhangyi/shellkit/shellkit:362
+#: /Users/zhangyi/shellkit/shellkit:380
 msgid "vendored library is out of date"
 msgstr "專案內的程式庫副本已過期"
 
-#: /Users/zhangyi/shellkit/shellkit:367
+#: /Users/zhangyi/shellkit/shellkit:385
 msgid "run without --check to update"
 msgstr "去掉 --check 重跑即可更新"
 
-#: /Users/zhangyi/shellkit/shellkit:370
+#: /Users/zhangyi/shellkit/shellkit:388
 msgid "vendored library is up to date"
 msgstr "專案內的程式庫副本已是最新"
 
-#: /Users/zhangyi/shellkit/shellkit:376
+#: /Users/zhangyi/shellkit/shellkit:394
 msgid "refusing to overwrite a directory that is not a shellkit vendor"
 msgstr "拒絕覆蓋不是 shellkit 副本的目錄"
 
-#: /Users/zhangyi/shellkit/shellkit:380
+#: /Users/zhangyi/shellkit/shellkit:398
 msgid "syncing"
 msgstr "正在同步"
 
-#: /Users/zhangyi/shellkit/shellkit:382
+#: /Users/zhangyi/shellkit/shellkit:400
 msgid "failed to sync the vendored library"
 msgstr "同步程式庫副本失敗"
 
-#: /Users/zhangyi/shellkit/shellkit:387
+#: /Users/zhangyi/shellkit/shellkit:405
 msgid "load it from your scripts"
 msgstr "在腳本裡這樣載入"
 
-#: /Users/zhangyi/shellkit/shellkit:401
+#: /Users/zhangyi/shellkit/shellkit:419
 msgid "public function has no doc comment"
 msgstr "公開函式缺少文件註解"
 
-#: /Users/zhangyi/shellkit/shellkit:463 /Users/zhangyi/shellkit/shellkit:487
+#: /Users/zhangyi/shellkit/shellkit:481 /Users/zhangyi/shellkit/shellkit:505
 msgid "failed to render"
 msgstr "產生文件失敗"
 
-#: /Users/zhangyi/shellkit/shellkit:467
+#: /Users/zhangyi/shellkit/shellkit:485
 msgid "document is missing"
 msgstr "文件不存在"
 
-#: /Users/zhangyi/shellkit/shellkit:470
+#: /Users/zhangyi/shellkit/shellkit:488
 msgid "document is out of date"
 msgstr "文件已過期"
 
-#: /Users/zhangyi/shellkit/shellkit:471
+#: /Users/zhangyi/shellkit/shellkit:489
 msgid "run to regenerate"
 msgstr "執行以重新產生"
 
-#: /Users/zhangyi/shellkit/shellkit:477
+#: /Users/zhangyi/shellkit/shellkit:495
 msgid "documentation is up to date"
 msgstr "文件已是最新"
 
-#: /Users/zhangyi/shellkit/shellkit:498
+#: /Users/zhangyi/shellkit/shellkit:516
 msgid "wrote"
 msgstr "已寫入"
 
-#: /Users/zhangyi/shellkit/shellkit:538
+#: /Users/zhangyi/shellkit/shellkit:623
 msgid "no write permission"
 msgstr "沒有寫入權限"
 
-#: /Users/zhangyi/shellkit/shellkit:539
+#: /Users/zhangyi/shellkit/shellkit:624
 msgid "try a writable prefix"
 msgstr "換一個可寫的前綴"
 
-#: /Users/zhangyi/shellkit/shellkit:543
+#: /Users/zhangyi/shellkit/shellkit:628
 msgid "installing"
 msgstr "正在安裝"
 
-#: /Users/zhangyi/shellkit/shellkit:553
+#: /Users/zhangyi/shellkit/shellkit:641
+msgid "failed to write the install manifest"
+msgstr "寫入安裝清單失敗"
+
+#: /Users/zhangyi/shellkit/shellkit:647
 msgid "failed to create symlink"
 msgstr "建立符號連結失敗"
 
-#: /Users/zhangyi/shellkit/shellkit:556
+#: /Users/zhangyi/shellkit/shellkit:650
 msgid "installed"
 msgstr "已安裝"
+
+#: /Users/zhangyi/shellkit/shellkit:684
+msgid "no install manifest under"
+msgstr "這裡沒有安裝清單："
+
+#: /Users/zhangyi/shellkit/shellkit:685
+msgid "nothing was removed, delete that directory by hand if you are sure"
+msgstr "沒有刪除任何東西；確認無誤請手動刪除該目錄"
+
+#: /Users/zhangyi/shellkit/shellkit:689
+msgid "removing"
+msgstr "正在刪除："
+
+#: /Users/zhangyi/shellkit/shellkit:697
+msgid "skipped a path outside the install directory"
+msgstr "跳過了安裝目錄之外的路徑："
+
+#: /Users/zhangyi/shellkit/shellkit:706
+msgid "failed to remove"
+msgstr "刪除失敗："
+
+#: /Users/zhangyi/shellkit/shellkit:717
+msgid "leftover files were kept"
+msgstr "保留了未清理的檔案："
+
+#: /Users/zhangyi/shellkit/shellkit:725
+msgid "left the symlink alone, it points elsewhere"
+msgstr "未動該符號連結，它指向別處："
+
+#: /Users/zhangyi/shellkit/shellkit:728
+msgid "left the file alone, it is not a symlink"
+msgstr "未動該檔案，它不是符號連結："
+
+#: /Users/zhangyi/shellkit/shellkit:731
+msgid "removed"
+msgstr "已刪除："
+
+#: /Users/zhangyi/shellkit/shellkit:731
+msgid "files"
+msgstr "個檔案"
+
+#: /Users/zhangyi/shellkit/shellkit:751
+msgid "no such file"
+msgstr "檔案不存在："
+
+#: /Users/zhangyi/shellkit/shellkit:759
+msgid "checking for a newer version"
+msgstr "正在檢查新版本"
+
+#: /Users/zhangyi/shellkit/shellkit:765
+msgid "cannot read the latest version from the release API"
+msgstr "無法從 release API 讀出最新版本"
+
+#: /Users/zhangyi/shellkit/shellkit:770 /Users/zhangyi/shellkit/shellkit:813
+#: /Users/zhangyi/shellkit/shellkit:827
+msgid "already up to date"
+msgstr "已是最新版本："
+
+#: /Users/zhangyi/shellkit/shellkit:774 /Users/zhangyi/shellkit/shellkit:815
+msgid "current version"
+msgstr "目前版本："
+
+#: /Users/zhangyi/shellkit/shellkit:774 /Users/zhangyi/shellkit/shellkit:815
+msgid "not installed"
+msgstr "未安裝"
+
+#: /Users/zhangyi/shellkit/shellkit:775 /Users/zhangyi/shellkit/shellkit:816
+msgid "latest version"
+msgstr "最新版本："
+
+#: /Users/zhangyi/shellkit/shellkit:784
+msgid "no checksum for this release"
+msgstr "該版本沒有校驗和："
+
+#: /Users/zhangyi/shellkit/shellkit:792
+msgid "no checksum provided, skipping verification"
+msgstr "沒有提供校驗和，跳過校驗："
+
+#: /Users/zhangyi/shellkit/shellkit:797
+msgid "cannot extract archive"
+msgstr "無法解包："
+
+#: /Users/zhangyi/shellkit/shellkit:802
+msgid "not a shellkit release"
+msgstr "這不是 shellkit 的發佈包："
+
+#: /Users/zhangyi/shellkit/shellkit:806
+msgid "cannot read the version of"
+msgstr "無法讀取版本號："
+
+#: /Users/zhangyi/shellkit/shellkit:822
+msgid "shellkit is not installed under"
+msgstr "shellkit 沒有裝在："
+
+#: /Users/zhangyi/shellkit/shellkit:823
+msgid "run install-self first, or point --prefix at the right place"
+msgstr "先跑 install-self，或把 --prefix 指到正確位置"
+
+#: /Users/zhangyi/shellkit/shellkit:831
+msgid "updating"
+msgstr "正在更新："
+
+#: /Users/zhangyi/shellkit/shellkit:834
+msgid "update failed"
+msgstr "更新失敗："
+
+#: /Users/zhangyi/shellkit/shellkit:837
+msgid "updated"
+msgstr "已更新："
+
+#: /Users/zhangyi/shellkit/shellkit:877
+msgid "cannot create a temporary directory"
+msgstr "無法建立暫存目錄"
 
 #: /Users/zhangyi/shellkit/templates/commands/__CMD__.sh:19
 msgid "running"
@@ -575,9 +702,6 @@ msgstr "已開啟強制模式"
 #: /Users/zhangyi/shellkit/templates/commands/__CMD__.sh:26
 msgid "finished"
 msgstr "完成"
-
-#~ msgid "reference is up to date"
-#~ msgstr "參考文件已是最新"
 
 #~ msgid "{{CMD}} command"
 #~ msgstr "{{CMD}} 子指令"

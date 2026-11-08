@@ -53,15 +53,51 @@ shellkit-demo/
 分发器不用动：`cli_run` 用 `declare -F` 动态找 `cmd_<name>`，命令名带短横也对得上
 （`install-self` → `cmd_install_self`）。
 
-## 装到 PATH
+## 一键安装
 
 ```bash
-./shellkit install-self                    # 默认 /usr/local/bin
+curl -fsSL https://raw.githubusercontent.com/yi-nology/shellkit/main/install.sh | bash
+```
+
+默认装到 `/usr/local`；没有写权限就退到 `~/.local`。要自己指定：
+
+```bash
+curl -fsSL .../install.sh | PREFIX="$HOME/.local" bash   # 换目录
+curl -fsSL .../install.sh | VERSION=0.4.0 bash           # 钉版本
+./install.sh --prefix /opt/shellkit                     # 在检出目录里直接跑，装当前工作树
+```
+
+脚本自己不往目标目录放任何文件：取版本号 → 下载 tar.gz 与 `SHA256SUMS` → 校验 → 交给包内自带的
+`shellkit install-self`。**sha256 对不上就 `exit 5`，一个字节都不落地**。
+
+手动装（已经 clone 下来时）：
+
+```bash
+./shellkit install-self                    # 默认 /usr/local
 ./shellkit install-self --prefix ~/.local  # 没有 root 就装到自己的目录
 ```
 
-不装也能用：直接 `git clone` 到任意位置，`./shellkit` 就是完整 CLI；
-工程里也可以自带一份库（`shellkit new` 默认就这么做）。
+## 更新与卸载
+
+```bash
+shellkit update --check     # 只比对版本；stdout 只给版本号，可直接进脚本
+shellkit update             # 更新到最新 release，校验 sha256 才装
+shellkit update --from pkg.tar.gz --sha256 SUM   # 离线或内网：指定本地包
+shellkit uninstall-self     # 按 MANIFEST 删干净
+```
+
+卸载不猜：安装时把真实落盘的文件写成 `PREFIX/share/shellkit/MANIFEST`，卸载只删清单里列出的
+相对路径（`../` 一律跳过并告警）；没有清单就报错退出（退出码 3），交给人决定。
+
+## 不装也能用
+
+```bash
+git clone https://github.com/yi-nology/shellkit.git
+cd shellkit && ./shellkit new /tmp/demo --cmd start
+```
+
+`./shellkit` 本身就是完整 CLI；`shellkit new` 默认把库拷进工程（`vendor/shellkit`），
+所以生成的工程不依赖本机装没装过 shellkit。
 
 ## 接进已有项目
 

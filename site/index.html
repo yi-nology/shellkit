@@ -10,7 +10,7 @@
 <body>
 <header class="nav">
   <a class="brand" href="./">shell<span>kit</span></a>
-  <nav><a href="#start">快速开始</a><a href="#modules">模块</a><a href="#docs">文档</a><a href="https://github.com/yi-nology/shellkit">GitHub</a></nav>
+  <nav><a href="#install">安装</a><a href="#start">快速开始</a><a href="#modules">模块</a><a href="#ai">给 AI 用</a><a href="#docs">文档</a><a href="https://github.com/yi-nology/shellkit">GitHub</a></nav>
 </header>
 <main>
 <section class="hero">
@@ -19,9 +19,33 @@
   <p class="lede">一个<strong>约束清晰的 Bash 库</strong>、一个<strong>脚手架生成器</strong>、一套 <strong>CLI 框架</strong>。
   目标不是功能多，而是让写出来的脚本又准又一致 —— 日志不会污染 <code>$(...)</code>，
   失败有固定退出码，同一条命令跑一百遍和跑一遍一样。</p>
-  <div class="cmd"><span class="prompt">$</span> <code>git clone https://github.com/yi-nology/shellkit.git &amp;&amp; cd shellkit &amp;&amp; ./shellkit doctor</code></div>
-  <div class="cta"><a class="btn primary" href="#start">三十秒上手</a>
-  <a class="btn" href="https://github.com/yi-nology/shellkit/releases/latest">下载 0.3.0</a></div>
+  <div class="cmd"><span class="prompt">$</span> <code>curl -fsSL https://raw.githubusercontent.com/yi-nology/shellkit/main/install.sh | bash</code></div>
+  <div class="cta"><a class="btn primary" href="#install">一键安装</a>
+  <a class="btn" href="#start">三十秒上手</a>
+  <a class="btn" href="https://github.com/yi-nology/shellkit/releases/latest">下载 0.4.0</a></div>
+</section>
+
+<section id="install" class="start">
+  <h2>一条命令装上</h2>
+  <p>安装脚本只做四件事：取最新版本号 → 下载 tar.gz 与 SHA256SUMS → 校验 → 交给包内自带的
+  <code>shellkit install-self</code>。它自己不往目标目录里放任何文件，安装逻辑只有一份。</p>
+<pre><code><span class="c"># 默认装到 /usr/local；没有写权限就自动退到 ~/.local</span>
+curl -fsSL https://raw.githubusercontent.com/yi-nology/shellkit/main/install.sh | bash
+
+<span class="c"># 指定目录 / 指定版本 / 走内网镜像</span>
+curl -fsSL .../install.sh | PREFIX="$HOME/.local" bash
+curl -fsSL .../install.sh | VERSION=0.4.0 bash
+curl -fsSL .../install.sh | SHELLKIT_RELEASE_BASE=https://mirror.example/shellkit bash</code></pre>
+  <p>装完后 <code>$PREFIX/bin/shellkit</code> 里就这些：</p>
+<pre><code>shellkit update            <span class="c"># 更新到最新 release，sha256 对不上就不装</span>
+shellkit update --check    <span class="c"># stdout 只给版本号，可直接写进脚本</span>
+shellkit update --from pkg.tar.gz --sha256 SUM   <span class="c"># 离线或内网：指定本地包</span>
+shellkit uninstall-self    <span class="c"># 按 MANIFEST 删；没有清单就报错退出</span></code></pre>
+  <div class="facts">
+    <div class="fact"><h3>校验不过就不装</h3><p>sha256 不匹配直接 <code>exit 5</code>，一个字节都不会落地。</p></div>
+    <div class="fact"><h3>卸载不猜</h3><p>安装时写 <code>MANIFEST</code>；卸载只删清单里列出的文件，<code>../</code> 一律跳过。</p></div>
+    <div class="fact"><h3>重装不嵌套</h3><p>整目录替换，不是逐文件覆盖 —— 装一百次布局都一样。</p></div>
+  </div>
 </section>
 <section class="facts">
   <div class="fact"><h3>stdout 只给数据</h3><p>日志一律走 stderr。所以 <code>v=$(conf_get KEY)</code> 拿到的永远是干净的值，不会混进 <code>[INFO]</code>。</p></div>
@@ -65,6 +89,34 @@ shellkit vendor . --check    <span class="c"># 逐字节比对，漂移返回 5�
   </tbody></table></div>
 </section>
 
+<section id="ai" class="modules">
+  <h2>给 AI 用</h2>
+  <p>这个库的约束本来就是写给机器看的：禁用语法、任务落点、交付自检都写在 <code>AGENTS.md</code> 里。
+  让 AI 写 Bash 时先把它指到这几份文件，比事后返工便宜得多 —— 它不会发明不存在的函数名，
+  也不会写出在 macOS 自带的 bash 3.2 上直接崩的语法。</p>
+  <div class="table-wrap"><table>
+  <thead><tr><th>你想让它做的</th><th>先喂给它</th></tr></thead><tbody>
+  <tr><td>按本库写脚本</td><td><code>AGENTS.md</code>：Bash 3.2 禁用语法对照表 + 任务→函数落点表 + 交付前自检清单</td></tr>
+  <tr><td>别发明 API</td><td><code>docs/REFERENCE.md</code>：从源码注释生成，<code>shellkit docs --check</code> 拦漂移</td></tr>
+  <tr><td>在新工程里直接开工</td><td><code>shellkit new</code> 生成的 <code>AGENTS.md</code>，或装上 <code>skills/shellkit/SKILL.md</code></td></tr>
+  <tr><td>改完自己验收</td><td>让它跑 <code>bash -n</code> + <code>shellcheck -S warning -x</code>，并贴出真实输出而不是「应该能跑」</td></tr>
+  </tbody></table></div>
+  <p>可以直接这么开口：</p>
+<pre><code><span class="c"># 把这段当提示词的开头，比只说"用 shellkit 写个脚本"有效得多</span>
+用 shellkit 写 deploy.sh：
+ - 日志用 log_info / log_ok / log_warn / log_error，全部走 stderr
+ - 读配置用 conf_init + conf_get_any；改配置用 conf_set（幂等）
+ - 失败用 die / require_cmd，退出码按 0/1/2/3/4/5 分，不要一律 exit 1
+ - 下载校验用 net_download URL DEST sha256；等端口用 net_wait_port
+ - 同时只跑一个实例用 lock_acquire
+ - 禁用 declare -A / local -n / ${v^^} / mapfile / [[ -v ]]
+ - 空数组遍历写成 ${arr[@]+"${arr[@]}"}
+ - 交付前跑 bash -n 和 shellcheck -S warning -x</code></pre>
+  <p><a href="https://github.com/yi-nology/shellkit/blob/main/AGENTS.md">AGENTS.md</a> ·
+     <a href="https://github.com/yi-nology/shellkit/blob/main/skills/shellkit/SKILL.md">SKILL.md</a> ·
+     <a href="https://github.com/yi-nology/shellkit/blob/main/docs/REFERENCE.md">REFERENCE.md</a> ·
+     <a href="https://github.com/yi-nology/shellkit/blob/main/docs/COOKBOOK.md">Cookbook</a></p>
+</section>
 <section id="docs" class="docs">
   <h2>下一步看哪份</h2>
   <div class="cards">

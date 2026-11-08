@@ -7,7 +7,8 @@
 
 ## 地图
 
-    shellkit                  生成器 CLI（new / doctor / list / vendor / docs / install-self）
+    shellkit                  生成器 CLI（new / doctor / list / vendor / docs / install-self / uninstall-self / update）
+    install.sh                一键安装脚本：取版本 → 下载 release → 校验 sha256 → 交给 install-self
     lib/bootstrap.sh          唯一入口：按拓扑序 source lib/core/*.sh
     lib/core/<module>.sh      15 个模块，一个模块一个主题
     templates/                shellkit new 的模板（含 __NAME__ / __CMD__ 占位符）

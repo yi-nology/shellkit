@@ -16,7 +16,12 @@ shellkit 是 Bash 库 + 脚手架。用它，你不用再手写日志、配置�
     # B. 既有工程：把库镜像到 vendor/shellkit（可提交，可复现）
     shellkit vendor .
 
-    # C. 自用脚本：全局安装
+    # C. 自用脚本：全局安装（一键取 release，sha256 校验通过才装）
+    curl -fsSL https://raw.githubusercontent.com/yi-nology/shellkit/main/install.sh | bash
+    shellkit update            # 之后一条命令更新
+    shellkit uninstall-self    # 不想要了按 MANIFEST 删干净
+
+    # 已经 clone 下来时也可以直接装，或用 --prefix 换目录
     shellkit install-self --prefix ~/.local
 
 脚本里加载库就一行：

@@ -8,13 +8,29 @@
 #   shellkit install-self [--prefix DIR]
 set -euo pipefail
 
-SELF_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" &>/dev/null && pwd)"
+# 定位自身：先解析软链再取目录。
+# 装在 PREFIX/bin/x 并链到 PREFIX/share/... 时，dirname 看到的是 bin/，
+# 直接用它会导致 lib/ 找不到 —— 必须顺着软链走到真实文件。
+__self=${BASH_SOURCE[0]}
+while [ -L "$__self" ]; do
+  __linkdir=$(cd -P "$(dirname "$__self")" &>/dev/null && pwd)
+  __self=$(readlink "$__self")
+  case "$__self" in
+    /*) ;;
+    *) __self="$__linkdir/$__self" ;;
+  esac
+done
+SELF_DIR="$(cd -P "$(dirname "$__self")" &>/dev/null && pwd)"
 . "$SELF_DIR/lib/bootstrap.sh"
 
 # 供 lib/core/cli.sh 生成 usage 前缀；跨文件使用，shellcheck 看不到
 # shellcheck disable=SC2034
 SK_PROG=shellkit
 SK_TPL_DIR="$SELF_DIR/templates"
+# update 的两个端点：可用环境变量指向镜像或内网发布源
+SHELLKIT_RELEASE_API="${SHELLKIT_RELEASE_API:-https://api.github.com/repos/yi-nology/shellkit/releases/latest}"
+SHELLKIT_RELEASE_BASE="${SHELLKIT_RELEASE_BASE:-https://github.com/yi-nology/shellkit/releases/download}"
+export SHELLKIT_RELEASE_API SHELLKIT_RELEASE_BASE
 
 if ! require_bash 3 2; then
   exit "$SK_PRECOND"
@@ -31,6 +47,8 @@ cli_group "$(_t 'documentation')"
 cli_cmd docs "$(_t 'regenerate the API reference')" "docs [--check]"
 cli_group "$(_t 'installation')"
 cli_cmd install-self "$(_t 'install shellkit into PATH')" "install-self [--prefix DIR]"
+cli_cmd uninstall-self "$(_t 'remove an installed shellkit')" "uninstall-self [--prefix DIR]"
+cli_cmd update "$(_t 'update an installed shellkit')" "update [--check] [--from FILE] [--sha256 SUM] [--prefix DIR]"
 
 # _sk_render SRC DST NAME VERSION [CMD]
 #   占位符用双花括号形式，避免和 shell 的美元大括号混淆。
@@ -500,7 +518,73 @@ cmd_docs() {
   return "$SK_OK"
 }
 
-# ---------- install-self ----------
+# ---------- 安装 / 卸载 / 更新 ----------
+#
+# 安装位置固定为 PREFIX/share/shellkit（数据）+ PREFIX/bin/shellkit（软链接）。
+# 安装时写 MANIFEST；卸载只删 MANIFEST 里列出的文件 —— 不猜，也不 rm -rf。
+
+# _sk_install_dest PREFIX —— 安装目录，前缀末尾多余斜杠会被吃掉
+_sk_install_dest() { printf '%s' "${1%/}/share/shellkit"; }
+
+# _sk_copy_tree SRC DST —— 整目录替换
+# cp -R 的坑：DST 已存在时会把 SRC 塞成 DST/SRC（二次安装就多一层 lib/lib），
+# 所以先删。${__dst:?} 是安全阀：变量异常为空时绝不让 rm 落到 /lib 上。
+_sk_copy_tree() {
+  local __src=$1 __dst=$2
+  if [ -e "$__dst" ]; then
+    rm -rf "${__dst:?}" || return 1
+  fi
+  cp -R "$__src" "$__dst" || return 1
+  return 0
+}
+
+# _sk_manifest_write DEST —— 把 DEST 下真实存在的文件写成 MANIFEST
+# 清单来自文件系统，而不是「我以为会装什么」：装多了装少了，卸载都以实际为准。
+_sk_manifest_write() {
+  local __dest=$1 __tmp
+  __tmp="$__dest/MANIFEST.tmp.$$"
+  {
+    printf '# shellkit %s\n' "$SK_VERSION"
+    printf '# prefix %s\n' "$(dirname "$(dirname "$__dest")")"
+    (
+      cd "$__dest" || exit 1
+      find . -type f ! -name MANIFEST ! -name 'MANIFEST.tmp.*' -print
+    ) | sed 's|^\./||' | LC_ALL=C sort
+  } >"$__tmp" || {
+    rm -f "$__tmp"
+    return 1
+  }
+  if ! mv -f "$__tmp" "$__dest/MANIFEST"; then
+    rm -f "$__tmp"
+    return 1
+  fi
+  return 0
+}
+
+# _sk_find_tree DIR —— 在解包目录里找 shellkit 源码树（含 shellkit 与 lib/）
+_sk_find_tree() {
+  local __root=$1 __d
+  if [ -f "$__root/shellkit" ] && [ -d "$__root/lib" ]; then
+    printf '%s' "$__root"
+    return 0
+  fi
+  for __d in "$__root"/*/; do
+    if [ -f "${__d}shellkit" ] && [ -d "${__d}lib" ]; then
+      printf '%s' "${__d%/}"
+      return 0
+    fi
+  done
+  return 1
+}
+
+# _sk_tree_version DIR —— 读取一棵源码树里的 VERSION
+_sk_tree_version() {
+  local __dir=$1
+  if [ ! -f "$__dir/VERSION" ]; then
+    return 1
+  fi
+  tr -d '[:space:]' <"$__dir/VERSION"
+}
 
 cmd_install_self() {
   local __prefix="/usr/local" __dest __bin
@@ -529,7 +613,8 @@ cmd_install_self() {
     shift
   done
 
-  __dest="$__prefix/share/shellkit"
+  __prefix="${__prefix%/}"
+  __dest="$(_sk_install_dest "$__prefix")"
   __bin="$__prefix/bin/shellkit"
   fs_ensure_dir "$__prefix/bin" 755 || return "$SK_PRECOND"
   fs_ensure_dir "$__dest" 755 || return "$SK_PRECOND"
@@ -541,12 +626,21 @@ cmd_install_self() {
   fi
 
   log_section "$(_t 'installing'): $__dest"
-  cp -R "$SELF_DIR/lib" "$__dest/lib"
-  cp -R "$SELF_DIR/templates" "$__dest/templates"
-  cp -R "$SELF_DIR/locale" "$__dest/locale"
-  cp "$SELF_DIR/VERSION" "$__dest/VERSION"
-  cp "$SELF_DIR/shellkit" "$__dest/shellkit"
-  chmod 755 "$__dest/shellkit"
+  _sk_copy_tree "$SELF_DIR/lib" "$__dest/lib" || return "$SK_ERR"
+  _sk_copy_tree "$SELF_DIR/templates" "$__dest/templates" || return "$SK_ERR"
+  _sk_copy_tree "$SELF_DIR/locale" "$__dest/locale" || return "$SK_ERR"
+  # 只装得进源码树里真有的东西：vendor 出来的副本可能没有 skills/
+  if [ -d "$SELF_DIR/skills" ]; then
+    _sk_copy_tree "$SELF_DIR/skills" "$__dest/skills" || return "$SK_ERR"
+  fi
+  cp -f "$SELF_DIR/VERSION" "$__dest/VERSION" || return "$SK_ERR"
+  cp -f "$SELF_DIR/shellkit" "$__dest/shellkit" || return "$SK_ERR"
+  chmod 755 "$__dest/shellkit" || return "$SK_ERR"
+
+  if ! _sk_manifest_write "$__dest"; then
+    log_error "$(_t 'failed to write the install manifest'): $__dest/MANIFEST"
+    return "$SK_ERR"
+  fi
 
   rm -f "$__bin"
   if ! ln -s "$__dest/shellkit" "$__bin"; then
@@ -555,6 +649,237 @@ cmd_install_self() {
   fi
   log_ok "$(_t 'installed'): $__bin"
   return "$SK_OK"
+}
+
+cmd_uninstall_self() {
+  local __prefix="/usr/local" __dest __bin __line __path __n=0 __fail=0 __link
+  while [ "$#" -gt 0 ]; do
+    case "$1" in
+      --prefix)
+        shift
+        if [ "$#" -eq 0 ]; then
+          log_error "$(_t 'option requires a value'): --prefix"
+          return "$SK_USAGE"
+        fi
+        __prefix=$1
+        ;;
+      --prefix=*) __prefix="${1#*=}" ;;
+      -h | --help)
+        cli_usage_cmd uninstall-self
+        return "$SK_OK"
+        ;;
+      *)
+        log_error "$(_t 'unknown option'): $1"
+        return "$SK_USAGE"
+        ;;
+    esac
+    shift
+  done
+
+  __prefix="${__prefix%/}"
+  __dest="$(_sk_install_dest "$__prefix")"
+  __bin="$__prefix/bin/shellkit"
+
+  if [ ! -f "$__dest/MANIFEST" ]; then
+    log_error "$(_t 'no install manifest under'): $__dest"
+    log_info "$(_t 'nothing was removed, delete that directory by hand if you are sure')"
+    return "$SK_PRECOND"
+  fi
+
+  log_section "$(_t 'removing'): $__dest"
+  while IFS= read -r __line; do
+    case "$__line" in
+      '' | '#'*) continue ;;
+    esac
+    # 清单是文件，不是可信输入：绝不允许 ../ 把删除动作带出安装目录
+    case "$__line" in
+      /* | ../* | */../*)
+        log_warn "$(_t 'skipped a path outside the install directory'): $__line"
+        continue
+        ;;
+    esac
+    __path="$__dest/$__line"
+    if [ -e "$__path" ] || [ -L "$__path" ]; then
+      if rm -f "$__path"; then
+        __n=$((__n + 1))
+      else
+        log_warn "$(_t 'failed to remove'): $__path"
+        __fail=$((__fail + 1))
+      fi
+    fi
+  done <"$__dest/MANIFEST"
+
+  rm -f "$__dest/MANIFEST"
+  # 由深到浅删空目录；rmdir 只删空目录，碰到别人的东西会失败而不是删掉
+  find "$__dest" -depth -type d -exec rmdir {} \; 2>/dev/null || true
+
+  if [ -d "$__dest" ]; then
+    log_warn "$(_t 'leftover files were kept'): $__dest"
+    __fail=$((__fail + 1))
+  fi
+
+  if [ -L "$__bin" ]; then
+    __link=$(readlink "$__bin")
+    case "$__link" in
+      "$__dest" | "$__dest"/*) rm -f "$__bin" ;;
+      *) log_warn "$(_t 'left the symlink alone, it points elsewhere'): $__bin" ;;
+    esac
+  elif [ -e "$__bin" ]; then
+    log_warn "$(_t 'left the file alone, it is not a symlink'): $__bin"
+  fi
+
+  log_ok "$(_t 'removed'): $__n $(_t 'files')"
+  if [ "$__fail" -ne 0 ]; then
+    return "$SK_ERR"
+  fi
+  return "$SK_OK"
+}
+
+# _sk_update_run PREFIX FROM SUM CHECK FORCE TMP
+#   装在 TMP 里的临时目录由调用方负责清理，所以这里只管逻辑，不管收尾。
+_sk_update_run() {
+  local __prefix=$1 __from=$2 __sum=$3 __check=$4 __force=$5 __tmp=$6
+  local __dest __ver="" __tgz="" __sumfile="" __src="" __cur="" __tag=""
+
+  __dest="$(_sk_install_dest "$__prefix")"
+  if [ -f "$__dest/VERSION" ]; then
+    __cur=$(_sk_tree_version "$__dest") || __cur=""
+  fi
+
+  if [ -n "$__from" ]; then
+    if [ ! -f "$__from" ]; then
+      log_error "$(_t 'no such file'): $__from"
+      return "$SK_PRECOND"
+    fi
+    __tgz=$__from
+    if [ -z "$__sum" ] && [ -f "$__from.sha256" ]; then
+      __sum=$(awk 'NR==1{print $1}' "$__from.sha256")
+    fi
+  else
+    log_info "$(_t 'checking for a newer version')"
+    net_download "$SHELLKIT_RELEASE_API" "$__tmp/release.json" || return $?
+    __tag=$(sed -n 's/.*"tag_name"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' \
+      "$__tmp/release.json" | head -1)
+    __ver=${__tag#v}
+    if [ -z "$__ver" ]; then
+      log_error "$(_t 'cannot read the latest version from the release API')"
+      return "$SK_VERIFY"
+    fi
+    if [ "$__check" = "1" ] && [ "$__cur" = "$__ver" ]; then
+      printf '%s\n' "$__ver"
+      log_ok "$(_t 'already up to date'): $__cur"
+      return "$SK_OK"
+    elif [ "$__check" = "1" ]; then
+      printf '%s\n' "$__ver"
+      log_info "$(_t 'current version'): ${__cur:-$(_t 'not installed')}"
+      log_ok "$(_t 'latest version'): $__ver"
+      return "$SK_OK"
+    fi
+    __tgz="$__tmp/shellkit-$__ver.tar.gz"
+    net_download "${SHELLKIT_RELEASE_BASE%/}/v$__ver/shellkit-$__ver.tar.gz" "$__tgz" || return $?
+    __sumfile="$__tmp/SHA256SUMS"
+    net_download "${SHELLKIT_RELEASE_BASE%/}/v$__ver/SHA256SUMS" "$__sumfile" || return $?
+    __sum=$(awk -v n="shellkit-$__ver.tar.gz" '$2==n{print $1}' "$__sumfile")
+    if [ -z "$__sum" ]; then
+      log_error "$(_t 'no checksum for this release'): $__sumfile"
+      return "$SK_VERIFY"
+    fi
+  fi
+
+  if [ -n "$__sum" ]; then
+    net_verify "$__tgz" "$__sum" || return $?
+  else
+    log_warn "$(_t 'no checksum provided, skipping verification'): $__tgz"
+  fi
+
+  fs_ensure_dir "$__tmp/src" "" || return "$SK_ERR"
+  if ! tar -C "$__tmp/src" -xzf "$__tgz" 2>/dev/null; then
+    log_error "$(_t 'cannot extract archive'): $__tgz"
+    return "$SK_VERIFY"
+  fi
+  __src=$(_sk_find_tree "$__tmp/src") || __src=""
+  if [ -z "$__src" ]; then
+    log_error "$(_t 'not a shellkit release'): $__tgz"
+    return "$SK_VERIFY"
+  fi
+  __ver=$(_sk_tree_version "$__src") || {
+    log_error "$(_t 'cannot read the version of'): $__src"
+    return "$SK_VERIFY"
+  }
+
+  if [ "$__check" = "1" ]; then
+    printf '%s\n' "$__ver"
+    if [ "$__cur" = "$__ver" ]; then
+      log_ok "$(_t 'already up to date'): $__cur"
+    else
+      log_info "$(_t 'current version'): ${__cur:-$(_t 'not installed')}"
+      log_ok "$(_t 'latest version'): $__ver"
+    fi
+    return "$SK_OK"
+  fi
+
+  if [ -z "$__cur" ]; then
+    log_error "$(_t 'shellkit is not installed under'): $__dest"
+    log_info "$(_t 'run install-self first, or point --prefix at the right place')"
+    return "$SK_PRECOND"
+  fi
+  if [ "$__cur" = "$__ver" ] && [ "$__force" != "1" ]; then
+    log_ok "$(_t 'already up to date'): $__cur"
+    return "$SK_OK"
+  fi
+
+  log_section "$(_t 'updating'): $__cur -> $__ver"
+  # 用新版本自己的 install-self 来装：安装逻辑只有一份，不会与 install-self 漂移
+  if ! bash "$__src/shellkit" install-self --prefix "$__prefix"; then
+    log_error "$(_t 'update failed'): $__ver"
+    return "$SK_ERR"
+  fi
+  log_ok "$(_t 'updated'): $__ver"
+  return "$SK_OK"
+}
+
+cmd_update() {
+  local __prefix="/usr/local" __from="" __sum="" __check=0 __force=0 __tmp __rc=0 __opt=""
+  while [ "$#" -gt 0 ]; do
+    case "$1" in
+      --prefix | --from | --sha256)
+        __opt=$1
+        shift
+        if [ "$#" -eq 0 ]; then
+          log_error "$(_t 'option requires a value'): $__opt"
+          return "$SK_USAGE"
+        fi
+        case "$__opt" in
+          --prefix) __prefix=$1 ;;
+          --from) __from=$1 ;;
+          --sha256) __sum=$1 ;;
+        esac
+        ;;
+      --prefix=*) __prefix="${1#*=}" ;;
+      --from=*) __from="${1#*=}" ;;
+      --sha256=*) __sum="${1#*=}" ;;
+      --check) __check=1 ;;
+      -f | --force) __force=1 ;;
+      -h | --help)
+        cli_usage_cmd update
+        return "$SK_OK"
+        ;;
+      *)
+        log_error "$(_t 'unknown option'): $1"
+        return "$SK_USAGE"
+        ;;
+    esac
+    shift
+  done
+
+  __prefix="${__prefix%/}"
+  __tmp=$(mktemp -d "${TMPDIR:-/tmp}/shellkit-update.XXXXXX") || {
+    log_error "$(_t 'cannot create a temporary directory')"
+    return "$SK_ERR"
+  }
+  _sk_update_run "$__prefix" "$__from" "$__sum" "$__check" "$__force" "$__tmp" || __rc=$?
+  rm -rf "${__tmp:?}"
+  return "$__rc"
 }
 
 cli_run "$@"
