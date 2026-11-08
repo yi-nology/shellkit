@@ -1,0 +1,50 @@
+name: pages
+
+# 不另开 gh-pages 分支：产物由 Actions 直接发布成站点，构建结果不进 git 历史。
+# 站点只有两个来源：site/ 下的手写页面，和 docs/shots/ 里真跑出来的截图。
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - 'site/**'
+      - 'docs/shots/**'
+      - '.github/workflows/pages.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: build site
+        run: |
+          set -euo pipefail
+          mkdir -p _site/shots
+          cp site/index.html site/style.css _site/
+          cp docs/shots/*.svg _site/shots/
+          # 截图是构建期拷过去的，站里不能出现坏链
+          for f in $(grep -oE 'shots/[a-z-]+\.svg' site/index.html | sort -u); do
+            test -f "_site/$f" || { echo "missing $f" >&2; exit 1; }
+          done
+          ls -R _site
+
+      - uses: actions/configure-pages@v5
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: _site
+      - id: deployment
+        uses: actions/deploy-pages@v4

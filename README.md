@@ -11,6 +11,8 @@ macOS 原生 bash、Alpine 的 busybox 之外的主流发行版都能直接跑�
 
 ## 先找你自己
 
+站点版（同样的内容，带真跑出来的终端截图）：https://yi-nology.github.io/shellkit/
+
 | 你现在的情况 | 从哪进 |
 |---|---|
 | 想花五分钟判断值不值得用 | 往下读「三十秒」 |

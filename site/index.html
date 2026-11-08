@@ -1,0 +1,83 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>shellkit — 写运维 shell 的起点</title>
+<meta name="description" content="一个约束清晰的 Bash 库、脚手架生成器与 CLI 框架。基线 Bash 3.2+，stdout 只给数据，日志一律 stderr。">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<header class="nav">
+  <a class="brand" href="./">shell<span>kit</span></a>
+  <nav><a href="#start">快速开始</a><a href="#modules">模块</a><a href="#docs">文档</a><a href="https://github.com/yi-nology/shellkit">GitHub</a></nav>
+</header>
+<main>
+<section class="hero">
+  <p class="eyebrow">Bash 3.2+ · 零运行时依赖</p>
+  <h1>写运维 shell 的起点</h1>
+  <p class="lede">一个<strong>约束清晰的 Bash 库</strong>、一个<strong>脚手架生成器</strong>、一套 <strong>CLI 框架</strong>。
+  目标不是功能多，而是让写出来的脚本又准又一致 —— 日志不会污染 <code>$(...)</code>，
+  失败有固定退出码，同一条命令跑一百遍和跑一遍一样。</p>
+  <div class="cmd"><span class="prompt">$</span> <code>git clone https://github.com/yi-nology/shellkit.git &amp;&amp; cd shellkit &amp;&amp; ./shellkit doctor</code></div>
+  <div class="cta"><a class="btn primary" href="#start">三十秒上手</a>
+  <a class="btn" href="https://github.com/yi-nology/shellkit/releases/latest">下载 0.3.0</a></div>
+</section>
+<section class="facts">
+  <div class="fact"><h3>stdout 只给数据</h3><p>日志一律走 stderr。所以 <code>v=$(conf_get KEY)</code> 拿到的永远是干净的值，不会混进 <code>[INFO]</code>。</p></div>
+  <div class="fact"><h3>出参用 <code>printf -v</code></h3><p>函数不直接改调用方变量。Bash 3.2 没有 nameref，这是唯一在 3.2 上可靠的返回值通道。</p></div>
+  <div class="fact"><h3>基线 3.2，不是 5.x</h3><p>macOS 自带的 <code>/bin/bash</code> 就是 3.2.57。关联数组、nameref、<code>mapfile</code> 全库禁用。</p></div>
+</section>
+
+<section class="shots">
+  <p class="note">下面每张图都是真跑出来的：<code>docs/shots/*.shot</code> 里每行 <code>$</code> 开头的命令会被执行，输出原样渲染成 SVG。</p>
+  <figure><img src="shots/doctor.svg" alt="shellkit doctor 的真实输出" loading="lazy"><figcaption>先看环境缺什么，缺了也不影响核心功能</figcaption></figure>
+  <figure><img src="shots/new-project.svg" alt="shellkit new 后 make test 通过的真实输出" loading="lazy"><figcaption>生成的工程当场 <code>make test</code> 通过</figcaption></figure>
+  <figure><img src="shots/gate.svg" alt="文档门禁的真实输出" loading="lazy"><figcaption>文档里的例子改名会立刻红，不会悄悄烂掉</figcaption></figure>
+</section>
+
+<section id="start" class="start">
+  <h2>三十秒</h2>
+<pre><code><span class="c"># 生成一个工程，自带库副本、测试、Makefile 和给 AI 的约束</span>
+./shellkit new /tmp/demo --cmd start --cmd status
+cd /tmp/demo &amp;&amp; make test
+
+<span class="c"># 加一个子命令 = 复制 commands/start.sh 改名 + 改 cli_cmd 那一行</span>
+<span class="c"># 分发器不用动：cli_run 用 declare -F 动态找 cmd_&lt;name&gt;</span></code></pre>
+  <p>已经能跑的项目不用重写：一条命令把库镜像进去，再按五步渐进迁移，每一步都能单独上线。</p>
+<pre><code>shellkit vendor .            <span class="c"># 同步到 vendor/shellkit</span>
+shellkit vendor . --check    <span class="c"># 逐字节比对，漂移返回 5，适合进 CI</span></code></pre>
+</section>
+
+<section id="modules" class="modules">
+  <h2>模块</h2>
+  <p>15 个模块，一个模块一个主题。你该做的是装配，不是重新实现一遍。</p>
+  <div class="table-wrap"><table>
+  <thead><tr><th>模块</th><th>管什么</th></tr></thead><tbody>
+  <tr><td><code>log</code></td><td>全部走 stderr，彩色可关</td></tr>
+  <tr><td><code>error</code></td><td>失败即返回既定退出码（2 用法 / 3 前置 / 4 网络 / 5 校验）</td></tr>
+  <tr><td><code>config</code></td><td>KEY=VALUE，环境变量优先，值未变不写盘</td></tr>
+  <tr><td><code>fs</code></td><td>原子写、备份轮转、<code>ensure_line</code> 幂等改文件</td></tr>
+  <tr><td><code>net</code> <code>retry</code></td><td>下载带 sha256 校验与镜像回退；退避重试不管用法错</td></tr>
+  <tr><td><code>lock</code> <code>trap</code></td><td>原子锁与清理栈，拿到锁即挂进清理栈</td></tr>
+  <tr><td><code>cli</code> <code>prompt</code></td><td>注册式命令 + <code>--help</code> 自动生成；超时回退默认值</td></tr>
+  <tr><td><code>str</code> <code>validate</code> <code>os</code> <code>run</code> <code>i18n</code></td><td>3.2 兼容的字符串、校验、平台差异、失败即停、译文</td></tr>
+  </tbody></table></div>
+</section>
+
+<section id="docs" class="docs">
+  <h2>下一步看哪份</h2>
+  <div class="cards">
+    <a class="card" href="https://github.com/yi-nology/shellkit/blob/main/docs/COOKBOOK.md"><h3>Cookbook</h3><p>14 个场景：改配置、下载校验、重试、单实例、交互确认。每节都是「场景 / 代码 / 为什么」。</p></a>
+    <a class="card" href="https://github.com/yi-nology/shellkit/blob/main/docs/MIGRATING.md"><h3>迁移指南</h3><p>已有脚本想接库又不重写：五步渐进，先杀 stdout 污染，再接 CLI 与测试。</p></a>
+    <a class="card" href="https://github.com/yi-nology/shellkit/blob/main/docs/REFERENCE.md"><h3>API 参考</h3><p>从源码注释生成，签名与退出码不会和代码漂移。不用记函数名。</p></a>
+    <a class="card" href="https://github.com/yi-nology/shellkit/blob/main/AGENTS.md"><h3>给 AI 的约束</h3><p>禁用语法对照表 + 任务落点表 + 交付前自检，让 AI 第一次就写对。</p></a>
+    <a class="card" href="https://github.com/yi-nology/shellkit/tree/main/examples"><h3>示例工程</h3><p>两个能直接跑的完整工程：幂等装 systemd 单元、下载校验后原子切换版本。</p></a>
+    <a class="card" href="https://github.com/yi-nology/shellkit/releases/latest"><h3>发布产物</h3><p>tarball + SHA256SUMS，解包即用，不需要 git。</p></a>
+  </div>
+</section>
+</main>
+<footer><p>GPL-3.0-or-later · <a href="https://github.com/yi-nology/shellkit">yi-nology/shellkit</a></p></footer>
+</body>
+</html>
+
