@@ -8,11 +8,11 @@
 
 ### `die`
 
-die CODE MSG...
+die CODE MSG... —— CODE 必须是 0-255；不合法按用法错误退出 2，而不是让 exit 截成 255
 
 ### `fail`
 
-fail CODE MSG...  —— 不退出，只返回码
+fail CODE MSG...  —— 不退出，只返回码；CODE 校验同 die
 
 ### `require_cmd`
 
@@ -46,7 +46,7 @@ log_warn MSG... —— 警告，不中断
 
 ### `log_error`
 
-log_error MSG... —— 记录错误，并设置 SK_ERRMSG 供 cli_run 补印一次
+log_error MSG... —— 输出错误（stderr），并把最后一条错误记进 SK_ERRMSG
 
 ### `log_debug`
 
@@ -106,7 +106,7 @@ validate_port VALUE
 
 ### `validate_ip`
 
-validate_ip VALUE
+validate_ip VALUE —— 四段十进制，每段 0-255，且不接受前导零（010 会被当成八进制）
 
 ### `validate_version`
 
@@ -354,7 +354,7 @@ cli_run ARGS...
 
 ### `cli_opt_init`
 
-cli_opt_init VAR DEFAULT —— 只在调用方未定义该变量时初始化，不覆盖调用方的默认值
+cli_opt_init —— 清空选项注册表。不接受参数；变量默认值请自己先赋好
 
 ### `cli_opt`
 

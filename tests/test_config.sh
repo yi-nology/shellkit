@@ -67,3 +67,10 @@ assert_contains "$keys" "A2"
 assert_not_contains "$keys" "#"
 
 assert_eq "" "$(conf_get NOPE)" "missing key without default"
+
+# 「键存在但值为空」不等于「键不存在」：空值不该回落到默认值
+printf 'EMPTY_KEY=\n' >>"$cfg"
+assert_true conf_has "EMPTY_KEY"
+assert_eq "" "$(conf_get EMPTY_KEY fallback)" "an empty value does not fall back to the default"
+assert_eq "" "$(conf_get EMPTY_KEY)" "an empty value stays empty without a default"
+assert_eq "fallback" "$(conf_get ABSENT_KEY fallback)" "a missing key still falls back"

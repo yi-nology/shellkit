@@ -23,8 +23,11 @@ mk_release() {
   __stage=$work/stage-$__ver
   mkdir -p "$__stage/shellkit-$__ver"
   cp -R "$TEST_ROOT/lib" "$TEST_ROOT/templates" "$TEST_ROOT/locale" \
-    "$TEST_ROOT/skills" "$TEST_ROOT/shellkit" "$__stage/shellkit-$__ver/" ||
+    "$TEST_ROOT/skills" "$TEST_ROOT/tools" "$TEST_ROOT/docs" \
+    "$TEST_ROOT/shellkit" "$TEST_ROOT/AGENTS.md" "$__stage/shellkit-$__ver/" ||
     _fail "cannot stage the release tree"
+  # 与 release.yml 一致：设计文档不随发布包走
+  rm -rf "$__stage/shellkit-$__ver/docs/superpowers"
   printf '%s\n' "$__ver" >"$__stage/shellkit-$__ver/VERSION"
   tar -C "$__stage" -czf "$__out" "shellkit-$__ver" || _fail "cannot build the tarball"
 }
@@ -39,6 +42,12 @@ assert_true test -f "$dest/MANIFEST"
 assert_true test ! -e "$dest/lib/lib"
 assert_eq "$(cat "$TEST_ROOT/VERSION")" "$("$dest/shellkit" --version)" "installed copy runs"
 assert_eq "$(cat "$TEST_ROOT/VERSION")" "$("$prefix/bin/shellkit" --version)" "symlink resolves its own root"
+
+# 装完的副本必须能自己跑文档门禁：docs --check 需要 tools/ 与 docs/ai/，
+# 少装一个就只有「装完之后第一次 docs 才炸」才知道。
+assert_true test -d "$dest/tools"
+assert_true test -d "$dest/docs/ai"
+assert_exit_code 0 "$prefix/bin/shellkit" docs --check
 
 # 二次安装必须幂等：cp -R 到已存在的目录会嵌套成 lib/lib
 lines=$(grep -vc '^#' "$dest/MANIFEST")

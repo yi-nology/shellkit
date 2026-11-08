@@ -58,6 +58,10 @@ jobs:
       - name: docs snippets
         run: make check-docs
 
+      # pot 与源码漂移过（头里还写着 0.3.0 而 VERSION 早就是 0.4.x）
+      - name: message catalogue
+        run: make messages-check
+
       - name: examples
         run: make examples
 

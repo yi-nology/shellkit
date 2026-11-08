@@ -90,3 +90,52 @@ out=$(
   trap_install
 )
 assert_contains "$out" "child-cleanup"
+
+# 调用方的 INT/TERM/HUP handler 不能被静默覆盖。
+# 顺序：先跑清理栈，再跑调用方的 handler，最后以 128+sig 退出。
+# 用 bash -c 起真进程：$() 里 $$ 仍是父 shell 的 pid，kill -INT $$ 会打到测试进程自己身上。
+out=$(bash -c '
+  . "$1/lib/bootstrap.sh"
+  trap "printf \"user-int\\n\"" INT
+  trap_push "printf \"cleanup\\n\""
+  trap_install
+  kill -INT $$
+  sleep 5
+' _ "$TEST_ROOT")
+assert_contains "$out" "cleanup" "cleanup runs before the caller's INT handler"
+assert_contains "$out" "user-int" "the caller's INT handler is chained, not replaced"
+
+out=$(bash -c '
+  . "$1/lib/bootstrap.sh"
+  trap "printf \"user-term\\n\"" TERM
+  trap_push "printf \"cleanup\\n\""
+  trap_install
+  kill -TERM $$
+  sleep 5
+' _ "$TEST_ROOT")
+assert_contains "$out" "user-term" "the caller's TERM handler is chained"
+
+out=$(bash -c '
+  . "$1/lib/bootstrap.sh"
+  trap "printf \"user-hup\\n\"" HUP
+  trap_install
+  kill -HUP $$
+  sleep 5
+' _ "$TEST_ROOT")
+assert_contains "$out" "user-hup" "the caller's HUP handler is chained"
+
+# 没有调用方 handler 时，信号仍以 128+sig 退出（清理动作照样跑）
+out=$(
+  bash -c '
+  . "$1/lib/bootstrap.sh"
+  trap_push "printf \"cleanup\\n\""
+  trap_install
+  kill -TERM $$
+  sleep 5
+  printf "survived\\n"
+' _ "$TEST_ROOT"
+  printf 'rc=%s' "$?"
+)
+assert_contains "$out" "cleanup"
+assert_contains "$out" "rc=143" "a bare TERM exits with 128+15"
+assert_not_contains "$out" "survived"

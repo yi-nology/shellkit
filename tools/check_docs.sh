@@ -95,7 +95,7 @@ while IFS= read -r f; do
       *) printf '%s\n' "$line" >>"$TMP/blk.sh" ;;
     esac
   done <"$f"
-# docs/superpowers/ 是设计档案，不是给人照抄的示例，不纳入校验
+  # docs/superpowers/ 是设计档案，不是给人照抄的示例，不纳入校验
 done < <(find "$ROOT" -name '*.md' -not -path '*/.git/*' -not -path '*/.upstream/*' \
   -not -path '*/docs/superpowers/*' | sort)
 

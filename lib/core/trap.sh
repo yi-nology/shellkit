@@ -15,6 +15,9 @@ _SK_TRAP_RUNNING=0
 _SK_TRAP_INSTALLED=0
 _SK_TRAP_HAD_EXIT=0
 _SK_TRAP_SAVED_EXIT=""
+_SK_TRAP_SAVED_INT=""
+_SK_TRAP_SAVED_TERM=""
+_SK_TRAP_SAVED_HUP=""
 
 # trap_push CMD... —— 注册一个清理动作；后注册的先执行
 trap_push() {
@@ -110,9 +113,21 @@ _sk_trap_read() {
   return 0
 }
 
+# _sk_trap_slot SIG —— 该信号的保存位变量名
+_sk_trap_slot() {
+  case "${1:-}" in
+    EXIT) printf '_SK_TRAP_SAVED_EXIT' ;;
+    INT) printf '_SK_TRAP_SAVED_INT' ;;
+    TERM) printf '_SK_TRAP_SAVED_TERM' ;;
+    HUP) printf '_SK_TRAP_SAVED_HUP' ;;
+    *) return 1 ;;
+  esac
+}
+
 # _sk_trap_capture SIG —— 把调用方已有的同名 trap 存下来，稍后链式执行
 _sk_trap_capture() {
-  local __sig=$1 __line __cmd
+  local __sig=$1 __slot __line __cmd
+  __slot=$(_sk_trap_slot "$__sig") || return 0
   _sk_trap_read "$__sig" || return 0
   __line=$_SK_TRAP_CUR
   case "$__line" in
@@ -120,7 +135,12 @@ _sk_trap_capture() {
     *) return 0 ;;
   esac
   __cmd=${__line#trap -- }
-  __cmd=${__cmd%" $__sig"}
+  # trap -p 的尾部是信号名：EXIT 写 EXIT，其余写 SIGINT / SIGTERM / SIGHUP
+  case "$__cmd" in
+    *" SIG$__sig") __cmd=${__cmd%" SIG$__sig"} ;;
+    *" $__sig") __cmd=${__cmd%" $__sig"} ;;
+    *) return 0 ;;
+  esac
   case "$__cmd" in
     \'*\') ;;
     *) return 0 ;;
@@ -130,9 +150,26 @@ _sk_trap_capture() {
   if [ -z "$__cmd" ]; then
     return 0
   fi
-  _SK_TRAP_SAVED_EXIT=$__cmd
-  _SK_TRAP_HAD_EXIT=1
+  printf -v "$__slot" '%s' "$__cmd"
+  if [ "$__sig" = "EXIT" ]; then
+    _SK_TRAP_HAD_EXIT=1
+  fi
   log_debug "chaining existing trap for $__sig"
+  return 0
+}
+
+# _sk_trap_run_sig SIG —— 执行该信号保存的调用方 handler（跑过即清空，避免重复）
+_sk_trap_run_sig() {
+  local __slot __cmd
+  __slot=$(_sk_trap_slot "${1:-}") || return 0
+  eval "__cmd=\${$__slot:-}"
+  if [ -z "$__cmd" ]; then
+    return 0
+  fi
+  printf -v "$__slot" '%s' ""
+  if ! eval "$__cmd"; then
+    log_warn "$(_t 'cleanup step failed'): $__cmd"
+  fi
   return 0
 }
 
@@ -146,18 +183,21 @@ _sk_trap_on_exit() {
 _sk_trap_on_int() {
   trap - EXIT INT TERM HUP
   trap_cleanup
+  _sk_trap_run_sig INT
   exit 130
 }
 
 _sk_trap_on_term() {
   trap - EXIT INT TERM HUP
   trap_cleanup
+  _sk_trap_run_sig TERM
   exit 143
 }
 
 _sk_trap_on_hup() {
   trap - EXIT INT TERM HUP
   trap_cleanup
+  _sk_trap_run_sig HUP
   exit 129
 }
 
@@ -173,11 +213,15 @@ _sk_trap_on_hup() {
 # 所以：我们自己装的 trap（含子 shell 里的残影）一律重装一遍（重装同处理器无害），
 # 并且绝不把它当成「调用方原有的 handler」捕获下来，否则清理时会自噬。
 trap_install() {
-  _sk_trap_read EXIT || true
-  case "${_SK_TRAP_CUR:-}" in
-    *"_sk_trap_on_exit"*) ;;
-    *) _sk_trap_capture EXIT ;;
-  esac
+  local __sig
+  for __sig in EXIT INT TERM HUP; do
+    _sk_trap_read "$__sig" || continue
+    case "${_SK_TRAP_CUR:-}" in
+      # 自己的处理器（含子 shell 残影）不算调用方的 handler，否则清理会自噬
+      *_sk_trap_on_*) ;;
+      *) _sk_trap_capture "$__sig" ;;
+    esac
+  done
   trap '_sk_trap_on_exit' EXIT
   trap '_sk_trap_on_int' INT
   trap '_sk_trap_on_term' TERM

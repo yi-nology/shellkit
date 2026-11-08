@@ -138,11 +138,12 @@ lock_acquire() {
     '' | *[!0-9]*) __wait=0 ;;
   esac
   __dir=$(_sk_lock_path "$__name")
-  _sk_lock_hook
 
   while :; do
     if _sk_lock_try "$__dir"; then
       _SK_LOCKS[${#_SK_LOCKS[@]}]="$__name"
+      # 只有真的拿到锁才挂钩：失败时既不该装 trap，也不该往调用方的清理栈里塞动作
+      _sk_lock_hook
       log_debug "lock acquired: $__name (pid $$)"
       return 0
     fi

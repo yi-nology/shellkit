@@ -36,12 +36,11 @@ log_ok() { _sk_log " OK " "1;32" "$@"; }
 # log_warn MSG... —— 警告，不中断
 log_warn() { _sk_log WARN "1;33" "$@"; }
 
-# log_error MSG... —— 记录错误，并设置 SK_ERRMSG 供 cli_run 补印一次
+# log_error MSG... —— 输出错误（stderr），并把最后一条错误记进 SK_ERRMSG
 log_error() {
-  # 公开变量：cli_run 负责补印一次
+  # 公开变量：供调用方在退出前读取最后一条错误
   # shellcheck disable=SC2034
   SK_ERRMSG="$*"
-  _SK_ERRMSG_SHOWN=1
   _sk_log ERROR "1;31" "$@"
 }
 

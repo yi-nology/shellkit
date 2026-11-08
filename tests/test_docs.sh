@@ -64,6 +64,19 @@ assert_not_contains "$out" "_hidden_fn" "private functions are exempt"
 # ---- 仓库自检 ----
 assert_exit_code 0 bash "$TEST_ROOT/shellkit" docs --check
 
+# ---- 覆盖检查不能吞掉 awk 的失败 ----
+# 缺 tools/coverage.awk 时 awk 会报错退出，但没接住它的退出码就会「静默变绿」
+fake="$d/fakeroot"
+mkdir -p "$fake"
+cp -R "$TEST_ROOT/lib" "$TEST_ROOT/tools" "$TEST_ROOT/docs" "$TEST_ROOT/templates" \
+  "$TEST_ROOT/skills" "$fake/" || _fail "cannot stage a fake root"
+cp "$TEST_ROOT/shellkit" "$TEST_ROOT/VERSION" "$TEST_ROOT/AGENTS.md" "$fake/"
+rm -f "$fake/tools/coverage.awk"
+err=$(bash "$fake/shellkit" docs --check 2>&1)
+rc=$?
+assert_ne "0" "$rc" "a missing coverage.awk is not a pass"
+assert_contains "$err" "coverage.awk" "the failure names the missing file"
+
 # ---- 漂移必须判红，且能恢复 ----
 ref="$TEST_ROOT/docs/REFERENCE.md"
 cp "$ref" "$d/ref.bak"

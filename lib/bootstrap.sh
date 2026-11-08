@@ -18,11 +18,10 @@ SHELLKIT_NONINTERACTIVE="${SHELLKIT_NONINTERACTIVE:-0}"
 SHELLKIT_TMP_KEEP="${SHELLKIT_TMP_KEEP:-0}"
 export SHELLKIT_DEBUG SHELLKIT_COLOR SHELLKIT_NONINTERACTIVE SHELLKIT_TMP_KEEP
 
-# 最近一次 log_error 的内容；由 cli_run 负责补印（且只印一次）
+# 最近一次 log_error 的内容，供调用方在退出前读取
 # 跨模块读写的公开变量
 # shellcheck disable=SC2034
 SK_ERRMSG=""
-_SK_ERRMSG_SHOWN=0
 
 SK_OK=0
 SK_ERR=1

@@ -97,8 +97,12 @@ _sk_check_dir() {
     log_error "$(_t 'path exists and is not a directory'): $__d"
     return "$SK_PRECOND"
   fi
-  for __entry in "$__d"/*; do
-    if [ -e "$__entry" ]; then
+  # 必须连点文件一起看：只查 * 会漏掉 .git / .env，然后往别人的仓库里写文件
+  for __entry in "$__d"/* "$__d"/.*; do
+    case "${__entry##*/}" in
+      . | ..) continue ;;
+    esac
+    if [ -e "$__entry" ] || [ -L "$__entry" ]; then
       log_error "$(_t 'target directory is not empty'): $__d"
       return "$SK_PRECOND"
     fi
@@ -313,7 +317,7 @@ cmd_doctor() {
 # ---------- list ----------
 
 cmd_list() {
-  local __f
+  local __f __i=0 __usage
   printf '%s:\n' "$(_t 'library modules')"
   for __f in "$SHELLKIT_HOME"/lib/core/*.sh; do
     printf '  %s\n' "$(basename "$__f" .sh)"
@@ -325,12 +329,15 @@ cmd_list() {
     fi
   done
   printf '\n%s:\n' "$(_t 'commands')"
-  printf '  %s\n' "shellkit new <dir> [--cmd NAME]..."
-  printf '  %s\n' "shellkit vendor <dir> [--check]"
-  printf '  %s\n' "shellkit docs [--check]"
-  printf '  %s\n' "shellkit doctor"
-  printf '  %s\n' "shellkit list"
-  printf '  %s\n' "shellkit install-self [--prefix DIR]"
+  # 从注册表生成：写死的清单一定会和 cli_cmd 漂移（少列过 uninstall-self 与 update）
+  while [ "$__i" -lt "${#SK_CLI_NAMES[@]}" ]; do
+    __usage=${SK_CLI_USAGES[$__i]}
+    if [ -z "$__usage" ]; then
+      __usage=${SK_CLI_NAMES[$__i]}
+    fi
+    printf '  shellkit %s\n' "$__usage"
+    __i=$((__i + 1))
+  done
   return "$SK_OK"
 }
 
@@ -411,9 +418,18 @@ cmd_vendor() {
 
 # _sk_docs_coverage —— 公开函数必须紧邻一行注释，否则返回 1
 _sk_docs_coverage() {
-  local __f __missing __line __bad=0
+  local __f __missing __line __bad=0 __rc=0
   for __f in "$SELF_DIR"/lib/core/*.sh; do
-    __missing=$(awk -v file="$(basename "$__f")" -f "$SELF_DIR/tools/coverage.awk" "$__f")
+    # 必须接住 awk 自己的退出码：缺 tools/coverage.awk 时它只往 stderr 抱怨，
+    # 只看输出是否为空会让整个检查静默变绿。
+    __missing=$(awk -v file="$(basename "$__f")" -f "$SELF_DIR/tools/coverage.awk" "$__f" 2>&1)
+    __rc=$?
+    if [ "$__rc" -ne 0 ]; then
+      log_error "$(_t 'failed to check doc comments'): $(basename "$__f")"
+      printf '%s\n' "$__missing" >&2
+      __bad=1
+      continue
+    fi
     if [ -n "$__missing" ]; then
       printf '%s\n' "$__missing" | while IFS= read -r __line; do
         log_error "$(_t 'public function has no doc comment'): $__line"
@@ -641,6 +657,16 @@ cmd_install_self() {
   # 只装得进源码树里真有的东西：vendor 出来的副本可能没有 skills/
   if [ -d "$SELF_DIR/skills" ]; then
     _sk_copy_tree "$SELF_DIR/skills" "$__dest/skills" || return "$SK_ERR"
+  fi
+  # tools/ 与 docs/ 是文档门禁的输入：少了它们，装完的副本第一次跑 docs 就会崩
+  if [ -d "$SELF_DIR/tools" ]; then
+    _sk_copy_tree "$SELF_DIR/tools" "$__dest/tools" || return "$SK_ERR"
+  fi
+  if [ -d "$SELF_DIR/docs" ]; then
+    _sk_copy_tree "$SELF_DIR/docs" "$__dest/docs" || return "$SK_ERR"
+  fi
+  if [ -f "$SELF_DIR/AGENTS.md" ]; then
+    cp -f "$SELF_DIR/AGENTS.md" "$__dest/AGENTS.md" || return "$SK_ERR"
   fi
   cp -f "$SELF_DIR/VERSION" "$__dest/VERSION" || return "$SK_ERR"
   cp -f "$SELF_DIR/shellkit" "$__dest/shellkit" || return "$SK_ERR"

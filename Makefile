@@ -1,11 +1,12 @@
 # shellkit 开发入口。CI 与本地跑的是同一组门。
 
 SHELL := /bin/bash
-SOURCES := shellkit lib/bootstrap.sh $(wildcard lib/core/*.sh) tests/*.sh po/messages.sh
+SOURCES := shellkit install.sh lib/bootstrap.sh $(wildcard lib/core/*.sh) \
+  $(wildcard tools/*.sh) tests/*.sh po/messages.sh
 TEMPLATES := $(shell find templates -type f)
 SHOTS := $(wildcard docs/shots/*.shot)
 
-.PHONY: help test syntax lint lint-templates fmt messages docs docs-check check-docs shots examples check install
+.PHONY: help test syntax lint lint-templates fmt messages messages-check docs docs-check check-docs shots examples check install
 
 help:
 	@printf '%s\n' \
@@ -14,6 +15,7 @@ help:
 	  'make lint        shellcheck -S warning -x' \
 	  'make fmt         shfmt -d -i 2 -ci（只检查）' \
 	  'make messages    重新抽取 msgid 并编译 .mo' \
+	  'make messages-check  只检查 pot 与源码是否一致（缺 xgettext 时跳过）' \
 	  'make docs        重新生成 REFERENCE.md / AGENTS.md / SKILL.md' \
 	  'make shots       按 docs/shots/*.shot 真跑命令并渲染 SVG 截图' \
 	  'make examples    跑 examples/ 下每个工程的测试' \
@@ -45,6 +47,10 @@ fmt:
 messages:
 	@bash po/messages.sh
 
+# 缺 xgettext 的机器上 po/messages.sh --check 自己会跳过，不会误伤 macOS
+messages-check:
+	@bash po/messages.sh --check
+
 docs:
 	@./shellkit docs
 
@@ -68,7 +74,7 @@ examples:
 	  $(MAKE) -C "$$d" test || exit 1; \
 	  done
 
-check: syntax test lint docs-check check-docs examples fmt
+check: syntax test lint docs-check check-docs messages-check examples fmt
 
 install:
 	./shellkit install-self --prefix $(PREFIX)/usr

@@ -70,3 +70,38 @@ return 0
 assert_exit_code 5 net_download "https://example.invalid/f" "$d/bad1" "0000000000000000000000000000000000000000000000000000000000000000"
 assert_false test -f "$d/bad1"
 unstub curl
+
+# net_wait_port 探测成功后不能去关 fd 3 —— 那个 3 是调用方开的，不是我们的
+if command -v python3 >/dev/null 2>&1; then
+  portf="$d/port"
+  python3 - "$portf" >/dev/null 2>&1 <<'PY' &
+import socket, sys, time
+s = socket.socket()
+s.bind(("127.0.0.1", 0))
+s.listen(1)
+with open(sys.argv[1], "w") as fh:
+    fh.write(str(s.getsockname()[1]))
+time.sleep(30)
+PY
+  listener=$!
+  tries=0
+  while [ ! -s "$portf" ] && [ "$tries" -lt 50 ]; do
+    sleep 0.1
+    tries=$((tries + 1))
+  done
+  port=$(cat "$portf" 2>/dev/null || true)
+  if [ -n "$port" ]; then
+    exec 3>"$d/fd3.log"
+    assert_exit_code 0 net_wait_port 127.0.0.1 "$port" 5
+    _fd3_ok=0
+    printf 'still-open\n' >&3 || _fd3_ok=1
+    exec 3>&-
+    assert_eq "0" "$_fd3_ok" "net_wait_port leaves the caller's fd 3 usable"
+    # exec 的重定向是永久的：以前那行还会把调用方的 stderr 丢进 /dev/null
+    _err_seen=$({ printf 'err-alive\n' >&2; } 2>&1)
+    assert_eq "err-alive" "$_err_seen" "net_wait_port leaves stderr usable"
+    assert_contains "$(cat "$d/fd3.log")" "still-open"
+  fi
+  kill "$listener" 2>/dev/null || true
+  wait "$listener" 2>/dev/null || true
+fi

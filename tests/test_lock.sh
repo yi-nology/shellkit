@@ -39,6 +39,27 @@ assert_exit_code 3 lock_release F1
 assert_true test -d "$foreign"
 rm -rf "$foreign"
 
+# 拿锁失败不能留下副作用：既不装 trap，也不往清理栈里塞动作。
+# 否则一次失败的 lock_acquire 会让调用方以为「反正有清理」，实际什么都没拿到。
+# pid 用一个真活着、且能被 kill -0 探到的进程：非 root 下 pid 1 会被判成已死
+sleep 30 &
+_busy_pid=$!
+probe="$SHELLKIT_LOCK_DIR/../probe.out"
+bash -c '
+  . "$1/lib/bootstrap.sh"
+  mkdir -p "$SHELLKIT_LOCK_DIR/shellkit-BUSY.lock"
+  printf "%s" "$3" >"$SHELLKIT_LOCK_DIR/shellkit-BUSY.lock/pid"
+  lock_acquire BUSY 0 2>/dev/null
+  printf "rc=%s\n" "$?" >"$2"
+  trap -p EXIT >>"$2"
+  trap_list >>"$2"
+' _ "$TEST_ROOT" "$probe" "$_busy_pid"
+kill "$_busy_pid" 2>/dev/null || true
+wait "$_busy_pid" 2>/dev/null || true
+assert_eq "rc=3" "$(cat "$probe")" "a failed lock_acquire has no side effects"
+rm -f "$probe"
+rm -rf "$SHELLKIT_LOCK_DIR/shellkit-BUSY.lock"
+
 # 退出时自动释放（清理栈）
 (
   lock_acquire AUTO1

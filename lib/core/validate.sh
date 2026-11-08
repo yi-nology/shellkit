@@ -62,20 +62,14 @@ validate_port() {
   _sk_vfail "$(_t 'port out of range'): $__v"
 }
 
-# validate_ip VALUE
+# validate_ip VALUE —— 四段十进制，每段 0-255，且不接受前导零（010 会被当成八进制）
 validate_ip() {
-  local __v="${1:-}" __o
-  if ! [[ "$__v" =~ ^([0-9]{1,3})\.([0-9]{1,3})\.([0-9]{1,3})\.([0-9]{1,3})$ ]]; then
-    _sk_vfail "$(_t 'invalid IPv4 address'): $__v"
-    return 1
+  local __v="${1:-}"
+  local __o='(25[0-5]|2[0-4][0-9]|1[0-9][0-9]|[1-9]?[0-9])'
+  if [[ "$__v" =~ ^$__o\.$__o\.$__o\.$__o$ ]]; then
+    return 0
   fi
-  for __o in "${BASH_REMATCH[1]}" "${BASH_REMATCH[2]}" "${BASH_REMATCH[3]}" "${BASH_REMATCH[4]}"; do
-    if [ "$__o" -gt 255 ]; then
-      _sk_vfail "$(_t 'invalid IPv4 address'): $__v"
-      return 1
-    fi
-  done
-  return 0
+  _sk_vfail "$(_t 'invalid IPv4 address'): $__v"
 }
 
 # validate_version VALUE

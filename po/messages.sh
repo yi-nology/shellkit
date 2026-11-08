@@ -34,7 +34,10 @@ if [ "$CHECK_ONLY" = "1" ]; then
   xgettext --language=Shell --keyword=_t --from-code=UTF-8 \
     --package-name=shellkit --package-version="$(tr -d '[:space:]' <"$ROOT/VERSION")" \
     -o "$tmp" "${sources[@]}"
-  if [ -f "$POT" ] && ! diff -q <(grep -v '^#' "$POT") <(grep -v '^#' "$tmp") >/dev/null; then
+  # 只比内容。注释行（#: 行号）与 POT-Creation-Date 每次生成都会变，
+  # 把它们算进来，这条检查在隔了一分钟之后必然报「消息变了」，等于永远过不了。
+  strip_header() { grep -v '^#' "$1" | grep -v '^"POT-Creation-Date:'; }
+  if [ -f "$POT" ] && ! diff -q <(strip_header "$POT") <(strip_header "$tmp") >/dev/null; then
     printf 'po: messages changed, run bash po/messages.sh\n' >&2
     exit 1
   fi

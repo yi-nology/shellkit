@@ -198,13 +198,9 @@ cli_run() {
     return "$SK_ERR"
   fi
 
-  SK_ERRMSG=""
-  _SK_ERRMSG_SHOWN=0
+  # log_error 已经把消息写进 stderr 并记进 SK_ERRMSG，这里不需要再"补印"一次
   __rc=0
   "$__fn" "$@" || __rc=$?
-  if [ -n "${SK_ERRMSG:-}" ] && [ "${_SK_ERRMSG_SHOWN:-0}" = "0" ]; then
-    printf '%s\n' "$SK_ERRMSG" >&2
-  fi
   return "$__rc"
 }
 
@@ -221,7 +217,7 @@ SK_OPT_SHORTS=()
 SK_OPT_ARGS=()
 SK_OPTS_LEFT=()
 
-# cli_opt_init VAR DEFAULT —— 只在调用方未定义该变量时初始化，不覆盖调用方的默认值
+# cli_opt_init —— 清空选项注册表。不接受参数；变量默认值请自己先赋好
 cli_opt_init() {
   SK_OPT_VARS=()
   SK_OPT_LONGS=()
@@ -254,6 +250,15 @@ cli_opt() {
         ;;
     esac
   fi
+  # 重名注册必须当场拒绝：否则解析会静默只命中最后一个，另一个永远读不到
+  if [ -n "$(_sk_opt_idx_long "$__long")" ]; then
+    log_error "$(_t 'duplicate option'): $__long"
+    return "$SK_USAGE"
+  fi
+  if [ -n "$__short" ] && [ -n "$(_sk_opt_idx_short "$__short")" ]; then
+    log_error "$(_t 'duplicate option'): $__short"
+    return "$SK_USAGE"
+  fi
   SK_OPT_VARS[${#SK_OPT_VARS[@]}]="$__var"
   SK_OPT_LONGS[${#SK_OPT_LONGS[@]}]="$__long"
   SK_OPT_SHORTS[${#SK_OPT_SHORTS[@]}]="$__short"
@@ -268,6 +273,7 @@ _sk_opt_idx_long() {
   while [ "$__i" -lt "${#SK_OPT_LONGS[@]}" ]; do
     if [ "${SK_OPT_LONGS[$__i]}" = "$__want" ]; then
       printf '%s' "$__i"
+      return 0
     fi
     __i=$((__i + 1))
   done
@@ -279,6 +285,7 @@ _sk_opt_idx_short() {
   while [ "$__i" -lt "${#SK_OPT_SHORTS[@]}" ]; do
     if [ "${SK_OPT_SHORTS[$__i]}" = "$__want" ]; then
       printf '%s' "$__i"
+      return 0
     fi
     __i=$((__i + 1))
   done
@@ -313,6 +320,11 @@ cli_opts() {
         __idx=$(_sk_opt_idx_long "${1%%=*}")
         if [ -z "$__idx" ]; then
           log_error "$(_t 'unknown option'): ${1%%=*}"
+          return "$SK_USAGE"
+        fi
+        # 布尔选项带 = 一律拒绝：把 "garbage" 塞进变量比直接报错难查得多
+        if [ "${SK_OPT_ARGS[$__idx]}" != "1" ]; then
+          log_error "$(_t 'option does not take a value'): ${1%%=*}"
           return "$SK_USAGE"
         fi
         _sk_opt_set "$__idx" "${1#*=}" || return $?

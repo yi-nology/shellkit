@@ -97,8 +97,9 @@ net_download() {
 net_wait_port() {
   local __host=$1 __port=$2 __timeout=${3:-30} __i=0
   while [ "$__i" -lt "$__timeout" ]; do
-    if (exec 3<>"/dev/tcp/$__host/$__port") 2>/dev/null; then
-      exec 3>&- 2>/dev/null || true
+    # 只在子 shell 里开连接：exec 的重定向会落到调用方的 shell 上，
+    # 以前那行 `exec 3>&- 2>/dev/null` 既关了别人的 fd 3，也把别人的 stderr 永久丢进 /dev/null。
+    if (: <"/dev/tcp/$__host/$__port") 2>/dev/null; then
       return 0
     fi
     sleep 1

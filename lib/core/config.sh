@@ -22,7 +22,7 @@ conf_file() { printf '%s\n' "${SK_CONF_FILE:-}"; }
 
 # conf_get KEY [DEFAULT] —— 只输出值；未初始化或无文件时返回默认值
 conf_get() {
-  local __key=${1:-} __default=${2:-} __file=${SK_CONF_FILE:-} __line __value=""
+  local __key=${1:-} __default=${2:-} __file=${SK_CONF_FILE:-} __line __value="" __found=0
   if ! validate_key "$__key"; then
     printf '%s\n' "$__default"
     return "$SK_USAGE"
@@ -33,11 +33,15 @@ conf_get() {
         '' | '#'*) continue ;;
       esac
       case "$__line" in
-        "${__key}="*) __value=${__line#*=} ;;
+        "${__key}="*)
+          __value=${__line#*=}
+          __found=1
+          ;;
       esac
     done <"$__file"
   fi
-  if [ -z "$__value" ]; then
+  # 键存在但值为空时保留空串：把空值当成"没配过"会让显式置空退回默认值
+  if [ "$__found" -eq 0 ]; then
     __value=$__default
   fi
   printf '%s\n' "$__value"

@@ -1,18 +1,39 @@
 #!/usr/bin/env bash
 # 错误与前置条件检查
 
-# die CODE MSG...
+# _sk_exit_code_ok VALUE —— 0..255 的十进制整数才是合法退出码
+_sk_exit_code_ok() {
+  local __v=${1:-}
+  case "$__v" in
+    '' | *[!0-9]*) return 1 ;;
+  esac
+  [ "$__v" -le 255 ]
+}
+
+# die CODE MSG... —— CODE 必须是 0-255；不合法按用法错误退出 2，而不是让 exit 截成 255
 die() {
-  local __code=${1:-1}
-  shift
+  local __code=${1:-}
+  if [ "$#" -gt 0 ]; then
+    shift
+  fi
+  if ! _sk_exit_code_ok "$__code"; then
+    log_error "$(_t 'invalid exit code'): ${__code:-<empty>}"
+    exit "$SK_USAGE"
+  fi
   log_error "$*"
   exit "$__code"
 }
 
-# fail CODE MSG...  —— 不退出，只返回码
+# fail CODE MSG...  —— 不退出，只返回码；CODE 校验同 die
 fail() {
-  local __code=${1:-1}
-  shift
+  local __code=${1:-}
+  if [ "$#" -gt 0 ]; then
+    shift
+  fi
+  if ! _sk_exit_code_ok "$__code"; then
+    log_error "$(_t 'invalid exit code'): ${__code:-<empty>}"
+    return "$SK_USAGE"
+  fi
   log_error "$*"
   return "$__code"
 }

@@ -37,6 +37,12 @@ fs_atomic_write() {
 fs_backup() {
   local __file=$1 __keep=${2:-3} __stamp __bak __x __i=0 __total
   local -a __list=()
+  case "$__keep" in
+    '' | *[!0-9]*)
+      log_error "$(_t 'invalid keep count'): $__keep"
+      return "$SK_USAGE"
+      ;;
+  esac
   if [ ! -f "$__file" ]; then
     return 0
   fi
@@ -92,7 +98,8 @@ fs_ensure_line() {
     return "$SK_USAGE"
   fi
   if [ -f "$__file" ]; then
-    if awk -v want="$__line" '$0 == want { found = 1 } END { exit found ? 0 : 1 }' "$__file"; then
+    # 用 ENVIRON 传值：awk -v 会对赋值做转义（\t -> TAB），含反斜杠的行就再也匹配不上自己
+    if WANT=$__line awk '$0 == ENVIRON["WANT"] { found = 1 } END { exit found ? 0 : 1 }' "$__file"; then
       return 0
     fi
   fi
@@ -147,7 +154,8 @@ fs_ensure_block() {
     __src=/dev/null
   fi
 
-  if ! awk -v b="$__begin" -v e="$__end" -v cf="$__cf" '
+  # 标记同样走 ENVIRON：awk -v 会把 \t 之类转义掉，标记就再也匹配不上文件里的原样文本
+  if ! B=$__begin E=$__end awk -v cf="$__cf" '
     function emit(   line) {
       if (!emitted && cf != "") {
         while ((getline line < cf) > 0) print line
@@ -155,7 +163,7 @@ fs_ensure_block() {
         emitted = 1
       }
     }
-    BEGIN { inblk = 0; seen = 0; emitted = 0 }
+    BEGIN { inblk = 0; seen = 0; emitted = 0; b = ENVIRON["B"]; e = ENVIRON["E"] }
     !inblk && !seen && $0 == b { inblk = 1; seen = 1; print; next }
     inblk {
       if ($0 == e) { emit(); print e; inblk = 0 }
