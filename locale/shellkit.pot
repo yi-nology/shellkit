@@ -8,7 +8,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: shellkit 0.1.0\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-11-08 20:03+0800\n"
+"POT-Creation-Date: 2026-11-08 20:18+0800\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language-Team: LANGUAGE <LL@li.org>\n"
@@ -18,7 +18,7 @@ msgstr ""
 "Content-Transfer-Encoding: 8bit\n"
 
 #: /Users/zhangyi/shellkit/lib/core/cli.sh:29
-#: /Users/zhangyi/shellkit/shellkit:92 /Users/zhangyi/shellkit/shellkit:104
+#: /Users/zhangyi/shellkit/shellkit:118 /Users/zhangyi/shellkit/shellkit:130
 msgid "invalid command name"
 msgstr ""
 
@@ -65,41 +65,42 @@ msgstr ""
 msgid "Did you mean"
 msgstr ""
 
-#: /Users/zhangyi/shellkit/lib/core/cli.sh:163
-#: /Users/zhangyi/shellkit/lib/core/cli.sh:168
-#: /Users/zhangyi/shellkit/lib/core/cli.sh:309
-#: /Users/zhangyi/shellkit/lib/core/cli.sh:319
-#: /Users/zhangyi/shellkit/lib/core/cli.sh:338
-#: /Users/zhangyi/shellkit/shellkit:110 /Users/zhangyi/shellkit/shellkit:310
+#: /Users/zhangyi/shellkit/lib/core/cli.sh:165
+#: /Users/zhangyi/shellkit/lib/core/cli.sh:170
+#: /Users/zhangyi/shellkit/lib/core/cli.sh:311
+#: /Users/zhangyi/shellkit/lib/core/cli.sh:321
+#: /Users/zhangyi/shellkit/lib/core/cli.sh:340
+#: /Users/zhangyi/shellkit/shellkit:136 /Users/zhangyi/shellkit/shellkit:326
+#: /Users/zhangyi/shellkit/shellkit:407
 msgid "unknown option"
 msgstr ""
 
-#: /Users/zhangyi/shellkit/lib/core/cli.sh:186
+#: /Users/zhangyi/shellkit/lib/core/cli.sh:188
 msgid "no such command"
 msgstr ""
 
-#: /Users/zhangyi/shellkit/lib/core/cli.sh:193
+#: /Users/zhangyi/shellkit/lib/core/cli.sh:195
 msgid "command has no handler"
 msgstr ""
 
-#: /Users/zhangyi/shellkit/lib/core/cli.sh:233
+#: /Users/zhangyi/shellkit/lib/core/cli.sh:235
 #: /Users/zhangyi/shellkit/lib/core/prompt.sh:67
 #: /Users/zhangyi/shellkit/lib/core/prompt.sh:81
 #: /Users/zhangyi/shellkit/lib/core/prompt.sh:115
 msgid "invalid variable name"
 msgstr ""
 
-#: /Users/zhangyi/shellkit/lib/core/cli.sh:239
+#: /Users/zhangyi/shellkit/lib/core/cli.sh:241
 msgid "long option must start with --"
 msgstr ""
 
-#: /Users/zhangyi/shellkit/lib/core/cli.sh:247
+#: /Users/zhangyi/shellkit/lib/core/cli.sh:249
 msgid "short option must be a single dash and one letter"
 msgstr ""
 
-#: /Users/zhangyi/shellkit/lib/core/cli.sh:325
-#: /Users/zhangyi/shellkit/lib/core/cli.sh:344
-#: /Users/zhangyi/shellkit/shellkit:84 /Users/zhangyi/shellkit/shellkit:297
+#: /Users/zhangyi/shellkit/lib/core/cli.sh:327
+#: /Users/zhangyi/shellkit/lib/core/cli.sh:346
+#: /Users/zhangyi/shellkit/shellkit:110 /Users/zhangyi/shellkit/shellkit:394
 msgid "option requires a value"
 msgstr ""
 
@@ -108,8 +109,8 @@ msgid "configuration file path is required"
 msgstr ""
 
 #: /Users/zhangyi/shellkit/lib/core/config.sh:83
-#: /Users/zhangyi/shellkit/lib/core/validate.sh:35
-#: /Users/zhangyi/shellkit/lib/core/validate.sh:41
+#: /Users/zhangyi/shellkit/lib/core/validate.sh:37
+#: /Users/zhangyi/shellkit/lib/core/validate.sh:43
 msgid "invalid configuration key"
 msgstr ""
 
@@ -226,184 +227,224 @@ msgstr ""
 msgid "invalid choice"
 msgstr ""
 
-#: /Users/zhangyi/shellkit/lib/core/validate.sh:16
+#: /Users/zhangyi/shellkit/lib/core/validate.sh:18
 msgid "value must not be empty"
 msgstr ""
 
-#: /Users/zhangyi/shellkit/lib/core/validate.sh:23
+#: /Users/zhangyi/shellkit/lib/core/validate.sh:25
 msgid "value must be a single line"
 msgstr ""
 
-#: /Users/zhangyi/shellkit/lib/core/validate.sh:53
+#: /Users/zhangyi/shellkit/lib/core/validate.sh:55
 msgid "port must be a number"
 msgstr ""
 
-#: /Users/zhangyi/shellkit/lib/core/validate.sh:60
+#: /Users/zhangyi/shellkit/lib/core/validate.sh:62
 msgid "port out of range"
 msgstr ""
 
-#: /Users/zhangyi/shellkit/lib/core/validate.sh:67
-#: /Users/zhangyi/shellkit/lib/core/validate.sh:72
+#: /Users/zhangyi/shellkit/lib/core/validate.sh:69
+#: /Users/zhangyi/shellkit/lib/core/validate.sh:74
 msgid "invalid IPv4 address"
 msgstr ""
 
-#: /Users/zhangyi/shellkit/lib/core/validate.sh:85
+#: /Users/zhangyi/shellkit/lib/core/validate.sh:87
 msgid "invalid version"
 msgstr ""
 
-#: /Users/zhangyi/shellkit/lib/core/validate.sh:93
+#: /Users/zhangyi/shellkit/lib/core/validate.sh:95
 msgid "path must be absolute"
 msgstr ""
 
-#: /Users/zhangyi/shellkit/lib/core/validate.sh:102
+#: /Users/zhangyi/shellkit/lib/core/validate.sh:104
 msgid "invalid URL"
 msgstr ""
 
-#: /Users/zhangyi/shellkit/lib/core/validate.sh:111
+#: /Users/zhangyi/shellkit/lib/core/validate.sh:113
 msgid "value not in allowed set"
 msgstr ""
 
-#: /Users/zhangyi/shellkit/shellkit:21
+#: /Users/zhangyi/shellkit/shellkit:23
 msgid "project generation"
 msgstr ""
 
-#: /Users/zhangyi/shellkit/shellkit:22
+#: /Users/zhangyi/shellkit/shellkit:24
 msgid "create a new project skeleton"
 msgstr ""
 
-#: /Users/zhangyi/shellkit/shellkit:23
+#: /Users/zhangyi/shellkit/shellkit:25
 msgid "environment"
 msgstr ""
 
-#: /Users/zhangyi/shellkit/shellkit:24
+#: /Users/zhangyi/shellkit/shellkit:26
 msgid "check the runtime environment"
 msgstr ""
 
-#: /Users/zhangyi/shellkit/shellkit:25
+#: /Users/zhangyi/shellkit/shellkit:27
 msgid "list templates and library modules"
 msgstr ""
 
-#: /Users/zhangyi/shellkit/shellkit:26
+#: /Users/zhangyi/shellkit/shellkit:28
+msgid "existing projects"
+msgstr ""
+
+#: /Users/zhangyi/shellkit/shellkit:29
+msgid "sync the library into an existing project"
+msgstr ""
+
+#: /Users/zhangyi/shellkit/shellkit:30
 msgid "installation"
 msgstr ""
 
-#: /Users/zhangyi/shellkit/shellkit:27
+#: /Users/zhangyi/shellkit/shellkit:31
 msgid "install shellkit into PATH"
 msgstr ""
 
-#: /Users/zhangyi/shellkit/shellkit:50
+#: /Users/zhangyi/shellkit/shellkit:76
 msgid "path exists and is not a directory"
 msgstr ""
 
-#: /Users/zhangyi/shellkit/shellkit:55
+#: /Users/zhangyi/shellkit/shellkit:81
 msgid "target directory is not empty"
 msgstr ""
 
-#: /Users/zhangyi/shellkit/shellkit:115
+#: /Users/zhangyi/shellkit/shellkit:141 /Users/zhangyi/shellkit/shellkit:331
 msgid "only one target directory is allowed"
 msgstr ""
 
-#: /Users/zhangyi/shellkit/shellkit:125
+#: /Users/zhangyi/shellkit/shellkit:151 /Users/zhangyi/shellkit/shellkit:341
 msgid "target directory is required"
 msgstr ""
 
-#: /Users/zhangyi/shellkit/shellkit:133
+#: /Users/zhangyi/shellkit/shellkit:159
 msgid "invalid project name"
 msgstr ""
 
-#: /Users/zhangyi/shellkit/shellkit:143
+#: /Users/zhangyi/shellkit/shellkit:169
 msgid "creating"
 msgstr ""
 
-#: /Users/zhangyi/shellkit/shellkit:154
+#: /Users/zhangyi/shellkit/shellkit:178 /Users/zhangyi/shellkit/shellkit:379
 msgid "vendored library"
 msgstr ""
 
-#: /Users/zhangyi/shellkit/shellkit:163
+#: /Users/zhangyi/shellkit/shellkit:187
 msgid "added command"
 msgstr ""
 
-#: /Users/zhangyi/shellkit/shellkit:178
+#: /Users/zhangyi/shellkit/shellkit:202
 msgid "project created"
 msgstr ""
 
-#: /Users/zhangyi/shellkit/shellkit:179
+#: /Users/zhangyi/shellkit/shellkit:203
 msgid "next steps"
 msgstr ""
 
-#: /Users/zhangyi/shellkit/shellkit:198
+#: /Users/zhangyi/shellkit/shellkit:222
 msgid "environment check"
 msgstr ""
 
-#: /Users/zhangyi/shellkit/shellkit:204
+#: /Users/zhangyi/shellkit/shellkit:228
 msgid "needs 3.2 or newer"
 msgstr ""
 
-#: /Users/zhangyi/shellkit/shellkit:211
+#: /Users/zhangyi/shellkit/shellkit:235
 msgid "sha256sum or shasum is required"
 msgstr ""
 
-#: /Users/zhangyi/shellkit/shellkit:218
+#: /Users/zhangyi/shellkit/shellkit:242
 msgid "curl or wget is needed for downloads"
 msgstr ""
 
-#: /Users/zhangyi/shellkit/shellkit:225
+#: /Users/zhangyi/shellkit/shellkit:249
 msgid "translations disabled, English only"
 msgstr ""
 
-#: /Users/zhangyi/shellkit/shellkit:232
+#: /Users/zhangyi/shellkit/shellkit:256
 msgid "xgettext and msgfmt are needed to update translations"
 msgstr ""
 
-#: /Users/zhangyi/shellkit/shellkit:239
+#: /Users/zhangyi/shellkit/shellkit:263
 msgid "not installed, lint will be skipped"
 msgstr ""
 
-#: /Users/zhangyi/shellkit/shellkit:246
+#: /Users/zhangyi/shellkit/shellkit:270
 msgid "not installed, format check will be skipped"
 msgstr ""
 
-#: /Users/zhangyi/shellkit/shellkit:255
+#: /Users/zhangyi/shellkit/shellkit:279
 msgid "required tooling is missing"
 msgstr ""
 
-#: /Users/zhangyi/shellkit/shellkit:259
+#: /Users/zhangyi/shellkit/shellkit:283
 msgid "optional tooling is missing; core features still work"
 msgstr ""
 
-#: /Users/zhangyi/shellkit/shellkit:262
+#: /Users/zhangyi/shellkit/shellkit:286
 msgid "all checks passed"
 msgstr ""
 
-#: /Users/zhangyi/shellkit/shellkit:270
+#: /Users/zhangyi/shellkit/shellkit:294
 msgid "library modules"
 msgstr ""
 
-#: /Users/zhangyi/shellkit/shellkit:274
+#: /Users/zhangyi/shellkit/shellkit:298
 msgid "templates"
 msgstr ""
 
-#: /Users/zhangyi/shellkit/shellkit:280
+#: /Users/zhangyi/shellkit/shellkit:304
 msgid "commands"
 msgstr ""
 
-#: /Users/zhangyi/shellkit/shellkit:323
+#: /Users/zhangyi/shellkit/shellkit:346
+msgid "target directory does not exist"
+msgstr ""
+
+#: /Users/zhangyi/shellkit/shellkit:355
+msgid "vendored library is out of date"
+msgstr ""
+
+#: /Users/zhangyi/shellkit/shellkit:360
+msgid "run without --check to update"
+msgstr ""
+
+#: /Users/zhangyi/shellkit/shellkit:363
+msgid "vendored library is up to date"
+msgstr ""
+
+#: /Users/zhangyi/shellkit/shellkit:369
+msgid "refusing to overwrite a directory that is not a shellkit vendor"
+msgstr ""
+
+#: /Users/zhangyi/shellkit/shellkit:373
+msgid "syncing"
+msgstr ""
+
+#: /Users/zhangyi/shellkit/shellkit:375
+msgid "failed to sync the vendored library"
+msgstr ""
+
+#: /Users/zhangyi/shellkit/shellkit:380
+msgid "load it from your scripts"
+msgstr ""
+
+#: /Users/zhangyi/shellkit/shellkit:420
 msgid "no write permission"
 msgstr ""
 
-#: /Users/zhangyi/shellkit/shellkit:324
+#: /Users/zhangyi/shellkit/shellkit:421
 msgid "try a writable prefix"
 msgstr ""
 
-#: /Users/zhangyi/shellkit/shellkit:328
+#: /Users/zhangyi/shellkit/shellkit:425
 msgid "installing"
 msgstr ""
 
-#: /Users/zhangyi/shellkit/shellkit:338
+#: /Users/zhangyi/shellkit/shellkit:435
 msgid "failed to create symlink"
 msgstr ""
 
-#: /Users/zhangyi/shellkit/shellkit:341
+#: /Users/zhangyi/shellkit/shellkit:438
 msgid "installed"
 msgstr ""
 

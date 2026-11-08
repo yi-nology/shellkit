@@ -46,6 +46,27 @@ deploy-tool/
 
 **加一个子命令** = 复制 `commands/start.sh` 改名 + 改函数名和 `cli_cmd` 那一行，分发器不用动。
 
+## 接进既有项目
+
+不用先重写脚本。已经能跑的项目，一条命令把库镜像进去：
+
+```bash
+cd /path/to/your-project
+shellkit vendor .            # 同步 lib/ + locale/ + VERSION 到 vendor/shellkit
+shellkit vendor . --check    # 只比对（逐字节 diff），漂移返回 5，适合放进 CI
+```
+
+脚本顶部两行接入：
+
+```bash
+. "$(cd "$(dirname "$0")/.." && pwd)/vendor/shellkit/lib/bootstrap.sh"
+```
+
+然后按 [docs/MIGRATING.md](docs/MIGRATING.md) 的 5 步渐进迁移
+（先杀 stdout 污染 → 配置读写 → 交互 → CLI 框架 → 测试），每一小步都能单独上线。
+
+只想先要测试能力？把 `tests/test_helper.sh` + `tests/run.sh` 两个文件拷过去即可，零依赖。
+
 ## 直接用库
 
 `@bash

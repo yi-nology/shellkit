@@ -25,6 +25,8 @@ cli_cmd new "$(_t 'create a new project skeleton')" "new <dir> [--name NAME] [--
 cli_group "$(_t 'environment')"
 cli_cmd doctor "$(_t 'check the runtime environment')" "doctor"
 cli_cmd list "$(_t 'list templates and library modules')" "list"
+cli_group "$(_t 'existing projects')"
+cli_cmd vendor "$(_t 'sync the library into an existing project')" "vendor <dir> [--check]"
 cli_group "$(_t 'installation')"
 cli_cmd install-self "$(_t 'install shellkit into PATH')" "install-self [--prefix DIR]"
 
@@ -40,6 +42,29 @@ _sk_render() {
     -e "s|{{SHELLKIT_VERSION}}|$__ver|g" \
     -e "s|{{CMD}}|$__cmd|g" \
     "$__src" >"$__dst"
+}
+
+# _sk_vendor_install DIR —— 把库整目录同步进 DIR/vendor/shellkit。
+# 用"整目录替换"而不是逐文件覆盖：模块被删掉时不会留残骸。
+_sk_vendor_install() {
+  local __dir=$1 __dest
+  __dest="$__dir/vendor/shellkit"
+  fs_ensure_dir "$__dest" 755 || return 1
+  # ${__dest:?} 是安全阀：万一变量异常为空，绝不让 rm 落到 /lib 上
+  rm -rf "${__dest:?}/lib" "${__dest:?}/locale" || return 1
+  cp -R "$SELF_DIR/lib" "$__dest/lib" || return 1
+  cp -R "$SELF_DIR/locale" "$__dest/locale" || return 1
+  cp "$SELF_DIR/VERSION" "$__dest/VERSION" || return 1
+  return 0
+}
+
+# _sk_vendor_same SRC DST —— 内容逐字节一致才返回 0
+_sk_vendor_same() {
+  local __src=$1 __dst=$2
+  if [ ! -e "$__dst" ]; then
+    return 1
+  fi
+  diff -r -q "$__src" "$__dst" >/dev/null 2>&1
 }
 
 # _sk_check_dir DEST —— 目标不存在或为空目录才允许生成
@@ -150,9 +175,7 @@ cmd_new() {
   fs_ensure_dir "$__dir/vendor/shellkit" 755
 
   # 库随工程一起走，生成出来的工程不依赖本机装没装 shellkit
-  cp -R "$SELF_DIR/lib" "$__dir/vendor/shellkit/lib"
-  cp -R "$SELF_DIR/locale" "$__dir/vendor/shellkit/locale"
-  cp "$SELF_DIR/VERSION" "$__dir/vendor/shellkit/VERSION"
+  _sk_vendor_install "$__dir" || return "$SK_ERR"
   log_info "$(_t 'vendored library'): vendor/shellkit ($SK_VERSION)"
 
   _sk_render "$SK_TPL_DIR/bin/__NAME__" "$__dir/bin/$__name" "$__name" "$SK_VERSION"
@@ -281,9 +304,83 @@ cmd_list() {
   done
   printf '\n%s:\n' "$(_t 'commands')"
   printf '  %s\n' "shellkit new <dir> [--cmd NAME]..."
+  printf '  %s\n' "shellkit vendor <dir> [--check]"
   printf '  %s\n' "shellkit doctor"
   printf '  %s\n' "shellkit list"
   printf '  %s\n' "shellkit install-self [--prefix DIR]"
+  return "$SK_OK"
+}
+
+# ---------- vendor ----------
+
+cmd_vendor() {
+  local __dir="" __check=0 __dest __stale=0 __x
+  while [ "$#" -gt 0 ]; do
+    case "$1" in
+      -h | --help)
+        cli_usage_cmd vendor
+        return "$SK_OK"
+        ;;
+      --check)
+        __check=1
+        ;;
+      --?*)
+        log_error "$(_t 'unknown option'): $1"
+        return "$SK_USAGE"
+        ;;
+      *)
+        if [ -n "$__dir" ]; then
+          log_error "$(_t 'only one target directory is allowed'): $1"
+          return "$SK_USAGE"
+        fi
+        __dir=$1
+        ;;
+    esac
+    shift
+  done
+
+  if [ -z "$__dir" ]; then
+    log_error "$(_t 'target directory is required')"
+    cli_usage_cmd vendor
+    return "$SK_USAGE"
+  fi
+  if [ ! -d "$__dir" ]; then
+    log_error "$(_t 'target directory does not exist'): $__dir"
+    return "$SK_PRECOND"
+  fi
+
+  __dest="$__dir/vendor/shellkit"
+
+  if [ "$__check" = "1" ]; then
+    for __x in lib locale VERSION; do
+      if ! _sk_vendor_same "$SELF_DIR/$__x" "$__dest/$__x"; then
+        log_error "$(_t 'vendored library is out of date'): vendor/shellkit/$__x"
+        __stale=1
+      fi
+    done
+    if [ "$__stale" -ne 0 ]; then
+      log_info "$(_t 'run without --check to update'): shellkit vendor $__dir"
+      return "$SK_VERIFY"
+    fi
+    log_ok "$(_t 'vendored library is up to date'): $__dest ($SK_VERSION)"
+    return "$SK_OK"
+  fi
+
+  # 只有当目标"看起来不是 shellkit"时才拒绝，避免误删同名目录
+  if [ -e "$__dest" ] && [ ! -f "$__dest/VERSION" ] && [ ! -f "$__dest/lib/bootstrap.sh" ]; then
+    log_error "$(_t 'refusing to overwrite a directory that is not a shellkit vendor'): $__dest"
+    return "$SK_PRECOND"
+  fi
+
+  log_section "$(_t 'syncing'): $__dest"
+  if ! _sk_vendor_install "$__dir"; then
+    log_error "$(_t 'failed to sync the vendored library'): $__dest"
+    return "$SK_ERR"
+  fi
+
+  log_ok "$(_t 'vendored library'): vendor/shellkit ($SK_VERSION)"
+  printf '  %s\n' "$(_t 'load it from your scripts'):"
+  printf '    . "$(cd "$(dirname "$0")/.." && pwd)/vendor/shellkit/lib/bootstrap.sh"\n'
   return "$SK_OK"
 }
 
