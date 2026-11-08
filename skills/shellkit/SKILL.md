@@ -17,7 +17,7 @@ shellkit 是 Bash 库 + 脚手架。用它，你不用再手写日志、配置�
     shellkit vendor .
 
     # C. 自用脚本：全局安装（一键取 release，sha256 校验通过才装）
-    curl -fsSL https://raw.githubusercontent.com/yi-nology/shellkit/main/install.sh | bash
+    curl -fsSL https://github.com/yi-nology/shellkit/releases/latest/download/install.sh | bash
     shellkit update            # 之后一条命令更新
     shellkit uninstall-self    # 不想要了按 MANIFEST 删干净
 

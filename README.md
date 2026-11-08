@@ -56,7 +56,7 @@ shellkit-demo/
 ## 一键安装
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/yi-nology/shellkit/main/install.sh | bash
+curl -fsSL https://github.com/yi-nology/shellkit/releases/latest/download/install.sh | bash
 ```
 
 默认装到 `/usr/local`；没有写权限就退到 `~/.local`。要自己指定：
@@ -66,6 +66,9 @@ curl -fsSL .../install.sh | PREFIX="$HOME/.local" bash   # 换目录
 curl -fsSL .../install.sh | VERSION=0.4.0 bash           # 钉版本
 ./install.sh --prefix /opt/shellkit                     # 在检出目录里直接跑，装当前工作树
 ```
+
+这个地址是 release 资产（`releases/latest/download/install.sh`），不是 `raw.githubusercontent.com` ——
+后者在部分网络会被重置，而仓库地址又是固定的，所以网页和 README 都不用 raw。
 
 脚本自己不往目标目录放任何文件：取版本号 → 下载 tar.gz 与 `SHA256SUMS` → 校验 → 交给包内自带的
 `shellkit install-self`。**sha256 对不上就 `exit 5`，一个字节都不落地**。

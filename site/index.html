@@ -19,7 +19,7 @@
   <p class="lede">一个<strong>约束清晰的 Bash 库</strong>、一个<strong>脚手架生成器</strong>、一套 <strong>CLI 框架</strong>。
   目标不是功能多，而是让写出来的脚本又准又一致 —— 日志不会污染 <code>$(...)</code>，
   失败有固定退出码，同一条命令跑一百遍和跑一遍一样。</p>
-  <div class="cmd"><span class="prompt">$</span> <code>curl -fsSL https://raw.githubusercontent.com/yi-nology/shellkit/main/install.sh | bash</code></div>
+  <div class="cmd"><span class="prompt">$</span> <code>curl -fsSL https://github.com/yi-nology/shellkit/releases/latest/download/install.sh | bash</code></div>
   <div class="cta"><a class="btn primary" href="#install">一键安装</a>
   <a class="btn" href="#start">三十秒上手</a>
   <a class="btn" href="https://github.com/yi-nology/shellkit/releases/latest">下载 0.4.0</a></div>
@@ -28,9 +28,10 @@
 <section id="install" class="start">
   <h2>一条命令装上</h2>
   <p>安装脚本只做四件事：取最新版本号 → 下载 tar.gz 与 SHA256SUMS → 校验 → 交给包内自带的
-  <code>shellkit install-self</code>。它自己不往目标目录里放任何文件，安装逻辑只有一份。</p>
+  <code>shellkit install-self</code>。它自己不往目标目录里放任何文件，安装逻辑只有一份。地址用的是 release 资产，不是
+  <code>raw.githubusercontent.com</code> —— 后者在部分网络会被重置。</p>
 <pre><code><span class="c"># 默认装到 /usr/local；没有写权限就自动退到 ~/.local</span>
-curl -fsSL https://raw.githubusercontent.com/yi-nology/shellkit/main/install.sh | bash
+curl -fsSL https://github.com/yi-nology/shellkit/releases/latest/download/install.sh | bash
 
 <span class="c"># 指定目录 / 指定版本 / 走内网镜像</span>
 curl -fsSL .../install.sh | PREFIX="$HOME/.local" bash

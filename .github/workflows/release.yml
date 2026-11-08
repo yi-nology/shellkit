@@ -55,8 +55,11 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
+          # install.sh 也作为资产发布：releases/latest/download/install.sh 是稳定地址，
+          # raw.githubusercontent.com 在部分地区不可达，网页上那条一行命令要能走 release。
           gh release create "$GITHUB_REF_NAME" \
             "dist/shellkit-$(cat VERSION).tar.gz" \
             "dist/SHA256SUMS" \
+            install.sh \
             --title "shellkit $(cat VERSION)" \
             --generate-notes
