@@ -67,6 +67,11 @@ if [ -z "$VER" ]; then
   exit 2
 fi
 
+# make 会把命令行变量（make release VERSION=x.y.z）导出给 recipe 的子进程，
+# 而 install.sh 把**环境变量** VERSION 解释成「装这个版本」。留着它会污染
+# 后面的 make check：测试里的 install.sh 会去下载一个还没发布的版本，报网络错（4）。
+unset VERSION
+
 # ---------- 1. 校验 ----------
 
 if ! printf '%s\n' "$VER" | grep -Eq '^[0-9]+\.[0-9]+\.[0-9]+$'; then

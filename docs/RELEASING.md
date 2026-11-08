@@ -32,6 +32,12 @@ bash tools/release.sh 0.6.0 --no-push # 本地提交与打 tag，推远端留给
 第 3 步失败时（脏工作树、分支不对、tag 已存在）**一个文件都不会被改**，这是刻意的：
 发版脚本最不该做的事是「改了一半然后停」。
 
+一个容易踩的坑：`make release VERSION=x.y.z` 会让 make 把 `VERSION` **导出**给 recipe 的子进程，
+而 `install.sh` 把环境变量 `VERSION` 解释成「装这个版本」。不处理的话，发版时的
+`make check` 里	extbf{测试}跑到的 `install.sh` 会去下载一个还没发布的版本，报网络错 `4`。
+所以 `tools/release.sh` 一开始就 `unset VERSION` —— 它只从 `VERSION` 文件读版本。
+
+
 ## 版本号出现的六处
 
 `VERSION` 是唯一真相源，其余全是投影，而投影是手抄的：
