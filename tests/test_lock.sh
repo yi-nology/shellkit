@@ -44,3 +44,21 @@ rm -rf "$foreign"
   lock_acquire AUTO1
 ) || _fail "acquire in subshell failed"
 assert_false test -d "$SHELLKIT_LOCK_DIR/shellkit-AUTO1.lock"
+
+# 跨进程：别人持有时拿不到；它退出时自动释放，后来者立刻能拿到
+(
+  lock_acquire XP
+  sleep 1
+) >/dev/null 2>&1 &
+holder=$!
+tries=0
+while [ ! -d "$SHELLKIT_LOCK_DIR/shellkit-XP.lock" ] && [ "$tries" -lt 50 ]; do
+  sleep 0.1
+  tries=$((tries + 1))
+done
+assert_true test -d "$SHELLKIT_LOCK_DIR/shellkit-XP.lock"
+assert_exit_code 3 lock_acquire XP
+wait "$holder"
+assert_false test -d "$SHELLKIT_LOCK_DIR/shellkit-XP.lock"
+assert_exit_code 0 lock_acquire XP
+lock_release XP
