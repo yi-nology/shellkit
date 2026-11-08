@@ -52,3 +52,19 @@ unset SHELLKIT_RETRY_ON
 assert_exit_code 2 retry 0 echo hi
 assert_exit_code 2 retry abc echo hi
 assert_exit_code 2 retry
+
+# ---------------------------------------------------------------------------
+# issue #22：SHELLKIT_RETRY_MAX_DELAY 以前只管后退之后的值，首次延迟按原值睡。
+# 于是「上限 5 秒」配「初始 100 秒」时，第一次就睡 100 秒 —— 上限看着生效、实际没生效。
+# ---------------------------------------------------------------------------
+sd=$(tmpdir)
+stub sleep --body "printf '%s\n' \"\$1\" >>'$sd/sleeps'"
+cfail="$d/cfail"
+_tryf() {
+  printf 'x' >>"$cfail"
+  return 1
+}
+SHELLKIT_RETRY_DELAY=100 SHELLKIT_RETRY_MAX_DELAY=5 assert_exit_code 1 retry 2 _tryf
+assert_stub_called sleep 1
+unstub sleep
+assert_eq "5" "$(head -1 "$sd/sleeps")" "the first retry delay is clamped by SHELLKIT_RETRY_MAX_DELAY"

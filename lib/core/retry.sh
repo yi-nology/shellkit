@@ -44,11 +44,16 @@ retry() {
   fi
 
   local __delay __backoff __max __i=1 __rc=0 __next
+  __max=$(_sk_uint SHELLKIT_RETRY_MAX_DELAY 30)
   __delay=$(_sk_uint SHELLKIT_RETRY_DELAY 1)
   __backoff=$(_sk_uint SHELLKIT_RETRY_BACKOFF 2)
-  __max=$(_sk_uint SHELLKIT_RETRY_MAX_DELAY 30)
   if [ "$__backoff" -lt 1 ]; then
     __backoff=1
+  fi
+  # 首个延迟也要夹：DELAY=100 / MAX=5 时以前第一次就白等 100 秒，
+  # 「上限」看着生效、实际第一步没生效。
+  if [ "$__delay" -gt "$__max" ]; then
+    __delay=$__max
   fi
 
   while :; do

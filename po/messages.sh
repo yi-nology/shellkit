@@ -21,19 +21,30 @@ if ! command -v xgettext >/dev/null 2>&1; then
   exit 0
 fi
 
+# xgettext 会把传进去的文件名原样写进 `#:` 注释。传绝对路径 ⇒ pot 里嵌着
+# 本机的 /Users/xxx，换台机器（或换个人）一跑 messages-check 就报「消息变了」，
+# 而且两百行注释每改一次代码就整片漂移（issue #23）。
+# 所以固定 cd 到仓库根、只传相对路径，并整体关掉位置注释：行号本来就每次改动都动，
+# 留着只会制造假红；真正的漂移由 msgid 本身反映。
+cd "$ROOT"
+
 sources=()
-for f in "$ROOT/lib/bootstrap.sh" "$ROOT"/lib/core/*.sh "$ROOT/shellkit" "$ROOT"/templates/bin/__NAME__ "$ROOT"/templates/lib/app.sh "$ROOT"/templates/commands/__CMD__.sh; do
+for f in lib/bootstrap.sh lib/core/*.sh shellkit \
+  templates/bin/__NAME__ templates/lib/app.sh templates/commands/__CMD__.sh; do
   if [ -f "$f" ]; then
-    sources[${#sources[@]}]="$f"
+    sources[${#sources[@]}]=$f
   fi
 done
+
+XGETTEXT_ARGS=(
+  --language=Shell --keyword=_t --from-code=UTF-8 --no-location
+  --package-name=shellkit --package-version="$(tr -d '[:space:]' <VERSION)"
+)
 
 if [ "$CHECK_ONLY" = "1" ]; then
   tmp=$(mktemp)
   trap 'rm -f "$tmp"' EXIT
-  xgettext --language=Shell --keyword=_t --from-code=UTF-8 \
-    --package-name=shellkit --package-version="$(tr -d '[:space:]' <"$ROOT/VERSION")" \
-    -o "$tmp" "${sources[@]}"
+  xgettext "${XGETTEXT_ARGS[@]}" -o "$tmp" "${sources[@]}"
   # 只比内容。注释行（#: 行号）与 POT-Creation-Date 每次生成都会变，
   # 把它们算进来，这条检查在隔了一分钟之后必然报「消息变了」，等于永远过不了。
   strip_header() { grep -v '^#' "$1" | grep -v '^"POT-Creation-Date:'; }
@@ -44,10 +55,7 @@ if [ "$CHECK_ONLY" = "1" ]; then
   exit 0
 fi
 
-xgettext --language=Shell --keyword=_t --from-code=UTF-8 \
-  --package-name=shellkit --package-version="$(tr -d '[:space:]' <"$ROOT/VERSION")" \
-  --add-comments=TRANSLATORS \
-  -o "$POT" "${sources[@]}"
+xgettext "${XGETTEXT_ARGS[@]}" --add-comments=TRANSLATORS -o "$POT" "${sources[@]}"
 printf 'po: wrote %s\n' "${POT#"$ROOT"/}"
 
 need_msgfmt=0

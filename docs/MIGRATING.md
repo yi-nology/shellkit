@@ -127,6 +127,28 @@ shellkit vendor . --check    # 只比对，不写盘
 保留为「最后一条错误」。
 
 新增门禁：`make messages-check`（pot 与源码一致性，缺 `xgettext` 时跳过）已并入 `make check` 与 CI。
+
+### 0.5.0 → 0.6.0：会改变结果的行为变化
+
+0.6.0 修了 10 个缺陷。其中五处会让既有代码算出不一样的结果，升级后**先跑一遍你自己的测试**：
+
+| 变化 | 以前 | 现在 | 你会在哪里撞到 |
+|---|---|---|---|
+| `run` 的打印文本 | dry-run 与失败消息用 `$*` 拼接，引号丢失 | 逐参数引号化，带空格的参数会打印成 `'a b'` | 断言过 `[dry-run] touch /a b` 字面量的测试 |
+| `fs_backup` 的文件名 | `FILE.bak.YYYYmmddHHMMSS` | `FILE.bak.YYYYmmddHHMMSS.$$[.N]` | 用正则从备份名里抠时间戳的要改；`*.bak.*` 与「按名升序 == 时间序」不变 |
+| `lock_acquire` 对无 pid 的锁目录 | `SHELLKIT_LOCK_STALE` 默认 0 ⇒ **永不回收**，锁名永久不可用 | 默认 5 秒宽限，超过即回收 | 以前靠「永不回收」当互斥标记的用法会失效 |
+| `retry` 的首次延迟 | 只夹紧后退后的值，首次按原值睡 | 首次也吃 `SHELLKIT_RETRY_MAX_DELAY` | 拿「初始延迟 >> 上限」当一次性等待的用法会变快 |
+| 少传参数 | 零参的 `require_cmd` / `os_has_cmd` 返回 0；其余被 `set -u` 打死成 `1` | 一律返回用法错 `2` | `case "$rc" in 2)` 分流的地方；`require_cmd "$EMPTY"` 不再静默通过 |
+
+只加不改的部分（不用改代码就能升）：`run` 新增 `--no-die`，让 `if run --no-die ...` 与
+`run --no-die ... || ...` 真的成立（默认行为仍是「失败即 die」）；`install-self` 补装 `tests/`，
+装好的副本 `new` 出来的工程 `make test` 不再 127；`shellkit new` 落盘失败时返回非 0 且不再打印
+`[ OK ] project created`；pot 里不再有 `#:` 位置注释（行号注释每改一次代码就整片漂移），
+因此也不再有本机绝对路径。
+
+新增门禁：`make versions-check`（`VERSION` 与 pot 头、README、站点的版本引用是否一致）已并入
+`make check`。新增命令：`make release VERSION=x.y.z` / `make release-dry VERSION=x.y.z`。
+
 ## 渐进迁移：5 步，每步都能单独上线
 
 顺序按"收益 / 风险"排，**不要跳着一次全换**。

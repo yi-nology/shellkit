@@ -124,3 +124,26 @@ fs_ensure_block "$bsb" '#\tBEGIN' '#\tEND' 'a=1'
 fs_ensure_block "$bsb" '#\tBEGIN' '#\tEND' 'a=2'
 assert_eq "1" "$(grep -c 'BEGIN' "$bsb" | tr -d ' ')" "fs_ensure_block is idempotent for markers with backslashes"
 assert_contains "$(cat "$bsb")" 'a=2' "fs_ensure_block still replaces the block content"
+
+# ---------------------------------------------------------------------------
+# issue #21：备份名只带秒级时间戳，同一秒里备份两次会互相覆盖 —— 等于丢掉一份历史版本。
+# 把 date 钉死来复现：跨秒就测不出来了。
+# ---------------------------------------------------------------------------
+stub date --stdout '20260101000000'
+same="$d/same-second.txt"
+printf 'v1\n' >"$same"
+fs_backup "$same" 5
+printf 'v2\n' >"$same"
+fs_backup "$same" 5
+unstub date
+
+assert_eq "2" "$(ls -1 "$same".bak.* | wc -l | tr -d ' ')" \
+  "two backups in the same second must not overwrite each other"
+# 前缀仍是定长时间戳，所以「按名升序 == 时间序」的轮转前提必须还成立
+assert_eq "v1" "$(cat "$(ls -1 "$same".bak.* | head -1)")" "the oldest backup keeps the first version"
+assert_eq "v2" "$(cat "$(ls -1 "$same".bak.* | tail -1)")" "the newest backup keeps the last version"
+
+# 轮转依然按名序生效：KEEP=1 只留最新那份
+printf 'v3\n' >"$same"
+fs_backup "$same" 1
+assert_eq "1" "$(ls -1 "$same".bak.* | wc -l | tr -d ' ')" "rotation still trims to KEEP"

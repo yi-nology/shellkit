@@ -16,7 +16,7 @@ fail CODE MSG...  —— 不退出，只返回码；CODE 校验同 die
 
 ### `require_cmd`
 
-require_cmd CMD...
+require_cmd CMD... —— 零参数返回 SK_USAGE（否则 `require_cmd "$EMPTY"` 会静默通过）
 
 ### `require_root`
 
@@ -24,7 +24,7 @@ require_root
 
 ### `require_file`
 
-require_file PATH...
+require_file PATH... —— 零参数返回 SK_USAGE
 
 ### `require_bash`
 
@@ -174,7 +174,7 @@ os_is_root
 
 ### `os_has_cmd`
 
-os_has_cmd CMD...
+os_has_cmd CMD... —— 零参数返回 SK_USAGE（空真会让前置检查静默通过）
 
 ### `os_pkg_manager`
 
@@ -226,7 +226,7 @@ trap_install —— 安装 EXIT / INT / TERM / HUP 处理器；可重复调用 �
 
 ### `run`
 
-run CMD... —— 执行命令，失败即 die（消息含命令原文与退出码）
+run [--always] [--no-die] CMD... —— 执行命令，失败即 die；--no-die 只返回码
 
 ## retry
 

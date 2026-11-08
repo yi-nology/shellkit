@@ -42,8 +42,8 @@ _sk_lock_pid_alive() {
 }
 
 # _sk_lock_is_stale DIR —— 0 表示可以回收
-# 规则：持有者进程已消失即可回收；pid 文件缺失/不可读时，只有目录年龄超过
-# SHELLKIT_LOCK_STALE（默认 0 = 不按年龄回收）才回收。
+# 规则：持有者进程已消失即可回收；pid 文件缺失/不可读时按目录年龄判 ——
+# 宽限期取 SHELLKIT_LOCK_STALE，未设置时用 5 秒（刚 mkdir 还没写 pid 的瞬间不能被抢）。
 # 活着的持有者绝不按年龄回收 —— 那等于把正在干活的进程的锁抢走。
 _sk_lock_is_stale() {
   local __dir=$1 __pid __stale __now __mt
@@ -56,8 +56,11 @@ _sk_lock_is_stale() {
     log_debug "lock holder $__pid is gone"
     return 0
   fi
+  # 「目录在、pid 不在」不是合法的持有态：mkdir 与写 pid 之间被 SIGKILL / 断电 /
+  # OOM 打断就长这样。以前默认 0 = 永不回收，于是一次非正常退出就让这个锁名永久不可用，
+  # 报错还说是「另一个实例在跑」，用户只能去查一个不存在的进程。
   if [ "$__stale" -le 0 ]; then
-    return 1
+    __stale=5
   fi
   __mt=$(_sk_lock_mtime "$__dir" 2>/dev/null || printf '0')
   case "$__mt" in
@@ -154,7 +157,7 @@ lock_acquire() {
       continue
     fi
     if [ "$__i" -ge "$__wait" ]; then
-      log_error "$(_t 'another instance is running'): $__name"
+      log_error "$(_t 'another instance is running'): $__name ($__dir)"
       return "$SK_PRECOND"
     fi
     sleep 1

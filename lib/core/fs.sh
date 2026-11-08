@@ -5,7 +5,8 @@ SK_TMPDIR=""
 
 # fs_ensure_dir DIR [MODE]
 fs_ensure_dir() {
-  local __dir=$1 __mode=${2:-}
+  local __dir=${1:-} __mode=${2:-}
+  _sk_need_args "$#" 1 "fs_ensure_dir DIR [MODE]" || return $?
   if [ ! -d "$__dir" ]; then
     mkdir -p "$__dir" || return 1
   fi
@@ -17,7 +18,8 @@ fs_ensure_dir() {
 
 # fs_atomic_write FILE CONTENT [MODE]
 fs_atomic_write() {
-  local __file=$1 __content=$2 __mode=${3:-600} __dir __tmp
+  local __file=${1:-} __content=${2:-} __mode=${3:-600} __dir __tmp
+  _sk_need_args "$#" 2 "fs_atomic_write FILE CONTENT [MODE]" || return $?
   __dir=$(dirname "$__file")
   fs_ensure_dir "$__dir" "" || return 1
   __tmp=$(mktemp "$__file.tmp.XXXXXX") || return 1
@@ -35,8 +37,9 @@ fs_atomic_write() {
 
 # fs_backup FILE [KEEP] —— 产出 FILE.bak.YYYYmmddHHMMSS，按名升序保留最新 KEEP 份
 fs_backup() {
-  local __file=$1 __keep=${2:-3} __stamp __bak __x __i=0 __total
+  local __file=${1:-} __keep=${2:-3} __stamp __bak __x __i=0 __total __seq=0
   local -a __list=()
+  _sk_need_args "$#" 1 "fs_backup FILE [KEEP]" || return $?
   case "$__keep" in
     '' | *[!0-9]*)
       log_error "$(_t 'invalid keep count'): $__keep"
@@ -47,7 +50,13 @@ fs_backup() {
     return 0
   fi
   __stamp=$(date +%Y%m%d%H%M%S)
-  __bak="$__file.bak.$__stamp"
+  # 名字必须唯一：同一秒里备份两次，第二次会覆盖第一次刚建的备份（等于丢一份）。
+  # 加 pid 与序号后缀；前缀仍是定长时间戳，所以「按名升序 == 时间序」的轮转前提不变。
+  __bak="$__file.bak.$__stamp.$$"
+  while [ -e "$__bak" ]; do
+    __seq=$((__seq + 1))
+    __bak="$__file.bak.$__stamp.$$-$__seq"
+  done
   cp -p "$__file" "$__bak" || return 1
   for __x in "$__file".bak.*; do
     if [ -e "$__x" ]; then
@@ -88,7 +97,8 @@ _sk_fs_has_newline() {
 
 # fs_ensure_line FILE LINE —— 整行精确匹配；不存在才追加。幂等。
 fs_ensure_line() {
-  local __file=$1 __line=${2:-} __tmp
+  local __file=${1:-} __line=${2:-} __tmp
+  _sk_need_args "$#" 1 "fs_ensure_line FILE LINE" || return $?
   if [ -z "$__line" ]; then
     log_error "$(_t 'line must not be empty')"
     return "$SK_USAGE"
@@ -124,8 +134,9 @@ fs_ensure_line() {
 
 # fs_ensure_block FILE BEGIN END CONTENT —— 标记块内内容整体替换；没有就追加。幂等。
 fs_ensure_block() {
-  local __file=$1 __begin=${2:-} __end=${3:-} __content=${4:-}
+  local __file=${1:-} __begin=${2:-} __end=${3:-} __content=${4:-}
   local __tmp __cf __src
+  _sk_need_args "$#" 3 "fs_ensure_block FILE BEGIN END [CONTENT]" || return $?
   if [ -z "$__begin" ] || [ -z "$__end" ]; then
     log_error "$(_t 'block markers must not be empty')"
     return "$SK_USAGE"
@@ -194,6 +205,7 @@ fs_ensure_block() {
 # fs_ensure_symlink TARGET LINK —— 已是正确链接则不动；否者替换（绝不覆盖普通文件）
 fs_ensure_symlink() {
   local __target=${1:-} __link=${2:-} __cur
+  _sk_need_args "$#" 2 "fs_ensure_symlink TARGET LINK" || return $?
   if [ -z "$__target" ] || [ -z "$__link" ]; then
     log_error "$(_t 'fs_ensure_symlink requires TARGET and LINK')"
     return "$SK_USAGE"

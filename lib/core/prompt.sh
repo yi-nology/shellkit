@@ -62,7 +62,8 @@ _sk_ask_raw() {
 
 # ask VAR PROMPT [DEFAULT] [TIMEOUT]
 ask() {
-  local __var=$1 __prompt=$2 __default=${3:-} __timeout=${4:-} __msg
+  local __var=${1:-} __prompt=${2:-} __default=${3:-} __timeout=${4:-} __msg
+  _sk_need_args "$#" 2 "ask VAR PROMPT [DEFAULT] [TIMEOUT]" || return $?
   if ! _sk_is_name "$__var"; then
     log_error "$(_t 'invalid variable name'): $__var"
     return "$SK_USAGE"
@@ -76,7 +77,8 @@ ask() {
 
 # ask_yn VAR PROMPT [DEFAULT=y] [TIMEOUT] —— 结果写入 y 或 n
 ask_yn() {
-  local __var=$1 __prompt=$2 __default=${3:-y} __timeout=${4:-} _sk_ans="" _sk_tries=0 _sk_msg _sk_hint
+  local __var=${1:-} __prompt=${2:-} __default=${3:-y} __timeout=${4:-} _sk_ans="" _sk_tries=0 _sk_msg _sk_hint
+  _sk_need_args "$#" 2 "ask_yn VAR PROMPT [DEFAULT] [TIMEOUT]" || return $?
   if ! _sk_is_name "$__var"; then
     log_error "$(_t 'invalid variable name'): $__var"
     return "$SK_USAGE"
@@ -110,7 +112,8 @@ ask_yn() {
 
 # ask_choice VAR PROMPT "a|b|c" [DEFAULT] [TIMEOUT]
 ask_choice() {
-  local __var=$1 __prompt=$2 __choices=$3 __default=${4:-} __timeout=${5:-} _sk_ans="" _sk_tries=0 _sk_msg
+  local __var=${1:-} __prompt=${2:-} __choices=${3:-} __default=${4:-} __timeout=${5:-} _sk_ans="" _sk_tries=0 _sk_msg
+  _sk_need_args "$#" 3 "ask_choice VAR PROMPT 'a|b|c' [DEFAULT] [TIMEOUT]" || return $?
   if ! _sk_is_name "$__var"; then
     log_error "$(_t 'invalid variable name'): $__var"
     return "$SK_USAGE"

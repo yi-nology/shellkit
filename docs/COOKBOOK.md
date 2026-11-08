@@ -112,6 +112,24 @@ run ./build-in "$workdir"
 单个清理动作失败只报警告、不影响其余动作，也**不改脚本真实的退出码**。
 这一条很关键：`trap_install` 的 EXIT 处理器会先存下 `$?`，跑完清理再原样 `exit`。
 
+**要自己判成败就加 `--no-die`**：
+
+```bash
+# 探活失败不是错误，只是「没在跑」
+if run --no-die systemctl is-active --quiet nginx; then
+  log_info "nginx 在跑"
+else
+  log_warn "nginx 没在跑，准备启动"
+  run systemctl start nginx
+fi
+
+run --no-die curl -fsS "$health_url" >/dev/null || log_warn "健康检查没过，继续"
+```
+
+默认的 `run` 失败时走 `die`，而 `die` 里的 `exit` **不受 `if` / `||` 约束** —— 也就是说
+`if run cmd; then` 的 else 分支永远走不到，整个脚本直接退。这正是 `--no-die` 存在的理由：
+它只返回命令的退出码，不退出 shell。
+
 ## 7. 重试
 
 **场景**：拉取一个偶尔超时的接口。
@@ -124,6 +142,9 @@ SHELLKIT_RETRY_DELAY=2 SHELLKIT_RETRY_BACKOFF=2 retry 5 \
 
 **为什么**：默认从 1 秒起、每次翻倍、上限 30 秒；**用法错（2）与校验失败（5）默认不重试** ——
 参数写错了重试五次只是浪费日志。`SHELLKIT_RETRY_ON` 可以改这个集合。
+
+**首次延迟同样受上限约束**：`SHELLKIT_RETRY_DELAY=100 SHELLKIT_RETRY_MAX_DELAY=5` 时第一次就等 5 秒
+（不是 100 秒后才发现上限生效）。所以「初始给个大值、上限兜住」是安全的写法。
 
 ## 8. 装成 systemd 服务
 

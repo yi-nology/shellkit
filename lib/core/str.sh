@@ -16,9 +16,37 @@ _sk_ref_get() {
   eval "printf '%s' \"\${$__n-}\""
 }
 
+# _sk_shell_quote TEXT —— 输出能被 shell 重新解析的形式（给 dry-run 打印用）
+_sk_shell_quote() {
+  local __s=${1:-} __out="" __c __i=0
+  case "$__s" in
+    '')
+      printf "''"
+      return 0
+      ;;
+    *[!A-Za-z0-9_@%+=:,./-]*) ;;
+    *)
+      printf '%s' "$__s"
+      return 0
+      ;;
+  esac
+  # 需要引号：内部单引号写成 '\''，整体再包一层单引号
+  while [ "$__i" -lt "${#__s}" ]; do
+    __c=${__s:$__i:1}
+    if [ "$__c" = "'" ]; then
+      __out="$__out'\\''"
+    else
+      __out="$__out$__c"
+    fi
+    __i=$((__i + 1))
+  done
+  printf "'%s'" "$__out"
+}
+
 # str_trim VAR
 str_trim() {
-  local __n=$1 __v
+  local __n=${1:-} __v
+  _sk_need_args "$#" 1 "str_trim VAR" || return $?
   _sk_is_name "$__n" || return "$SK_USAGE"
   __v=$(_sk_ref_get "$__n") || return $?
   __v="${__v#"${__v%%[![:space:]]*}"}"
@@ -28,7 +56,8 @@ str_trim() {
 
 # str_lower VAR
 str_lower() {
-  local __n=$1 __v
+  local __n=${1:-} __v
+  _sk_need_args "$#" 1 "str_lower VAR" || return $?
   _sk_is_name "$__n" || return "$SK_USAGE"
   __v=$(_sk_ref_get "$__n") || return $?
   printf -v "$__n" '%s' "$(printf '%s' "$__v" | tr '[:upper:]' '[:lower:]')"
@@ -36,7 +65,8 @@ str_lower() {
 
 # str_upper VAR
 str_upper() {
-  local __n=$1 __v
+  local __n=${1:-} __v
+  _sk_need_args "$#" 1 "str_upper VAR" || return $?
   _sk_is_name "$__n" || return "$SK_USAGE"
   __v=$(_sk_ref_get "$__n") || return $?
   printf -v "$__n" '%s' "$(printf '%s' "$__v" | tr '[:lower:]' '[:upper:]')"
@@ -77,7 +107,8 @@ str_ends_with() {
 
 # str_repeat VAR COUNT STRING
 str_repeat() {
-  local __n=$1 __count=$2 __s=$3 __out="" __i=0
+  local __n=${1:-} __count=${2:-} __s=${3:-} __out="" __i=0
+  _sk_need_args "$#" 3 "str_repeat VAR COUNT STRING" || return $?
   _sk_is_name "$__n" || return "$SK_USAGE"
   case "$__count" in
     '' | *[!0-9]*) return "$SK_USAGE" ;;

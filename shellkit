@@ -52,16 +52,25 @@ cli_cmd update "$(_t 'update an installed shellkit')" "update [--check] [--from 
 
 # _sk_render SRC DST NAME VERSION [CMD]
 #   占位符用双花括号形式，避免和 shell 的美元大括号混淆。
+#   返回非 0 表示没写出来。调用方必须判——set -e 在 cli_run 的 `||` 列表里失效，
+#   不判的话 sed 失败只会留下一个空文件，然后照样打印 [ OK ]（issue #29）。
 _sk_render() {
   local __src=$1 __dst=$2 __name=$3 __ver=$4
   local __cmd=""
   if [ "$#" -ge 5 ]; then
     __cmd=$5
   fi
-  sed -e "s|{{NAME}}|$__name|g" \
+  if [ ! -f "$__src" ]; then
+    log_error "$(_t 'template is missing'): $__src"
+    return 1
+  fi
+  if ! sed -e "s|{{NAME}}|$__name|g" \
     -e "s|{{SHELLKIT_VERSION}}|$__ver|g" \
     -e "s|{{CMD}}|$__cmd|g" \
-    "$__src" >"$__dst"
+    "$__src" >"$__dst"; then
+    return 1
+  fi
+  return 0
 }
 
 # _sk_vendor_install DIR —— 把库整目录同步进 DIR/vendor/shellkit。
@@ -118,8 +127,88 @@ _sk_valid_name() {
   return 0
 }
 
+# _sk_new_generate DIR NAME [CMD]... —— 把模板落盘，任何一步没写成都返回非 0
+#   集中成函数是为了只判一次错：散在 cmd_new 里逐句 `|| return $SK_ERR` 又长又容易漏，
+#   而漏一处就是「写失败仍打印 [ OK ] project created」。
+_sk_new_generate() {
+  local __dir=$1 __name=$2 __cmd __first=""
+  shift 2
+  if [ "$#" -gt 0 ]; then
+    __first=$1
+  fi
+
+  fs_ensure_dir "$__dir/bin" 755 || return 1
+  fs_ensure_dir "$__dir/lib" 755 || return 1
+  fs_ensure_dir "$__dir/commands" 755 || return 1
+  fs_ensure_dir "$__dir/tests" 755 || return 1
+  fs_ensure_dir "$__dir/vendor/shellkit" 755 || return 1
+
+  # 库随工程一起走，生成出来的工程不依赖本机装没装 shellkit
+  _sk_vendor_install "$__dir" || return 1
+  log_info "$(_t 'vendored library'): vendor/shellkit ($SK_VERSION)"
+
+  _sk_render "$SK_TPL_DIR/bin/__NAME__" "$__dir/bin/$__name" "$__name" "$SK_VERSION" || return 1
+  chmod 755 "$__dir/bin/$__name" || return 1
+
+  _sk_render "$SK_TPL_DIR/lib/app.sh" "$__dir/lib/app.sh" "$__name" "$SK_VERSION" || return 1
+
+  for __cmd in "$@"; do
+    _sk_render "$SK_TPL_DIR/commands/__CMD__.sh" "$__dir/commands/$__cmd.sh" \
+      "$__name" "$SK_VERSION" "$__cmd" || return 1
+    log_info "$(_t 'added command'): $__cmd"
+  done
+
+  _sk_render "$SK_TPL_DIR/config.example" "$__dir/config.example" "$__name" "$SK_VERSION" || return 1
+  _sk_render "$SK_TPL_DIR/tests/test_smoke.sh" "$__dir/tests/test_smoke.sh" \
+    "$__name" "$SK_VERSION" "$__first" || return 1
+  chmod 755 "$__dir/tests/test_smoke.sh" || return 1
+  _sk_render "$SK_TPL_DIR/README.md" "$__dir/README.md" "$__name" "$SK_VERSION" || return 1
+  _sk_render "$SK_TPL_DIR/AGENTS.md" "$__dir/AGENTS.md" "$__name" "$SK_VERSION" "$__first" || return 1
+  cp "$SK_TPL_DIR/.shellcheckrc" "$__dir/.shellcheckrc" || return 1
+  # 必须渲染：模板里有 {{NAME}}，原样拷走会让 make lint 的 bin/*{{NAME}} 一条都匹配不上
+  _sk_render "$SK_TPL_DIR/Makefile" "$__dir/Makefile" "$__name" "$SK_VERSION" || return 1
+
+  cp "$SELF_DIR/tests/test_helper.sh" "$__dir/tests/test_helper.sh" || return 1
+  cp "$SELF_DIR/tests/run.sh" "$__dir/tests/run.sh" || return 1
+  chmod 755 "$__dir/tests/run.sh" || return 1
+  return 0
+}
+
+# _sk_new_verify DIR NAME [CMD]... —— 落盘后自检「该有的都在」
+#   退出码为 0 不等于工程可用：少一个 tests/run.sh，目录建得出来、日志也漂亮，
+#   但 make test 立刻 127。所以承诺过的文件逐个查，可执行位也查。
+_sk_new_verify() {
+  local __dir=$1 __name=$2 __c __p __missing=0
+  shift 2
+  for __p in \
+    "bin/$__name" lib/app.sh config.example Makefile README.md AGENTS.md .shellcheckrc \
+    tests/test_smoke.sh tests/test_helper.sh tests/run.sh \
+    vendor/shellkit/lib/bootstrap.sh vendor/shellkit/VERSION; do
+    if [ ! -f "$__dir/$__p" ]; then
+      log_error "$(_t 'generated file is missing'): $__p"
+      __missing=$((__missing + 1))
+    fi
+  done
+  for __c in "$@"; do
+    if [ ! -f "$__dir/commands/$__c.sh" ]; then
+      log_error "$(_t 'generated file is missing'): commands/$__c.sh"
+      __missing=$((__missing + 1))
+    fi
+  done
+  for __p in "bin/$__name" tests/test_smoke.sh tests/run.sh; do
+    if [ -f "$__dir/$__p" ] && [ ! -x "$__dir/$__p" ]; then
+      log_error "$(_t 'generated file is not executable'): $__p"
+      __missing=$((__missing + 1))
+    fi
+  done
+  if [ "$__missing" -ne 0 ]; then
+    return 1
+  fi
+  return 0
+}
+
 cmd_new() {
-  local __dir="" __name="" __opt="" __val="" __cmd=""
+  local __dir="" __name="" __opt="" __val=""
   local -a __cmds=()
 
   while [ "$#" -gt 0 ]; do
@@ -192,38 +281,17 @@ cmd_new() {
   fi
 
   log_section "$(_t 'creating'): $__dir"
-  fs_ensure_dir "$__dir/bin" 755
-  fs_ensure_dir "$__dir/lib" 755
-  fs_ensure_dir "$__dir/commands" 755
-  fs_ensure_dir "$__dir/tests" 755
-  fs_ensure_dir "$__dir/vendor/shellkit" 755
-
-  # 库随工程一起走，生成出来的工程不依赖本机装没装 shellkit
-  _sk_vendor_install "$__dir" || return "$SK_ERR"
-  log_info "$(_t 'vendored library'): vendor/shellkit ($SK_VERSION)"
-
-  _sk_render "$SK_TPL_DIR/bin/__NAME__" "$__dir/bin/$__name" "$__name" "$SK_VERSION"
-  chmod 755 "$__dir/bin/$__name"
-
-  _sk_render "$SK_TPL_DIR/lib/app.sh" "$__dir/lib/app.sh" "$__name" "$SK_VERSION"
-
-  for __cmd in "${__cmds[@]}"; do
-    _sk_render "$SK_TPL_DIR/commands/__CMD__.sh" "$__dir/commands/$__cmd.sh" "$__name" "$SK_VERSION" "$__cmd"
-    log_info "$(_t 'added command'): $__cmd"
-  done
-
-  _sk_render "$SK_TPL_DIR/config.example" "$__dir/config.example" "$__name" "$SK_VERSION"
-  _sk_render "$SK_TPL_DIR/tests/test_smoke.sh" "$__dir/tests/test_smoke.sh" "$__name" "$SK_VERSION" "${__cmds[0]}"
-  chmod 755 "$__dir/tests/test_smoke.sh"
-  _sk_render "$SK_TPL_DIR/README.md" "$__dir/README.md" "$__name" "$SK_VERSION"
-  _sk_render "$SK_TPL_DIR/AGENTS.md" "$__dir/AGENTS.md" "$__name" "$SK_VERSION" "${__cmds[0]}"
-  cp "$SK_TPL_DIR/.shellcheckrc" "$__dir/.shellcheckrc"
-  # 必须渲染：模板里有 {{NAME}}，原样拷走会让 make lint 的 bin/*{{NAME}} 一条都匹配不上
-  _sk_render "$SK_TPL_DIR/Makefile" "$__dir/Makefile" "$__name" "$SK_VERSION"
-
-  cp "$SELF_DIR/tests/test_helper.sh" "$__dir/tests/test_helper.sh"
-  cp "$SELF_DIR/tests/run.sh" "$__dir/tests/run.sh"
-  chmod 755 "$__dir/tests/run.sh"
+  # 注意 set -e 在这里是靠不住的：cmd_new 由 cli_run 用 `|| __rc=$?` 调用，
+  # 整个函数体因此不在 errexit 的保护下（issue #29）。所以每处落盘都显式判错。
+  if ! _sk_new_generate "$__dir" "$__name" ${__cmds[@]+"${__cmds[@]}"}; then
+    log_error "$(_t 'failed to generate the project'): $__dir"
+    log_info "$(_t 'the target directory was left in place for inspection')"
+    return "$SK_ERR"
+  fi
+  if ! _sk_new_verify "$__dir" "$__name" ${__cmds[@]+"${__cmds[@]}"}; then
+    log_error "$(_t 'the generated project is incomplete'): $__dir"
+    return "$SK_ERR"
+  fi
 
   printf '\n'
   log_ok "$(_t 'project created'): $__dir"
@@ -664,6 +732,11 @@ cmd_install_self() {
   fi
   if [ -d "$SELF_DIR/docs" ]; then
     _sk_copy_tree "$SELF_DIR/docs" "$__dest/docs" || return "$SK_ERR"
+  fi
+  # tests/ 必须一起装：`shellkit new` 会把 tests/test_helper.sh 与 tests/run.sh
+  # 拷进新工程，装好的副本里没有它们，新工程 make test 必然 127（issue #28）。
+  if [ -d "$SELF_DIR/tests" ]; then
+    _sk_copy_tree "$SELF_DIR/tests" "$__dest/tests" || return "$SK_ERR"
   fi
   if [ -f "$SELF_DIR/AGENTS.md" ]; then
     cp -f "$SELF_DIR/AGENTS.md" "$__dest/AGENTS.md" || return "$SK_ERR"

@@ -59,3 +59,24 @@ assert_not_contains "$(cat "$TEST_ROOT/docs/REFERENCE.md")" "cli_opt_init VAR DE
 
 # 生成工程的测试套件必须当场通过
 (cd "$proj" && bash tests/run.sh >/dev/null 2>&1) || _fail "generated project tests failed"
+
+# ---------------------------------------------------------------------------
+# issue #29：落盘失败必须报错。
+# 根因有两层：(1) cp/chmod 没判返回值；(2) cli_run 用 `|| __rc=$?` 调 cmd_new，
+# 这让 set -e 对整个函数体失效 —— 于是写失败被静默吞掉，照样打印 [ OK ] project created、
+# 退出码还是 0。脚本里「生成成功」是唯一承诺，破了它就等于交出一个半成品目录。
+# ---------------------------------------------------------------------------
+broken="$work/broken-src"
+mkdir -p "$broken"
+cp -R "$TEST_ROOT/lib" "$TEST_ROOT/templates" "$TEST_ROOT/locale" "$broken/" ||
+  _fail "cannot stage a broken tree"
+cp "$TEST_ROOT/shellkit" "$TEST_ROOT/VERSION" "$broken/"
+chmod 755 "$broken/shellkit"
+rm -f "$broken/templates/README.md"
+
+bad_proj="$work/broken-proj"
+bad_out=$("$broken/shellkit" new "$bad_proj" 2>&1)
+bad_rc=$?
+assert_ne "0" "$bad_rc" "new must fail when a template cannot be rendered"
+assert_not_contains "$bad_out" "project created" "a failed new must not claim success"
+assert_contains "$bad_out" "README.md" "the failure names the missing template"

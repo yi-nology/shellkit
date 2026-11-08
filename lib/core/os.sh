@@ -30,9 +30,10 @@ os_is_root() {
   return 1
 }
 
-# os_has_cmd CMD...
+# os_has_cmd CMD... —— 零参数返回 SK_USAGE（空真会让前置检查静默通过）
 os_has_cmd() {
   local __c
+  _sk_need_args "$#" 1 "os_has_cmd CMD..." || return $?
   for __c in "$@"; do
     if ! command -v "$__c" >/dev/null 2>&1; then
       return 1
@@ -103,7 +104,8 @@ os_sed_i() {
 
 # os_md5 FILE
 os_md5() {
-  local __f=$1
+  local __f=${1:-}
+  _sk_need_args "$#" 1 "os_md5 FILE" || return $?
   if command -v md5sum >/dev/null 2>&1; then
     md5sum "$__f" | awk '{print $1}'
   elif command -v md5 >/dev/null 2>&1; then
@@ -115,7 +117,8 @@ os_md5() {
 
 # os_sha256 FILE
 os_sha256() {
-  local __f=$1
+  local __f=${1:-}
+  _sk_need_args "$#" 1 "os_sha256 FILE" || return $?
   if command -v sha256sum >/dev/null 2>&1; then
     sha256sum "$__f" | awk '{print $1}'
   elif command -v shasum >/dev/null 2>&1; then

@@ -21,6 +21,7 @@ macOS 原生 bash、Alpine 的 busybox 之外的主流发行版都能直接跑�
 | 想让 AI 替你写 | 根目录的 [AGENTS.md](AGENTS.md)；`shellkit new` 生成的工程也自带一份，写清了这行的坑 |
 | 要查某个函数的确切签名和退出码 | [docs/REFERENCE.md](docs/REFERENCE.md)：从源码注释生成，不会和代码漂移 |
 | 想先看完整工程长什么样 | [examples/deploy-service](examples/deploy-service)、[examples/fetch-release](examples/fetch-release) |
+| 要发版 | [docs/RELEASING.md](docs/RELEASING.md)：一条命令升版本，附带发版后的验收清单 |
 
 ## 三十秒
 
@@ -205,6 +206,7 @@ trap_push 'rm -rf "$workdir"'   # LIFO；退出/INT/TERM/HUP 都会跑；单个�
 trap_install                    # 链式保留你已有的 EXIT trap，幂等
 
 run systemctl restart nginx     # 失败即 die，消息含命令原文 + 退出码
+run --no-die systemctl is-active nginx   # 只返回码，可以在 if / || 里判断
 retry 5 curl -fsS "$url" -o x   # 默认 1s 起、指数退避 2x、上限 30s
 
 lock_acquire deploy 30          # mkdir 原子锁；超时返回 SK_PRECOND

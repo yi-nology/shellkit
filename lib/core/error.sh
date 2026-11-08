@@ -1,6 +1,18 @@
 #!/usr/bin/env bash
 # 错误与前置条件检查
 
+# _sk_need_args HAVE NEED USAGE —— 参数不足时报用法错并返回 SK_USAGE。
+# 不用 ${1:-} 兜底是刻意的：少传参数的函数往往「用空值也能跑完」，
+# 静默跑完比当场报错难查得多。
+_sk_need_args() {
+  local __have=${1:-0} __need=${2:-0} __usage=${3:-}
+  if [ "$__have" -ge "$__need" ]; then
+    return 0
+  fi
+  log_error "$(_t 'Usage'): $__usage"
+  return "$SK_USAGE"
+}
+
 # _sk_exit_code_ok VALUE —— 0..255 的十进制整数才是合法退出码
 _sk_exit_code_ok() {
   local __v=${1:-}
@@ -38,9 +50,10 @@ fail() {
   return "$__code"
 }
 
-# require_cmd CMD...
+# require_cmd CMD... —— 零参数返回 SK_USAGE（否则 `require_cmd "$EMPTY"` 会静默通过）
 require_cmd() {
   local __c
+  _sk_need_args "$#" 1 "require_cmd CMD..." || return $?
   for __c in "$@"; do
     if ! command -v "$__c" >/dev/null 2>&1; then
       log_error "$(_t 'Required command not found'): $__c"
@@ -59,9 +72,10 @@ require_root() {
   return "$SK_PRECOND"
 }
 
-# require_file PATH...
+# require_file PATH... —— 零参数返回 SK_USAGE
 require_file() {
   local __f
+  _sk_need_args "$#" 1 "require_file PATH..." || return $?
   for __f in "$@"; do
     if [ ! -e "$__f" ]; then
       log_error "$(_t 'Required file not found'): $__f"

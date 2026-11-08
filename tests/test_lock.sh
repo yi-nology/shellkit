@@ -83,3 +83,40 @@ wait "$holder"
 assert_false test -d "$SHELLKIT_LOCK_DIR/shellkit-XP.lock"
 assert_exit_code 0 lock_acquire XP
 lock_release XP
+
+# ---------------------------------------------------------------------------
+# issue #24：锁目录在、pid 文件不在。以前 SHELLKIT_LOCK_STALE 默认 0 表示「永不回收」，
+# 于是一次断电/SIGKILL 就让这个锁名永久不可用，报错还说「另一个实例在跑」。
+# 规则要拆成两半：刚建出来的给宽限（mkdir 与写 pid 之间有真实窗口，立刻抢会双持有），
+# 超过宽限的必须回收。
+# ---------------------------------------------------------------------------
+nopid="$SHELLKIT_LOCK_DIR/shellkit-NOPID.lock"
+mkdir -p "$nopid"
+assert_exit_code 3 lock_acquire NOPID 0
+assert_true test -d "$nopid"
+
+# 做旧到宽限之外
+touch -t 200001010000 "$nopid"
+assert_exit_code 0 lock_acquire NOPID
+lock_release NOPID
+
+# 显式把宽限调大时，同样的旧目录也不再回收
+mkdir -p "$nopid"
+touch -t 200001010000 "$nopid"
+assert_exit_code 3 env SHELLKIT_LOCK_STALE=9999999999 bash -c '
+  . "$1/lib/bootstrap.sh"
+  lock_acquire NOPID 0 2>/dev/null
+' _ "$TEST_ROOT"
+rm -rf "$nopid"
+
+# 活着的持有者绝不按年龄回收：抢走锁等于让两个实例同时干活
+sleep 30 &
+_alive=$!
+adir="$SHELLKIT_LOCK_DIR/shellkit-ALIVE.lock"
+mkdir -p "$adir"
+printf '%s\n' "$_alive" >"$adir/pid"
+touch -t 200001010000 "$adir"
+assert_exit_code 3 lock_acquire ALIVE 0
+kill "$_alive" 2>/dev/null || true
+wait "$_alive" 2>/dev/null || true
+rm -rf "$adir"

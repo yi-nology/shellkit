@@ -68,3 +68,17 @@ if [ -f "$po" ]; then
   empty=$(grep -c '^msgstr ""$' "$po")
   assert_eq "1" "$empty" "every msgid in zh_CN has a translation (only the header may be empty)"
 fi
+
+# ---------------------------------------------------------------------------
+# issue #23：xgettext 会把传给它的文件名原样写进 `#:` 注释。
+# 传绝对路径时，pot 里嵌着本机的 /Users/xxx，换台机器一跑 messages-check 就红；
+# 而且行号注释每改一次代码就整片漂移 —— 假红会逼人把这条门禁关掉。
+# ---------------------------------------------------------------------------
+if [ -f "$TEST_ROOT/locale/shellkit.pot" ]; then
+  loc=$(grep -c '^#:' "$TEST_ROOT/locale/shellkit.pot" || true)
+  assert_eq "0" "$loc" "the pot file carries no location comments"
+  abs=$(grep -c '^#: /' "$TEST_ROOT/locale/shellkit.pot" || true)
+  assert_eq "0" "$abs" "the pot file leaks no absolute paths"
+  abs=$(grep -cF "$TEST_ROOT" "$TEST_ROOT/locale/shellkit.pot" || true)
+  assert_eq "0" "$abs" "the pot file does not mention the checkout path"
+fi

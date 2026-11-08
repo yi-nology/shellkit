@@ -14,6 +14,7 @@
     templates/                shellkit new 的模板（含 __NAME__ / __CMD__ 占位符）
     tests/                    自研断言 + 逐文件执行器 + 每个模块一个测试
     tools/                    shdoc.awk / coverage.awk / ai_doc.sh / check_docs.sh / term_shot.py
+                              release.sh（一条命令发版）/ check_versions.sh（版本引用一致性）
     docs/                     README 之外的深度文档；REFERENCE.md 与 AGENTS.md 是生成物
     docs/shots/*.shot         截图源：每行 `$ ` 是真要跑的命令，svg 由 make shots 渲染
     examples/                 两个能直接跑的工程，测试全程走真实二进制
@@ -29,7 +30,7 @@
 
 ## 门禁
 
-    make check     # syntax + test + lint + docs-check + check-docs + messages-check + examples + fmt，CI 也是这组
+    make check     # syntax + test + lint + docs-check + versions-check + check-docs + messages-check + examples + fmt，CI 也是这组
 
 `docs-check` 会拦两种事：公开函数缺注释、`docs/` 里的生成物与源码不一致。
 `lint` 是 `shellcheck -S warning -x`，模板会先渲染再检查（占位符不是合法语法）。
@@ -47,4 +48,15 @@
     make check
     bash tests/run.sh                # 只看测试
     ./shellkit docs --check          # 只看文档产物是否最新
+    bash tools/check_versions.sh     # 只看版本引用是否一致
     bash tools/check_docs.sh         # 只看文档里的示例是否仍然成立
+
+## 发版
+
+`VERSION` 是唯一真相源，pot 头、README、站点两处都是它的**手抄投影**。所以发版不许手工改：
+
+    make release-dry VERSION=x.y.z   # 先空跑：升版本→重生成→门禁，然后还原工作树
+    make release VERSION=x.y.z       # 真发：commit + tag + push，tag 触发 release.yml
+
+改了既有函数的结果（返回码、产出文件名、输出文本）就要升 **minor**，并在
+`docs/MIGRATING.md` 加一张「会改变结果的行为变化」表。只加不改的可以升 patch。

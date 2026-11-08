@@ -2,11 +2,15 @@
 # 网络：下载（带校验与镜像回退）与就绪探测。
 
 # net_sha256 FILE
-net_sha256() { os_sha256 "$1"; }
+net_sha256() {
+  _sk_need_args "$#" 1 "net_sha256 FILE" || return $?
+  os_sha256 "$1"
+}
 
 # net_verify FILE SHA256
 net_verify() {
-  local __file=$1 __expect=${2:-} __actual
+  local __file=${1:-} __expect=${2:-} __actual
+  _sk_need_args "$#" 2 "net_verify FILE SHA256" || return $?
   if [ -z "$__expect" ]; then
     log_error "$(_t 'no checksum configured for'): $__file"
     return "$SK_VERIFY"
@@ -37,7 +41,8 @@ _sk_download_raw() {
 
 # net_download URL DEST [SHA256]
 net_download() {
-  local __url=$1 __dest=$2 __expect=${3:-} __tmp __alt
+  local __url=${1:-} __dest=${2:-} __expect=${3:-} __tmp __alt
+  _sk_need_args "$#" 2 "net_download URL DEST [SHA256]" || return $?
   fs_ensure_dir "$(dirname "$__dest")" "" || return 1
 
   if [ -f "$__dest" ]; then
@@ -95,7 +100,8 @@ net_download() {
 
 # net_wait_port HOST PORT [TIMEOUT]
 net_wait_port() {
-  local __host=$1 __port=$2 __timeout=${3:-30} __i=0
+  local __host=${1:-} __port=${2:-} __timeout=${3:-30} __i=0
+  _sk_need_args "$#" 2 "net_wait_port HOST PORT [TIMEOUT]" || return $?
   while [ "$__i" -lt "$__timeout" ]; do
     # 只在子 shell 里开连接：exec 的重定向会落到调用方的 shell 上，
     # 以前那行 `exec 3>&- 2>/dev/null` 既关了别人的 fd 3，也把别人的 stderr 永久丢进 /dev/null。
@@ -110,7 +116,8 @@ net_wait_port() {
 
 # net_wait_http URL [TIMEOUT]
 net_wait_http() {
-  local __url=$1 __timeout=${2:-30} __i=0
+  local __url=${1:-} __timeout=${2:-30} __i=0
+  _sk_need_args "$#" 1 "net_wait_http URL [TIMEOUT]" || return $?
   if ! command -v curl >/dev/null 2>&1; then
     log_error "$(_t 'curl is required for HTTP probing')"
     return "$SK_PRECOND"

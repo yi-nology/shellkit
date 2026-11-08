@@ -230,6 +230,7 @@ cli_opt_init() {
 # cli_opt VAR LONG [SHORT] [TAKES_ARG]
 cli_opt() {
   local __var=${1:-} __long=${2:-} __short=${3:-} __arg=${4:-0}
+  _sk_need_args "$#" 2 "cli_opt VAR LONG [SHORT] [TAKES_ARG]" || return $?
   if ! _sk_is_name "$__var"; then
     log_error "$(_t 'invalid variable name'): $__var"
     return "$SK_USAGE"
