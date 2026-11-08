@@ -99,3 +99,144 @@ tmpdir() {
   __d=$(mktemp -d "$TEST_TMP_ROOT/case.XXXXXX") || return 1
   printf '%s\n' "$__d"
 }
+
+# ---------------------------------------------------------------------------
+# stub：在测试进程里用同名 shell 函数顶替外部命令，用来跑失败分支。
+# 函数对 $(...) 子 shell 天然可见，所以 net_download 里调的 curl 会被拦住。
+# ---------------------------------------------------------------------------
+
+SK_STUB_ROOT=""
+_SK_STUB_NAMES=""
+
+# 注意：必须在当前 shell 里设置 SK_STUB_ROOT，不能靠 $( ) 取回 ——
+# 命令替换在子 shell 里执行，赋值出不来，断言就会去 /curl.log 找记录。
+_sk_stub_dir() {
+  if [ -z "$SK_STUB_ROOT" ]; then
+    SK_STUB_ROOT="$TEST_TMP_ROOT/stubs"
+    mkdir -p "$SK_STUB_ROOT" || _fail "cannot create $SK_STUB_ROOT"
+  fi
+  return 0
+}
+
+# stub NAME [--exit N] [--stdout TEXT] [--stderr TEXT] [--body SCRIPT]
+stub() {
+  local __name=${1:-}
+  local __dir __exit=0 __out="" __err="" __body="" __outf __errf __log __fn
+  if [ -z "$__name" ]; then
+    _fail "stub: name is required"
+  fi
+  shift
+  while [ "$#" -gt 0 ]; do
+    case "$1" in
+      --exit)
+        __exit=${2:-0}
+        shift 2
+        ;;
+      --stdout)
+        __out=${2:-}
+        shift 2
+        ;;
+      --stderr)
+        __err=${2:-}
+        shift 2
+        ;;
+      --body)
+        __body=${2:-}
+        shift 2
+        ;;
+      *)
+        _fail "stub: unknown option: $1"
+        ;;
+    esac
+  done
+
+  _sk_stub_dir
+  __dir=$SK_STUB_ROOT
+  __outf="$__dir/$__name.out"
+  __errf="$__dir/$__name.err"
+  __log="$__dir/$__name.log"
+  printf '%s' "$__out" >"$__outf"
+  printf '%s' "$__err" >"$__errf"
+  : >"$__log"
+
+  __fn="$__name() {
+  printf '%s\n' \"\$*\" >>'$__log'
+  if [ -s '$__outf' ]; then cat '$__outf'; fi
+  if [ -s '$__errf' ]; then cat '$__errf' >&2; fi
+  $__body
+  return $__exit
+}"
+  eval "$__fn"
+  case " $_SK_STUB_NAMES " in
+    *" $__name "*) ;;
+    *) _SK_STUB_NAMES="$_SK_STUB_NAMES $__name" ;;
+  esac
+  return 0
+}
+
+unstub() {
+  local __name=${1:-}
+  if [ -z "$__name" ]; then
+    return 0
+  fi
+  unset -f "$__name" 2>/dev/null || true
+  return 0
+}
+
+stub_reset() {
+  local __n
+  for __n in $_SK_STUB_NAMES; do
+    unset -f "$__n" 2>/dev/null || true
+  done
+  _SK_STUB_NAMES=""
+  if [ -n "$SK_STUB_ROOT" ]; then
+    rm -rf "$SK_STUB_ROOT"
+  fi
+  return 0
+}
+
+_sk_stub_log() {
+  printf '%s\n' "$SK_STUB_ROOT/$1.log"
+}
+
+assert_stub_called() {
+  local __name=$1 __want=${2:-} __log __got=0
+  __log=$(_sk_stub_log "$__name")
+  if [ -f "$__log" ]; then
+    __got=$(grep -c '' "$__log" 2>/dev/null || true)
+  fi
+  case "$__got" in
+    '' | *[!0-9]*) __got=0 ;;
+  esac
+  if [ -n "$__want" ] && [ "$__got" != "$__want" ]; then
+    _fail "stub <$__name> expected $__want call(s), got $__got"
+  fi
+  if [ -z "$__want" ] && [ "$__got" -eq 0 ]; then
+    _fail "stub <$__name> was not called"
+  fi
+  return 0
+}
+
+assert_stub_not_called() {
+  local __name=$1 __log __got=0
+  __log=$(_sk_stub_log "$__name")
+  if [ -f "$__log" ]; then
+    __got=$(grep -c '' "$__log" 2>/dev/null || true)
+  fi
+  case "$__got" in
+    '' | *[!0-9]*) __got=0 ;;
+  esac
+  if [ "$__got" -ne 0 ]; then
+    _fail "stub <$__name> was called $__got time(s)"
+  fi
+  return 0
+}
+
+assert_stub_args() {
+  local __name=$1 __text=${2:-} __log
+  __log=$(_sk_stub_log "$__name")
+  if [ ! -f "$__log" ] || ! grep -F -- "$__text" "$__log" >/dev/null 2>&1; then
+    _fail "stub <$__name> was never called with args containing <$__text>"
+  fi
+  return 0
+}
