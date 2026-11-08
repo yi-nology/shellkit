@@ -3,10 +3,19 @@ set -u
 . "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/test_helper.sh"
 . "$TEST_ROOT/lib/bootstrap.sh"
 
-# 译文必须真的生效：用子进程带上 LANG，避免污染当前 shell
-if [ -n "${SK_GETTEXT:-}" ] && [ -f "$TEST_ROOT/locale/zh_CN/LC_MESSAGES/shellkit.mo" ]; then
-  msg=$(LANG=zh_CN.UTF-8 bash -c '. "$1/lib/bootstrap.sh"; _t "Usage"' _ "$TEST_ROOT")
-  assert_eq "用法" "$msg" "zh_CN translation applies"
+mo="$TEST_ROOT/locale/zh_CN/LC_MESSAGES/shellkit.mo"
+
+# 译文是否真的生效，取决于系统装没装 zh_CN 这个 locale：
+#   - 装了：直接验 LANG=zh_CN.UTF-8 下 _t 的输出
+#   - 没装（CI 的 ubuntu 就是这种）：退化为验 .mo 里确实编进了译文
+#   - 没有 gettext：只验降级路径
+if [ -n "${SK_GETTEXT:-}" ] && [ -f "$mo" ]; then
+  if locale -a 2>/dev/null | grep -qi '^zh_CN'; then
+    msg=$(LANG=zh_CN.UTF-8 bash -c '. "$1/lib/bootstrap.sh"; _t "Usage"' _ "$TEST_ROOT")
+    assert_eq "用法" "$msg" "zh_CN translation applies"
+  else
+    assert_contains "$(cat "$mo")" "用法" "zh_CN .mo carries the compiled translation"
+  fi
 fi
 
 # 没有 gettext 时降级为英文，且不报错
