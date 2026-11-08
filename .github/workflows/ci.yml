@@ -2,30 +2,31 @@ name: quality
 
 on:
   push:
-    branches: [main]
+    branches:
+      - main
   pull_request:
 
 jobs:
   test:
+    name: test on ${{ matrix.os }}
+    runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false
       matrix:
-        include:
-          # macOS 的 /bin/bash 是 3.2，基线只有这里能真正验证
-          - os: macos-latest
-            shell: /bin/bash
-          - os: ubuntu-latest
-            shell: bash
-    runs-on: ${{ matrix.os }}
+        os:
+          # macOS 的 /bin/bash 就是 3.2，基线只有这里能真正验证
+          - macos-latest
+          - ubuntu-latest
     steps:
       - uses: actions/checkout@v4
 
+      - name: bash version
+        run: bash --version | head -1
+
       - name: syntax
-        shell: ${{ matrix.shell }}
         run: make syntax
 
       - name: test
-        shell: ${{ matrix.shell }}
         run: make test
 
       - name: shellcheck
