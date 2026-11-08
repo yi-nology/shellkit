@@ -42,7 +42,7 @@ else
 fi
 export SK_VERSION
 
-for _sk_module in error i18n log str validate fs os net config prompt cli; do
+for _sk_module in error i18n log str validate fs os trap run retry lock net config prompt cli; do
   if ! . "$SHELLKIT_HOME/lib/core/${_sk_module}.sh"; then
     printf 'shellkit: failed to load module: %s\n' "${_sk_module}" >&2
     return 1 2>/dev/null || exit 1
