@@ -88,3 +88,17 @@ str_repeat() {
   done
   printf -v "$__n" '%s' "$__out"
 }
+
+# _sk_uint VAR DEFAULT —— 把变量值规范成非负整数；未设置或非法时用 DEFAULT
+_sk_uint() {
+  local __n=$1 __d=$2 __v
+  if ! _sk_is_name "$__n"; then
+    printf '%s\n' "$__d"
+    return 0
+  fi
+  __v=$(_sk_ref_get "$__n") || __v=""
+  case "$__v" in
+    '' | *[!0-9]*) __v=$__d ;;
+  esac
+  printf '%s\n' "$__v"
+}

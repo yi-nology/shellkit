@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# 文件系统工具。写入一律原子。
+# 文件系统工具。写入一律原子，幂等操作已正确时零改动。
 
 SK_TMPDIR=""
 
@@ -58,6 +58,155 @@ fs_backup() {
   return 0
 }
 
+# _sk_fs_new_tmp FILE —— 在同目录建临时文件；FILE 存在时连权限一起复制过来
+_sk_fs_new_tmp() {
+  local __file=$1 __tmp
+  __tmp=$(mktemp "$__file.tmp.XXXXXX") || return 1
+  if [ -f "$__file" ]; then
+    if ! cp -p "$__file" "$__tmp"; then
+      rm -f "$__tmp"
+      return 1
+    fi
+  fi
+  printf '%s\n' "$__tmp"
+  return 0
+}
+
+# _sk_fs_has_newline TEXT
+_sk_fs_has_newline() {
+  if [ "$(printf '%s' "$1" | wc -l)" -ne 0 ]; then
+    return 0
+  fi
+  return 1
+}
+
+# fs_ensure_line FILE LINE —— 整行精确匹配；不存在才追加。幂等。
+fs_ensure_line() {
+  local __file=$1 __line=${2:-} __tmp
+  if [ -z "$__line" ]; then
+    log_error "$(_t 'line must not be empty')"
+    return "$SK_USAGE"
+  fi
+  if _sk_fs_has_newline "$__line"; then
+    log_error "$(_t 'line must not contain a newline')"
+    return "$SK_USAGE"
+  fi
+  if [ -f "$__file" ]; then
+    if awk -v want="$__line" '$0 == want { found = 1 } END { exit found ? 0 : 1 }' "$__file"; then
+      return 0
+    fi
+  fi
+  fs_ensure_dir "$(dirname "$__file")" "" || return 1
+  __tmp=$(_sk_fs_new_tmp "$__file") || return 1
+  if [ -f "$__file" ] && [ -n "$(tail -c 1 "$__file" 2>/dev/null)" ]; then
+    printf '\n' >>"$__tmp" || {
+      rm -f "$__tmp"
+      return 1
+    }
+  fi
+  printf '%s\n' "$__line" >>"$__tmp" || {
+    rm -f "$__tmp"
+    return 1
+  }
+  if ! mv -f "$__tmp" "$__file"; then
+    rm -f "$__tmp"
+    return 1
+  fi
+  return 0
+}
+
+# fs_ensure_block FILE BEGIN END CONTENT —— 标记块内内容整体替换；没有就追加。幂等。
+fs_ensure_block() {
+  local __file=$1 __begin=${2:-} __end=${3:-} __content=${4:-}
+  local __tmp __cf __src
+  if [ -z "$__begin" ] || [ -z "$__end" ]; then
+    log_error "$(_t 'block markers must not be empty')"
+    return "$SK_USAGE"
+  fi
+  if [ "$__begin" = "$__end" ]; then
+    log_error "$(_t 'block markers must differ')"
+    return "$SK_USAGE"
+  fi
+  if _sk_fs_has_newline "$__begin$__end"; then
+    log_error "$(_t 'block markers must be single lines')"
+    return "$SK_USAGE"
+  fi
+  fs_ensure_dir "$(dirname "$__file")" "" || return 1
+  __tmp=$(_sk_fs_new_tmp "$__file") || return 1
+  __cf=$(mktemp "$__file.content.XXXXXX") || {
+    rm -f "$__tmp"
+    return 1
+  }
+  if ! printf '%s' "$__content" >"$__cf"; then
+    rm -f "$__tmp" "$__cf"
+    return 1
+  fi
+  if [ -f "$__file" ]; then
+    __src=$__file
+  else
+    __src=/dev/null
+  fi
+
+  if ! awk -v b="$__begin" -v e="$__end" -v cf="$__cf" '
+    function emit(   line) {
+      if (!emitted && cf != "") {
+        while ((getline line < cf) > 0) print line
+        close(cf)
+        emitted = 1
+      }
+    }
+    BEGIN { inblk = 0; seen = 0; emitted = 0 }
+    !inblk && !seen && $0 == b { inblk = 1; seen = 1; print; next }
+    inblk {
+      if ($0 == e) { emit(); print e; inblk = 0 }
+      next
+    }
+    { print }
+    END {
+      if (inblk) { emit(); print e }
+      if (!seen) { print b; emit(); print e }
+    }
+  ' "$__src" >"$__tmp"; then
+    rm -f "$__tmp" "$__cf"
+    return 1
+  fi
+  rm -f "$__cf"
+
+  if [ -f "$__file" ] && cmp -s "$__tmp" "$__file"; then
+    rm -f "$__tmp"
+    return 0
+  fi
+  if ! mv -f "$__tmp" "$__file"; then
+    rm -f "$__tmp"
+    return 1
+  fi
+  return 0
+}
+
+# fs_ensure_symlink TARGET LINK —— 已是正确链接则不动；否者替换（绝不覆盖普通文件）
+fs_ensure_symlink() {
+  local __target=${1:-} __link=${2:-} __cur
+  if [ -z "$__target" ] || [ -z "$__link" ]; then
+    log_error "$(_t 'fs_ensure_symlink requires TARGET and LINK')"
+    return "$SK_USAGE"
+  fi
+  fs_ensure_dir "$(dirname "$__link")" "" || return 1
+  if [ -L "$__link" ]; then
+    __cur=$(readlink "$__link" 2>/dev/null || true)
+    if [ "$__cur" = "$__target" ]; then
+      return 0
+    fi
+    rm -f "$__link" || return 1
+  elif [ -e "$__link" ]; then
+    log_error "$(_t 'refusing to replace a non-symlink'): $__link"
+    return "$SK_ERR"
+  fi
+  if ! ln -s "$__target" "$__link"; then
+    return 1
+  fi
+  return 0
+}
+
 _sk_tmp_cleanup() {
   if [ -n "${SK_TMPDIR:-}" ] && [ -d "$SK_TMPDIR" ] && [ "${SHELLKIT_TMP_KEEP:-0}" != "1" ]; then
     rm -rf "$SK_TMPDIR"
@@ -93,16 +242,14 @@ fs_tmpdir() {
   printf '%s\n' "$SK_TMPDIR"
 }
 
-# fs_tmp_init —— 在当前 shell 初始化临时目录并注册 EXIT 清理。
-# 只在入口脚本里调用；调用方已有 EXIT trap 时不覆盖，只提示。
+# fs_tmp_init —— 在当前 shell 初始化临时目录，并把清理动作推进清理栈。
+# 与 0.1.0 的差别：以前「调用方已有 EXIT trap 就放弃清理」，现在改为入栈，
+# 与调用方自己的 trap 共存（trap_install 会链式保留已有 EXIT trap）。
 fs_tmp_init() {
   if ! fs_tmpdir >/dev/null; then
     return 1
   fi
-  if [ -z "$(trap -p EXIT 2>/dev/null)" ]; then
-    trap '_sk_tmp_cleanup' EXIT
-  else
-    log_debug "EXIT trap already set; temp dir will not be auto-removed: $SK_TMPDIR"
-  fi
+  trap_push '_sk_tmp_cleanup'
+  trap_install
   return 0
 }
