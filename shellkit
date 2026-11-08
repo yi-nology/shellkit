@@ -526,6 +526,15 @@ cmd_docs() {
 # _sk_install_dest PREFIX —— 安装目录，前缀末尾多余斜杠会被吃掉
 _sk_install_dest() { printf '%s' "${1%/}/share/shellkit"; }
 
+# _sk_running_prefix —— 当前跑的是装好的副本时，返回它的 PREFIX
+# 副本长这样：PREFIX/share/shellkit/shellkit。从它自己的位置就能推出该更新/删除哪里，
+# 不必让用户把 --prefix 再写一遍（写错了就是在 /usr/local 上找不到清单）。
+_sk_running_prefix() {
+  case "$SELF_DIR" in
+    */share/shellkit) printf '%s' "${SELF_DIR%/share/shellkit}" ;;
+  esac
+}
+
 # _sk_copy_tree SRC DST —— 整目录替换
 # cp -R 的坑：DST 已存在时会把 SRC 塞成 DST/SRC（二次安装就多一层 lib/lib），
 # 所以先删。${__dst:?} 是安全阀：变量异常为空时绝不让 rm 落到 /lib 上。
@@ -652,7 +661,9 @@ cmd_install_self() {
 }
 
 cmd_uninstall_self() {
-  local __prefix="/usr/local" __dest __bin __line __path __n=0 __fail=0 __link
+  local __prefix __run __dest __bin __line __path __n=0 __fail=0 __link
+  __run=$(_sk_running_prefix)
+  __prefix=${__run:-/usr/local}
   while [ "$#" -gt 0 ]; do
     case "$1" in
       --prefix)
@@ -839,7 +850,9 @@ _sk_update_run() {
 }
 
 cmd_update() {
-  local __prefix="/usr/local" __from="" __sum="" __check=0 __force=0 __tmp __rc=0 __opt=""
+  local __prefix __run __from="" __sum="" __check=0 __force=0 __tmp __rc=0 __opt=""
+  __run=$(_sk_running_prefix)
+  __prefix=${__run:-/usr/local}
   while [ "$#" -gt 0 ]; do
     case "$1" in
       --prefix | --from | --sha256)

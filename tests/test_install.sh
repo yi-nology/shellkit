@@ -76,6 +76,12 @@ assert_false test -e "$dest"
 assert_false test -e "$prefix/bin/shellkit"
 assert_exit_code 3 "$sk" uninstall-self --prefix "$prefix"
 
+# 装好的副本自己知道 prefix：不带 --prefix 也该能卸自己
+p2=$work/selfpref
+assert_exit_code 0 "$sk" install-self --prefix "$p2"
+assert_exit_code 0 "$p2/bin/shellkit" uninstall-self
+assert_false test -e "$p2/share/shellkit"
+
 # 清单是文件，不是可信输入：../ 不许把删除动作带出安装目录
 esc=$work/esc
 mkdir -p "$esc/share/shellkit" "$esc/outside"
