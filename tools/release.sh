@@ -70,6 +70,8 @@ fi
 # make 会把命令行变量（make release VERSION=x.y.z）导出给 recipe 的子进程，
 # 而 install.sh 把**环境变量** VERSION 解释成「装这个版本」。留着它会污染
 # 后面的 make check：测试里的 install.sh 会去下载一个还没发布的版本，报网络错（4）。
+# 光 unset 不够 —— 子 make 会从 MAKEFLAGS 里把 VERSION=x.y.z 重新装回来，
+# 所以下面调 make check 时要把这三个变量一起摘掉。
 unset VERSION
 
 # ---------- 1. 校验 ----------
@@ -160,7 +162,7 @@ _say "checking version references"
 bash tools/check_versions.sh
 
 _say "running make check (this is the long part)"
-if ! make check; then
+if ! env -u VERSION -u MAKEFLAGS -u MFLAGS make check; then
   if [ "$DRY" = "1" ]; then
     git checkout -- .
   fi

@@ -35,7 +35,9 @@ bash tools/release.sh 0.6.0 --no-push # 本地提交与打 tag，推远端留给
 一个容易踩的坑：`make release VERSION=x.y.z` 会让 make 把 `VERSION` **导出**给 recipe 的子进程，
 而 `install.sh` 把环境变量 `VERSION` 解释成「装这个版本」。不处理的话，发版时的
 `make check` 里	extbf{测试}跑到的 `install.sh` 会去下载一个还没发布的版本，报网络错 `4`。
-所以 `tools/release.sh` 一开始就 `unset VERSION` —— 它只从 `VERSION` 文件读版本。
+而且光 `unset` 不够：子 make 会从 `MAKEFLAGS` 里把 `VERSION=x.y.z` 重新装回来。
+所以 `tools/release.sh` 先 `unset VERSION`，再用 `env -u VERSION -u MAKEFLAGS -u MFLAGS make check`
+跑门禁 —— 它只从 `VERSION` 文件读版本。
 
 
 ## 版本号出现的六处
