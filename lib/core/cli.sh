@@ -57,6 +57,7 @@ cli_has() {
 # _sk_cmd_fn NAME —— install-self 对应 cmd_install_self
 _sk_cmd_fn() { printf 'cmd_%s' "$(printf '%s' "${1:-}" | tr '-' '_')"; }
 
+# cli_usage_cmd NAME —— 打印单个子命令的用法行
 cli_usage_cmd() {
   local __name=${1:-} __i=0 __prog
   __prog=${SK_PROG:-$(basename "$0")}
@@ -75,6 +76,7 @@ cli_usage_cmd() {
   return 0
 }
 
+# cli_usage_global —— 打印总用法：命令按分组，选项固定五条
 cli_usage_global() {
   local __i=0 __max=8 __len __grp="" __prog
   __prog=${SK_PROG:-$(basename "$0")}
@@ -219,6 +221,7 @@ SK_OPT_SHORTS=()
 SK_OPT_ARGS=()
 SK_OPTS_LEFT=()
 
+# cli_opt_init VAR DEFAULT —— 只在调用方未定义该变量时初始化，不覆盖调用方的默认值
 cli_opt_init() {
   SK_OPT_VARS=()
   SK_OPT_LONGS=()
@@ -292,6 +295,7 @@ _sk_opt_set() {
   return 0
 }
 
+# cli_opts NAME ARGS... —— 按 cli_opt 注册的规则解析子命令选项
 cli_opts() {
   local __idx="" __opt=""
   SK_OPTS_LEFT=()

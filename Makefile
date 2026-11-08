@@ -4,7 +4,7 @@ SHELL := /bin/bash
 SOURCES := shellkit lib/bootstrap.sh $(wildcard lib/core/*.sh) tests/*.sh po/messages.sh
 TEMPLATES := $(shell find templates -type f)
 
-.PHONY: help test syntax lint lint-templates fmt messages check install
+.PHONY: help test syntax lint lint-templates fmt messages docs docs-check check install
 
 help:
 	@printf '%s\n' \
@@ -13,6 +13,7 @@ help:
 	  'make lint      shellcheck -S warning -x' \
 	  'make fmt       shfmt -d -i 2 -ci（只检查）' \
 	  'make messages  重新抽取 msgid 并编译 .mo' \
+	  'make docs      从源码注释重新生成 docs/REFERENCE.md' \
 	  'make check     依次跑 syntax / test / lint / fmt'
 
 test:
@@ -40,7 +41,13 @@ fmt:
 messages:
 	@bash po/messages.sh
 
-check: syntax test lint fmt
+docs:
+	@./shellkit docs
+
+docs-check:
+	@./shellkit docs --check
+
+check: syntax test lint docs-check fmt
 
 install:
 	./shellkit install-self --prefix $(PREFIX)/usr

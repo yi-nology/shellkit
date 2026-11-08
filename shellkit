@@ -27,6 +27,8 @@ cli_cmd doctor "$(_t 'check the runtime environment')" "doctor"
 cli_cmd list "$(_t 'list templates and library modules')" "list"
 cli_group "$(_t 'existing projects')"
 cli_cmd vendor "$(_t 'sync the library into an existing project')" "vendor <dir> [--check]"
+cli_group "$(_t 'documentation')"
+cli_cmd docs "$(_t 'regenerate the API reference')" "docs [--check]"
 cli_group "$(_t 'installation')"
 cli_cmd install-self "$(_t 'install shellkit into PATH')" "install-self [--prefix DIR]"
 
@@ -305,6 +307,7 @@ cmd_list() {
   printf '\n%s:\n' "$(_t 'commands')"
   printf '  %s\n' "shellkit new <dir> [--cmd NAME]..."
   printf '  %s\n' "shellkit vendor <dir> [--check]"
+  printf '  %s\n' "shellkit docs [--check]"
   printf '  %s\n' "shellkit doctor"
   printf '  %s\n' "shellkit list"
   printf '  %s\n' "shellkit install-self [--prefix DIR]"
@@ -381,6 +384,81 @@ cmd_vendor() {
   log_ok "$(_t 'vendored library'): vendor/shellkit ($SK_VERSION)"
   printf '  %s\n' "$(_t 'load it from your scripts'):"
   printf '    . "$(cd "$(dirname "$0")/.." && pwd)/vendor/shellkit/lib/bootstrap.sh"\n'
+  return "$SK_OK"
+}
+
+# ---------- docs ----------
+
+# _sk_docs_coverage —— 公开函数必须紧邻一行注释，否则返回 1
+_sk_docs_coverage() {
+  local __f __missing __line __bad=0
+  for __f in "$SELF_DIR"/lib/core/*.sh; do
+    __missing=$(awk -v file="$(basename "$__f")" -f "$SELF_DIR/tools/coverage.awk" "$__f")
+    if [ -n "$__missing" ]; then
+      printf '%s\n' "$__missing" | while IFS= read -r __line; do
+        log_error "$(_t 'public function has no doc comment'): $__line"
+      done
+      __bad=1
+    fi
+  done
+  if [ "$__bad" -ne 0 ]; then
+    return 1
+  fi
+  return 0
+}
+
+cmd_docs() {
+  local __check=0 __tmp __rc=0
+  while [ "$#" -gt 0 ]; do
+    case "$1" in
+      -h | --help)
+        cli_usage_cmd docs
+        return "$SK_OK"
+        ;;
+      --check)
+        __check=1
+        ;;
+      *)
+        log_error "$(_t 'unknown option'): $1"
+        return "$SK_USAGE"
+        ;;
+    esac
+    shift
+  done
+
+  __tmp=$(mktemp "$SELF_DIR/.REFERENCE.XXXXXX") || return "$SK_ERR"
+  if ! bash "$SELF_DIR/tools/shdoc.sh" >"$__tmp"; then
+    rm -f "$__tmp"
+    log_error "$(_t 'failed to render the reference')"
+    return "$SK_ERR"
+  fi
+
+  if [ "$__check" = "1" ]; then
+    _sk_docs_coverage || __rc=$SK_VERIFY
+    if [ ! -f "$SELF_DIR/docs/REFERENCE.md" ]; then
+      log_error "$(_t 'reference is missing'): docs/REFERENCE.md"
+      __rc=$SK_VERIFY
+    elif ! diff -q "$__tmp" "$SELF_DIR/docs/REFERENCE.md" >/dev/null 2>&1; then
+      log_error "$(_t 'reference is out of date'): docs/REFERENCE.md"
+      log_info "$(_t 'run to regenerate'): shellkit docs"
+      __rc=$SK_VERIFY
+    fi
+    rm -f "$__tmp"
+    if [ "$__rc" -eq 0 ]; then
+      log_ok "$(_t 'reference is up to date')"
+    fi
+    return "$__rc"
+  fi
+
+  fs_ensure_dir "$SELF_DIR/docs" 755 || {
+    rm -f "$__tmp"
+    return "$SK_ERR"
+  }
+  if ! mv -f "$__tmp" "$SELF_DIR/docs/REFERENCE.md"; then
+    rm -f "$__tmp"
+    return "$SK_ERR"
+  fi
+  log_ok "$(_t 'wrote'): docs/REFERENCE.md"
   return "$SK_OK"
 }
 

@@ -27,10 +27,16 @@ _sk_log() {
   fi
 }
 
+# log_info MSG... —— 普通信息
 log_info() { _sk_log INFO "" "$@"; }
+
+# log_ok MSG... —— 成功；单独用 " OK " 是为了和四字母级别对齐
 log_ok() { _sk_log " OK " "1;32" "$@"; }
+
+# log_warn MSG... —— 警告，不中断
 log_warn() { _sk_log WARN "1;33" "$@"; }
 
+# log_error MSG... —— 记录错误，并设置 SK_ERRMSG 供 cli_run 补印一次
 log_error() {
   # 公开变量：cli_run 负责补印一次
   # shellcheck disable=SC2034
@@ -39,6 +45,7 @@ log_error() {
   _sk_log ERROR "1;31" "$@"
 }
 
+# log_debug MSG... —— 仅在 SHELLKIT_DEBUG=1 时输出
 log_debug() {
   if [ "${SHELLKIT_DEBUG:-0}" = "1" ]; then
     _sk_log DEBUG "1;36" "$@"
@@ -46,6 +53,7 @@ log_debug() {
   return 0
 }
 
+# log_section TITLE —— 分段标题，带前导空行
 log_section() {
   if [ "${SK_COLOR_ON:-0}" = "1" ]; then
     printf '\n\033[1;33m==> %s\033[0m\n' "$*" >&2
