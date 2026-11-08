@@ -1,0 +1,3 @@
+# title: 门禁 — 文档与代码不许漂移
+$ ./shellkit docs --check
+$ bash tools/check_docs.sh

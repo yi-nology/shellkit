@@ -1,0 +1,20 @@
+# check_docs.sh 白名单：文档示例里会用到、但不是 shellkit 核心库提供的东西。
+# 一行一个名字。加之前先问：这是不是说明文档该改用库里的函数？
+
+# tests/test_helper.sh 提供的断言与替身（只在测试里出现）
+assert_eq
+assert_contains
+assert_exit_code
+assert_true
+assert_false
+assert_file_mode
+assert_stdout_empty
+assert_ne
+assert_not_contains
+assert_stub_called
+assert_stub_not_called
+assert_stub_args
+stub
+unstub
+stub_reset
+tmpdir

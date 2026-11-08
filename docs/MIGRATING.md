@@ -16,21 +16,21 @@
 
 只拷两个文件，不碰业务代码，立刻有断言能力和逐文件执行器：
 
-`@bash
+```bash
 mkdir -p tests
 cp <shellkit>/tests/test_helper.sh <shellkit>/tests/run.sh tests/
-`@
+```
 
 然后照着它写第一个测试：
 
-`@bash
+```bash
 #!/usr/bin/env bash
 . "$(cd "$(dirname "$0")" && pwd)/test_helper.sh"
 
 out=$(bin/mytool --version 2>/dev/null)
 assert_ne "" "$out" "--version 不该为空"
 assert_exit_code 2 bin/mytool no-such-command
-`@
+```
 
 `tests/run.sh` 会自动发现 `tests/test_*.sh` 并逐个 `@bash` 执行，
 每个文件固定从 `/dev/null` 取 stdin（不会因为等输入挂死），有 `timeout` 就给单文件上限。
@@ -39,29 +39,29 @@ assert_exit_code 2 bin/mytool no-such-command
 
 ## B. vendor 整个库（推荐）
 
-`@bash
+```bash
 cd /path/to/your-project
 shellkit vendor .
-`@
+```
 
 产出：
 
-`@
+```
 your-project/
 └─ vendor/shellkit/
    ├─ lib/           11 个模块（bootstrap.sh + core/*.sh）
    ├─ locale/        gettext 译文（en / zh_CN / zh_Hant）
    └─ VERSION        锁定的版本号
-`@
+```
 
 脚本里两行接入：
 
-`@bash
+```bash
 #!/usr/bin/env bash
 set -euo pipefail
 
 . "$(cd "$(dirname "$0")/.." && pwd)/vendor/shellkit/lib/bootstrap.sh"
-`@
+```
 
 就这些。`bootstrap.sh` 会按拓扑序把 11 个模块加载好，设置 `SK_*` 常量与退出码，
 **不改你的 shell 选项、不改 cwd**——你的脚本还是你说了算。
@@ -74,25 +74,25 @@ set -euo pipefail
 
 ## C. 全局安装（自用脚本可以）
 
-`@bash
+```bash
 shellkit install-self --prefix ~/.local
-`@
+```
 
 脚本里就得靠 PATH 找库（脆弱，不推荐给要分发的项目）：
 
-`@bash
+```bash
 SHELLKIT_HOME=${SHELLKIT_HOME:-$(cd "$(dirname "$(command -v shellkit)")/../share/shellkit" && pwd)}
 . "$SHELLKIT_HOME/lib/bootstrap.sh"
-`@
+```
 
 ## 升级与防漂移
 
 库更新后，把新版本同步进项目：
 
-`@bash
+```bash
 shellkit vendor .            # 幂等：整目录替换，模块被删掉也不留残骸
 shellkit vendor . --check    # 只比对，不写盘
-`@
+```
 
 `--check` 是**逐字节 diff**（不是比版本号），任何漂移都会报出来并返回 `5`。
 把它放进 CI，就再也不会出现"仓库里是旧版、本机是新版"：
@@ -100,7 +100,7 @@ shellkit vendor . --check    # 只比对，不写盘
 `@yaml
       - name: vendored shellkit is in sync
         run: shellkit vendor . --check
-`@
+```
 
 （CI 里没有 `shellkit` 命令时，用 `diff -r` 直接比等价内容也行。）
 
@@ -112,28 +112,28 @@ shellkit vendor . --check    # 只比对，不写盘
 
 你项目里大概率有这种函数：
 
-`@bash
+```bash
 log_info()  { echo "[INFO] $*"; }        # ← 写到了 stdout
 log_error() { echo "[ERROR] $*" >&2; }
-`@
+```
 
 只要 `log_info` 走 stdout，`v=$(your_fn)` 就会拿到 `[INFO] ...` 这种脏值，
 而这类 bug 通常在几百行外的 `$(...)` 里才炸。
 
 换成：
 
-`@bash
+```bash
 . "$PROJECT_ROOT/vendor/shellkit/lib/bootstrap.sh"
 # 直接用 log_info / log_ok / log_warn / log_error / log_debug / log_section
-`@
+```
 
 **判据**：`out=$(你的命令 2>/dev/null)` 里不再出现 `[INFO]`/`[ERROR]`。
 加一条测试固定住它：
 
-`@bash
+```bash
 out=$(bin/mytool deploy 2>/dev/null)
 assert_not_contains "$out" "[INFO]" "日志不能污染 stdout"
-`@
+```
 
 ### 第 2 步：替换配置读写
 
@@ -154,14 +154,14 @@ assert_not_contains "$out" "[INFO]" "日志不能污染 stdout"
 
 - **非交互自动取默认值**（`-y` / `SHELLKIT_NONINTERACTIVE=1` / stdin 不是 tty），
   没默认值则返回 `3` 而不是静默返回空串；
-- **真超时才回退默认值**，EOF 算错误（上游把两者混同，这是修掉的一个坑）；
+- **真超时才回退默认值**，EOF 算错误（手写实现常把两者混同，于是 `</dev/null` 被当成"用户按了回车"）；
 - **`ask_choice` 会校验默认值在选项集里**，写错当场 `2`。
 
 ### 第 4 步：接 CLI 框架
 
 把 `case "$1" in` 那张表换成注册式：
 
-`@bash
+```bash
 cli_group "运维"
 cli_cmd deploy "部署服务" "deploy [--force] <target>"
 
@@ -175,7 +175,7 @@ cmd_deploy() {
 }
 
 cli_run "$@"
-`@
+```
 
 **收益**：`--help` 自动生成、未知命令按前缀给候选、`log_error` 只报一次
 （`cli_run` 兜底补印），新增命令零改分发器——命令名甚至可以带短横，
@@ -189,13 +189,13 @@ cli_run "$@"
 
 `tests/run.sh` + 断言库，然后**每迁一类函数就加一个 `test_*.sh`**：
 
-`@bash
+```bash
 assert_eq "${expected}" "${actual}"
 assert_contains "${haystack}" "${needle}"
 assert_exit_code 3 your_command --bad
 assert_file_mode config 600
 assert_stdout_empty your_command --quiet
-`@
+```
 
 ## 迁移时容易踩的坑
 
@@ -205,7 +205,7 @@ assert_stdout_empty your_command --quiet
    依赖 `set -e` 下的隐式退出，换成 `|| return $?` 后语义会变，要显式处理。
 3. **Bash 3.2 的边界只约束库，不约束你的业务代码**。库里不用关联数组/nameref/
    `${var^^}`，但你的脚本只要目标平台 bash ≥ 4，继续用没问题，混着用也不冲突。
-4. **`source` 之后 `$0` 和 cwd 都没变**——这是刻意的（上游 `jmsctl.sh` 一进来就 `cd`，
+4. **`source` 之后 `$0` 和 cwd 都没变**——这是刻意的（不少安装脚本一进来就 `cd`，
    把调用方的相对路径全带偏了）。所以路径请自己算，别指望库替你 cd。
 5. **i18n 是可选的**。不接 gettext 就只有英文，不会有额外依赖；
    要中文就编 `locale/zh_CN` 的 `.mo`（`bash po/messages.sh`）。
@@ -214,7 +214,7 @@ assert_stdout_empty your_command --quiet
 
 改造前（典型手写版，三个隐患都占全了）：
 
-`@bash
+```bash
 #!/bin/bash
 log() { echo "[$(date +%T)] $*"; }            # 隐患 1：stdout
 get() { grep "^$1=" config | cut -d= -f2; }   # 隐患 2：值空就崩，且不校验键名
@@ -223,11 +223,11 @@ set() { echo "$1=$2" >> config; }             # 隐患 3：追加写，重复键
 . ./lib/config.sh
 log "deploying to $(get TARGET)"
 set TARGET "$1"
-`@
+```
 
 改造后：
 
-`@bash
+```bash
 #!/usr/bin/env bash
 set -euo pipefail
 
@@ -238,7 +238,7 @@ conf_init "$APP_ROOT/config" || exit $?
 
 log_section "deploying to $(conf_get_any TARGET localhost)"   # 日志走 stderr
 conf_set TARGET "$1"                                          # 原子写、600、幂等
-`@
+```
 
 同样的功能，但 `$(...)` 干净了、配置写坏了不会半截、非法键名当场报错。
 

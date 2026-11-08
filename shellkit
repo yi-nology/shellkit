@@ -194,8 +194,10 @@ cmd_new() {
   _sk_render "$SK_TPL_DIR/tests/test_smoke.sh" "$__dir/tests/test_smoke.sh" "$__name" "$SK_VERSION" "${__cmds[0]}"
   chmod 755 "$__dir/tests/test_smoke.sh"
   _sk_render "$SK_TPL_DIR/README.md" "$__dir/README.md" "$__name" "$SK_VERSION"
+  _sk_render "$SK_TPL_DIR/AGENTS.md" "$__dir/AGENTS.md" "$__name" "$SK_VERSION" "${__cmds[0]}"
   cp "$SK_TPL_DIR/.shellcheckrc" "$__dir/.shellcheckrc"
-  cp "$SK_TPL_DIR/Makefile" "$__dir/Makefile"
+  # 必须渲染：模板里有 {{NAME}}，原样拷走会让 make lint 的 bin/*{{NAME}} 一条都匹配不上
+  _sk_render "$SK_TPL_DIR/Makefile" "$__dir/Makefile" "$__name" "$SK_VERSION"
 
   cp "$SELF_DIR/tests/test_helper.sh" "$__dir/tests/test_helper.sh"
   cp "$SELF_DIR/tests/run.sh" "$__dir/tests/run.sh"
@@ -407,8 +409,33 @@ _sk_docs_coverage() {
   return 0
 }
 
+# _sk_docs_artifacts —— 需要生成与校验的文档产物，一行一个
+_sk_docs_artifacts() {
+  printf '%s\n' REFERENCE AGENTS TEMPLATES_AGENTS SKILL
+}
+
+# _sk_docs_path NAME —— 产物相对仓库根的路径
+_sk_docs_path() {
+  case "$1" in
+    REFERENCE) printf 'docs/REFERENCE.md' ;;
+    AGENTS) printf 'AGENTS.md' ;;
+    TEMPLATES_AGENTS) printf 'templates/AGENTS.md' ;;
+    SKILL) printf 'skills/shellkit/SKILL.md' ;;
+  esac
+}
+
+# _sk_docs_render NAME —— 渲染到 stdout
+_sk_docs_render() {
+  case "$1" in
+    REFERENCE) bash "$SELF_DIR/tools/shdoc.sh" ;;
+    AGENTS) bash "$SELF_DIR/tools/ai_doc.sh" repo ;;
+    TEMPLATES_AGENTS) bash "$SELF_DIR/tools/ai_doc.sh" project ;;
+    SKILL) bash "$SELF_DIR/tools/ai_doc.sh" skill ;;
+  esac
+}
+
 cmd_docs() {
-  local __check=0 __tmp __rc=0
+  local __check=0 __name __rel __tmp __rc=0
   while [ "$#" -gt 0 ]; do
     case "$1" in
       -h | --help)
@@ -426,39 +453,50 @@ cmd_docs() {
     shift
   done
 
-  __tmp=$(mktemp "$SELF_DIR/.REFERENCE.XXXXXX") || return "$SK_ERR"
-  if ! bash "$SELF_DIR/tools/shdoc.sh" >"$__tmp"; then
-    rm -f "$__tmp"
-    log_error "$(_t 'failed to render the reference')"
-    return "$SK_ERR"
-  fi
-
   if [ "$__check" = "1" ]; then
     _sk_docs_coverage || __rc=$SK_VERIFY
-    if [ ! -f "$SELF_DIR/docs/REFERENCE.md" ]; then
-      log_error "$(_t 'reference is missing'): docs/REFERENCE.md"
-      __rc=$SK_VERIFY
-    elif ! diff -q "$__tmp" "$SELF_DIR/docs/REFERENCE.md" >/dev/null 2>&1; then
-      log_error "$(_t 'reference is out of date'): docs/REFERENCE.md"
-      log_info "$(_t 'run to regenerate'): shellkit docs"
-      __rc=$SK_VERIFY
-    fi
-    rm -f "$__tmp"
+    for __name in $(_sk_docs_artifacts); do
+      __rel=$(_sk_docs_path "$__name")
+      __tmp=$(mktemp "$SELF_DIR/.DOCS.XXXXXX") || return "$SK_ERR"
+      if ! _sk_docs_render "$__name" >"$__tmp"; then
+        rm -f "$__tmp"
+        log_error "$(_t 'failed to render'): $__rel"
+        return "$SK_ERR"
+      fi
+      if [ ! -f "$SELF_DIR/$__rel" ]; then
+        log_error "$(_t 'document is missing'): $__rel"
+        __rc=$SK_VERIFY
+      elif ! diff -q "$__tmp" "$SELF_DIR/$__rel" >/dev/null 2>&1; then
+        log_error "$(_t 'document is out of date'): $__rel"
+        log_info "$(_t 'run to regenerate'): shellkit docs"
+        __rc=$SK_VERIFY
+      fi
+      rm -f "$__tmp"
+    done
     if [ "$__rc" -eq 0 ]; then
-      log_ok "$(_t 'reference is up to date')"
+      log_ok "$(_t 'documentation is up to date')"
     fi
     return "$__rc"
   fi
 
-  fs_ensure_dir "$SELF_DIR/docs" 755 || {
-    rm -f "$__tmp"
-    return "$SK_ERR"
-  }
-  if ! mv -f "$__tmp" "$SELF_DIR/docs/REFERENCE.md"; then
-    rm -f "$__tmp"
-    return "$SK_ERR"
-  fi
-  log_ok "$(_t 'wrote'): docs/REFERENCE.md"
+  for __name in $(_sk_docs_artifacts); do
+    __rel=$(_sk_docs_path "$__name")
+    __tmp=$(mktemp "$SELF_DIR/.DOCS.XXXXXX") || return "$SK_ERR"
+    if ! _sk_docs_render "$__name" >"$__tmp"; then
+      rm -f "$__tmp"
+      log_error "$(_t 'failed to render'): $__rel"
+      return "$SK_ERR"
+    fi
+    fs_ensure_dir "$(dirname "$SELF_DIR/$__rel")" 755 || {
+      rm -f "$__tmp"
+      return "$SK_ERR"
+    }
+    if ! mv -f "$__tmp" "$SELF_DIR/$__rel"; then
+      rm -f "$__tmp"
+      return "$SK_ERR"
+    fi
+    log_ok "$(_t 'wrote'): $__rel"
+  done
   return "$SK_OK"
 }
 

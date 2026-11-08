@@ -1,0 +1,4 @@
+# title: shellkit new — 生成的工程当场 make test 通过
+# setup: rm -rf /tmp/shellkit-demo
+$ ./shellkit new /tmp/shellkit-demo --cmd start --cmd status
+$ cd /tmp/shellkit-demo && make test 2>&1 | tail -2

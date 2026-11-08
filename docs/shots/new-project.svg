@@ -1,0 +1,22 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="516" height="332" viewBox="0 0 516 332" role="img" aria-label="shellkit new — 生成的工程当场 make test 通过">
+<rect x="0" y="0" width="516" height="332" rx="10" fill="#11161d"/>
+<path d="M0 40 A0 0 0 0 0 0 0 Z" fill="none"/>
+<rect x="0" y="0" width="516" height="30" rx="10" fill="#1b222c"/>
+<rect x="0" y="20" width="516" height="10" fill="#1b222c"/>
+<circle cx="18" cy="15" r="5" fill="#ff5f56"/>
+<circle cx="38" cy="15" r="5" fill="#ffbd2e"/>
+<circle cx="58" cy="15" r="5" fill="#27c93f"/>
+<text x="84" y="19" font-family="SFMono-Regular, Menlo, Consolas, DejaVu Sans Mono, monospace" font-size="11" fill="#8b949e">shellkit new — 生成的工程当场 make test 通过</text>
+<text x="18" y="61" font-family="SFMono-Regular, Menlo, Consolas, DejaVu Sans Mono, monospace" font-size="13" fill="#e6edf3" xml:space="preserve">$ ./shellkit new /tmp/shellkit-demo --cmd start --cmd status</text>
+<text x="18" y="99" font-family="SFMono-Regular, Menlo, Consolas, DejaVu Sans Mono, monospace" font-size="13" fill="#e6edf3" xml:space="preserve">==&gt; creating: /tmp/shellkit-demo</text>
+<text x="18" y="118" font-family="SFMono-Regular, Menlo, Consolas, DejaVu Sans Mono, monospace" font-size="13" fill="#58a6ff" xml:space="preserve">[INFO] vendored library: vendor/shellkit (0.3.0)</text>
+<text x="18" y="137" font-family="SFMono-Regular, Menlo, Consolas, DejaVu Sans Mono, monospace" font-size="13" fill="#58a6ff" xml:space="preserve">[INFO] added command: start</text>
+<text x="18" y="156" font-family="SFMono-Regular, Menlo, Consolas, DejaVu Sans Mono, monospace" font-size="13" fill="#58a6ff" xml:space="preserve">[INFO] added command: status</text>
+<text x="18" y="194" font-family="SFMono-Regular, Menlo, Consolas, DejaVu Sans Mono, monospace" font-size="13" fill="#3fb950" xml:space="preserve">[ OK ] project created: /tmp/shellkit-demo</text>
+<text x="18" y="213" font-family="SFMono-Regular, Menlo, Consolas, DejaVu Sans Mono, monospace" font-size="13" fill="#e6edf3" xml:space="preserve">  next steps</text>
+<text x="18" y="232" font-family="SFMono-Regular, Menlo, Consolas, DejaVu Sans Mono, monospace" font-size="13" fill="#e6edf3" xml:space="preserve">    cd /tmp/shellkit-demo</text>
+<text x="18" y="251" font-family="SFMono-Regular, Menlo, Consolas, DejaVu Sans Mono, monospace" font-size="13" fill="#e6edf3" xml:space="preserve">    make test</text>
+<text x="18" y="270" font-family="SFMono-Regular, Menlo, Consolas, DejaVu Sans Mono, monospace" font-size="13" fill="#e6edf3" xml:space="preserve">$ cd /tmp/shellkit-demo &amp;&amp; make test 2&gt;&amp;1 | tail -2</text>
+<text x="18" y="308" font-family="SFMono-Regular, Menlo, Consolas, DejaVu Sans Mono, monospace" font-size="13" fill="#e6edf3" xml:space="preserve">All 1 test files passed.</text>
+<rect x="0.5" y="0.5" width="515" height="331" rx="10" fill="none" stroke="#30363d"/>
+</svg>

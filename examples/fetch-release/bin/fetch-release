@@ -1,0 +1,22 @@
+#!/usr/bin/env bash
+#
+# 取版工具的入口。只做三件事：定位自身、加载库、交给 cli_run。
+set -euo pipefail
+
+SELF=$(cd "$(dirname "$0")" && pwd)
+HOME_DIR=$(cd "$SELF/.." && pwd)
+
+# 这是仓库内的示例，库用相对路径加载。拿去用之前先 shellkit vendor .，
+# 再把下面这行换成 vendor/shellkit/lib/bootstrap.sh（见 README）。
+. "$HOME_DIR/../../lib/bootstrap.sh"
+
+cli_group "发布包"
+cli_cmd fetch "下载并切换到指定版本" "fetch [--refresh] <version>"
+cli_cmd current "打印当前生效的版本"
+cli_cmd versions "列出已经下载过的版本"
+
+for __file in "$HOME_DIR"/commands/*.sh; do
+  . "$__file"
+done
+
+cli_run "$@"

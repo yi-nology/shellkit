@@ -3,18 +3,21 @@
 SHELL := /bin/bash
 SOURCES := shellkit lib/bootstrap.sh $(wildcard lib/core/*.sh) tests/*.sh po/messages.sh
 TEMPLATES := $(shell find templates -type f)
+SHOTS := $(wildcard docs/shots/*.shot)
 
-.PHONY: help test syntax lint lint-templates fmt messages docs docs-check check install
+.PHONY: help test syntax lint lint-templates fmt messages docs docs-check check-docs shots examples check install
 
 help:
 	@printf '%s\n' \
-	  'make test      跑全部测试（tests/run.sh）' \
-	  'make syntax    bash -n 全部脚本' \
-	  'make lint      shellcheck -S warning -x' \
-	  'make fmt       shfmt -d -i 2 -ci（只检查）' \
-	  'make messages  重新抽取 msgid 并编译 .mo' \
-	  'make docs      从源码注释重新生成 docs/REFERENCE.md' \
-	  'make check     依次跑 syntax / test / lint / fmt'
+	  'make test        跑全部测试（tests/run.sh）' \
+	  'make syntax      bash -n 全部脚本' \
+	  'make lint        shellcheck -S warning -x' \
+	  'make fmt         shfmt -d -i 2 -ci（只检查）' \
+	  'make messages    重新抽取 msgid 并编译 .mo' \
+	  'make docs        重新生成 REFERENCE.md / AGENTS.md / SKILL.md' \
+	  'make shots       按 docs/shots/*.shot 真跑命令并渲染 SVG 截图' \
+	  'make examples    跑 examples/ 下每个工程的测试' \
+	  'make check       依次跑 syntax / test / lint / docs-check / check-docs / examples / fmt'
 
 test:
 	@bash tests/run.sh
@@ -33,6 +36,7 @@ lint:
 # 模板里有 {{NAME}} 这类占位符，直接检查会被当成语法错误；先渲染再检查。
 lint-templates:
 	@bash tests/lint_templates.sh
+
 fmt:
 	@if command -v shfmt >/dev/null 2>&1; then \
 	  shfmt -d -i 2 -ci $(SOURCES); \
@@ -47,7 +51,24 @@ docs:
 docs-check:
 	@./shellkit docs --check
 
-check: syntax test lint docs-check fmt
+# 文档里的代码块必须能过 bash -n，函数名必须真实存在
+check-docs:
+	@bash tools/check_docs.sh
+
+# 截图是真实输出渲染的，需要用 python3；没有就跳过而不是失败
+shots:
+	@if command -v python3 >/dev/null 2>&1; then \
+	  python3 tools/term_shot.py $(SHOTS); \
+	  else echo "python3 not installed, skipping screenshots"; fi
+
+examples:
+	@for d in examples/*/; do \
+	  [ -f "$$d/Makefile" ] || continue; \
+	  echo "==> $$d"; \
+	  $(MAKE) -C "$$d" test || exit 1; \
+	  done
+
+check: syntax test lint docs-check check-docs examples fmt
 
 install:
 	./shellkit install-self --prefix $(PREFIX)/usr

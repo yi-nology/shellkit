@@ -27,4 +27,6 @@ cmd_{{CMD}}() {
   return "$SK_OK"
 }
 
-cli_cmd {{CMD}} "$(_t '{{CMD}} command')" "{{CMD}} [<options>]"
+# 描述不套 _t：msgid 里带占位符必然匹配不到任何译文，只会留下一条死键。
+# 工程自己的命令名怎么描述，是工程自己的事。
+cli_cmd {{CMD}} "{{CMD}} command" "{{CMD}} [<options>]"

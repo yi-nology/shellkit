@@ -33,6 +33,11 @@ jobs:
           sudo locale-gen zh_CN.UTF-8
           locale -a | grep -i zh_CN
 
+      - name: shfmt
+        run: |
+          go install mvdan.cc/sh/v3/cmd/shfmt@latest
+          echo "$(go env GOPATH)/bin" >> "$GITHUB_PATH"
+
       - name: syntax
         run: make syntax
 
@@ -42,3 +47,17 @@ jobs:
       - name: shellcheck
         if: runner.os == 'Linux'
         run: make lint
+
+      # 生成物（REFERENCE / AGENTS / 模板 AGENTS / SKILL）必须与源码一致
+      - name: docs check
+        run: make docs-check
+
+      # 文档里的代码块要真能跑、函数名要真实存在
+      - name: docs snippets
+        run: make check-docs
+
+      - name: examples
+        run: make examples
+
+      - name: format
+        run: make fmt

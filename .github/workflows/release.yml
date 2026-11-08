@@ -1,0 +1,62 @@
+name: release
+
+# 打 tag 即发版：构建 tarball、生成校验和、先自检再发布。
+# 产物是这个库唯一的「安装包」形态 —— 解包即用，不需要 git。
+on:
+  push:
+    tags:
+      - 'v*'
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: tag matches VERSION
+        run: |
+          version=$(cat VERSION)
+          if [ "v$version" != "$GITHUB_REF_NAME" ]; then
+            echo "tag $GITHUB_REF_NAME does not match VERSION $version" >&2
+            exit 1
+          fi
+
+      - name: build tarball
+        run: |
+          set -euo pipefail
+          version=$(cat VERSION)
+          name="shellkit-$version"
+          mkdir -p "dist/$name"
+          # 只放跑起来需要的东西：生成器、库、模板、语言包、文档、测试
+          cp -R shellkit lib templates locale po tools tests docs "dist/$name/"
+          cp README.md AGENTS.md VERSION LICENSE Makefile "dist/$name/"
+          rm -rf "dist/$name/docs/superpowers"
+          chmod +x "dist/$name/shellkit"
+          tar -C dist -czf "dist/$name.tar.gz" "$name"
+          ( cd dist && sha256sum "$name.tar.gz" > SHA256SUMS )
+          cat dist/SHA256SUMS
+
+      - name: smoke test the artifact
+        run: |
+          set -euo pipefail
+          version=$(cat VERSION)
+          work=$(mktemp -d)
+          tar -C "$work" -xzf "dist/shellkit-$version.tar.gz"
+          cd "$work/shellkit-$version"
+          bash tests/run.sh
+          ./shellkit doctor || true
+          ./shellkit new "$work/demo" --cmd start
+          ( cd "$work/demo" && make test )
+
+      - name: publish
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh release create "$GITHUB_REF_NAME" \
+            "dist/shellkit-$(cat VERSION).tar.gz" \
+            "dist/SHA256SUMS" \
+            --title "shellkit $(cat VERSION)" \
+            --generate-notes
