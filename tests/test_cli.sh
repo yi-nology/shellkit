@@ -35,6 +35,19 @@ cmd_force() {
   printf 'force=[%s]\n' "$force"
 }
 
+# 回归：选项值写进的变量名与库内部局部变量同名时，值曾整个丢失
+# （_sk_opt_set 自己的 local 截胡了 printf -v）。生成的模板里就有这种写法。
+cmd_same_name() {
+  local __target=""
+  cli_opt_init
+  cli_opt __target --target -t 1
+  cli_opts "$@" || return $?
+  printf 'target=[%s]\n' "$__target"
+}
+
+assert_eq "target=[/etc/hosts]" "$(cmd_same_name --target /etc/hosts)" "option value must reach a variable named like an internal local"
+assert_eq "target=[]" "$(cmd_same_name)" "without the option the variable stays empty"
+
 cmd_target() {
   local target=""
   cli_opt_init
