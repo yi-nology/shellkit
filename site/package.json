@@ -1,0 +1,21 @@
+{
+  "name": "shellkit-docs",
+  "private": true,
+  "version": "0.0.0",
+  "description": "shellkit 文档站（VuePress 2）",
+  "scripts": {
+    "sync": "bash ../tools/site_sync.sh",
+    "predev": "npm run sync",
+    "dev": "vuepress dev",
+    "prebuild": "npm run sync",
+    "build": "vuepress build",
+    "clean": "rm -rf .vuepress/dist .vuepress/.cache .vuepress/.temp"
+  },
+  "devDependencies": {
+    "@vuepress/bundler-vite": "2.0.0-rc.31",
+    "@vuepress/plugin-search": "2.0.0-rc.137",
+    "@vuepress/theme-default": "2.0.0-rc.137",
+    "sass-embedded": "^1.108.1",
+    "vuepress": "2.0.0-rc.31"
+  }
+}

@@ -10,9 +10,10 @@
 #   6. tools/check_versions.sh + make check
 #   7. commit "chore(release): x.y.z" → 打 tag → push main 与 tag
 #
-# 为什么不是「手写五个 sed」：版本号出现在六处（VERSION、pot 头、README、站点的
-# 下载按钮与钉版本示例）且全是手抄的。漏一处的后果不是报错，而是网页挂着上一版的
-# 下载按钮、README 教人装旧版 —— 而门禁全绿。所以顺序固定、且有一步专门复查。
+# 为什么不是「手写五个 sed」：版本号出现在五个文件、七条引用（VERSION、pot 头、
+# README、site/index.md 与 site/en/index.md 的下载按钮与钉版本示例）且全是手抄的。
+# 漏一处的后果不是报错，而是网页挂着上一版的下载按钮、README 教人装旧版 —— 而门禁
+# 全绿。所以顺序固定、且有一步专门复查。
 #
 #   bash tools/release.sh 0.6.0              # 真发（push main + tag）
 #   bash tools/release.sh 0.6.0 --dry-run    # 跑完全部本地步骤后把工作树还原
@@ -150,11 +151,16 @@ _bump_refs() {
   sed -E -i.bak \
     -e "s/VERSION=[0-9]+\.[0-9]+\.[0-9]+/VERSION=$VER/g" \
     -e "s/下载 [0-9]+\.[0-9]+\.[0-9]+/下载 $VER/g" \
+    -e "s/Download [0-9]+\.[0-9]+\.[0-9]+/Download $VER/g" \
+    -e "s/shellkit-[0-9]+\.[0-9]+\.[0-9]+\.tar\.gz/shellkit-$VER.tar.gz/g" \
     "$__f"
   rm -f "$__f.bak"
 }
 _bump_refs README.md
-_bump_refs site/index.html
+_bump_refs site/index.md
+_bump_refs site/en/index.md
+_bump_refs site/guide/installation.md
+_bump_refs site/en/guide/installation.md
 
 # ---------- 6. 两道门 ----------
 

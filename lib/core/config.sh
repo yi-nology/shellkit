@@ -5,7 +5,7 @@
 
 SK_CONF_FILE=""
 
-# conf_init FILE
+# conf_init FILE —— 载入 KEY=VALUE 配置文件；文件不存在不报错（当成空配置）
 conf_init() {
   local __file=${1:-}
   if ! validate_not_empty "$__file"; then
@@ -17,7 +17,7 @@ conf_init() {
   return 0
 }
 
-# conf_file
+# conf_file —— 当前生效的配置文件路径；未初始化时为空
 conf_file() { printf '%s\n' "${SK_CONF_FILE:-}"; }
 
 # conf_get KEY [DEFAULT] —— 只输出值；未初始化或无文件时返回默认值
@@ -127,7 +127,7 @@ conf_set() {
   return 0
 }
 
-# conf_unset KEY
+# conf_unset KEY —— 删掉一个键；幂等，键不存在也算成功
 conf_unset() {
   local __key=${1:-} __file=${SK_CONF_FILE:-} __line __tmp
   if ! validate_key "$__key"; then

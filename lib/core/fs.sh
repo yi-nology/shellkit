@@ -3,7 +3,7 @@
 
 SK_TMPDIR=""
 
-# fs_ensure_dir DIR [MODE]
+# fs_ensure_dir DIR [MODE] —— 幂等建目录；给了 MODE 就 chmod
 fs_ensure_dir() {
   local __dir=${1:-} __mode=${2:-}
   _sk_need_args "$#" 1 "fs_ensure_dir DIR [MODE]" || return $?
@@ -16,7 +16,7 @@ fs_ensure_dir() {
   return 0
 }
 
-# fs_atomic_write FILE CONTENT [MODE]
+# fs_atomic_write FILE CONTENT [MODE] —— 原子写文件；默认权限 600，父目录不存在会先建
 fs_atomic_write() {
   local __file=${1:-} __content=${2:-} __mode=${3:-600} __dir __tmp
   _sk_need_args "$#" 2 "fs_atomic_write FILE CONTENT [MODE]" || return $?

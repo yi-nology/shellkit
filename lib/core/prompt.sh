@@ -60,7 +60,7 @@ _sk_ask_raw() {
   return 0
 }
 
-# ask VAR PROMPT [DEFAULT] [TIMEOUT]
+# ask VAR PROMPT [DEFAULT] [TIMEOUT] —— 问一个问题，把答案写进 VAR；超时或 EOF 回退默认值
 ask() {
   local __var=${1:-} __prompt=${2:-} __default=${3:-} __timeout=${4:-} __msg
   _sk_need_args "$#" 2 "ask VAR PROMPT [DEFAULT] [TIMEOUT]" || return $?
@@ -110,7 +110,7 @@ ask_yn() {
   return "$SK_USAGE"
 }
 
-# ask_choice VAR PROMPT "a|b|c" [DEFAULT] [TIMEOUT]
+# ask_choice VAR PROMPT "a|b|c" [DEFAULT] [TIMEOUT] —— 多选一；超时或 EOF 回退默认值
 ask_choice() {
   local __var=${1:-} __prompt=${2:-} __choices=${3:-} __default=${4:-} __timeout=${5:-} _sk_ans="" _sk_tries=0 _sk_msg
   _sk_need_args "$#" 3 "ask_choice VAR PROMPT 'a|b|c' [DEFAULT] [TIMEOUT]" || return $?

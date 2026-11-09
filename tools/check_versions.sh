@@ -3,7 +3,7 @@
 # 版本号一致性。VERSION 是唯一真相源，其余位置都是它的投影：
 #   - locale/shellkit.pot 的 Project-Id-Version 头（翻译工具读它）
 #   - README.md 的一键安装钉版本示例
-#   - site/index.html 的下载按钮与钉版本示例
+#   - site/index.md 与 site/en/index.md 的下载按钮与钉版本示例
 #
 # 为什么需要这条：这些位置都是手抄的，发版时漏一处不会报错 —— 网页上挂着上一版的
 # 下载按钮、README 教人装旧版，而所有测试和门禁都是绿的。
@@ -44,12 +44,37 @@ _check "README.md" "VERSION=" \
   $(grep -Eo 'VERSION=[0-9]+\.[0-9]+\.[0-9]+' "$ROOT/README.md" | sed 's/^VERSION=//')
 
 # shellcheck disable=SC2046
-_check "site/index.html" "VERSION=" \
-  $(grep -Eo 'VERSION=[0-9]+\.[0-9]+\.[0-9]+' "$ROOT/site/index.html" | sed 's/^VERSION=//')
+_check "site/index.md" "VERSION=" \
+  $(grep -Eo 'VERSION=[0-9]+\.[0-9]+\.[0-9]+' "$ROOT/site/index.md" | sed 's/^VERSION=//')
 
 # shellcheck disable=SC2046
-_check "site/index.html" "download button" \
-  $(grep -Eo '下载 [0-9]+\.[0-9]+\.[0-9]+' "$ROOT/site/index.html" | sed 's/^下载 //')
+_check "site/index.md" "download button" \
+  $(grep -Eo '下载 [0-9]+\.[0-9]+\.[0-9]+' "$ROOT/site/index.md" | sed 's/^下载 //')
+
+# shellcheck disable=SC2046
+_check "site/en/index.md" "VERSION=" \
+  $(grep -Eo 'VERSION=[0-9]+\.[0-9]+\.[0-9]+' "$ROOT/site/en/index.md" | sed 's/^VERSION=//')
+
+# shellcheck disable=SC2046
+_check "site/en/index.md" "download button" \
+  $(grep -Eo 'Download [0-9]+\.[0-9]+\.[0-9]+' "$ROOT/site/en/index.md" | sed 's/^Download //')
+
+# 安装页里也有钉版本的示例：漏改就会教人装上一版
+# shellcheck disable=SC2046
+_check "site/guide/installation.md" "VERSION=" \
+  $(grep -Eo 'VERSION=[0-9]+\.[0-9]+\.[0-9]+' "$ROOT/site/guide/installation.md" | sed 's/^VERSION=//')
+
+# shellcheck disable=SC2046
+_check "site/guide/installation.md" "tarball name" \
+  $(grep -Eo 'shellkit-[0-9]+\.[0-9]+\.[0-9]+\.tar\.gz' "$ROOT/site/guide/installation.md" | sed 's/^shellkit-//; s/\.tar\.gz$//')
+
+# shellcheck disable=SC2046
+_check "site/en/guide/installation.md" "VERSION=" \
+  $(grep -Eo 'VERSION=[0-9]+\.[0-9]+\.[0-9]+' "$ROOT/site/en/guide/installation.md" | sed 's/^VERSION=//')
+
+# shellcheck disable=SC2046
+_check "site/en/guide/installation.md" "tarball name" \
+  $(grep -Eo 'shellkit-[0-9]+\.[0-9]+\.[0-9]+\.tar\.gz' "$ROOT/site/en/guide/installation.md" | sed 's/^shellkit-//; s/\.tar\.gz$//')
 
 # shellcheck disable=SC2046
 _check "locale/shellkit.pot" "Project-Id-Version" \

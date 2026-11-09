@@ -40,22 +40,32 @@ bash tools/release.sh 0.6.0 --no-push # 本地提交与打 tag，推远端留给
 跑门禁 —— 它只从 `VERSION` 文件读版本。
 
 
-## 版本号出现的六处
+## 版本号出现的六个文件、十一条引用
 
 `VERSION` 是唯一真相源，其余全是投影，而投影是手抄的：
 
     VERSION                              真相源，且被 release.yml 用来校验 tag 与包名
     locale/shellkit.pot  的 Project-Id-Version 头
     README.md            的 VERSION=x.y.z 钉版本示例
-    site/index.html      的「下载 x.y.z」按钮
-    site/index.html      的 VERSION=x.y.z 钉版本示例
+    site/index.md        的「下载 x.y.z」按钮
+    site/index.md        的 VERSION=x.y.z 钉版本示例
+    site/en/index.md     的「Download x.y.z」按钮
+    site/en/index.md     的 VERSION=x.y.z 钉版本示例
+    site/guide/installation.md        的 VERSION=x.y.z 钉版本示例
+    site/guide/installation.md        的 shellkit-x.y.z.tar.gz 包名
+    site/en/guide/installation.md     的 VERSION=x.y.z 钉版本示例
+    site/en/guide/installation.md     的 shellkit-x.y.z.tar.gz 包名
     docs/shots/*.svg     截图里若出现版本号，由 make shots 重新渲染
 
-前五处由 `tools/check_versions.sh` 逐项复查（`make versions-check`，已并入 `make check`）。
+除截图外都由 `tools/check_versions.sh` 逐项复查（`make versions-check`，已并入 `make check`）。
 它用「精确等于 `VERSION`」判定，而不是「看起来像版本号」—— 所以漏改一处必然红。
+`tools/site_links.sh` 在构建产物上再查一遍首页的两处版本串，拦住「源码对了但没重建」。
 
-`site/index.html` 里还有 `3.2.57` 这种与项目版本无关的串（那是 bash 版本），
-所以检查用的是带上下文的模式（`VERSION=` 与 `下载 `），不是裸版本号。
+首页里还有 `3.2.57` 这种与项目版本无关的串（那是 bash 版本），
+所以检查用的是带上下文的模式（`VERSION=` 与 `下载 ` / `Download `），不是裸版本号。
+
+指南里刻意出现的版本号（`make release VERSION=x.y.z` 这类示例）不跟版本走 ——
+它们是「怎么写」的示范，不是「当前是几号」的断言。
 
 ## 发布之后必须自己验一遍
 

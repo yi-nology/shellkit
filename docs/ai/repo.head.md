@@ -15,10 +15,11 @@
     tests/                    自研断言 + 逐文件执行器 + 每个模块一个测试
     tools/                    shdoc.awk / coverage.awk / ai_doc.sh / check_docs.sh / term_shot.py
                               release.sh（一条命令发版）/ check_versions.sh（版本引用一致性）
+                              site_sync.sh（docs/ → 站点页面）/ site_links.sh（产物链接门禁）
     docs/                     README 之外的深度文档；REFERENCE.md 与 AGENTS.md 是生成物
     docs/shots/*.shot         截图源：每行 `$ ` 是真要跑的命令，svg 由 make shots 渲染
     examples/                 两个能直接跑的工程，测试全程走真实二进制
-    site/                     GitHub Pages 站点（Actions 构建，产物不进 git 历史）
+    site/                     VuePress 2 文档站（手写页 + docs/ 同步页；Actions 构建，产物不进 git 历史）
     locale/{en,zh_CN,zh_Hant} gettext 目录，msgid 一律英文
 
 ## 加一个模块要改四处，少一处就红
@@ -50,10 +51,11 @@
     ./shellkit docs --check          # 只看文档产物是否最新
     bash tools/check_versions.sh     # 只看版本引用是否一致
     bash tools/check_docs.sh         # 只看文档里的示例是否仍然成立
+    make site                         # 构建文档站（先从 docs/ 同步，再查产物内部链接）
 
 ## 发版
 
-`VERSION` 是唯一真相源，pot 头、README、站点两处都是它的**手抄投影**。所以发版不许手工改：
+`VERSION` 是唯一真相源，pot 头、README、`site/index.md` 与 `site/en/index.md` 都是它的**手抄投影**。所以发版不许手工改：
 
     make release-dry VERSION=x.y.z   # 先空跑：升版本→重生成→门禁，然后还原工作树
     make release VERSION=x.y.z       # 真发：commit + tag + push，tag 触发 release.yml

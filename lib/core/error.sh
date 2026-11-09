@@ -63,7 +63,7 @@ require_cmd() {
   return 0
 }
 
-# require_root
+# require_root —— 必须是 root 运行；否则返回 SK_PRECOND(3)
 require_root() {
   if [ "$(id -u 2>/dev/null)" = "0" ]; then
     return 0
@@ -85,7 +85,7 @@ require_file() {
   return 0
 }
 
-# require_bash MAJOR [MINOR]
+# require_bash MAJOR [MINOR] —— 当前 bash 版本是否达标；不达标返回 SK_PRECOND(3)
 require_bash() {
   local __need_major=${1:-3} __need_minor=${2:-0}
   local __major=${BASH_VERSINFO[0]:-0} __minor=${BASH_VERSINFO[1]:-0}

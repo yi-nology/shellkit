@@ -96,8 +96,11 @@ while IFS= read -r f; do
     esac
   done <"$f"
   # docs/superpowers/ 是设计档案，不是给人照抄的示例，不纳入校验
+  # node_modules 与站点构建产物里也有大量 markdown，扫进来只会制造噪音
 done < <(find "$ROOT" -name '*.md' -not -path '*/.git/*' -not -path '*/.upstream/*' \
-  -not -path '*/docs/superpowers/*' | sort)
+  -not -path '*/docs/superpowers/*' -not -path '*/node_modules/*' \
+  -not -path '*/site/.vuepress/dist/*' -not -path '*/site/.vuepress/.cache/*' \
+  -not -path '*/site/.vuepress/.temp/*' | sort)
 
 if [ "$bad" -ne 0 ]; then
   printf 'check_docs: found problems in documentation\n' >&2

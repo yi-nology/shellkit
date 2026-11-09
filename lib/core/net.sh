@@ -1,13 +1,13 @@
 #!/usr/bin/env bash
 # 网络：下载（带校验与镜像回退）与就绪探测。
 
-# net_sha256 FILE
+# net_sha256 FILE —— 文件的 sha256；两种工具都没有时返回 1
 net_sha256() {
   _sk_need_args "$#" 1 "net_sha256 FILE" || return $?
   os_sha256 "$1"
 }
 
-# net_verify FILE SHA256
+# net_verify FILE SHA256 —— 校验文件的 sha256；对不上返回 SK_VERIFY(5)
 net_verify() {
   local __file=${1:-} __expect=${2:-} __actual
   _sk_need_args "$#" 2 "net_verify FILE SHA256" || return $?
@@ -39,7 +39,7 @@ _sk_download_raw() {
   fi
 }
 
-# net_download URL DEST [SHA256]
+# net_download URL DEST [SHA256] —— 下载并可选校验 sha256；已有本地缓存且校验通过就不重下
 net_download() {
   local __url=${1:-} __dest=${2:-} __expect=${3:-} __tmp __alt
   _sk_need_args "$#" 2 "net_download URL DEST [SHA256]" || return $?
@@ -98,7 +98,7 @@ net_download() {
   return 0
 }
 
-# net_wait_port HOST PORT [TIMEOUT]
+# net_wait_port HOST PORT [TIMEOUT] —— 等端口可连；超时返回 SK_NET(4)
 net_wait_port() {
   local __host=${1:-} __port=${2:-} __timeout=${3:-30} __i=0
   _sk_need_args "$#" 2 "net_wait_port HOST PORT [TIMEOUT]" || return $?
@@ -114,7 +114,7 @@ net_wait_port() {
   return "$SK_NET"
 }
 
-# net_wait_http URL [TIMEOUT]
+# net_wait_http URL [TIMEOUT] —— 等 HTTP 可用；超时返回 SK_NET(4)
 net_wait_http() {
   local __url=${1:-} __timeout=${2:-30} __i=0
   _sk_need_args "$#" 1 "net_wait_http URL [TIMEOUT]" || return $?

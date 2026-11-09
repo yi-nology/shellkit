@@ -1,14 +1,19 @@
 name: pages
 
 # 不另开 gh-pages 分支：产物由 Actions 直接发布成站点，构建结果不进 git 历史。
-# 站点只有两个来源：site/ 下的手写页面，和 docs/shots/ 里真跑出来的截图。
+# 站点是 docs/ 的视图，不是第二份真相源：cookbook / 迁移 / 发版 / API 参考四类页面由
+# tools/site_sync.sh 在构建前从 docs/ 生成 (site/.gitignore 已忽略)，所以改了 docs/ 也要重发站点。
 on:
   push:
     branches:
       - main
     paths:
       - 'site/**'
-      - 'docs/shots/**'
+      - 'docs/**'
+      - 'lib/**'
+      - 'VERSION'
+      - 'tools/site_sync.sh'
+      - 'tools/site_links.sh'
       - '.github/workflows/pages.yml'
   workflow_dispatch:
 
@@ -30,21 +35,28 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: site/package-lock.json
+
+      - name: install
+        working-directory: site
+        run: npm ci --no-audit --no-fund
+
+      # prebuild 会先跑 tools/site_sync.sh：把 docs/ 同步成站点页面再构建
       - name: build site
-        run: |
-          set -euo pipefail
-          mkdir -p _site/shots
-          cp site/index.html site/style.css _site/
-          cp docs/shots/*.svg _site/shots/
-          # 截图是构建期拷过去的，站里不能出现坏链
-          for f in $(grep -oE 'shots/[a-z-]+\.svg' site/index.html | sort -u); do
-            test -f "_site/$f" || { echo "missing $f" >&2; exit 1; }
-          done
-          ls -R _site
+        working-directory: site
+        run: npm run build
+
+      # 主题自带的 links-check 不会让坏链导致构建失败，所以另有一道产物上的门
+      - name: check links
+        run: bash tools/site_links.sh site/.vuepress/dist
 
       - uses: actions/configure-pages@v5
       - uses: actions/upload-pages-artifact@v3
         with:
-          path: _site
+          path: site/.vuepress/dist
       - id: deployment
         uses: actions/deploy-pages@v4

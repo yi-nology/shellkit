@@ -20,7 +20,7 @@ require_cmd CMD... —— 零参数返回 SK_USAGE（否则 `require_cmd "$EMPTY
 
 ### `require_root`
 
-require_root
+require_root —— 必须是 root 运行；否则返回 SK_PRECOND(3)
 
 ### `require_file`
 
@@ -28,7 +28,7 @@ require_file PATH... —— 零参数返回 SK_USAGE
 
 ### `require_bash`
 
-require_bash MAJOR [MINOR]
+require_bash MAJOR [MINOR] —— 当前 bash 版本是否达标；不达标返回 SK_PRECOND(3)
 
 ## log
 
@@ -60,15 +60,15 @@ log_section TITLE —— 分段标题，带前导空行
 
 ### `str_trim`
 
-str_trim VAR
+str_trim VAR —— 去掉首尾空白，原地改写该变量
 
 ### `str_lower`
 
-str_lower VAR
+str_lower VAR —— 转小写，原地改写该变量（3.2 没有大写展开语法）
 
 ### `str_upper`
 
-str_upper VAR
+str_upper VAR —— 转大写，原地改写该变量（3.2 没有大写展开语法）
 
 ### `str_contains`
 
@@ -76,25 +76,25 @@ str_contains HAYSTACK NEEDLE —— 返回码；空 needle 恒返回 1
 
 ### `str_starts_with`
 
-str_starts_with STR PREFIX
+str_starts_with STR PREFIX —— 前缀匹配；用返回码而不是布尔值
 
 ### `str_ends_with`
 
-str_ends_with STR SUFFIX
+str_ends_with STR SUFFIX —— 后缀匹配；用返回码而不是布尔值
 
 ### `str_repeat`
 
-str_repeat VAR COUNT STRING
+str_repeat VAR COUNT STRING —— 把字符串重复 N 次写进变量
 
 ## validate
 
 ### `validate_not_empty`
 
-validate_not_empty VALUE
+validate_not_empty VALUE —— 非空校验；失败原因写进 SK_VALIDATE_ERR
 
 ### `validate_single_line`
 
-validate_single_line VALUE —— 配置文件的值不允许换行
+validate_single_line VALUE —— 单行文本；配置项的值不允许带换行 —— 配置文件的值不允许换行
 
 ### `validate_key`
 
@@ -102,7 +102,7 @@ validate_key VALUE —— 合法配置键名
 
 ### `validate_port`
 
-validate_port VALUE
+validate_port VALUE —— 1-65535 的端口号
 
 ### `validate_ip`
 
@@ -110,29 +110,29 @@ validate_ip VALUE —— 四段十进制，每段 0-255，且不接受前导零�
 
 ### `validate_version`
 
-validate_version VALUE
+validate_version VALUE —— x.y.z 或 v1.2.3 形式的版本号
 
 ### `validate_abs_path`
 
-validate_abs_path VALUE
+validate_abs_path VALUE —— 绝对路径
 
 ### `validate_url`
 
-validate_url VALUE
+validate_url VALUE —— http/https URL
 
 ### `validate_enum`
 
-validate_enum VALUE "a|b|c"
+validate_enum VALUE "a|b|c" —— 取值必须在给定集合内
 
 ## fs
 
 ### `fs_ensure_dir`
 
-fs_ensure_dir DIR [MODE]
+fs_ensure_dir DIR [MODE] —— 幂等建目录；给了 MODE 就 chmod
 
 ### `fs_atomic_write`
 
-fs_atomic_write FILE CONTENT [MODE]
+fs_atomic_write FILE CONTENT [MODE] —— 原子写文件；默认权限 600，父目录不存在会先建
 
 ### `fs_backup`
 
@@ -170,7 +170,7 @@ os_arch —— x86_64 | aarch64 | other
 
 ### `os_is_root`
 
-os_is_root
+os_is_root —— 当前是否以 root 身份运行
 
 ### `os_has_cmd`
 
@@ -178,15 +178,15 @@ os_has_cmd CMD... —— 零参数返回 SK_USAGE（空真会让前置检查静�
 
 ### `os_pkg_manager`
 
-os_pkg_manager
+os_pkg_manager —— 本机的包管理器名（apt-get/yum/dnf/zypper/apk）；没有则返回 1
 
 ### `os_pkg_update`
 
-os_pkg_update
+os_pkg_update —— 刷新包索引；没有受支持的包管理器返回 SK_PRECOND(3)
 
 ### `os_pkg_install`
 
-os_pkg_install PKG...
+os_pkg_install PKG... —— 用本机包管理器装包；没有受支持的包管理器返回 SK_PRECOND(3)
 
 ### `os_sed_i`
 
@@ -194,11 +194,11 @@ os_sed_i ARGS... —— 就地编辑；Darwin 的 sed 必须给个备份后缀
 
 ### `os_md5`
 
-os_md5 FILE
+os_md5 FILE —— 文件的 md5；两种工具都没有时返回 1
 
 ### `os_sha256`
 
-os_sha256 FILE
+os_sha256 FILE —— 文件的 sha256；两种工具都没有时返回 1
 
 ## trap
 
@@ -232,7 +232,7 @@ run [--always] [--no-die] CMD... —— 执行命令，失败即 die；--no-die 
 
 ### `retry`
 
-retry ATTEMPTS CMD...
+retry ATTEMPTS CMD... —— 失败退避重试；用法错与校验失败不重试
 
 ## lock
 
@@ -252,33 +252,33 @@ lock_held NAME —— 返回码判断是否被占；被占时 stdout 输出持�
 
 ### `net_sha256`
 
-net_sha256 FILE
+net_sha256 FILE —— 文件的 sha256；两种工具都没有时返回 1
 
 ### `net_verify`
 
-net_verify FILE SHA256
+net_verify FILE SHA256 —— 校验文件的 sha256；对不上返回 SK_VERIFY(5)
 
 ### `net_download`
 
-net_download URL DEST [SHA256]
+net_download URL DEST [SHA256] —— 下载并可选校验 sha256；已有本地缓存且校验通过就不重下
 
 ### `net_wait_port`
 
-net_wait_port HOST PORT [TIMEOUT]
+net_wait_port HOST PORT [TIMEOUT] —— 等端口可连；超时返回 SK_NET(4)
 
 ### `net_wait_http`
 
-net_wait_http URL [TIMEOUT]
+net_wait_http URL [TIMEOUT] —— 等 HTTP 可用；超时返回 SK_NET(4)
 
 ## config
 
 ### `conf_init`
 
-conf_init FILE
+conf_init FILE —— 载入 KEY=VALUE 配置文件；文件不存在不报错（当成空配置）
 
 ### `conf_file`
 
-conf_file
+conf_file —— 当前生效的配置文件路径；未初始化时为空
 
 ### `conf_get`
 
@@ -298,7 +298,7 @@ conf_set KEY VALUE —— 校验 + 值未变则跳过 + 原子写 + 600
 
 ### `conf_unset`
 
-conf_unset KEY
+conf_unset KEY —— 删掉一个键；幂等，键不存在也算成功
 
 ### `conf_disable`
 
@@ -312,7 +312,7 @@ conf_keys —— 逐行输出键名
 
 ### `ask`
 
-ask VAR PROMPT [DEFAULT] [TIMEOUT]
+ask VAR PROMPT [DEFAULT] [TIMEOUT] —— 问一个问题，把答案写进 VAR；超时或 EOF 回退默认值
 
 ### `ask_yn`
 
@@ -320,7 +320,7 @@ ask_yn VAR PROMPT [DEFAULT=y] [TIMEOUT] —— 结果写入 y 或 n
 
 ### `ask_choice`
 
-ask_choice VAR PROMPT "a|b|c" [DEFAULT] [TIMEOUT]
+ask_choice VAR PROMPT "a|b|c" [DEFAULT] [TIMEOUT] —— 多选一；超时或 EOF 回退默认值
 
 ### `confirm`
 
@@ -334,11 +334,11 @@ cli_group TITLE —— 后续注册的命令归入该分组
 
 ### `cli_cmd`
 
-cli_cmd NAME DESC [USAGE]
+cli_cmd NAME DESC [USAGE] —— 注册一个子命令；要写在命令文件末尾
 
 ### `cli_has`
 
-cli_has NAME
+cli_has NAME —— 该命令是否已注册
 
 ### `cli_usage_cmd`
 
@@ -350,7 +350,7 @@ cli_usage_global —— 打印总用法：命令按分组，选项固定五条
 
 ### `cli_run`
 
-cli_run ARGS...
+cli_run ARGS... —— 分发入口：吃全局选项后按名字找同名 cmd_ 前缀的函数
 
 ### `cli_opt_init`
 
@@ -358,9 +358,9 @@ cli_opt_init —— 清空选项注册表。不接受参数；变量默认值请
 
 ### `cli_opt`
 
-cli_opt VAR LONG [SHORT] [TAKES_ARG]
+cli_opt VAR LONG [SHORT] [TAKES_ARG] —— 注册一个选项；第四个参数为 1 表示这个选项要吃值
 
 ### `cli_opts`
 
-cli_opts NAME ARGS... —— 按 cli_opt 注册的规则解析子命令选项
+cli_opts ARGS... —— 按 cli_opt 注册的规则解析子命令选项；剩余位置参数进 SK_OPTS_LEFT
 

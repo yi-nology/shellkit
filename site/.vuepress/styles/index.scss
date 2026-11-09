@@ -1,0 +1,88 @@
+// 主题调色板覆盖。变量名来自 @vuepress/theme-default 的 palette 约定。
+// 深色是默认：与原来手写落地页的 #0b0e13 / #3fb950 保持一致。
+
+:root {
+  --vp-font-family-base: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto,
+    'PingFang SC', 'Hiragino Sans GB', 'Microsoft YaHei', sans-serif;
+  --vp-font-family-mono: SFMono-Regular, Menlo, Consolas, 'DejaVu Sans Mono', monospace;
+  --content-width: 880px;
+
+  --vp-c-accent: #1a7f37;
+  --vp-c-accent-bg: #1a7f37;
+  --vp-c-accent-hover: #2ea043;
+  --vp-c-accent-soft: rgba(26, 127, 55, 0.14);
+}
+
+[data-theme='dark'] {
+  --vp-c-accent: #3fb950;
+  --vp-c-accent-bg: #2ea043;
+  --vp-c-accent-hover: #4ec46a;
+  --vp-c-accent-soft: rgba(63, 185, 80, 0.16);
+
+  --vp-c-bg: #0b0e13;
+  --vp-c-bg-alt: #0e131a;
+  --vp-c-bg-elv: #11161d;
+  --vp-c-bg-soft: #131a22;
+  --vp-c-border: #222b36;
+  --vp-c-divider: #1b232d;
+  --vp-c-gutter: #0b0e13;
+
+  --vp-c-text: #e6edf3;
+  --vp-c-text-mute: #9aa6b2;
+  --vp-c-text-subtle: #7d8894;
+}
+
+// 行内代码与正文里的命令：给一点底色，但不抢眼
+div[class*='language-'] {
+  border-radius: 8px;
+}
+
+.vp-doc {
+  table {
+    display: table;
+    width: 100%;
+  }
+
+  th {
+    white-space: nowrap;
+  }
+
+  td:first-child {
+    white-space: nowrap;
+  }
+
+  blockquote {
+    border-left-color: var(--vp-c-accent);
+  }
+}
+
+// 侧边栏条目多一点留白，15 个模块看起来才不挤
+.vp-sidebar-item {
+  line-height: 1.5;
+}
+
+// 首页 hero 的字标稍微收紧，长中文标题不至于换行太碎
+.vp-hero-info {
+  max-width: 46rem;
+}
+
+// 首页/指南里的终端截图（ShotFigure 组件）：给一圈边框，深浅色都不脏
+.sk-shot {
+  margin: 1.6rem 0;
+
+  img {
+    display: block;
+    width: 100%;
+    border: 1px solid var(--vp-c-divider);
+    border-radius: 10px;
+    background: var(--vp-c-bg-alt);
+  }
+
+  figcaption {
+    margin-top: 0.55rem;
+    font-size: 0.86rem;
+    line-height: 1.5;
+    color: var(--vp-c-text-mute);
+    text-align: center;
+  }
+}

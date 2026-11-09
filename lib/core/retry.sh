@@ -24,7 +24,7 @@ _sk_retry_allowed() {
   return 0
 }
 
-# retry ATTEMPTS CMD...
+# retry ATTEMPTS CMD... —— 失败退避重试；用法错与校验失败不重试
 retry() {
   if [ "$#" -lt 2 ]; then
     log_error "$(_t 'usage: retry ATTEMPTS COMMAND...')"

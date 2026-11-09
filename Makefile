@@ -6,7 +6,7 @@ SOURCES := shellkit install.sh lib/bootstrap.sh $(wildcard lib/core/*.sh) \
 TEMPLATES := $(shell find templates -type f)
 SHOTS := $(wildcard docs/shots/*.shot)
 
-.PHONY: help test syntax lint lint-templates fmt messages messages-check docs docs-check versions-check check-docs shots examples check install release release-dry
+.PHONY: help test syntax lint lint-templates fmt messages messages-check docs docs-check versions-check check-docs shots examples check install release release-dry site-deps site-sync site site-serve
 
 help:
 	@printf '%s\n' \
@@ -22,7 +22,11 @@ help:
 	  'make examples    跑 examples/ 下每个工程的测试' \
 	  'make check       依次跑 syntax / test / lint / docs-check / versions-check / check-docs / messages-check / examples / fmt' \
 	  'make release VERSION=x.y.z  发版：升版本→重生成产物→门禁→commit→tag→push' \
-	  'make release-dry VERSION=x.y.z  同 release，但跑完还原工作树、不提交'
+	  'make release-dry VERSION=x.y.z  同 release，但跑完还原工作树、不提交' \
+	  'make site        构建文档站（先跑 tools/site_sync.sh 从 docs/ 同步）' \
+	  'make site-serve  本地起文档站的开发服务器' \
+	  'make site-deps   装文档站的 node 依赖'
+
 
 test:
 	@bash tests/run.sh
@@ -73,6 +77,25 @@ shots:
 	@if command -v python3 >/dev/null 2>&1; then \
 	  python3 tools/term_shot.py $(SHOTS); \
 	  else echo "python3 not installed, skipping screenshots"; fi
+
+# ---------- 文档站 ----------
+# 刻意不进 check：库的门禁不依赖 Node，没装 npm 的机器上也该能全绿。
+# CI 里站点是独立 job（.github/workflows/ci.yml），发站是 .github/workflows/pages.yml。
+
+site-deps:
+	@cd site && npm install --no-audit --no-fund
+
+# docs/ 是唯一真相源；site/ 里的 cookbook / 迁移 / 发版 / 参考页都是它的生成物
+site-sync:
+	@bash tools/site_sync.sh
+
+# prebuild 已经会先跑 site-sync，所以这一条就够；做完再查产物上的内部链接
+site:
+	@cd site && npm run build
+	@bash tools/site_links.sh site/.vuepress/dist
+
+site-serve:
+	@cd site && npm run dev
 
 examples:
 	@for d in examples/*/; do \

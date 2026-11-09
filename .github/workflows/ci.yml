@@ -67,3 +67,28 @@ jobs:
 
       - name: format
         run: make fmt
+
+  # 站点是 docs/ 的视图，构建一次就能证明同步脚本没把页面写坏、内部链接没有 404。
+  # 放在独立 job 里：库的门禁不依赖 Node，本地 make check 也不该因为没装 npm 而红。
+  site:
+    name: docs site
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: site/package-lock.json
+
+      - name: install
+        working-directory: site
+        run: npm ci --no-audit --no-fund
+
+      - name: build
+        working-directory: site
+        run: npm run build
+
+      - name: check links
+        run: bash tools/site_links.sh site/.vuepress/dist

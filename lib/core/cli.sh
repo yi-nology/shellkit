@@ -22,7 +22,7 @@ _sk_is_cmd_name() {
   return 0
 }
 
-# cli_cmd NAME DESC [USAGE]
+# cli_cmd NAME DESC [USAGE] —— 注册一个子命令；要写在命令文件末尾
 cli_cmd() {
   local __name=${1:-} __desc=${2:-} __usage=${3:-}
   if ! _sk_is_cmd_name "$__name"; then
@@ -40,7 +40,7 @@ cli_cmd() {
   return 0
 }
 
-# cli_has NAME
+# cli_has NAME —— 该命令是否已注册
 cli_has() {
   local __n=${1:-} __x
   if [ "${#SK_CLI_NAMES[@]}" -eq 0 ]; then
@@ -128,7 +128,7 @@ _sk_suggest() {
   return 0
 }
 
-# cli_run ARGS...
+# cli_run ARGS... —— 分发入口：吃全局选项后按名字找同名 cmd_ 前缀的函数
 cli_run() {
   local __name="" __fn="" __rc=0
   while [ "$#" -gt 0 ]; do
@@ -227,7 +227,7 @@ cli_opt_init() {
   return 0
 }
 
-# cli_opt VAR LONG [SHORT] [TAKES_ARG]
+# cli_opt VAR LONG [SHORT] [TAKES_ARG] —— 注册一个选项；第四个参数为 1 表示这个选项要吃值
 cli_opt() {
   local __var=${1:-} __long=${2:-} __short=${3:-} __arg=${4:-0}
   _sk_need_args "$#" 2 "cli_opt VAR LONG [SHORT] [TAKES_ARG]" || return $?
@@ -303,7 +303,7 @@ _sk_opt_set() {
   return 0
 }
 
-# cli_opts NAME ARGS... —— 按 cli_opt 注册的规则解析子命令选项
+# cli_opts ARGS... —— 按 cli_opt 注册的规则解析子命令选项；剩余位置参数进 SK_OPTS_LEFT
 cli_opts() {
   local __idx="" __opt=""
   SK_OPTS_LEFT=()

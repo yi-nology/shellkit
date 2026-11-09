@@ -11,7 +11,8 @@ macOS 原生 bash、Alpine 的 busybox 之外的主流发行版都能直接跑�
 
 ## 先找你自己
 
-站点版（同样的内容，带真跑出来的终端截图）：https://yi-nology.github.io/shellkit/
+站点版（**VuePress 文档站**，中英双语、可搜索、带真跑出来的终端截图）：
+https://yi-nology.github.io/shellkit/ —— 中文在 `/`，英文在 `/en/`。
 
 | 你现在的情况 | 从哪进 |
 |---|---|
@@ -340,6 +341,9 @@ locale/{en,zh_CN,zh_Hant}
 docs/ai/                  AI 契约的真相源（三份产物由它拼出）
 docs/shots/               截图：.shot 是真命令，.svg 是真输出
 docs/superpowers/specs/   设计文档（决策记录）
+site/                     VuePress 2 文档站（手写页 + 从 docs/ 同步的生成页）
+tools/site_sync.sh        把 docs/ 投影成站点页面（cookbook / 迁移 / 发版 / API 参考）
+tools/site_links.sh       构建产物上的链接门禁（主题自带的 links-check 不会让构建失败）
 ```
 
 截图不是画的：`docs/shots/*.shot` 里每行 `$` 开头的都是要真跑的命令，

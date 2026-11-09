@@ -43,7 +43,7 @@ _sk_shell_quote() {
   printf "'%s'" "$__out"
 }
 
-# str_trim VAR
+# str_trim VAR —— 去掉首尾空白，原地改写该变量
 str_trim() {
   local __n=${1:-} __v
   _sk_need_args "$#" 1 "str_trim VAR" || return $?
@@ -54,7 +54,7 @@ str_trim() {
   printf -v "$__n" '%s' "$__v"
 }
 
-# str_lower VAR
+# str_lower VAR —— 转小写，原地改写该变量（3.2 没有大写展开语法）
 str_lower() {
   local __n=${1:-} __v
   _sk_need_args "$#" 1 "str_lower VAR" || return $?
@@ -63,7 +63,7 @@ str_lower() {
   printf -v "$__n" '%s' "$(printf '%s' "$__v" | tr '[:upper:]' '[:lower:]')"
 }
 
-# str_upper VAR
+# str_upper VAR —— 转大写，原地改写该变量（3.2 没有大写展开语法）
 str_upper() {
   local __n=${1:-} __v
   _sk_need_args "$#" 1 "str_upper VAR" || return $?
@@ -83,7 +83,7 @@ str_contains() {
   return 1
 }
 
-# str_starts_with STR PREFIX
+# str_starts_with STR PREFIX —— 前缀匹配；用返回码而不是布尔值
 str_starts_with() {
   if [ -z "${2:-}" ]; then
     return 1
@@ -94,7 +94,7 @@ str_starts_with() {
   return 1
 }
 
-# str_ends_with STR SUFFIX
+# str_ends_with STR SUFFIX —— 后缀匹配；用返回码而不是布尔值
 str_ends_with() {
   if [ -z "${2:-}" ]; then
     return 1
@@ -105,7 +105,7 @@ str_ends_with() {
   return 1
 }
 
-# str_repeat VAR COUNT STRING
+# str_repeat VAR COUNT STRING —— 把字符串重复 N 次写进变量
 str_repeat() {
   local __n=${1:-} __count=${2:-} __s=${3:-} __out="" __i=0
   _sk_need_args "$#" 3 "str_repeat VAR COUNT STRING" || return $?

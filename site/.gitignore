@@ -1,0 +1,15 @@
+node_modules/
+.vuepress/dist/
+.vuepress/.cache/
+.vuepress/.temp/
+
+# 由 tools/site_sync.sh 从 docs/ 生成，不入库
+guide/cookbook.md
+guide/migrating.md
+guide/releasing.md
+reference/
+en/guide/cookbook.md
+en/guide/migrating.md
+en/guide/releasing.md
+en/reference/
+.vuepress/public/shots/

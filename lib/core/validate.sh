@@ -10,7 +10,7 @@ _sk_vfail() {
   return 1
 }
 
-# validate_not_empty VALUE
+# validate_not_empty VALUE —— 非空校验；失败原因写进 SK_VALIDATE_ERR
 validate_not_empty() {
   if [ -n "${1:-}" ]; then
     return 0
@@ -18,7 +18,7 @@ validate_not_empty() {
   _sk_vfail "$(_t 'value must not be empty')"
 }
 
-# validate_single_line VALUE —— 配置文件的值不允许换行
+# validate_single_line VALUE —— 单行文本；配置项的值不允许带换行 —— 配置文件的值不允许换行
 validate_single_line() {
   case "${1:-}" in
     *$'\n'* | *$'\r'*)
@@ -47,7 +47,7 @@ validate_key() {
   return 0
 }
 
-# validate_port VALUE
+# validate_port VALUE —— 1-65535 的端口号
 validate_port() {
   local __v="${1:-}"
   case "$__v" in
@@ -72,7 +72,7 @@ validate_ip() {
   _sk_vfail "$(_t 'invalid IPv4 address'): $__v"
 }
 
-# validate_version VALUE
+# validate_version VALUE —— x.y.z 或 v1.2.3 形式的版本号
 validate_version() {
   local __v="${1:-}"
   if [[ "$__v" =~ ^v?[0-9]+(\.[0-9]+){0,2}([-.+][0-9A-Za-z.-]+)?$ ]]; then
@@ -81,7 +81,7 @@ validate_version() {
   _sk_vfail "$(_t 'invalid version'): $__v"
 }
 
-# validate_abs_path VALUE
+# validate_abs_path VALUE —— 绝对路径
 validate_abs_path() {
   case "${1:-}" in
     /*) return 0 ;;
@@ -89,7 +89,7 @@ validate_abs_path() {
   _sk_vfail "$(_t 'path must be absolute'): ${1:-}"
 }
 
-# validate_url VALUE
+# validate_url VALUE —— http/https URL
 validate_url() {
   local __v="${1:-}"
   if [[ "$__v" =~ ^https?://[^[:space:]]+$ ]]; then
@@ -98,7 +98,7 @@ validate_url() {
   _sk_vfail "$(_t 'invalid URL'): $__v"
 }
 
-# validate_enum VALUE "a|b|c"
+# validate_enum VALUE "a|b|c" —— 取值必须在给定集合内
 validate_enum() {
   local __v="${1:-}" __choices="${2:-}"
   case "|$__choices|" in
