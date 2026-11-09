@@ -260,6 +260,23 @@ man_page() {
   return 0
 }
 
+# _man_has_module NAME —— 这个模块在清单里吗
+#
+# 为什么不用 `man_modules | grep -qx "$name"`：grep -q 命中就退出，管道上游
+# （man_modules）还在往里写，会被 SIGPIPE 打死（退出码 141）。平时看不出来，
+# 但调用方开了 `set -o pipefail` 时整条管道按 141 判失败 —— 「模块存在」被
+# 误判成「模块不存在」，而且是竞态：同一台机器有时绿有时红，CI 上必炸。
+# 这里逐个比对，不用管道。
+_man_has_module() {
+  local __want=${1:-} __m
+  for __m in $(man_modules); do
+    if [ "$__m" = "$__want" ]; then
+      return 0
+    fi
+  done
+  return 1
+}
+
 # man_module_page MODULE —— 输出某模块第 3 节的 roff 正文
 # @exitcode 0 成功
 # @exitcode 2 模块名不合法或模块不存在
@@ -268,7 +285,7 @@ man_module_page() {
   case "$__mod" in
     '' | *[!A-Za-z0-9_-]*) return "$SK_USAGE" ;;
   esac
-  man_modules | grep -qx "$__mod" || return "$SK_USAGE"
+  _man_has_module "$__mod" || return "$SK_USAGE"
   local __ver __date __desc __line __kind __rest __fname __syn __dsc
   __ver=$(_man_version)
   __date=$(_man_date)

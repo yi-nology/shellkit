@@ -10,7 +10,8 @@ mo="$TEST_ROOT/locale/zh_CN/LC_MESSAGES/shellkit.mo"
 # 环境差异不该把测试判红，但译文缺失必须红。
 if [ -n "${SK_GETTEXT:-}" ] && [ -f "$mo" ]; then
   msg=""
-  if locale -a 2>/dev/null | grep -qi '^zh_CN'; then
+  # 不加 -q：grep -q 命中即退，locale 会被 SIGPIPE 打死，pipefail 下这条判断就成了假绿
+  if locale -a 2>/dev/null | grep -i '^zh_CN' >/dev/null; then
     msg=$(LC_ALL=zh_CN.UTF-8 LANG=zh_CN.UTF-8 bash -c '. "$1/lib/bootstrap.sh"; _t "Usage"' _ "$TEST_ROOT")
   fi
   if [ "$msg" = "用法" ]; then

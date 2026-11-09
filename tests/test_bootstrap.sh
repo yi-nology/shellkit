@@ -45,7 +45,7 @@ _loaded_modules() {
     for f in "$1"/lib/core/*.sh; do
       m=${f##*/}
       m=${m%.sh}
-      fn=$(grep -E "^[A-Za-z_][A-Za-z0-9_]*[(][)]" "$f" | head -1 | sed "s/[(].*//")
+      fn=$(grep -E "^[A-Za-z_][A-Za-z0-9_]*[(][)]" "$f" | sed -n "1p" | sed "s/[(].*//")
       [ -n "$fn" ] || continue
       if declare -F "$fn" >/dev/null 2>&1; then printf "%s\n" "$m"; fi
     done

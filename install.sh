@@ -180,7 +180,9 @@ if [ "$mode" = check ]; then
   tmp=$(mktemp -d "${TMPDIR:-/tmp}/shellkit-check.XXXXXX") || die "cannot create a temporary directory" "$SK_ERR"
   trap 'rm -rf "${tmp:?}"' EXIT INT TERM
   fetch "$RELEASE_API" "$tmp/release.json" || die "cannot reach the release API: $RELEASE_API" "$SK_NET"
-  tag=$(sed -n 's/.*"tag_name"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' "$tmp/release.json" | head -1)
+  # 取第一行匹配，但不让 head 提前退出把 sed 打死（SIGPIPE → 141）
+  tag=$(sed -n 's/.*"tag_name"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' "$tmp/release.json")
+  tag=${tag%%$'\n'*}
   latest=${tag#v}
   [ -n "$latest" ] || die "cannot read the version from $RELEASE_API" "$SK_VERIFY"
   # stdout 只给数据：这一行就是脚本能拿去做判断的东西
@@ -210,7 +212,9 @@ else
   trap 'rm -rf "${tmp:?}"' EXIT INT TERM
   if [ -z "$ver" ]; then
     fetch "$RELEASE_API" "$tmp/release.json" || die "cannot reach the release API: $RELEASE_API" "$SK_NET"
-    tag=$(sed -n 's/.*"tag_name"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' "$tmp/release.json" | head -1)
+    # 取第一行匹配，但不让 head 提前退出把 sed 打死（SIGPIPE → 141）
+    tag=$(sed -n 's/.*"tag_name"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' "$tmp/release.json")
+    tag=${tag%%$'\n'*}
     ver=${tag#v}
     [ -n "$ver" ] || die "cannot read the version from $RELEASE_API" "$SK_VERIFY"
   fi

@@ -140,7 +140,7 @@ unstub date
 assert_eq "2" "$(ls -1 "$same".bak.* | wc -l | tr -d ' ')" \
   "two backups in the same second must not overwrite each other"
 # 前缀仍是定长时间戳，所以「按名升序 == 时间序」的轮转前提必须还成立
-assert_eq "v1" "$(cat "$(ls -1 "$same".bak.* | head -1)")" "the oldest backup keeps the first version"
+assert_eq "v1" "$(cat "$(ls -1 "$same".bak.* | sed -n '1p')")" "the oldest backup keeps the first version"
 assert_eq "v2" "$(cat "$(ls -1 "$same".bak.* | tail -1)")" "the newest backup keeps the last version"
 
 # 轮转依然按名序生效：KEEP=1 只留最新那份

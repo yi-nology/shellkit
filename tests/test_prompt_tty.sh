@@ -59,7 +59,9 @@ _pty_run() {
 # 提示语是 printf '%s: ' 写的、没有换行，会和标记挤在同一行，所以不能锚定行首。
 _pty_value() {
   local __key=$1 __out=$2 __val
-  __val=$(printf '%s\n' "$__out" | sed -n "s/.*$__key=\([^[:space:]]*\).*/\1/p" | head -1)
+  # 不接 head -1：head 提前退出会把 sed 打死（SIGPIPE → 141），赋值语句于是拿到 141
+  __val=$(printf '%s\n' "$__out" | sed -n "s/.*$__key=\([^[:space:]]*\).*/\1/p")
+  __val=${__val%%$'\n'*}
   printf '%s' "${__val#*=}"
 }
 

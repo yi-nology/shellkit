@@ -62,7 +62,9 @@ _check "site/en/index.md" "download button" \
 # CHANGELOG 的最新一节必须就是当前版本 —— 否则发版了但变更记录停在上一版，
 # 用户看到的「最近改了什么」是过期的。
 if [ -f "$ROOT/CHANGELOG.md" ]; then
-  _cl=$(sed -n 's/^## \([0-9][0-9]*\.[0-9][0-9]*\.[0-9][0-9]*\).*/\1/p' "$ROOT/CHANGELOG.md" | head -1)
+  # 取第一行匹配，但不让 head 提前退出把 sed 打死（SIGPIPE → 141）
+  _cl=$(sed -n 's/^## \([0-9][0-9]*\.[0-9][0-9]*\.[0-9][0-9]*\).*/\1/p' "$ROOT/CHANGELOG.md")
+  _cl=${_cl%%$'\n'*}
   if [ -z "$_cl" ]; then
     printf 'versions-check: CHANGELOG.md has no version section\n' >&2
     exit 5

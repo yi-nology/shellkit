@@ -274,9 +274,13 @@ for __fn in $OUT_PARAM_FUNCS; do
     _fail "找不到公开出参函数 $__fn"
     continue
   fi
-  if ! _fn_body "$__file" "$__fn" | grep -q '_sk_check_out_name'; then
-    _fail "$__fn() 是公开出参入口，必须调用 _sk_check_out_name 挡住保留名"
-  fi
+  # 不用 `_fn_body ... | grep -q`：grep -q 命中即退，上游会被 SIGPIPE 打死（141），
+  # 调用方开了 pipefail 时整条管道判失败。这里先把正文收进变量，再用 case 匹配。
+  __body=$(_fn_body "$__file" "$__fn" 2>/dev/null) || __body=""
+  case "$__body" in
+    *_sk_check_out_name*) ;;
+    *) _fail "$__fn() 是公开出参入口，必须调用 _sk_check_out_name 挡住保留名" ;;
+  esac
 done
 
 if [ "$_bad" -ne 0 ]; then
