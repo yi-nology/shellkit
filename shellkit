@@ -105,6 +105,7 @@ if [ "$SK_BOOTSTRAP_OK" -eq 1 ]; then
   cli_cmd vendor "$(_t 'sync the library into an existing project')" "vendor <dir> [--check]"
   cli_group "$(_t 'documentation')"
   cli_cmd docs "$(_t 'regenerate the API reference')" "docs [--check]"
+  cli_cmd man "$(_t 'generate man pages')" "man [--out DIR]"
   cli_cmd completion "$(_t 'print a shell completion script')" "completion [bash|zsh]"
   cli_group "$(_t 'installation')"
   cli_cmd install-self "$(_t 'install shellkit into PATH')" "install-self [--prefix DIR]"
@@ -1117,10 +1118,11 @@ cmd_doctor() {
 # ---------- list ----------
 
 cmd_list() {
-  local __f __i=0 __usage
+  local __f __i=0 __usage __mods=0 __fns=0
   printf '%s:\n' "$(_t 'library modules')"
   for __f in "$SHELLKIT_HOME"/lib/core/*.sh; do
     printf '  %s\n' "$(basename "$__f" .sh)"
+    __mods=$((__mods + 1))
   done
   printf '\n%s:\n' "$(_t 'templates')"
   for __f in "$SK_TPL_DIR"/*; do
@@ -1138,6 +1140,74 @@ cmd_list() {
     printf '  shellkit %s\n' "$__usage"
     __i=$((__i + 1))
   done
+  # 能力概览：数字全部现算，写死必然漂移（模块数、函数数、命令数都会随版本变）
+  __fns=$(grep -h '^[A-Za-z][A-Za-z0-9_]*()' "$SHELLKIT_HOME"/lib/core/*.sh 2>/dev/null | wc -l | tr -d ' ')
+  printf '\n%s:\n' "$(_t 'capabilities')"
+  printf '  %s: %s\n' "$(_t 'library modules')" "$__mods"
+  printf '  %s: %s\n' "$(_t 'public functions')" "$__fns"
+  printf '  %s: %s\n' "$(_t 'commands')" "${#SK_CLI_NAMES[@]}"
+  return "$SK_OK"
+}
+
+# ---------- man ----------
+
+cmd_man() {
+  local __out=""
+
+  while [ "$#" -gt 0 ]; do
+    case "$1" in
+      -h | --help)
+        cli_usage_cmd man
+        return "$SK_OK"
+        ;;
+      --out)
+        shift
+        __out=${1:-}
+        if [ -z "$__out" ]; then
+          log_error "$(_t 'missing directory for --out')"
+          return "$SK_USAGE"
+        fi
+        ;;
+      --out=*)
+        __out=${1#--out=}
+        ;;
+      --)
+        shift
+        break
+        ;;
+      *)
+        log_error "$(_t 'unknown option'): $1"
+        return "$SK_USAGE"
+        ;;
+    esac
+    shift
+  done
+  if [ "$#" -gt 0 ]; then
+    log_error "$(_t 'unexpected argument'): $1"
+    return "$SK_USAGE"
+  fi
+
+  # man 模块可以按需不加载（SHELLKIT_MODULES）；这时候说清楚，而不是 command not found
+  if ! command -v man_page >/dev/null 2>&1; then
+    log_error "$(_t 'the man module is not loaded'): SHELLKIT_MODULES"
+    return "$SK_PRECOND"
+  fi
+
+  if [ -n "$__out" ]; then
+    if [ ! -d "$__out" ]; then
+      log_error "$(_t 'output directory does not exist'): $__out"
+      return "$SK_PRECOND"
+    fi
+    man_write_all "$__out" || {
+      log_error "$(_t 'failed to write man pages'): $__out"
+      return "$SK_PRECOND"
+    }
+    log_ok "$(_t 'wrote man pages'): $__out"
+    return "$SK_OK"
+  fi
+
+  # stdout 只给数据：roff 正文直接吐出去，重定向到文件就是一页 man
+  man_page
   return "$SK_OK"
 }
 

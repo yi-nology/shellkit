@@ -4,7 +4,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: shellkit\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-11-09 20:47+0800\n"
+"POT-Creation-Date: 2026-11-09 21:18+0800\n"
 "PO-Revision-Date: 2026-11-08 00:00+0800\n"
 "Last-Translator: shellkit contributors\n"
 "Language-Team: shellkit contributors\n"
@@ -383,6 +383,9 @@ msgstr ""
 msgid "regenerate the API reference"
 msgstr ""
 
+msgid "generate man pages"
+msgstr ""
+
 msgid "print a shell completion script"
 msgstr ""
 
@@ -579,6 +582,30 @@ msgid "templates"
 msgstr ""
 
 msgid "commands"
+msgstr ""
+
+msgid "capabilities"
+msgstr ""
+
+msgid "public functions"
+msgstr ""
+
+msgid "missing directory for --out"
+msgstr ""
+
+msgid "unexpected argument"
+msgstr ""
+
+msgid "the man module is not loaded"
+msgstr ""
+
+msgid "output directory does not exist"
+msgstr ""
+
+msgid "failed to write man pages"
+msgstr ""
+
+msgid "wrote man pages"
 msgstr ""
 
 msgid "vendored library is out of date"

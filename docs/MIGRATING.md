@@ -49,7 +49,7 @@ shellkit vendor .
 ```
 your-project/
 └─ vendor/shellkit/
-   ├─ lib/           17 个模块（bootstrap.sh + core/*.sh）
+   ├─ lib/           18 个模块（bootstrap.sh + core/*.sh）
    ├─ locale/        gettext 译文（en / zh_CN / zh_Hant）
    ├─ templates/     脚手架模板（副本自己就能 new / upgrade）
    ├─ tests/         测试基建（test_helper.sh + run.sh）
@@ -69,7 +69,7 @@ set -euo pipefail
 . "$(cd "$(dirname "$0")/.." && pwd)/vendor/shellkit/lib/bootstrap.sh"
 ```
 
-就这些。`bootstrap.sh` 会按拓扑序把 17 个模块加载好，设置 `SK_*` 常量与退出码，
+就这些。`bootstrap.sh` 会按拓扑序把 18 个模块加载好，设置 `SK_*` 常量与退出码，
 **不改你的 shell 选项、不改 cwd**——你的脚本还是你说了算。
 
 ### 为什么是 `vendor/` 而不是装到系统里
@@ -154,6 +154,39 @@ shellkit vendor . --check    # 只比对，不写盘
 
 新增门禁：`make versions-check`（`VERSION` 与 pot 头、README、站点的版本引用是否一致）已并入
 `make check`。新增命令：`make release VERSION=x.y.z` / `make release-dry VERSION=x.y.z`。
+
+
+### 0.9.0 → 0.10.0：会改变结果的行为变化
+
+这一版修的是**一类静默失效的缺陷**。Bash 的 `printf -v` 写的是「最近一层声明了该名字的
+作用域」：出参名一旦和出参链路上某个局部变量同名，内容就写回库自己那层 —— 你的变量
+还是旧值，**不报错、不崩**。其中一处已经害得交互式问答**永远拿不到用户输入**。
+
+| 变化 | 以前 | 现在 | 你会在哪里撞到 |
+|---|---|---|---|
+| 交互式 `ask` / `ask_yn` / `ask_choice` / `confirm` | 在真终端里也永远回退默认值，用户输入被丢弃 | 正常拿到用户输入 | 用交互问答的脚本：以前问一百遍拿到的都是默认值 |
+| 出参名撞上内部保留名 | 静默失效：结果写丢，函数却返回 0 | 返回 2（用法错），并说明撞了哪个名字 | 只有用了保留名单里那些名字的调用方会变 —— 那些名字以前就是不工作的 |
+| 模板里 `cli_opt __target` | `--target` 的值写进库内部变量，调用方永远读到空 | 正常写进调用方的变量 | 生成的工程里用了 `--target` 选项的脚本 |
+
+保留名单是**精确**的：只有真正会撞车的名字在里面，不是「`__` 前缀一律拒绝」。
+用别的名字（哪怕带 `__` 前缀）照常能用 —— `ask __my_answer` 不受影响。
+名单由 `tools/check_local_names.sh` 守着：库内部新增局部变量却忘了进名单，门禁就红。
+
+新增的能力（都是加法，既有行为不变）：
+
+- `shellkit man` —— 生成 man page：第 1 节是命令总览，第 3 节每个模块一页（函数签名、
+  返回码、交叉引用）。数据来自 CLI 注册表与函数注释，**不另维护一份清单** —— 加一个命令、
+  改一句函数说明，man 页自动跟着变。`shellkit man --out DIR` 把 `shellkit.1` 与每个模块的
+  `shellkit-<模块>.3` 写进目录（vendor 副本里也能生成：副本自带库与清单）。
+- `man` 模块 —— `man_page` / `man_module_page` / `man_write_all` / `man_modules` /
+  `man_count_functions`，库函数层面也能用。
+- `shellkit list` 增一段**能力概览**（模块数、公开函数数、命令数）——数字全部现算，
+  不写死。
+- 新门禁 `tools/check_module_count.sh` —— 文档里手抄的「N 个模块」必须与 `lib/modules.txt`
+  一致（模块数在六个地方手抄，加一个模块必然漂移）。
+- 新门禁 `tools/check_local_names.sh` —— 库内部局部变量一律 `__` 前缀；出参链路上的局部
+  变量必须进保留名单；公开出参入口必须挡住保留名。
+
 
 ### 0.8.1 → 0.9.0：会改变结果的行为变化
 

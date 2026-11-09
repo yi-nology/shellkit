@@ -1015,3 +1015,47 @@ cli_opts ARGS... —— 按 cli_opt 注册的规则解析子命令选项；剩�
 - 0 解析成功（剩余位置参数在 SK_OPTS_LEFT）
 - 2 选项不认识或缺值
 
+## man
+
+### `man_modules`
+
+man_modules —— 输出模块名，一行一个
+
+**退出码**
+
+- 0 总是成功
+
+### `man_page`
+
+man_page —— 输出 shellkit(1) 的 roff 正文
+
+**退出码**
+
+- 0 总是成功
+
+### `man_module_page`
+
+man_module_page MODULE —— 输出某模块第 3 节的 roff 正文
+
+**退出码**
+
+- 0 成功
+- 2 模块名不合法或模块不存在
+
+### `man_write_all`
+
+man_write_all DIR —— 把所有页面写进 DIR
+
+**退出码**
+
+- 0 全部写成功
+- 3 目录不存在或不可写
+
+### `man_count_functions`
+
+man_count_functions —— 公开函数总数
+
+**退出码**
+
+- 0 总是成功
+

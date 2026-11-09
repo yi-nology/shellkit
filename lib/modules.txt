@@ -37,3 +37,4 @@ http         error i18n log
 config       fs i18n log str validate
 prompt       error i18n log str
 cli          error i18n log str
+man          cli error i18n log str

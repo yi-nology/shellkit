@@ -4,7 +4,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: shellkit\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-11-09 20:47+0800\n"
+"POT-Creation-Date: 2026-11-09 21:18+0800\n"
 "PO-Revision-Date: 2026-11-08 00:00+0800\n"
 "Last-Translator: shellkit contributors\n"
 "Language-Team: shellkit contributors\n"
@@ -383,6 +383,9 @@ msgstr "文件"
 msgid "regenerate the API reference"
 msgstr "重新產生 API 參考"
 
+msgid "generate man pages"
+msgstr "產生 man 手册頁"
+
 msgid "print a shell completion script"
 msgstr "輸出 shell 補全腳本"
 
@@ -580,6 +583,30 @@ msgstr "樣板"
 
 msgid "commands"
 msgstr "指令"
+
+msgid "capabilities"
+msgstr "能力概覽"
+
+msgid "public functions"
+msgstr "公開函式"
+
+msgid "missing directory for --out"
+msgstr "--out 缺少目錄參數"
+
+msgid "unexpected argument"
+msgstr "多餘參數"
+
+msgid "the man module is not loaded"
+msgstr "man 模組沒有載入"
+
+msgid "output directory does not exist"
+msgstr "輸出目錄不存在"
+
+msgid "failed to write man pages"
+msgstr "寫 man 手册頁失敗"
+
+msgid "wrote man pages"
+msgstr "已寫入 man 手册頁"
 
 msgid "vendored library is out of date"
 msgstr "專案內的程式庫副本已過期"

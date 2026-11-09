@@ -25,6 +25,7 @@ just another way of hitting the same trap twice.
 | [scaffold](/en/reference/scaffold.md) | template variables, manifests, hooks | `scaffold_vars_set` `scaffold_vars_get` `scaffold_config_load` `scaffold_render` `scaffold_manifest_read` `scaffold_run_hook` |
 | [prompt](/en/reference/prompt.md) | interaction | `ask` `ask_yn` `ask_choice` `confirm` |
 | [cli](/en/reference/cli.md) | registered-command framework | `cli_group` `cli_cmd` `cli_run` `cli_opt` `cli_opts` `cli_has` `cli_usage_global` |
+| [man](/en/reference/man.md) | man page generation | `man_page` `man_module_page` `man_write_all` `man_modules` `man_count_functions` |
 
 ## Load order is not alphabetical
 

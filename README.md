@@ -202,6 +202,7 @@ SHELLKIT_MODULES="log fs" . ./vendor/shellkit/lib/bootstrap.sh
 | `scaffold` | `scaffold_vars_set` `scaffold_vars_get` `scaffold_manifest_read` `scaffold_render` | 模板变量渲染、生成物清单、生成前后钩子 |
 | `prompt` | `ask` `ask_yn` `ask_choice` `confirm` | 超时回退默认值；EOF 与超时区分处理 |
 | `cli` | `cli_group` `cli_cmd` `cli_run` `cli_opt` `cli_opts` `cli_completion_script` | 注册即生效，`declare -F` 动态分发 |
+| `man` | `man_page` `man_module_page` `man_write_all` `man_modules` `man_count_functions` | 从注册表与函数注释生成 man page，不另维护清单 |
 
 ### 退出码
 
@@ -436,7 +437,7 @@ shellkit                  生成器入口（也 source 自己的库）
 lib/bootstrap.sh          唯一入口，按 lib/modules.txt 的顺序加载
                           SHELLKIT_MODULES="log fs" 只加载这两个模块和它们的传递依赖
 lib/modules.txt           模块清单的唯一真相源：模块名 + 它依赖的模块
-lib/core/*.sh             17 个模块
+lib/core/*.sh             18 个模块
 templates/                shellkit new 的模板
 tests/                    断言库 + 逐文件执行器 + 每个模块一个测试
 tools/                    shdoc.awk 渲染 / comment_coverage.awk 查漏 / check_docs.sh 门禁 / term_shot.py 截图
