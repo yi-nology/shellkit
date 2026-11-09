@@ -88,6 +88,22 @@ fs_backup /etc/app/conf 5
 
 你可以在入口脚本里放心开 `set -euo pipefail`，库不会把它关掉，也不会加别的全局副作用。
 
+但有一条要跟 `pipefail` 一起想清楚：**它会改变管道的语义**。`grep -q` 命中就退出，管道上游
+还在往里写，于是上游被 SIGPIPE 打死（退出码 141）。平时看不出来 —— 141 只出现在
+`PIPESTATUS` 里；可 `pipefail` 让整条管道按 141 判失败，于是「查到了」变成「没查到」。
+库内部因此不写「上游可能多行输出、消费者提前退出」的管道：
+
+```bash
+# 危险：grep -q 命中即退，上游可能被 SIGPIPE 打死（141）
+man_modules | grep -qx "$name"
+
+# 稳妥：让消费者读完整个输入
+man_modules | grep -x "$name" >/dev/null
+```
+
+你自己脚本里开 `pipefail` 之前也过一遍这条：`cmd | grep -q` 里的 `cmd` 如果可能输出多行，
+就改成 `grep -q 模式 文件`，或者让 `grep` 读完整个输入。
+
 ## 相关的两条实践
 
 - **失败要带既定退出码**，不要一律 `exit 1`。见 [故障排查](./troubleshooting.md) 的退出码表。

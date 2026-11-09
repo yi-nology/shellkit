@@ -95,6 +95,23 @@ Likewise the library never `cd`s. Functions that need another directory do it in
 So you can safely enable `set -euo pipefail` in your entry point. The library will not switch it off, and adds no
 other global side effects.
 
+One interaction with `pipefail` deserves spelling out: **it changes what a pipeline means**. `grep -q` exits as
+soon as it matches while the producer is still writing, so the producer is killed by SIGPIPE (exit code 141).
+That is invisible in normal use -- 141 only shows up in `PIPESTATUS` -- but `pipefail` makes the whole pipeline
+fail with 141, so "found it" turns into "it failed". The library therefore never writes a pipeline whose
+consumer exits early while the producer may emit more than one line:
+
+```bash
+# Dangerous: grep -q exits on the first match, the producer may be killed by SIGPIPE (141)
+man_modules | grep -qx "$name"
+
+# Safe: let the consumer read the whole input
+man_modules | grep -x "$name" >/dev/null
+```
+
+Before you enable `pipefail` in your own script, check it the same way: when the `cmd` in `cmd | grep -q` may
+print more than one line, use `grep -q pattern file` instead, or let `grep` read everything.
+
 ## Two related practices
 
 - **Fail with the documented exit code**, never a blanket `exit 1`. See the exit-code table in [Troubleshooting](./troubleshooting.md).

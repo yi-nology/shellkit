@@ -6,7 +6,7 @@
 make check
 ```
 
-十二步全绿才算过。单跑某一步：
+十五步全绿才算过。单跑某一步：
 
 ```bash
 bash tests/run.sh
@@ -15,6 +15,7 @@ bash tools/check_versions.sh
 bash tools/check_docs.sh
 bash tools/check_module_order.sh
 bash tools/check_exitcode_docs.sh
+bash tools/check_pipe_safety.sh
 ```
 
 ## 加一个模块要改三处，少一处就红

@@ -98,7 +98,7 @@ unstub curl
 
 同一套办法也用于 `date`（钉死时间，测备份文件名）、`sleep`（不真睡，测重试延迟区间）。
 
-## 门禁：`make check` 的十四步
+## 门禁：`make check` 的十五步
 
 | 步骤 | 拦什么 |
 | --- | --- |
@@ -109,6 +109,7 @@ unstub curl
 | `check-exitcode-docs` | 公开函数没写明返回码，或注释块与函数之间有空行 |
 | `local-names-check` | 库内部局部变量没用 `__` 前缀；出参链路上的局部变量没进保留名单（用那个名字的调用方会静默拿到旧值） |
 | `module-count-check` | 文档里手抄的「N 个模块」与 `lib/modules.txt` 对不上 |
+| `pipe-safety-check` | 管道里有会提前退出的消费者（`grep -q` / `head`）：上游会被 SIGPIPE 打死，调用方开了 `pipefail` 时整条管道误判失败 |
 | `docs-check` | 公开函数缺注释、生成物与源码不一致 |
 | `versions-check` | `VERSION` 与五处投影是否一致 |
 | `check-docs` | markdown 的 bash 代码块必须 `bash -n` 通过；函数名必须真实存在 |

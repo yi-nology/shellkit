@@ -40,15 +40,18 @@
 ## 门禁
 
     make check     # syntax + test + lint + module-order-check + check-exitcode-docs +
-                  # local-names-check + docs-check + versions-check + check-docs +
+                  # local-names-check + module-count-check + pipe-safety-check +
+                  # docs-check + versions-check + check-docs +
                   # cookbook-check + messages-check + examples + fmt，CI 也是这组
 
 `docs-check` 会拦两种事：公开函数缺注释、`docs/` 里的生成物与源码不一致。
 `lint` 是 `shellcheck -S warning -x`，模板会先渲染再检查（占位符不是合法语法）。
 `local-names-check` 拦的是「同名遮蔽」：出参名撞上出参链路上的某个 local 时，
 内容会静默写丢（见下面第 4 条）。
+`pipe-safety-check` 拦的是「管道早退」：`grep -q` / `head` 命中即退，上游被 SIGPIPE 打死，
+调用方开了 `pipefail` 时整条管道误判失败（见下面第 5 条）。
 
-## 四个已经踩过的坑
+## 五个已经踩过的坑
 
 1. **bash 3.2 与 5 的 trap 语义不同**：子 shell 里 `trap -p EXIT`，3.2 读到空，5.x 仍打印
    父 shell 的 trap 但子 shell 退出时不执行。所以幂等不能只查 `trap -p`，看到是自己的
@@ -60,6 +63,9 @@
    prompt.sh 曾因此让交互式 `ask` 永远拿不到用户输入。公开出参入口一律先调
    `_sk_check_out_name` 挡住保留名；链路上新增局部变量要同步进那份名单
    （`tools/check_local_names.sh` 会查漂移）。
+5. **`grep -q` / `head` 会把管道上游 SIGPIPE 打死**：命中即退，上游还在写就被杀（141）。
+   调用方一开 `set -o pipefail`，整条管道按 141 判失败 —— 「查到了」变成「没查到」，
+   而且是竞态（本机常绿、CI 必炸）。库里不写这种管道；`tools/check_pipe_safety.sh` 盯着。
 
 ## 本场景的验证
 
@@ -72,6 +78,7 @@
     bash tools/check_local_names.sh  # 只看命名空间与出参保留名单对不对
     bash tools/check_exitcode_docs.sh # 只看公开函数有没有写明返回码
     bash tools/check_cookbook_count.sh # 只看文档里说的场景数对不对
+    bash tools/check_pipe_safety.sh  # 只看管道里有没有会提前退出的消费者
     make site                         # 构建文档站（先从 docs/ 同步，再查产物内部链接）
 
 ## 发版
