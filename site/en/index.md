@@ -41,7 +41,7 @@ curl -fsSL https://github.com/yi-nology/shellkit/releases/latest/download/instal
 curl -fsSL https://github.com/yi-nology/shellkit/releases/latest/download/install.sh | VERSION=0.6.0 bash
 ```
 
-Current version **0.6.0** — [Download 0.6.0](https://github.com/yi-nology/shellkit/releases/latest).
+Current version **[Download 0.6.0](https://github.com/yi-nology/shellkit/releases/latest)**.
 If the sha256 does not match it exits 5 and writes nothing.
 
 ## Real terminal output

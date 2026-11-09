@@ -76,6 +76,32 @@ _check "site/en/guide/installation.md" "VERSION=" \
 _check "site/en/guide/installation.md" "tarball name" \
   $(grep -Eo 'shellkit-[0-9]+\.[0-9]+\.[0-9]+\.tar\.gz' "$ROOT/site/en/guide/installation.md" | sed 's/^shellkit-//; s/\.tar\.gz$//')
 
+# _check_no_stray FILE LABEL —— 页面里出现任何 x.y.z 形态的串，都必须等于 VERSION。
+#
+# 为什么需要这条：release.sh 是按「带上下文的模式」替换的（VERSION= / 下载 / Download /
+# shellkit-x.y.z.tar.gz），所以**裸版本号**（比如正文里的「当前版本 0.6.0」）不在任何
+# 替换规则里 —— 发版后它会留在原地，页面变成「当前版本 0.6.0 —— 下载 0.7.0」。
+# 逐条模式检查抓不到这种漏改，因为它查的是「该在的地方在不在」，不是「不该在的在不在」。
+#
+# 白名单是 bash 版本（3.2.57 之类），它与项目版本无关。
+_check_no_stray() {
+  local __file=$1 __label=$2 __v
+  for __v in $(grep -Eo '[0-9]+\.[0-9]+\.[0-9]+' "$ROOT/$__file" 2>/dev/null | sort -u); do
+    case "$__v" in
+      3.2.*) continue ;;
+    esac
+    if [ "$__v" != "$_ver" ]; then
+      printf 'versions-check: %s: %s has a stray version %s (VERSION says %s)\n' \
+        "$__file" "$__label" "$__v" "$_ver" >&2
+      _fail=1
+    fi
+  done
+}
+_check_no_stray "site/index.md" "homepage"
+_check_no_stray "site/en/index.md" "homepage"
+_check_no_stray "site/guide/installation.md" "install guide"
+_check_no_stray "site/en/guide/installation.md" "install guide"
+
 # shellcheck disable=SC2046
 _check "locale/shellkit.pot" "Project-Id-Version" \
   $(grep -Eo 'Project-Id-Version: shellkit [0-9]+\.[0-9]+\.[0-9]+' "$ROOT/locale/shellkit.pot" |
