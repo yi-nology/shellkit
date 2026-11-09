@@ -9,16 +9,23 @@ printf 'shellkit net test\n' >"$src"
 sum=$(net_sha256 "$src")
 assert_eq "$(os_sha256 "$src")" "$sum" "net_sha256 matches os_sha256"
 
-dst="$d/dst.txt"
-net_download "file://$src" "$dst" "$sum" 2>/dev/null
-assert_eq "shellkit net test" "$(cat "$dst")" "net_download content"
+# 真下载一次：file:// 走的是同一条 curl 路径。没有 curl 也没有 wget 时这条路
+# 根本跑不了（net_download 会以 3 退出）—— 环境差异不该把测试判红，跳过；
+# 下面 stub 覆盖的分支照跑。
+if command -v curl >/dev/null 2>&1 || command -v wget >/dev/null 2>&1; then
+  dst="$d/dst.txt"
+  net_download "file://$src" "$dst" "$sum" 2>/dev/null
+  assert_eq "shellkit net test" "$(cat "$dst")" "net_download content"
 
-net_download "file://$src" "$dst" "$sum" 2>/dev/null
-assert_eq "shellkit net test" "$(cat "$dst")" "net_download reuses cache"
+  net_download "file://$src" "$dst" "$sum" 2>/dev/null
+  assert_eq "shellkit net test" "$(cat "$dst")" "net_download reuses cache"
 
-bad="$d/bad.txt"
-assert_exit_code 5 net_download "file://$src" "$bad" "0000000000000000000000000000000000000000000000000000000000000000"
-assert_false test -f "$bad"
+  bad="$d/bad.txt"
+  assert_exit_code 5 net_download "file://$src" "$bad" "0000000000000000000000000000000000000000000000000000000000000000"
+  assert_false test -f "$bad"
+else
+  printf 'skip: neither curl nor wget is installed, the real download cases are not run\n' >&2
+fi
 
 assert_true net_verify "$src" "$sum"
 assert_exit_code 5 net_verify "$src" "deadbeef"

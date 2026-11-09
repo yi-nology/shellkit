@@ -134,34 +134,42 @@ assert_eq "$(cat "$TEST_ROOT/VERSION")" "$("$work/fromtree/bin/shellkit" --versi
   "install.sh installs the working tree when run from a checkout"
 
 # 远端路径：file:// 假 release，跑的是真实的 下载 → 校验 → 解包 → install-self
-rel=$work/rel
-mkdir -p "$rel/v9.9.9"
-cp "$fake" "$rel/v9.9.9/shellkit-9.9.9.tar.gz"
-printf '%s  %s\n' "$(_sha "$rel/v9.9.9/shellkit-9.9.9.tar.gz")" "shellkit-9.9.9.tar.gz" \
-  >"$rel/v9.9.9/SHA256SUMS"
-printf '{"tag_name":"v9.9.9"}\n' >"$rel/release.json"
+#
+# 这一段必须真的下载：install.sh 自己就要求 curl 或 wget，没有这个下载器时它会
+# 以 3 退出并说「curl or wget is required to download」。那是环境差异，不是缺陷 ——
+# 按仓库惯例（test_makefile.sh / test_http.sh 同样处理）跳过，不要报成假红。
+if command -v curl >/dev/null 2>&1 || command -v wget >/dev/null 2>&1; then
+  rel=$work/rel
+  mkdir -p "$rel/v9.9.9"
+  cp "$fake" "$rel/v9.9.9/shellkit-9.9.9.tar.gz"
+  printf '%s  %s\n' "$(_sha "$rel/v9.9.9/shellkit-9.9.9.tar.gz")" "shellkit-9.9.9.tar.gz" \
+    >"$rel/v9.9.9/SHA256SUMS"
+  printf '{"tag_name":"v9.9.9"}\n' >"$rel/release.json"
 
-assert_exit_code 0 env \
-  SHELLKIT_RELEASE_API="file://$rel/release.json" \
-  SHELLKIT_RELEASE_BASE="file://$rel" \
-  "$installer" --remote --prefix "$work/remote"
-assert_eq "9.9.9" "$("$work/remote/bin/shellkit" --version)" "remote install lands on the release version"
+  assert_exit_code 0 env \
+    SHELLKIT_RELEASE_API="file://$rel/release.json" \
+    SHELLKIT_RELEASE_BASE="file://$rel" \
+    "$installer" --remote --prefix "$work/remote"
+  assert_eq "9.9.9" "$("$work/remote/bin/shellkit" --version)" "remote install lands on the release version"
 
-assert_eq "9.9.9" \
-  "$(SHELLKIT_RELEASE_API="file://$rel/release.json" "$installer" --check --prefix "$work/remote" 2>/dev/null)" \
-  "--check prints the latest version on stdout"
+  assert_eq "9.9.9" \
+    "$(SHELLKIT_RELEASE_API="file://$rel/release.json" "$installer" --check --prefix "$work/remote" 2>/dev/null)" \
+    "--check prints the latest version on stdout"
 
-# 校验不过的包一个字节都不许落地
-bad=$work/bad
-mkdir -p "$bad/v9.9.9"
-cp "$fake" "$bad/v9.9.9/shellkit-9.9.9.tar.gz"
-printf '0000  %s\n' "shellkit-9.9.9.tar.gz" >"$bad/v9.9.9/SHA256SUMS"
-assert_exit_code 5 env SHELLKIT_RELEASE_BASE="file://$bad" \
-  "$installer" --version 9.9.9 --prefix "$work/badprefix"
-assert_false test -e "$work/badprefix/share/shellkit/shellkit"
+  # 校验不过的包一个字节都不许落地
+  bad=$work/bad
+  mkdir -p "$bad/v9.9.9"
+  cp "$fake" "$bad/v9.9.9/shellkit-9.9.9.tar.gz"
+  printf '0000  %s\n' "shellkit-9.9.9.tar.gz" >"$bad/v9.9.9/SHA256SUMS"
+  assert_exit_code 5 env SHELLKIT_RELEASE_BASE="file://$bad" \
+    "$installer" --version 9.9.9 --prefix "$work/badprefix"
+  assert_false test -e "$work/badprefix/share/shellkit/shellkit"
 
-assert_exit_code 0 "$installer" --uninstall --prefix "$work/remote"
-assert_false test -e "$work/remote/share/shellkit"
+  assert_exit_code 0 "$installer" --uninstall --prefix "$work/remote"
+  assert_false test -e "$work/remote/share/shellkit"
+else
+  printf 'skip: neither curl nor wget is installed, the remote install cases are not run\n' >&2
+fi
 assert_exit_code 3 "$installer" --uninstall --prefix "$work/absent"
 assert_exit_code 2 "$installer" --bogus
 
