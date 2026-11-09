@@ -76,14 +76,14 @@ CI 绿了不等于用户装得上。这四个动作是发版的验收标准：
 gh run list --workflow=release.yml --limit 1
 
 # 2. 三个资产都在吗
-gh release view v0.6.0 --json tagName,isDraft,isPrerelease,assets
+gh release view v0.7.0 --json tagName,isDraft,isPrerelease,assets
 
 # 3. 下载校验和 + 装一遍 + 自检
 work=$(mktemp -d)
 curl -fsSLO --output-dir "$work" \
-  https://github.com/yi-nology/shellkit/releases/download/v0.6.0/SHA256SUMS
+  https://github.com/yi-nology/shellkit/releases/download/v0.7.0/SHA256SUMS
 curl -fsSLO --output-dir "$work" \
-  https://github.com/yi-nology/shellkit/releases/download/v0.6.0/shellkit-0.6.0.tar.gz
+  https://github.com/yi-nology/shellkit/releases/download/v0.7.0/shellkit-0.7.0.tar.gz
 (cd "$work" && shasum -a 256 -c SHA256SUMS)
 
 # 4. 装好的副本能干活：版本、自检、文档产物、生成工程能跑测试

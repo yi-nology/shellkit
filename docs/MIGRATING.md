@@ -149,6 +149,30 @@ shellkit vendor . --check    # 只比对，不写盘
 新增门禁：`make versions-check`（`VERSION` 与 pot 头、README、站点的版本引用是否一致）已并入
 `make check`。新增命令：`make release VERSION=x.y.z` / `make release-dry VERSION=x.y.z`。
 
+### 0.6.0 → 0.7.0：会改变结果的行为变化
+
+**没有会改变结果的行为变化。** 0.7.0 的库函数行为与 0.6.0 完全一致：返回码、产出文件名、
+输出文本、退出码语义都没动。所以升级不需要改任何代码。
+
+这次改的是**文档站**与**文档本身**：
+
+| 变化 | 以前 | 现在 | 你会在哪里撞到 |
+|---|---|---|---|
+| 站点 | 单页手写落地页 | VuePress 文档站，中英双语、带站内搜索、按模块分页 | 书签了 `https://yi-nology.github.io/shellkit/` 的人会看到新界面；URL 前缀不变，深链接不受影响 |
+| API 参考 | 83 个公开函数里 37 个只有一行签名 | 每个函数都有中文摘要（做什么、失败返回什么） | 从 `docs/REFERENCE.md` 抄注释的人会看到更长的摘要行 |
+| `cli_opts` 的签名注释 | 写的是 `cli_opts NAME ARGS...` | 改成 `cli_opts ARGS...`（实现本来就不接 NAME） | 按注释猜签名的人会发现注释以前是错的；**代码行为没变** |
+
+站点里那四类同步页（Cookbook、迁移、发版、API 参考）由 `tools/site_sync.sh` 从 `docs/`
+生成，**不要在 `site/` 里直接改** —— 下次构建会被覆盖。
+
+新增门禁与命令：
+
+- `bash tools/site_links.sh [dist]` —— 构建产物上的内部链接校验。主题自带的 links-check
+  不会让坏链导致构建失败，所以另有一道这道门；退出码 5 表示有坏链。
+- `make site` / `make site-serve` / `make site-deps` / `make site-sync` —— 构建与本地预览文档站。
+  刻意**不进** `make check`：库的门禁不依赖 Node，没装 npm 的机器上也该能全绿。
+- `make versions-check` 现在多管四处：两个首页与两个安装页的钉版本示例。
+
 ## 渐进迁移：5 步，每步都能单独上线
 
 顺序按"收益 / 风险"排，**不要跳着一次全换**。
