@@ -65,9 +65,16 @@ jobs:
         run: |
           # install.sh 也作为资产发布：releases/latest/download/install.sh 是稳定地址，
           # raw.githubusercontent.com 在部分地区不可达，网页上那条一行命令要能走 release。
-          gh release create "$GITHUB_REF_NAME" \
-            "dist/shellkit-$(cat VERSION).tar.gz" \
-            "dist/SHA256SUMS" \
-            install.sh \
-            --title "shellkit $(cat VERSION)" \
-            --generate-notes
+          tag="$GITHUB_REF_NAME"
+          assets=("dist/shellkit-$(cat VERSION).tar.gz" "dist/SHA256SUMS" "install.sh")
+          if gh release view "$tag" >/dev/null 2>&1; then
+            # 同一个 tag 被推了两次（比如先推轻量 tag、后来补推 annotated tag）时，
+            # 直接发布会以「release 已存在」失败，把整条流水线染红 —— 而产物其实
+            # 一模一样。这里改成刷新资产，幂等。
+            echo "release $tag already exists; refreshing its assets"
+            gh release upload "$tag" "${assets[@]}" --clobber
+          else
+            gh release create "$tag" "${assets[@]}" \
+              --title "shellkit $(cat VERSION)" \
+              --generate-notes
+          fi
