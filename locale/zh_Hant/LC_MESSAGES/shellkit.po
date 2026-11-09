@@ -4,7 +4,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: shellkit\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-11-09 18:44+0800\n"
+"POT-Creation-Date: 2026-11-09 19:52+0800\n"
 "PO-Revision-Date: 2026-11-08 00:00+0800\n"
 "Last-Translator: shellkit contributors\n"
 "Language-Team: shellkit contributors\n"
@@ -347,6 +347,9 @@ msgstr "路徑必須是絕對路徑"
 msgid "value not in allowed set"
 msgstr "值不在允許的集合中"
 
+msgid "the library is only partially loaded"
+msgstr "程式庫只載入了一部分"
+
 msgid "project generation"
 msgstr "產生專案"
 
@@ -485,11 +488,35 @@ msgstr "將更新"
 msgid "updated"
 msgstr "已更新："
 
+msgid "already running from the vendored copy"
+msgstr "已經在用 vendor 副本本身執行"
+
 msgid "failed to sync the vendored library"
 msgstr "同步程式庫副本失敗"
 
 msgid "upgrade finished"
 msgstr "升級完成"
+
+msgid "library file is missing"
+msgstr "程式庫檔案缺失"
+
+msgid "module files are missing"
+msgstr "模組檔案缺失"
+
+msgid "module file is empty"
+msgstr "模組檔案為空"
+
+msgid "module file has a syntax error"
+msgstr "模組檔案有語法錯誤"
+
+msgid "module files present"
+msgstr "模組檔案齊備"
+
+msgid "library integrity"
+msgstr "程式庫完整性"
+
+msgid "the library could not be loaded"
+msgstr "程式庫無法載入"
 
 msgid "environment check"
 msgstr "環境檢查"
@@ -514,6 +541,24 @@ msgstr "未安裝，lint 會被略過"
 
 msgid "not installed, format check will be skipped"
 msgstr "未安裝，格式檢查會被略過"
+
+msgid "vendor check"
+msgstr "vendor 校驗"
+
+msgid "vendor copy has drifted"
+msgstr "vendor 副本已漂移"
+
+msgid "the vendored library path is not a directory"
+msgstr "vendor 程式庫路徑不是目錄"
+
+msgid "vendor copy matches the bundled library"
+msgstr "vendor 副本與內建程式庫一致"
+
+msgid "no vendored library found"
+msgstr "未找到 vendor 程式庫"
+
+msgid "library integrity check failed"
+msgstr "程式庫完整性檢查未通過"
 
 msgid "required tooling is missing"
 msgstr "缺少必要的工具"
@@ -556,6 +601,12 @@ msgstr "註解覆蓋檢查失敗"
 
 msgid "public function has no doc comment"
 msgstr "公開函式缺少文件註解"
+
+msgid "this copy has no documentation sources"
+msgstr "這份副本裡沒有說明文件來源"
+
+msgid "run it from a shellkit source tree"
+msgstr "請在 shellkit 原始碼樹裡執行"
 
 msgid "failed to render"
 msgstr "產生文件失敗"

@@ -37,3 +37,27 @@ got=$(
   printf '%s' "$SK_VERSION"
 )
 assert_eq "$(cat "$TEST_ROOT/VERSION")" "$got" "vendored bootstrap reports the synced version"
+
+# ---- vendor 出来的副本必须自带「管它的工具」 ----
+#
+# 工程被 vendor 到别的机器上时，PATH 上不一定有 shellkit。如果副本里只有库，
+# 工程就永远升不了级 —— 而「升级」正是 vendor 这套机制存在的理由。
+if [ ! -f "$proj/vendor/shellkit/shellkit" ]; then
+  _fail "the vendored copy carries the CLI"
+fi
+if [ ! -d "$proj/vendor/shellkit/templates" ]; then
+  _fail "the vendored copy carries the templates"
+fi
+
+# 自带的 CLI 真能跑，而且报的是副本自己的版本
+vver=$(bash "$proj/vendor/shellkit/shellkit" --version 2>/dev/null || true)
+assert_eq "$(cat "$TEST_ROOT/VERSION")" "$vver" "the vendored CLI runs and reports the synced version"
+
+# 自带的 CLI 能把工程升级（离线：不依赖 PATH 上的 shellkit）
+assert_exit_code 0 bash "$proj/vendor/shellkit/shellkit" upgrade "$proj"
+
+# CLI 与模板漂移也要被 --check 抓到
+printf '# drift\n' >>"$proj/vendor/shellkit/shellkit"
+assert_exit_code 5 "$TEST_ROOT/shellkit" vendor "$proj" --check
+assert_exit_code 0 "$TEST_ROOT/shellkit" vendor "$proj"
+assert_exit_code 0 "$TEST_ROOT/shellkit" vendor "$proj" --check

@@ -21,7 +21,63 @@ while [ -L "$__self" ]; do
   esac
 done
 SELF_DIR="$(cd -P "$(dirname "$__self")" &>/dev/null && pwd)"
-. "$SELF_DIR/lib/bootstrap.sh"
+
+# _sk_preflight_modules —— 提前把每个模块过一遍语法
+#   bash 对 sourced 文件里的语法错误是致命的：整个脚本当场退出，doctor 连话都说不出来。
+#   所以在 source 之前先查一遍，坏了就走降级路径，把「哪个模块坏了」报出来。
+#   返回 0 = 都能解析；1 = 有模块语法坏了。
+_sk_preflight_modules() {
+  local __list="$SELF_DIR/lib/modules.txt" __line __name __f
+  [ -r "$__list" ] || return 0
+  while IFS= read -r __line || [ -n "$__line" ]; do
+    __line="${__line%%#*}"
+    case "$__line" in
+      '' | '#'*) continue ;;
+    esac
+    __name="${__line%%[[:space:]]*}"
+    [ -n "$__name" ] || continue
+    __f="$SELF_DIR/lib/core/${__name}.sh"
+    [ -f "$__f" ] || continue
+    if ! "${BASH:-bash}" -n "$__f" 2>/dev/null; then
+      return 1
+    fi
+  done <"$__list"
+  return 0
+}
+
+# 加载库。模块缺失或损坏时 bootstrap 会当场中止整个脚本 ——
+# 但 doctor 的职责之一正是报出「少了哪个模块」，所以这里容错：
+# 失败就记下来，转入只做自检的降级路径。
+SK_BOOTSTRAP_OK=1
+# 只有 doctor 需要在「库坏了」的时候还能活下来，别让它拖累别的命令的启动速度。
+for __sk_arg in "$@"; do
+  if [ "$__sk_arg" = "doctor" ]; then
+    if ! _sk_preflight_modules; then
+      SK_BOOTSTRAP_OK=0
+    fi
+    break
+  fi
+done
+unset __sk_arg
+if [ "$SK_BOOTSTRAP_OK" -eq 1 ]; then
+  if ! . "$SELF_DIR/lib/bootstrap.sh"; then
+    SK_BOOTSTRAP_OK=0
+  fi
+fi
+# bootstrap「成功」不等于库可用：modules.txt 缺失时它会加载零个模块也算成功。
+if [ "$SK_BOOTSTRAP_OK" -eq 1 ]; then
+  for __sk_need in log_error require_bash cli_run; do
+    if ! command -v "$__sk_need" >/dev/null 2>&1; then
+      printf 'shellkit: %s: %s\n' "$(_t 'the library is only partially loaded')" "$__sk_need" >&2
+      exit "$SK_PRECOND"
+    fi
+  done
+  unset __sk_need
+fi
+# 库没加载全时 i18n 可能没进来 —— 补一个只输出原文的 _t，让自检路径还能说话。
+if ! command -v _t >/dev/null 2>&1; then
+  _t() { printf '%s' "${1:-}"; }
+fi
 
 # 供 lib/core/cli.sh 生成 usage 前缀；跨文件使用，shellcheck 看不到
 # shellcheck disable=SC2034
@@ -32,25 +88,29 @@ SHELLKIT_RELEASE_API="${SHELLKIT_RELEASE_API:-https://api.github.com/repos/yi-no
 SHELLKIT_RELEASE_BASE="${SHELLKIT_RELEASE_BASE:-https://github.com/yi-nology/shellkit/releases/download}"
 export SHELLKIT_RELEASE_API SHELLKIT_RELEASE_BASE
 
-if ! require_bash 3 2; then
-  exit "$SK_PRECOND"
-fi
+# 库没加载起来时下面这套注册跑不了（cli 模块可能压根没进来），
+# 所以整块挂在 SK_BOOTSTRAP_OK 上：降级路径自己收尾。
+if [ "$SK_BOOTSTRAP_OK" -eq 1 ]; then
+  if ! require_bash 3 2; then
+    exit "$SK_PRECOND"
+  fi
 
-cli_group "$(_t 'project generation')"
-cli_cmd new "$(_t 'create a new project skeleton')" "new <dir> [--name NAME] [--cmd NAME]... [--template DIR] [--set K=V] [--yes]"
-cli_cmd upgrade "$(_t 'update a generated project to the current template')" "upgrade <dir> [--check] [--force]"
-cli_group "$(_t 'environment')"
-cli_cmd doctor "$(_t 'check the runtime environment')" "doctor"
-cli_cmd list "$(_t 'list templates and library modules')" "list"
-cli_group "$(_t 'existing projects')"
-cli_cmd vendor "$(_t 'sync the library into an existing project')" "vendor <dir> [--check]"
-cli_group "$(_t 'documentation')"
-cli_cmd docs "$(_t 'regenerate the API reference')" "docs [--check]"
-cli_cmd completion "$(_t 'print a shell completion script')" "completion [bash|zsh]"
-cli_group "$(_t 'installation')"
-cli_cmd install-self "$(_t 'install shellkit into PATH')" "install-self [--prefix DIR]"
-cli_cmd uninstall-self "$(_t 'remove an installed shellkit')" "uninstall-self [--prefix DIR]"
-cli_cmd update "$(_t 'update an installed shellkit')" "update [--check] [--from FILE] [--sha256 SUM] [--prefix DIR]"
+  cli_group "$(_t 'project generation')"
+  cli_cmd new "$(_t 'create a new project skeleton')" "new <dir> [--name NAME] [--cmd NAME]... [--template DIR] [--set K=V] [--yes]"
+  cli_cmd upgrade "$(_t 'update a generated project to the current template')" "upgrade <dir> [--check] [--force]"
+  cli_group "$(_t 'environment')"
+  cli_cmd doctor "$(_t 'check the runtime environment')" "doctor [--dir DIR]"
+  cli_cmd list "$(_t 'list templates and library modules')" "list"
+  cli_group "$(_t 'existing projects')"
+  cli_cmd vendor "$(_t 'sync the library into an existing project')" "vendor <dir> [--check]"
+  cli_group "$(_t 'documentation')"
+  cli_cmd docs "$(_t 'regenerate the API reference')" "docs [--check]"
+  cli_cmd completion "$(_t 'print a shell completion script')" "completion [bash|zsh]"
+  cli_group "$(_t 'installation')"
+  cli_cmd install-self "$(_t 'install shellkit into PATH')" "install-self [--prefix DIR]"
+  cli_cmd uninstall-self "$(_t 'remove an installed shellkit')" "uninstall-self [--prefix DIR]"
+  cli_cmd update "$(_t 'update an installed shellkit')" "update [--check] [--from FILE] [--sha256 SUM] [--prefix DIR]"
+fi
 
 # _sk_render SRC DST —— 用当前模板变量渲染文件（薄封装，逻辑在 scaffold 模块）
 #   占位符用双花括号形式，避免和 shell 的美元大括号混淆。
@@ -165,10 +225,26 @@ _sk_vendor_install() {
   __dest="$__dir/vendor/shellkit"
   fs_ensure_dir "$__dest" 755 || return 1
   # ${__dest:?} 是安全阀：万一变量异常为空，绝不让 rm 落到 /lib 上
-  rm -rf "${__dest:?}/lib" "${__dest:?}/locale" || return 1
+  # tools/ 与 docs/ 是 shellkit 仓库自己的门禁输入，**不进副本**：
+  # 副本的职责是「库能跟着工程走 + 工程能自己升级」，不是把仓库整套搬过去。
+  # 少了它们，副本里的 shellkit docs 会明确报前置条件错（见 cmd_docs）。
+  rm -rf "${__dest:?}/lib" "${__dest:?}/locale" "${__dest:?}/templates" || return 1
   cp -R "$SELF_DIR/lib" "$__dest/lib" || return 1
   cp -R "$SELF_DIR/locale" "$__dest/locale" || return 1
+  cp -R "$SELF_DIR/templates" "$__dest/templates" || return 1
+  # 只拷测试基建的两份文件：副本要能跑「渲染模板 → 生成工程」这条链，
+  # 而渲染要 tests/test_helper.sh 与 tests/run.sh。整份 tests/ 有几十个
+  # 仓库自测文件，工程用不上，不该进 vendor。
+  rm -rf "${__dest:?}/tests"
+  fs_ensure_dir "$__dest/tests" 755 || return 1
+  cp -f "$SELF_DIR/tests/test_helper.sh" "$__dest/tests/test_helper.sh" || return 1
+  cp -f "$SELF_DIR/tests/run.sh" "$__dest/tests/run.sh" || return 1
+  chmod 755 "$__dest/tests/run.sh" || return 1
   cp "$SELF_DIR/VERSION" "$__dest/VERSION" || return 1
+  # 副本必须自带 CLI：工程被 vendor 到别的机器时，PATH 上不一定有 shellkit。
+  # 没有 CLI，副本就永远升不了级 —— 而升级正是 vendor 这套机制存在的理由。
+  cp -f "$SELF_DIR/shellkit" "$__dest/shellkit" || return 1
+  chmod 755 "$__dest/shellkit" || return 1
   # MIT 许可证要求「副本里带上版权声明」，所以 vendor 出来的副本必须带 LICENSE 与 NOTICE
   _sk_copy_legal "$__dest" || return 1
   return 0
@@ -500,7 +576,7 @@ EOF
 
 cmd_upgrade() {
   local __dir="" __tpl="$SK_TPL_DIR" __check=0 __force=0
-  local __name __rel __old __cur __new __tmp __cmds_csv
+  local __name __rel __old __cur __new __tmp __cmds_csv __vdir
   local __updated=0 __skipped=0 __added=0
 
   while [ "$#" -gt 0 ]; do
@@ -644,7 +720,13 @@ EOF
   rm -rf "${__tmp:?}"
 
   if [ "$__check" != "1" ]; then
-    if ! _sk_vendor_install "$__dir"; then
+    # 正在用副本自己的 CLI 升级它自己时不能再去同步：同步会先删掉副本里的
+    # lib/ 再从它自己拷回去（源没了），而且 CLI 会往自己身上 cp。
+    __vdir="$__dir/vendor/shellkit"
+    __vdir=$(cd "$__vdir" 2>/dev/null && pwd -P) || __vdir="$__dir/vendor/shellkit"
+    if [ "$__vdir" = "$SELF_DIR" ]; then
+      log_info "$(_t 'already running from the vendored copy'): $SELF_DIR"
+    elif ! _sk_vendor_install "$__dir"; then
       log_error "$(_t 'failed to sync the vendored library')"
       return "$SK_ERR"
     fi
@@ -696,8 +778,244 @@ _sk_doctor_row() {
   printf '  %-6s %-12s %s\n' "$__status" "$__name" "$__detail"
 }
 
+# _sk_doctor_scan_modules —— 扫 lib/modules.txt，把「登记了但文件不在 / 是空的 / 坏了」的模块分开记下
+#   自己读清单，不依赖 bootstrap：库加载不全时也要能报出缺哪个模块。
+#   结果写进 _SK_DOCTOR_MOD_* 全局变量。
+#
+# 清单的读法只有一处定义：lib/bootstrap.sh 的 _sk_module_manifest
+# （第一列是模块名，第二列是依赖）。这里用 awk 取第一列，不再抄一份 bash 解析器 ——
+# 抄一份就多一个会漂移的地方。
+_SK_DOCTOR_MOD_COUNT=0
+_SK_DOCTOR_MOD_MISSING=""
+_SK_DOCTOR_MOD_EMPTY=""
+_SK_DOCTOR_MOD_BROKEN=""
+
+_sk_doctor_scan_modules() {
+  local __file="$SELF_DIR/lib/modules.txt" __name __f __bash
+  _SK_DOCTOR_MOD_COUNT=0
+  _SK_DOCTOR_MOD_MISSING=""
+  _SK_DOCTOR_MOD_EMPTY=""
+  _SK_DOCTOR_MOD_BROKEN=""
+  [ -r "$__file" ] || return 1
+  __bash="${BASH:-bash}"
+  while IFS= read -r __name; do
+    [ -n "$__name" ] || continue
+    __f="$SELF_DIR/lib/core/${__name}.sh"
+    _SK_DOCTOR_MOD_COUNT=$((_SK_DOCTOR_MOD_COUNT + 1))
+    if [ ! -f "$__f" ]; then
+      _SK_DOCTOR_MOD_MISSING="$_SK_DOCTOR_MOD_MISSING, $__name"
+      continue
+    fi
+    if [ ! -s "$__f" ]; then
+      _SK_DOCTOR_MOD_EMPTY="$_SK_DOCTOR_MOD_EMPTY, $__name"
+      continue
+    fi
+    # 语法坏掉的模块要等 source 时才炸；这里提前一步，把它和「缺失」分开报
+    if ! "$__bash" -n "$__f" 2>/dev/null; then
+      _SK_DOCTOR_MOD_BROKEN="$_SK_DOCTOR_MOD_BROKEN, $__name"
+    fi
+  done <<EOF
+$(awk '{ sub(/#.*/, ""); if (NF > 0) print $1 }' "$__file")
+EOF
+  # 列表用逗号分隔，前面留的逗号在这里去掉
+  _SK_DOCTOR_MOD_MISSING="${_SK_DOCTOR_MOD_MISSING#, }"
+  _SK_DOCTOR_MOD_EMPTY="${_SK_DOCTOR_MOD_EMPTY#, }"
+  _SK_DOCTOR_MOD_BROKEN="${_SK_DOCTOR_MOD_BROKEN#, }"
+  return 0
+}
+
+# _sk_doctor_lib_check —— B 类检查：库自己的文件齐不齐
+#   返回 0 = 齐；1 = 有缺失/损坏（校验失败）
+_sk_doctor_lib_check() {
+  local __rc=0
+  if ! _sk_doctor_scan_modules; then
+    _sk_doctor_row "FAIL" "modules" "$(_t 'library file is missing'): lib/modules.txt"
+    return 1
+  fi
+  if [ -n "$_SK_DOCTOR_MOD_MISSING" ]; then
+    _sk_doctor_row "FAIL" "modules" "$(_t 'module files are missing'): $_SK_DOCTOR_MOD_MISSING"
+    __rc=1
+  fi
+  if [ -n "$_SK_DOCTOR_MOD_EMPTY" ]; then
+    _sk_doctor_row "FAIL" "modules" "$(_t 'module file is empty'): $_SK_DOCTOR_MOD_EMPTY"
+    __rc=1
+  fi
+  if [ -n "$_SK_DOCTOR_MOD_BROKEN" ]; then
+    _sk_doctor_row "FAIL" "modules" "$(_t 'module file has a syntax error'): $_SK_DOCTOR_MOD_BROKEN"
+    __rc=1
+  fi
+  if [ "$__rc" -eq 0 ]; then
+    _sk_doctor_row "OK" "modules" "$_SK_DOCTOR_MOD_COUNT $(_t 'module files present')"
+  fi
+
+  if [ -s "$SELF_DIR/lib/bootstrap.sh" ]; then
+    _sk_doctor_row "OK" "bootstrap" "lib/bootstrap.sh"
+  else
+    _sk_doctor_row "FAIL" "bootstrap" "$(_t 'library file is missing'): lib/bootstrap.sh"
+    __rc=1
+  fi
+
+  if [ -s "$SELF_DIR/VERSION" ]; then
+    _sk_doctor_row "OK" "version" "VERSION"
+  else
+    _sk_doctor_row "FAIL" "version" "$(_t 'library file is missing'): VERSION"
+    __rc=1
+  fi
+
+  if [ -d "$SELF_DIR/locale" ]; then
+    _sk_doctor_row "OK" "locale" "locale/"
+  else
+    _sk_doctor_row "FAIL" "locale" "$(_t 'library file is missing'): locale/"
+    __rc=1
+  fi
+  return "$__rc"
+}
+
+# _sk_doctor_file_list DIR —— 打印目录里全部文件的相对路径（排序）
+#   不用 diff -r：macOS 与 GNU 的 diff 参数不一致，逐文件比更稳。
+_sk_doctor_file_list() {
+  (
+    cd "$1" 2>/dev/null || exit 1
+    find . -type f -print | sed 's|^\./||' | LC_ALL=C sort
+  )
+}
+
+# _sk_doctor_same_file A B —— 两个文件逐字节一致才返回 0
+_sk_doctor_same_file() {
+  if command -v cmp >/dev/null 2>&1; then
+    cmp -s "$1" "$2"
+  else
+    diff -q "$1" "$2" >/dev/null 2>&1
+  fi
+}
+
+# _sk_doctor_dir_diff A B PREFIX —— 打印两个目录内容不同的相对路径（带前缀）
+#   一边缺文件、或内容不一样，都会列出来；没有差异就什么都不输出。
+_sk_doctor_dir_diff() {
+  local __a=$1 __b=$2 __pre=$3 __rel __list
+  __list=$(
+    {
+      _sk_doctor_file_list "$__a" 2>/dev/null || true
+      _sk_doctor_file_list "$__b" 2>/dev/null || true
+    } | LC_ALL=C sort -u
+  )
+  while IFS= read -r __rel; do
+    [ -n "$__rel" ] || continue
+    if [ ! -f "$__a/$__rel" ] || [ ! -f "$__b/$__rel" ]; then
+      printf '%s%s\n' "$__pre" "$__rel"
+      continue
+    fi
+    _sk_doctor_same_file "$__a/$__rel" "$__b/$__rel" || printf '%s%s\n' "$__pre" "$__rel"
+  done <<EOF
+$__list
+EOF
+}
+
+# _sk_doctor_vendor_check BASE —— C 类检查：BASE/vendor/shellkit 与自带副本是否逐字节一致
+#
+# 比的项目必须与 `shellkit vendor --check` **完全一致**。两处比的东西不一样是最难查的坑：
+# doctor 说「没漂移」、vendor --check 说「过期」，用户信谁？
+#   目录：lib/ locale/ templates/
+#   文件：VERSION shellkit tests/test_helper.sh tests/run.sh
+#   （tests/ 只比那两份 —— 副本里只有这两份，整目录比会误报漂移）
+#
+# 返回 0 = 通过（没有 vendor 也算通过）；1 = 漂移。
+# 结论写进 _SK_DOCTOR_VENDOR_* 全局变量。
+_SK_DOCTOR_VENDOR_STATE="none"
+_SK_DOCTOR_VENDOR_DETAIL=""
+
+_sk_doctor_vendor_check() {
+  local __root="$1/vendor/shellkit" __drift="" __item
+  _SK_DOCTOR_VENDOR_STATE="none"
+  _SK_DOCTOR_VENDOR_DETAIL=""
+  [ -e "$__root" ] || return 0
+  if [ ! -d "$__root" ]; then
+    _SK_DOCTOR_VENDOR_STATE="notdir"
+    return 0
+  fi
+  # 每一项都查完：只报第一处漂移的话，用户得反复跑 doctor 才能修完。
+  # 汇总用逗号分隔，最后统一去掉尾巴那个逗号。
+  for __item in lib locale templates; do
+    __one=$(_sk_doctor_dir_diff "$__root/$__item" "$SELF_DIR/$__item" "$__item/")
+    if [ -n "$__one" ]; then
+      __drift="$__drift$(printf '%s' "$__one" | tr '\n' ','), "
+    fi
+  done
+  for __item in VERSION shellkit tests/test_helper.sh tests/run.sh; do
+    if ! _sk_doctor_same_file "$__root/$__item" "$SELF_DIR/$__item"; then
+      __drift="$__drift$__item, "
+    fi
+  done
+  if [ -n "$__drift" ]; then
+    _SK_DOCTOR_VENDOR_STATE="drift"
+    _SK_DOCTOR_VENDOR_DETAIL="${__drift%, }"
+    return 1
+  fi
+  _SK_DOCTOR_VENDOR_STATE="ok"
+  return 0
+}
+
+# _sk_doctor_bootstrap_failed —— 库没加载起来时的降级自检
+#   这时候连 log_error 都可能不存在，所以只用 printf 往 stderr 写。
+#   退出码：用法错 2；库不完整 5。
+_sk_doctor_bootstrap_failed() {
+  local __arg __skip=0
+  for __arg in "$@"; do
+    if [ "$__skip" = "1" ]; then
+      __skip=0
+      continue
+    fi
+    case "$__arg" in
+      doctor) continue ;;
+      --dir)
+        __skip=1
+        continue
+        ;;
+      -V | --version)
+        printf '%s\n' "${SK_VERSION:-dev}"
+        return 0
+        ;;
+      -h | --help | --verbose | --no-color | -y | --yes) continue ;;
+      *)
+        printf 'shellkit: %s: %s\n' "$(_t 'unknown option')" "$__arg" >&2
+        return 2
+        ;;
+    esac
+  done
+
+  printf '%s\n' "$(_t 'library integrity')"
+  _sk_doctor_lib_check || true
+  printf '\n'
+  printf 'shellkit: %s\n' "$(_t 'the library could not be loaded')" >&2
+  return 5
+}
+
 cmd_doctor() {
-  local __missing=0 __optional_missing=0 __ver
+  local __dir="" __missing=0 __optional_missing=0 __verify=0 __ver
+  while [ "$#" -gt 0 ]; do
+    case "$1" in
+      --dir)
+        if [ "$#" -lt 2 ]; then
+          log_error "$(_t 'option requires a value'): $1"
+          return "$SK_USAGE"
+        fi
+        __dir=$2
+        shift
+        ;;
+      --dir=*) __dir="${1#*=}" ;;
+      -h | --help)
+        cli_usage_cmd doctor
+        return "$SK_OK"
+        ;;
+      *)
+        log_error "$(_t 'unknown option'): $1"
+        return "$SK_USAGE"
+        ;;
+    esac
+    shift
+  done
+  [ -n "$__dir" ] || __dir=$(pwd)
+
   printf '%s\n' "$(_t 'environment check')"
 
   __ver="${BASH_VERSION:-unknown}"
@@ -753,7 +1071,37 @@ cmd_doctor() {
   _sk_doctor_row "INFO" "os" "$(os_name)/$(os_arch)"
   _sk_doctor_row "INFO" "shellkit" "$SK_VERSION"
 
+  printf '\n%s\n' "$(_t 'library integrity')"
+  if ! _sk_doctor_lib_check; then
+    __verify=1
+  fi
+
+  printf '\n%s\n' "$(_t 'vendor check')"
+  if ! _sk_doctor_vendor_check "$__dir"; then
+    __verify=1
+  fi
+  case "$_SK_DOCTOR_VENDOR_STATE" in
+    drift)
+      _sk_doctor_row "FAIL" "vendor" "$(_t 'vendor copy has drifted'): $_SK_DOCTOR_VENDOR_DETAIL"
+      __verify=1
+      ;;
+    notdir)
+      _sk_doctor_row "FAIL" "vendor" "$(_t 'the vendored library path is not a directory'): $__dir/vendor/shellkit"
+      __verify=1
+      ;;
+    ok)
+      _sk_doctor_row "OK" "vendor" "$(_t 'vendor copy matches the bundled library'): $__dir/vendor/shellkit"
+      ;;
+    *)
+      _sk_doctor_row "INFO" "vendor" "$(_t 'no vendored library found'): $__dir"
+      ;;
+  esac
+
   printf '\n'
+  if [ "$__verify" -ne 0 ]; then
+    log_error "$(_t 'library integrity check failed')"
+    return "$SK_VERIFY"
+  fi
   if [ "$__missing" -ne 0 ]; then
     log_error "$(_t 'required tooling is missing')"
     return "$SK_PRECOND"
@@ -834,7 +1182,7 @@ cmd_vendor() {
   __dest="$__dir/vendor/shellkit"
 
   if [ "$__check" = "1" ]; then
-    for __x in lib locale VERSION; do
+    for __x in lib locale templates VERSION shellkit tests/test_helper.sh tests/run.sh; do
       if ! _sk_vendor_same "$SELF_DIR/$__x" "$__dest/$__x"; then
         log_error "$(_t 'vendored library is out of date'): vendor/shellkit/$__x"
         __stale=1
@@ -922,6 +1270,16 @@ _sk_docs_render() {
 
 cmd_docs() {
   local __check=0 __name __rel __tmp __rc=0
+
+  # 文档生成是仓库维护者的事：它要 docs/ 里的源与 tools/ 里的生成器。
+  # vendor 出来的副本不带这两样（副本的职责是「库跟着走 + 工程能自己升级」），
+  # 所以在副本里跑 docs 要说清楚，而不是抛一堆「No such file」。
+  if [ ! -f "$SELF_DIR/tools/shdoc.sh" ] || [ ! -d "$SELF_DIR/docs" ]; then
+    log_error "$(_t 'this copy has no documentation sources'): $SELF_DIR"
+    log_info "$(_t 'run it from a shellkit source tree'): shellkit docs"
+    return "$SK_PRECOND"
+  fi
+
   while [ "$#" -gt 0 ]; do
     case "$1" in
       -h | --help)
@@ -1383,4 +1741,9 @@ cmd_update() {
   return "$__rc"
 }
 
-cli_run "$@"
+if [ "$SK_BOOTSTRAP_OK" -eq 1 ]; then
+  cli_run "$@"
+else
+  # 库自己都不完整：没有 cli 分发器可用，走降级自检路径（报出缺什么，退出 5）
+  _sk_doctor_bootstrap_failed "$@" || exit $?
+fi

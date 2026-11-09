@@ -4,7 +4,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: shellkit\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-11-09 18:44+0800\n"
+"POT-Creation-Date: 2026-11-09 19:52+0800\n"
 "PO-Revision-Date: 2026-11-08 00:00+0800\n"
 "Last-Translator: shellkit contributors\n"
 "Language-Team: shellkit contributors\n"
@@ -347,6 +347,9 @@ msgstr ""
 msgid "value not in allowed set"
 msgstr ""
 
+msgid "the library is only partially loaded"
+msgstr ""
+
 msgid "project generation"
 msgstr ""
 
@@ -485,10 +488,34 @@ msgstr ""
 msgid "updated"
 msgstr ""
 
+msgid "already running from the vendored copy"
+msgstr ""
+
 msgid "failed to sync the vendored library"
 msgstr ""
 
 msgid "upgrade finished"
+msgstr ""
+
+msgid "library file is missing"
+msgstr ""
+
+msgid "module files are missing"
+msgstr ""
+
+msgid "module file is empty"
+msgstr ""
+
+msgid "module file has a syntax error"
+msgstr ""
+
+msgid "module files present"
+msgstr ""
+
+msgid "library integrity"
+msgstr ""
+
+msgid "the library could not be loaded"
 msgstr ""
 
 msgid "environment check"
@@ -513,6 +540,24 @@ msgid "not installed, lint will be skipped"
 msgstr ""
 
 msgid "not installed, format check will be skipped"
+msgstr ""
+
+msgid "vendor check"
+msgstr ""
+
+msgid "vendor copy has drifted"
+msgstr ""
+
+msgid "the vendored library path is not a directory"
+msgstr ""
+
+msgid "vendor copy matches the bundled library"
+msgstr ""
+
+msgid "no vendored library found"
+msgstr ""
+
+msgid "library integrity check failed"
 msgstr ""
 
 msgid "required tooling is missing"
@@ -555,6 +600,12 @@ msgid "failed to check doc comments"
 msgstr ""
 
 msgid "public function has no doc comment"
+msgstr ""
+
+msgid "this copy has no documentation sources"
+msgstr ""
+
+msgid "run it from a shellkit source tree"
 msgstr ""
 
 msgid "failed to render"

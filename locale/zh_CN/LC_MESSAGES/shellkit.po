@@ -4,7 +4,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: shellkit\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-11-09 18:44+0800\n"
+"POT-Creation-Date: 2026-11-09 19:52+0800\n"
 "PO-Revision-Date: 2026-11-08 00:00+0800\n"
 "Last-Translator: shellkit contributors\n"
 "Language-Team: shellkit contributors\n"
@@ -347,6 +347,9 @@ msgstr "路径必须是绝对路径"
 msgid "value not in allowed set"
 msgstr "值不在允许的集合里"
 
+msgid "the library is only partially loaded"
+msgstr "库只加载了一部分"
+
 msgid "project generation"
 msgstr "生成工程"
 
@@ -485,11 +488,35 @@ msgstr "将更新"
 msgid "updated"
 msgstr "已更新："
 
+msgid "already running from the vendored copy"
+msgstr "已经在用 vendor 副本本身运行"
+
 msgid "failed to sync the vendored library"
 msgstr "同步库副本失败"
 
 msgid "upgrade finished"
 msgstr "升级完成"
+
+msgid "library file is missing"
+msgstr "库文件缺失"
+
+msgid "module files are missing"
+msgstr "模块文件缺失"
+
+msgid "module file is empty"
+msgstr "模块文件为空"
+
+msgid "module file has a syntax error"
+msgstr "模块文件有语法错误"
+
+msgid "module files present"
+msgstr "模块文件齐备"
+
+msgid "library integrity"
+msgstr "库完整性"
+
+msgid "the library could not be loaded"
+msgstr "库无法加载"
 
 msgid "environment check"
 msgstr "环境检查"
@@ -514,6 +541,24 @@ msgstr "未安装，lint 会被跳过"
 
 msgid "not installed, format check will be skipped"
 msgstr "未安装，格式检查会被跳过"
+
+msgid "vendor check"
+msgstr "vendor 校验"
+
+msgid "vendor copy has drifted"
+msgstr "vendor 副本已漂移"
+
+msgid "the vendored library path is not a directory"
+msgstr "vendor 库路径不是目录"
+
+msgid "vendor copy matches the bundled library"
+msgstr "vendor 副本与自带库一致"
+
+msgid "no vendored library found"
+msgstr "未找到 vendor 库"
+
+msgid "library integrity check failed"
+msgstr "库完整性检查未通过"
 
 msgid "required tooling is missing"
 msgstr "缺少必需的工具"
@@ -556,6 +601,12 @@ msgstr "注释覆盖检查失败"
 
 msgid "public function has no doc comment"
 msgstr "公开函数缺少文档注释"
+
+msgid "this copy has no documentation sources"
+msgstr "这份副本里没有文档源"
+
+msgid "run it from a shellkit source tree"
+msgstr "请在 shellkit 源码树里运行"
 
 msgid "failed to render"
 msgstr "生成文档失败"
