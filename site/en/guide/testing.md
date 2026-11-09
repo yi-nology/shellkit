@@ -100,7 +100,7 @@ unstub curl
 The same approach works for `date` (freeze time, assert on backup file names) and `sleep` (do not actually sleep,
 still assert on the retry delay window).
 
-## The gate: twelve steps of `make check`
+## The gate: fourteen steps of `make check`
 
 | Step | What it blocks |
 | --- | --- |
@@ -109,6 +109,8 @@ still assert on the retry delay window).
 | `lint` | `shellcheck -S warning -x` (templates are rendered before checking) |
 | `module-order-check` | a module calling a function from a module loaded later |
 | `check-exitcode-docs` | a public function that does not document its return code, or whose comment block is separated from it by a blank line |
+| `local-names-check` | a library local that is not `__`-prefixed, or a local on the out-parameter path that is missing from the reserved list (callers using that name silently keep the old value) |
+| `module-count-check` | the hand-written "N modules" in the docs does not match `lib/modules.txt` |
 | `docs-check` | public functions without a comment, generated artefacts out of sync |
 | `versions-check` | `VERSION` against its five projections |
 | `check-docs` | every bash block in markdown must pass `bash -n`, and every function name must exist |
