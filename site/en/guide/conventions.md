@@ -39,6 +39,12 @@ log_info "parsed: $parsed"
 Why not a "global variable by convention": two concurrent calls would overwrite each other. With `printf -v` the
 variable name comes from the caller, so scoping is correct by construction.
 
+One trap to avoid: `printf -v` assigns to the nearest scope that declares that name. If the out-parameter
+name happens to match one of the library's own locals, the value is written into that inner scope -- your variable keeps
+the old value, and nothing fails. The library therefore keeps a **reserved list** of every local on the
+out-parameter path; calling with one of those names returns exit code 2 instead of failing silently. Names
+outside the list work as usual, `__` prefix or not.
+
 ## 3. Precedence: explicit argument > environment variable > config file > default
 
 ```bash
