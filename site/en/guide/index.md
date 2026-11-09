@@ -20,11 +20,11 @@ Every page stands on its own; the cross-links tell you where to go next.
 
 - [Five hard rules](./conventions.md) -- why stdout carries data only, and why out-parameters use `printf -v`.
 - [Bash 3.2 compatibility](./bash32.md) -- the syntax that crashes on the bash macOS ships, and why.
-- [Module map](./modules.md) -- the fifteen modules, what each one owns, and when to reach for it.
+- [Module map](./modules.md) -- the seventeen modules, what each one owns, and when to reach for it.
 
 ## Common tasks
 
-- [Cookbook](./cookbook.md) -- fourteen scenarios, each one *scenario / code / why*.
+- [Cookbook](./cookbook.md) -- 23 scenarios, each one *scenario / code / why*.
 - [CLI framework](./cli.md) -- registered commands, generated help, option parsing.
 - [Internationalisation](./i18n.md) -- English msgids, pot/po/mo, and degrading gracefully without gettext.
 - [Testing and gates](./testing.md) -- the assertion library, the per-file runner, what each `make check` step blocks.

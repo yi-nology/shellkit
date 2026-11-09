@@ -12,9 +12,18 @@
 
 ## 能不能只用其中一两个模块？
 
-`lib/bootstrap.sh` 一次性加载全部 15 个模块。单个模块很小，拆开 source 只会让依赖关系变复杂，
-而且模块之间有拓扑依赖（`log` 要用 `i18n`）。想「只要测试能力」的时候可以直接拷
-`tests/run.sh` 和 `tests/test_helper.sh` 两个文件，零依赖。
+默认会一次性加载全部 17 个模块 —— 单个模块很小，加起来还不到 400KB。
+
+真要瘦下来，用 `SHELLKIT_MODULES` 点名要用的模块：
+
+```bash
+SHELLKIT_MODULES="log fs" . ./vendor/shellkit/lib/bootstrap.sh
+```
+
+只有列出来的模块会被加载，**它们的传递依赖会自动带上**（`i18n` 永远加载，
+因为每个模块都要翻译）。写了不存在的模块名会直接报错，不会静默忽略。
+
+想「只要测试能力」的时候可以直接拷 `tests/run.sh` 和 `tests/test_helper.sh` 两个文件，零依赖。
 
 ## 为什么 `shellkit new` 要把库拷进 `vendor/`？
 

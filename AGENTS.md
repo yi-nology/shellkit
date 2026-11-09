@@ -11,7 +11,9 @@
                               install-self / uninstall-self / update）
     install.sh                一键安装脚本：取版本 → 下载 release → 校验 sha256 → 交给 install-self
     lib/bootstrap.sh          唯一入口：按 lib/modules.txt 的顺序 source lib/core/*.sh
-    lib/modules.txt           模块加载顺序的唯一真相源（bootstrap 与 shdoc 都读它）
+                              SHELLKIT_MODULES="log fs" 只加载这两个模块和它们的传递依赖
+    lib/modules.txt           模块清单的唯一真相源：两列 —— 模块名 + 它依赖的模块
+                              （bootstrap、shdoc、站点都读它）
     lib/core/<module>.sh      17 个模块，一个模块一个主题
     templates/                shellkit new 的模板（含 __NAME__ / __CMD__ 占位符）
     tests/                    自研断言 + 逐文件执行器 + 每个模块一个测试
@@ -28,15 +30,18 @@
 ## 加一个模块要改三处，少一处就红
 
 1. 写 `lib/core/<name>.sh`：公开函数上方**必须**紧邻注释行，否则 `make docs-check` 红。
-2. 在 `lib/modules.txt` 里加一行 —— 按依赖拓扑序，不是字母序。
+2. 在 `lib/modules.txt` 里加一行 —— 两列：**模块名 + 它依赖的模块**（空格分隔，可不写），
+   按依赖拓扑序排，不是字母序。
    顺序只有这一份真相源：`lib/bootstrap.sh` 按它加载，`tools/shdoc.sh` 按它生成 API 参考。
-   放错位置不要紧，`make module-order-check` 会指出「哪个模块调用了还没加载的函数」。
+   放错位置或漏写依赖不要紧，`make module-order-check` 会指出「哪个模块调用了还没加载的函数」
+   或「哪个依赖没声明」。
 3. 写 `tests/test_<name>.sh`。测试文件名被 `tests/test_*.sh` 通配到就自动执行。
 
 ## 门禁
 
-    make check     # syntax + test + lint + module-order-check + docs-check + versions-check +
-                  # check-docs + messages-check + examples + fmt，CI 也是这组
+    make check     # syntax + test + lint + module-order-check + check-exitcode-docs +
+                  # docs-check + versions-check + check-docs + cookbook-check +
+                  # messages-check + examples + fmt，CI 也是这组
 
 `docs-check` 会拦两种事：公开函数缺注释、`docs/` 里的生成物与源码不一致。
 `lint` 是 `shellcheck -S warning -x`，模板会先渲染再检查（占位符不是合法语法）。
@@ -57,6 +62,8 @@
     bash tools/check_versions.sh     # 只看版本引用是否一致
     bash tools/check_docs.sh         # 只看文档里的示例是否仍然成立
     bash tools/check_module_order.sh  # 只看模块加载顺序对不对
+    bash tools/check_exitcode_docs.sh # 只看公开函数有没有写明返回码
+    bash tools/check_cookbook_count.sh # 只看文档里说的场景数对不对
     make site                         # 构建文档站（先从 docs/ 同步，再查产物内部链接）
 
 ## 发版

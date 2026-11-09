@@ -271,7 +271,236 @@ assert_stub_called curl 1
 `stub` 把命令换成可断言的行为并记录调用次数 —— 没有它，下载失败、镜像回退、
 校验不匹配这三条分支永远测不到，只能「看代码觉得对」。
 
-## 14. 拿不准的时候
+## 14. 调 REST 接口：网络错和业务错分开看
+
+**场景**：脚本要调一个后端接口，并且区分「请求根本没发出去」和「对方返回了 4xx / 5xx」。
+
+```bash
+token=$(conf_get_any API_TOKEN "")
+
+net_request GET "https://api.example.com/v1/users/me" \
+  --header "Authorization: Bearer $token" \
+  --timeout 10 || die "request failed"
+
+case "$SK_HTTP_CODE" in
+  2*) log_ok "ok: $SK_HTTP_BODY" ;;
+  4*) die "bad request: $SK_HTTP_BODY" ;;
+  5*) die "server error: $SK_HTTP_CODE" ;;
+  *) die "unexpected status: $SK_HTTP_CODE" ;;
+esac
+```
+
+**为什么**：`net_request` 的退出码只管**网络层** —— 0 是「请求完成了」，4 是「连不上 / 超时 / DNS 失败」，
+2 是用法错，3 是缺 curl。**HTTP 状态码不算错误**：500 也返回 0。业务错误得自己看 `SK_HTTP_CODE`，
+所以上面那段把两层分开判：4xx 是「请求写错了」，5xx 是「服务端炸了」，处理方式完全不同。
+
+出参是三个全局变量 —— `SK_HTTP_CODE`（状态码）、`SK_HTTP_BODY`（响应体）、`SK_HTTP_HEADERS`（响应头全文）——
+所以 stdout 依旧是干净的，响应体再大也不会混进你的数据流。响应体很大时加 `--output FILE`，
+body 直接落盘、`SK_HTTP_BODY` 就变空。`--json` 会自动补上 `Content-Type: application/json`；
+`--connect-timeout` 管连上之前，`--timeout` 管整个请求。
+
+## 15. 从 JSON 里取嵌套字段
+
+**场景**：接口返回一大坨 JSON，只想拿其中一个字段（比如列表里第一项的名字）。
+
+```bash
+name=$(net_json GET "https://api.example.com/v1/users/me" --path "data.profile.name") ||
+  die "cannot read profile"
+log_info "name: $name"
+```
+
+要往回发 JSON，先把文本转义好：
+
+```bash
+note=$(net_escape_json "$user_note")
+net_request POST "https://api.example.com/v1/notes" \
+  --json "{\"text\":$note}" || die "post failed"
+```
+
+**为什么**：`--path` 走点号路径，数组下标也是一段（`data.items.0.name`）。取不到值返回 5 而不是 0，
+所以「字段不存在」不会被当成「字段是空的」。解析器有 jq 用 jq、有 python3 用 python3，都没有返回 3 ——
+库会先查解析器再发请求，没有解析器就不该把请求打出去。
+
+拼请求体不要手写转义：`net_escape_json` 把任意文本变成**合法的 JSON 字符串字面量（含双引号）**，
+所以 `"{\"text\":$note}"` 拼出来就是 `{"text":"..."}`，引号和反斜杠都替你处理了。
+
+## 16. 读 dotenv：进配置层，还是 export 给子进程
+
+**场景**：项目里有个 `.env`，要读它的值，但不想动调用方的环境变量。
+
+```bash
+conf_load_dotenv ./.env || die "no .env file"
+
+host=$(conf_get_any API_HOST 127.0.0.1)
+port=$(conf_get_any API_PORT 8080)
+log_info "target $host:$port"
+```
+
+确实要让子进程继承的时候才 export：
+
+```bash
+conf_source ./.env || die "no .env file"
+
+run ./bin/child --host "$API_HOST"
+```
+
+**为什么**：两个函数的区别只有一句话 —— `conf_load_dotenv` **只进配置层**，不 export：
+环境变量优先级最高，往里塞东西会盖掉调用方自己设的值；`conf_source` 反过来，**明确要 export**，
+只导环境变量、不进配置层。
+
+所以「我读一下配置」用前者，「我要把这份配置交给子进程」用后者。两者都容忍脏数据：非法行跳过并告警，
+不整体失败；文件不存在返回 3。解析格式有歧义时用 `conf_init ./config --format dotenv` 明确指定
+（`env` / `dotenv` / `auto`）。
+
+## 17. 日志送进采集系统
+
+**场景**：本地看人类可读的日志，线上要把日志喂给采集器，还要按级别过滤。
+
+```bash
+export SHELLKIT_LOG_FORMAT=json
+export SHELLKIT_LOG_LEVEL=warn
+export SHELLKIT_LOG_FILE=/var/log/myapp.log
+
+log_info "invisible at warn level"
+log_warn "kept"
+log_section "no section title in json mode"
+```
+
+一条日志长这样：
+
+```text
+{"ts":"2026-11-09T19:04:58+08:00","level":"WARN","msg":"kept"}
+```
+
+**为什么**：三个环境变量各管一件事 —— `SHELLKIT_LOG_LEVEL`（debug / info / warn / error，默认 info）
+按级别过滤，`SHELLKIT_LOG_FORMAT=json` 换成一行一条紧凑 JSON，`SHELLKIT_LOG_FILE` 追加落盘。
+
+json 模式下 `log_section` **不出声**：分段标题没有 level 语义，混进去就破坏了「一行一条记录」的约定，
+采集器按行切会切出半截。日志仍然走 stderr（「stdout 只给数据」这条规矩不因为换格式就破），
+文件写不进去只报错、不改退出码 —— 日志挂了不该让业务脚本跟着挂。
+
+## 18. 同一条命令并发跑 N 份
+
+**场景**：一批目标要跑同一个动作（给 20 台机器装同一个补丁），要并发不要排队。
+
+```bash
+ok=$(run_concurrent 8 --timeout 120 -- ./patch-one) || die "some instances failed"
+log_info "succeeded: $ok / 8"
+```
+
+**为什么**：stdout 和 stderr 分开，这是它最要紧的地方 —— **stdout 只给一个整数：成功实例数**；
+stderr 给每个实例的 stdout / stderr，逐行带 `[i/8]` 前缀。所以上面那行可以直接 `ok=$(...)` 取走，
+而 8 份实例的输出仍然留在终端上，一眼看出是哪一份出的问题。
+
+返回码是**第一个失败实例的退出码**（全过返回 0），所以 `|| die` 直接可用。它跟 `run` 的差别也在退出语义上：
+`run` 失败即 `die`，而 `die` 里的 `exit` 在 `if` / `||` 里照样退整个 shell；
+`run_concurrent` 只返回码，可以安全地放进条件里。
+
+**注意它跑的是同一条命令 N 份，参数完全一样** —— 所以「每个实例一个不同目标」得让命令自己去领。
+用 `mkdir` 领是最省事的一种（`mkdir` 是原子的，天然互斥）：
+
+```bash
+#!/usr/bin/env bash
+# ./patch-one —— 每个实例自己领一个还没人领的目标
+while read -r target; do
+  if mkdir "$lockdir/claim.$target" 2>/dev/null; then
+    ./apply-patch "$target"
+    exit $?
+  fi
+done < "$targets_file"
+```
+
+`--timeout` 依赖系统的 `timeout`（macOS 上是 `gtimeout`）；两个都没有时只告警、不超时。
+
+## 19. 生成工程时带上自己的变量和钩子
+
+**场景**：用模板生成新工程，但工程名、命令名、说明文字要按项目来；生成前后还想跑自己的脚本。
+
+```bash
+shellkit new ./myapp --name myapp --cmd deploy --cmd status \
+  --set DESCRIPTION="部署运维小工具" --yes
+```
+
+变量声明在模板目录的 `template.config`：
+
+```text
+# templates/template.config
+DESCRIPTION=A command line tool
+```
+
+模板里用 `{{KEY}}` 引用；`--set` 覆盖默认值，`--yes` 跳过提问（没给值的变量留空）。
+
+钩子放在模板目录的 `template.hooks.d/` 下：`pre` 在落盘前跑，`post` 在落盘后跑，各是一段可执行脚本。
+
+```bash
+#!/usr/bin/env bash
+# templates/template.hooks.d/post
+printf 'generated %s into %s\n' "$SHELLKIT_PROJECT_NAME" "$SHELLKIT_PROJECT_DIR"
+```
+
+**为什么**：`--set` 让「这个工程特有的东西」留在命令行上，不必改模板。钩子拿到的环境变量里有
+`SHELLKIT_PROJECT_DIR` / `SHELLKIT_PROJECT_NAME` / `SHELLKIT_PROJECT_COMMANDS` /
+`SHELLKIT_TEMPLATE_VERSION`，以及每个模板变量 —— 够写一个「生成完顺手装个 systemd 单元」之类的动作。
+
+钩子没设执行位就跳过并告警，不会因为忘了 `chmod +x` 就让生成失败；钩子返回非 0 则生成失败，
+这是故意的：钩子失败说明这个工程没成。
+
+## 20. 让生成的工程跟上模板更新
+
+**场景**：shellkit 出了新版本，之前生成的工程要跟上模板的改进。
+
+```bash
+shellkit upgrade ./myapp --check    # 只看会动哪些文件，不写盘
+shellkit upgrade ./myapp             # 真改
+```
+
+**为什么**：生成时工程里落了一份 `.shellkit-manifest`，记着每个模板文件的 sha256。升级时逐个比对：
+**指纹没变**（你没动过）就覆盖，**指纹变了**（你改过）就跳过并告警 `modified locally, left alone` ——
+本地改动**永远不会被覆盖**。
+
+`--check` 是空跑，只报「会更新哪个文件」，适合先看清楚再决定；确实想拿模板盖掉本地改动时用 `--force`。
+你自己写的 `commands/` 和 `tests/test_smoke.sh` 不在模板自有清单里，升级根本不会碰。
+
+## 21. 给自己写的 CLI 装上补全
+
+**场景**：写了个自己的命令行工具，想让用户按 Tab 补出子命令。
+
+```bash
+shellkit completion bash >> "$HOME/.bash_completion"
+source "$HOME/.bash_completion"
+
+shellkit completion zsh > "$HOME/.zsh/completions/_shellkit"
+```
+
+工程里（自己的 CLI 框架）用库函数生成，程序名取 `SK_PROG`：
+
+```bash
+SK_PROG=myapp
+cli_completion_script bash > myapp-completion.bash
+```
+
+**为什么**：补全脚本里的子命令列表是**从注册表生成的** —— 你 `cli_cmd` 注册了什么，补全里就有什么，
+不用另维护一份命令清单（这是很多框架最烦的地方：加个子命令要改三个文件）。
+`shellkit completion` 输出的是库自己那份（程序名 `shellkit`），`cli_completion_script` 输出的是给你自己的
+CLI 用的，程序名取 `SK_PROG`。
+
+## 22. 工程搬到别的机器上，也能自己升级
+
+**场景**：工程里 vendor 了库，同事在另一台**没装 shellkit** 的机器上 clone 下来。
+
+```bash
+./vendor/shellkit/shellkit upgrade . --check   # 只看会动哪些文件
+./vendor/shellkit/shellkit upgrade .             # 真改
+```
+
+**为什么**：`vendor` 出来的副本自带 CLI、模板与测试基建，所以「升级工程」不再依赖
+PATH 上有没有 shellkit。副本里那份 CLI 用的就是同一份模板 —— 不会出现
+「模板是新的、库是旧的」这种半吊子状态。
+
+副本里也带 `--check`：`./vendor/shellkit/shellkit vendor . --check` 逐字节比对，
+本地改过 vendor 就返回 5，正好放进 CI。
+
+## 23. 拿不准的时候
 
 | 你想做的事 | 先看哪里 |
 |---|---|

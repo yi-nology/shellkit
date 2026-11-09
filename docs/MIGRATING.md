@@ -7,7 +7,7 @@
 | 姿势 | 改动量 | 适合 | 代价 |
 |---|---|---|---|
 | **A. 只借测试** | 拷 2 个文件 | 已有脚本能跑但没测试 | 拿不到 log/config/prompt |
-| **B. vendor 整个库**（推荐） | 一条命令 + 每个脚本 2 行 | 绝大多数项目 | 库里镜像进仓库（约 120KB） |
+| **B. vendor 整个库**（推荐） | 一条命令 + 每个脚本 2 行 | 绝大多数项目 | 库里镜像进仓库（约 400KB，含 CLI 与模板） |
 | **C. 全局安装** | 一条命令，脚本靠 PATH 找库 | 只在自己机器上跑的脚本 | 别人/CI 必须先装，版本不可控 |
 
 一句话：**要分发给别人的项目一律选 B**，因为库跟着代码走，git 里能 diff、能回滚、离线能跑。
@@ -49,10 +49,16 @@ shellkit vendor .
 ```
 your-project/
 └─ vendor/shellkit/
-   ├─ lib/           11 个模块（bootstrap.sh + core/*.sh）
+   ├─ lib/           17 个模块（bootstrap.sh + core/*.sh）
    ├─ locale/        gettext 译文（en / zh_CN / zh_Hant）
+   ├─ templates/     脚手架模板（副本自己就能 new / upgrade）
+   ├─ tests/         测试基建（test_helper.sh + run.sh）
+   ├─ shellkit       CLI 本身（副本自己就能升级工程）
    └─ VERSION        锁定的版本号
 ```
+
+副本自带 CLI 与模板，所以工程被拷到一台**没装 shellkit 的机器**上时，
+`./vendor/shellkit/shellkit upgrade .` 照样能离线升级。
 
 脚本里两行接入：
 
@@ -63,7 +69,7 @@ set -euo pipefail
 . "$(cd "$(dirname "$0")/.." && pwd)/vendor/shellkit/lib/bootstrap.sh"
 ```
 
-就这些。`bootstrap.sh` 会按拓扑序把 11 个模块加载好，设置 `SK_*` 常量与退出码，
+就这些。`bootstrap.sh` 会按拓扑序把 17 个模块加载好，设置 `SK_*` 常量与退出码，
 **不改你的 shell 选项、不改 cwd**——你的脚本还是你说了算。
 
 ### 为什么是 `vendor/` 而不是装到系统里
@@ -148,6 +154,28 @@ shellkit vendor . --check    # 只比对，不写盘
 
 新增门禁：`make versions-check`（`VERSION` 与 pot 头、README、站点的版本引用是否一致）已并入
 `make check`。新增命令：`make release VERSION=x.y.z` / `make release-dry VERSION=x.y.z`。
+
+### 0.8.1 → 0.9.0：会改变结果的行为变化
+
+0.9.0 补的是「生态缺口」：模块按需加载、`shellkit doctor` 自检、vendor 副本自带 CLI。
+**库函数的行为一个字没改**（返回码、产出文件名、输出文本都没动），但命令行与工具链有四处
+会改变结果，升级后先跑一遍你自己的测试：
+
+| 变化 | 以前 | 现在 | 你会在哪里撞到 |
+|---|---|---|---|
+| `shellkit vendor` 的产物 | 只有 `lib/` + `locale/` + `VERSION` | 额外带 `templates/`、`tests/`（test_helper.sh 与 run.sh）与 **CLI 本身** | 断言 vendor 目录内容清单的脚本要改；vendor 目录从约 120KB 变成约 400KB |
+| `shellkit vendor --check` | 只比 lib / locale / VERSION | 多比 templates / tests / CLI | **老工程第一次跑会返回 5**（副本里还没有 CLI）：先跑一次 `shellkit vendor .` 再把它放进 CI |
+| `tests/run.sh --filter` | 匹配不到文件时退出 0（报「All 0 test files passed.」） | 退出 2，并把可用的测试文件列出来 | 靠「filter 没匹配到就算全过」判断的 CI 会红 —— 那本来是假绿 |
+| `shellkit docs`（在 vendor 副本里跑） | 跑到一半报「No such file」 | 明确报前置条件错（退出码 3） | 副本里本来就没有文档源（有意为之：副本的职责是「库跟着走 + 工程能自己升级」） |
+| `lib/modules.txt` 的格式 | 一行一个模块名 | 两列：**模块名 + 它依赖的模块**（空格分隔，可不写） | 自己往清单里加过模块的脚本或补丁要改；顺序与依赖从此只有这一处真相源 |
+| `lib/modules.txt` 读不到 | 静默加载零个模块 | 打印 `cannot read module list` 并返回 1 | 以前「清单读不到 ⇒ 一个模块都不加载」的用法会改成报错 —— 那本来是坏的 |
+
+新增的能力（都是加法，既有行为不变）：
+
+- `SHELLKIT_MODULES="log fs"` —— 只加载需要的模块，依赖会自动带上；不设这个变量时仍是全量加载。
+- `shellkit doctor` —— 三类检查：运行环境、库完整性（模块文件齐不齐）、vendor 漂移（逐字节比对）。
+- **vendor 副本自带 CLI** —— 工程被拷到一台没装 shellkit 的机器上时，
+  `./vendor/shellkit/shellkit upgrade .` 照样能离线升级。
 
 ### 0.7.0 → 0.8.0：会改变结果的行为变化
 

@@ -61,4 +61,4 @@ bash examples/fetch-release/tests/test_fetch.sh
 理由：source 内部函数测的是「函数按我预期实现」，执行二进制测的是「用户拿到的行为」。
 后者才会发现「子命令注册漏了」「入口脚本没找到 vendor/」这类问题。
 
-想看更多场景，[Cookbook](./cookbook.md) 有十四个，每节都是「场景 / 代码 / 为什么」。
+想看更多场景，[Cookbook](./cookbook.md) 有二十二个，每节都是「场景 / 代码 / 为什么」。

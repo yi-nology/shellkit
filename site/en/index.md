@@ -55,7 +55,7 @@ and the output is rendered as SVG, so versions, paths and exit codes are true at
 
 <ShotFigure src="/shots/gate.svg" caption="Rename a documented function and the gate goes red instead of rotting quietly" />
 
-## Fifteen modules, one topic each
+## Seventeen modules, one topic each
 
 Your job is assembly, not reimplementation. Full signatures and exit codes: [API reference](/en/reference/index.md).
 
@@ -73,7 +73,9 @@ Your job is assembly, not reimplementation. Full signatures and exit codes: [API
 | [retry](/en/reference/retry.md) | backoff retries, never retries usage errors |
 | [lock](/en/reference/lock.md) | mkdir atomic lock, pushed onto the cleanup stack |
 | [net](/en/reference/net.md) | downloads with sha256 verification and mirror fallback |
-| [config](/en/reference/config.md) | KEY=VALUE, env vars win |
+| [http](/en/reference/http.md) | HTTP requests, transport errors apart from business errors |
+| [config](/en/reference/config.md) | KEY=VALUE and dotenv, env vars win |
+| [scaffold](/en/reference/scaffold.md) | template variables, manifests, hooks |
 | [prompt](/en/reference/prompt.md) | timeouts fall back to defaults |
 | [cli](/en/reference/cli.md) | registration-based dispatch |
 

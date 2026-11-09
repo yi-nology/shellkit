@@ -32,7 +32,7 @@ https://yi-nology.github.io/shellkit/ —— 中文在 `/`，英文在 `/en/`。
 |---|---|
 | 想花五分钟判断值不值得用 | 往下读「三十秒」 |
 | 已经有脚本在跑，想接库但不想重写 | [docs/MIGRATING.md](docs/MIGRATING.md)：五步渐进，每一步都能单独上线 |
-| 手上有具体活：改配置、下载校验、重试、单实例、交互确认 | [docs/COOKBOOK.md](docs/COOKBOOK.md)：十四个场景，每节都是「场景 / 代码 / 为什么」 |
+| 手上有具体活：改配置、下载校验、重试、单实例、交互确认 | [docs/COOKBOOK.md](docs/COOKBOOK.md)：23 个场景，每节都是「场景 / 代码 / 为什么」 |
 | 想让 AI 替你写 | 根目录的 [AGENTS.md](AGENTS.md)；`shellkit new` 生成的工程也自带一份，写清了这行的坑 |
 | 要查某个函数的确切签名和退出码 | [docs/REFERENCE.md](docs/REFERENCE.md)：从源码注释生成，不会和代码漂移 |
 | 想先看完整工程长什么样 | [examples/deploy-service](examples/deploy-service)、[examples/fetch-release](examples/fetch-release) |
@@ -124,9 +124,12 @@ cd shellkit && ./shellkit new /tmp/demo --cmd start
 
 ```bash
 cd /path/to/your-project
-shellkit vendor .            # 同步 lib/ + locale/ + VERSION 到 vendor/shellkit
+shellkit vendor .            # 同步 lib/ + locale/ + templates/ + tests/ + CLI 到 vendor/shellkit
 shellkit vendor . --check     # 只比对（逐字节 diff），漂移返回 5，适合放进 CI
 ```
+
+副本自带 CLI 与模板，所以拷到一台没装 shellkit 的机器上，工程仍然能离线升级：
+`./vendor/shellkit/shellkit upgrade .`
 
 脚本顶部一行接入，然后在 [docs/MIGRATING.md](docs/MIGRATING.md) 里按顺序做五件事：
 先杀 stdout 污染 → 配置读写 → 交互 → CLI 框架 → 测试。
@@ -155,6 +158,15 @@ port=$(conf_get_any PORT 8080)    # 环境变量 PORT > config 里的 PORT > 808
 
 log_info "starting on port $port"     # 走 stderr，所以上面那行永远是干净的
 ```
+
+只想要其中几个模块时，用 `SHELLKIT_MODULES` 点名 —— 依赖会自动带上：
+
+```bash
+SHELLKIT_MODULES="log fs" . ./vendor/shellkit/lib/bootstrap.sh
+# 实际加载：i18n log error trap fs（i18n 恒定加载，它是 _t 的提供者）
+```
+
+不设这个变量就是全量加载，行为与以前逐字一致。
 
 ## 五条硬约定
 
@@ -319,6 +331,26 @@ bash po/messages.sh     # xgettext → msgmerge → msgfmt，产出 .mo
 自带 `zh_CN`、`zh_Hant`，`locale/en` 的 msgstr 留空回退英文。
 **没装 gettext 不会失败**，只是输出英文。
 
+## 测试输出格式
+
+CI 要的是「哪个用例挂了」，不是「哪个文件挂了」。执行器有三种格式：
+
+```bash
+bash tests/run.sh                    # plain（默认，行为与旧版逐字一致）
+bash tests/run.sh --format tap       # TAP 13，测试报告工具直接吃
+bash tests/run.sh --format junit      # JUnit XML，GitHub Actions / Jenkins 收
+bash tests/run.sh --jobs 4           # 并行（每个文件一个独立临时目录）
+bash tests/run.sh --filter '*fs*'    # 只跑文件名匹配的文件
+bash tests/run.sh --list             # 只列出将要跑的文件
+```
+
+`--filter` 收的是 shell 通配符；一个都没匹配上时退出码是 2 并列出可用文件，不会假绿。
+
+用例粒度靠测试文件里的 `# CASE: 标题` 注释切分；没有 `CASE` 标记的文件退化成
+「文件级一条用例」。**「有失败但报告说全过」不可能发生** —— 三种格式都会在有失败时
+返回非 0，这条不变量由 `tests/test_runner.sh` 守着（它把真的执行器复制到假仓库里，
+用受控的失败用例去验每种格式）。
+
 ## 文档与门禁
 
 API 文档从源码注释生成，不手写：
@@ -328,17 +360,23 @@ shellkit docs            # 重新生成 REFERENCE.md / AGENTS.md / 模板 AGENTS
 shellkit docs --check    # 只校验是否最新，过期返回 5
 ```
 
-约定是「注释块首行即摘要」，不需要额外标签：
+约定是「注释块首行即摘要」，返回码用 `@exitcode` 写明：
 
 ```bash
 # 下载到指定路径，带 sha256 校验与镜像回退。
 # @param 1  目标 URL
 # @param 2  保存路径
 # @param 3  sha256（可选）
+# @exitcode 0 下载成功（带 SHA256 时校验通过）
+# @exitcode 4 下载失败
+# @exitcode 5 校验和不匹配
 net_download() {
   : # 实现见 lib/core/net.sh
 }
 ```
+
+**每个公开函数都必须写明返回码**，`make check` 会查 —— 注释块与函数之间也不能有空行，
+空行会让整段注释在 API 参考里消失。
 
 给 AI 看的三份文档（本仓库的 `AGENTS.md`、模板工程的 `AGENTS.md`、可安装的 `skills/shellkit/SKILL.md`）
 都是同一条真相源 `docs/ai/contract.md` 拼出来的，改一处三处同时更新 —— 三份手写必然漂移。
@@ -348,12 +386,19 @@ net_download() {
 门禁有两层，都会拦住「文档写着、代码里没有」：
 
 ```bash
-make check     # syntax + test + lint + docs-check + check-docs + messages-check + examples + fmt
+make check     # syntax + test + lint + module-order-check + check-exitcode-docs
+               # + docs-check + check-docs + cookbook-check + messages-check
+               # + examples + fmt
 ```
 
 - `docs-check`：公开函数缺注释、生成物与源码不一致 ⇒ 红。
 - `check-docs`：所有 markdown 的 bash 代码块必须过 `bash -n`，块里出现的函数名必须真实存在于
   `docs/REFERENCE.md` ⇒ 红。所以 README 里的例子改名后会立刻失败，而不是悄悄烂掉。
+- `module-order-check`：某个模块调用了还没加载的模块的函数 ⇒ 红。
+- `check-exitcode-docs`：公开函数没写明返回码，或注释块与函数之间有空行 ⇒ 红。
+  「返回码就是接口的一部分」这句话得有门禁兑现，否则接口是残的。
+- `cookbook-check`：README 与站点首页里手写的「N 个场景」必须与 Cookbook 实际场景数一致 ⇒ 红。
+  手抄的数字必然过期，过期就得有人记得改 —— 这道门替那个人。
 
 ## 示例工程
 
@@ -388,8 +433,10 @@ bash examples/fetch-release/tests/test_fetch.sh
 
 ```text
 shellkit                  生成器入口（也 source 自己的库）
-lib/bootstrap.sh          唯一入口，按拓扑序加载
-lib/core/*.sh             15 个模块
+lib/bootstrap.sh          唯一入口，按 lib/modules.txt 的顺序加载
+                          SHELLKIT_MODULES="log fs" 只加载这两个模块和它们的传递依赖
+lib/modules.txt           模块清单的唯一真相源：模块名 + 它依赖的模块
+lib/core/*.sh             17 个模块
 templates/                shellkit new 的模板
 tests/                    断言库 + 逐文件执行器 + 每个模块一个测试
 tools/                    shdoc.awk 渲染 / comment_coverage.awk 查漏 / check_docs.sh 门禁 / term_shot.py 截图

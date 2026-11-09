@@ -99,3 +99,22 @@ cli_run "$@"
 
 注意 `printf` 写的是 stdout（这是数据），日志走 stderr —— 所以 `./hello --name x | jq` 这类
 管道不会被日志污染。
+
+## 命令补全
+
+子命令名和选项名都是自己定的，运维记不住是常态。补全脚本从注册表生成，
+不用维护第二份清单：
+
+```bash
+shellkit completion bash > /etc/bash_completion.d/shellkit
+shellkit completion zsh  > "${fpath[1]}/_shellkit"
+```
+
+自己写的 CLI 也能用同一个函数（程序名取 `SK_PROG`）：
+
+```bash
+cli_completion_script bash > mytool-completion.bash
+```
+
+`shellkit new` 生成的工程自带这条：`make completion` 输出补全脚本，
+优先用工程自带的 `vendor/shellkit/shellkit`，这样没装 shellkit 的机器也能生成。

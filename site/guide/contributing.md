@@ -6,21 +6,27 @@
 make check
 ```
 
-九步全绿才算过。单跑某一步：
+十二步全绿才算过。单跑某一步：
 
 ```bash
 bash tests/run.sh
 ./shellkit docs --check
 bash tools/check_versions.sh
 bash tools/check_docs.sh
+bash tools/check_module_order.sh
+bash tools/check_exitcode_docs.sh
 ```
 
-## 加一个模块要改四处，少一处就红
+## 加一个模块要改三处，少一处就红
 
-1. 写 `lib/core/<name>.sh`：公开函数上方**必须**紧邻注释行（`docs-check` 会拦）。
-2. `lib/bootstrap.sh` 的模块序列里插入 —— **按依赖拓扑序**，不是字母序。
-3. `tools/shdoc.sh` 的 `MODULES` 里加同一位置（两处顺序必须一致）。
-4. 写 `tests/test_<name>.sh`：文件名被 `tests/test_*.sh` 通配到就自动执行。
+1. 写 `lib/core/<name>.sh`：公开函数上方**必须**紧邻注释行（`docs-check` 会拦），
+   而且要写明返回码（`check-exitcode-docs` 会拦）。
+2. 在 `lib/modules.txt` 里加一行 —— 这是模块清单的**唯一真相源**：
+   `lib/bootstrap.sh` 按它加载，`tools/shdoc.sh` 按它生成 API 参考，站点也按它同步。
+   两列：**第一列模块名，第二列它依赖的模块**（空格分隔，可以不写）。
+   按**依赖拓扑序**放，不是字母序；依赖漏写或顺序颠倒，`module-order-check` 会直接指出
+   「哪个模块调用了还没加载的函数」或「哪个依赖没声明」。
+3. 写 `tests/test_<name>.sh`：文件名被 `tests/test_*.sh` 通配到就自动执行。
 
 `@internal` 标记的函数不导出，也不参与注释覆盖检查；内部函数名以下划线开头
 （`_sk_*`）同样不参与。

@@ -102,6 +102,30 @@ done < <(find "$ROOT" -name '*.md' -not -path '*/.git/*' -not -path '*/.upstream
   -not -path '*/site/.vuepress/dist/*' -not -path '*/site/.vuepress/.cache/*' \
   -not -path '*/site/.vuepress/.temp/*' | sort)
 
+# --------------------------------------------------------------------------
+# 乱码检查：文本文件里不许出现 U+FFFD 替换字符。
+#
+# 为什么需要：某个文件一旦被工具或编辑器以错误编码写过，中文注释里就会出现
+# U+FFFD 替换符（也就是那些「方块问号」）。
+# 这种损坏**不会让任何门禁变红** —— bash 照样解析，shellcheck 不看注释，
+# 测试也不会因为注释变乱码而失败。但读代码的人看到的是乱码，想改回原意只能靠猜。
+# 仓库里真的出现过一次（tools/release.sh 的一条注释），所以这道门是补的。
+# --------------------------------------------------------------------------
+bad_mojibake=0
+while IFS= read -r mf; do
+  [ -n "$mf" ] || continue
+  printf 'mojibake (U+FFFD) in: %s\n' "${mf#"$ROOT"/}" >&2
+  bad_mojibake=1
+done < <(grep -rlI $'\xef\xbf\xbd' "$ROOT" \
+  --include='*.sh' --include='*.awk' --include='*.md' --include='*.po' \
+  --include='*.pot' --include='*.yml' --include='Makefile' \
+  --exclude-dir=.git --exclude-dir=node_modules --exclude-dir=dist \
+  --exclude-dir=.cache --exclude-dir=.temp --exclude-dir=.upstream \
+  2>/dev/null || true)
+if [ "$bad_mojibake" -ne 0 ]; then
+  bad=1
+fi
+
 if [ "$bad" -ne 0 ]; then
   printf 'check_docs: found problems in documentation\n' >&2
   exit 1

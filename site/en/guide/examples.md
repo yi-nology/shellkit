@@ -63,4 +63,4 @@ and stdout. The reason: sourcing tests "the function does what I think it does",
 "the behaviour a user receives". Only the latter catches things like "a subcommand was never registered" or
 "the entry script cannot find vendor/", which are exactly the mistakes assembly makes.
 
-Want more scenarios? [Cookbook](./cookbook.md) has fourteen, each as *scenario / code / why*.
+Want more scenarios? [Cookbook](./cookbook.md) has twenty-two, each as *scenario / code / why*.

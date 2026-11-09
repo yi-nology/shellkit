@@ -133,6 +133,47 @@ _say "$CUR -> $VER on $BRANCH"
 
 printf '%s\n' "$VER" >VERSION
 
+# ---------- 2.5 CHANGELOG 追加本次发版的小节 ----------
+#
+# 变更记录不能手写：手写的 changelog 和 git 历史对不上，过几个月就没人信它了。
+# 这里从「上一个 tag 到 HEAD」的提交自动生成，人只负责写 commit message。
+_changelog_add() {
+  local __ver=$1 __prev __date __tmp
+  __prev=$(git tag --sort=v:refname -l 'v[0-9]*' | grep -v "^v$__ver\$" | tail -1)
+  __date=$(git log -1 --format=%ad --date=short)
+  __tmp=$(mktemp "${TMPDIR:-/tmp}/shellkit-changelog.XXXXXX") || _die 'mktemp failed' 1
+  {
+    printf '## %s — %s\n\n' "$__ver" "$__date"
+    if [ -n "$__prev" ]; then
+      git log --oneline --no-merges --reverse "$__prev..HEAD" |
+        grep -v ' chore(release):' || true
+    else
+      git log --oneline --no-merges --reverse HEAD | grep -v ' chore(release):' || true
+    fi
+    printf '\n'
+  } >"$__tmp"
+  if [ ! -f CHANGELOG.md ]; then
+    printf '# 变更记录\n\n本文件由 `tools/release.sh` 在发版时自动追加，已发布的小节不要手改。\n\n' >CHANGELOG.md
+  fi
+  # 插到第一个 "## " 小节之前（文件头之后、最新版本之前）
+  awk -v sec="$__tmp" '
+    !done && /^## / {
+      while ((getline line < sec) > 0) print line
+      close(sec)
+      done = 1
+    }
+    { print }
+  ' CHANGELOG.md >"$__tmp.out"
+  if [ ! -s "$__tmp.out" ]; then
+    cat CHANGELOG.md "$__tmp" >"$__tmp.out"
+  fi
+  mv -f "$__tmp.out" CHANGELOG.md
+  rm -f "$__tmp"
+}
+
+_say "updating the changelog"
+_changelog_add "$VER"
+
 # ---------- 3/4. pot 与文档产物 ----------
 
 _say "regenerating the pot"

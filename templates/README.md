@@ -14,9 +14,12 @@
 
 ## 常用
 
-    make test      # 全部测试
-    make lint      # shellcheck
-    make fmt       # shfmt 只检查不改
+    make test        # 全部测试
+    make lint        # shellcheck
+    make fmt         # shfmt 只检查不改
+    make upgrade     # 升级到当前模板
+    make completion  # 输出 bash 补全脚本
+    make version     # 打印工程用的库版本
     ./bin/{{NAME}} --help
 
 ## 加一个子命令
@@ -47,7 +50,32 @@
 
 生成的工程里有一份 `.shellkit-manifest`，记着模板版本与每个文件的指纹：
 
-    shellkit upgrade /path/to/project          # 更新没被你改过的文件
-    shellkit upgrade /path/to/project --check  # 只看会改什么，不动文件
+    make upgrade                                # 更新没被你改过的文件
+    shellkit upgrade /path/to/project           # 同上，直接调 CLI
+    shellkit upgrade /path/to/project --check   # 只看会改什么，不动文件
 
 你改过的文件一律留着不动，并告诉你哪些被跳过了。
+
+`make upgrade` 优先用工程自带的 `vendor/shellkit/shellkit`，没有才退回 PATH 上的
+`shellkit` —— 工程被 vendor 到别的机器上、PATH 上没装 shellkit 时也能跑。
+
+## 补全
+
+    make completion > /etc/bash_completion.d/{{NAME}}
+
+补全脚本从本工程自己的注册表生成：程序名是 `{{NAME}}`，子命令是你写的那些。
+新增子命令后重跑一次即可。
+
+不想装到系统目录就装给自己：
+
+    make completion > ~/.local/share/bash-completion/completions/{{NAME}}
+
+也可以直接问入口要：`./bin/{{NAME}} --completion bash`（zsh 用 `--completion zsh`）。
+
+## 版本
+
+    make version
+
+打印两行：`library` 是工程里那份库副本的版本（`vendor/shellkit/VERSION`），
+`template` 是生成工程时用的模板版本。两个号对不上说明模板与库不是同一版了 ——
+跑一次 `make upgrade` 追平。

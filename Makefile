@@ -6,7 +6,7 @@ SOURCES := shellkit install.sh lib/bootstrap.sh $(wildcard lib/core/*.sh) \
 TEMPLATES := $(shell find templates -type f)
 SHOTS := $(wildcard docs/shots/*.shot)
 
-.PHONY: help test syntax lint lint-templates fmt messages messages-check docs docs-check versions-check check-docs shots examples check install release release-dry site-deps site-sync site site-serve
+.PHONY: help test syntax lint lint-templates fmt messages messages-check docs docs-check versions-check check-docs cookbook-check shots examples check install release release-dry site-deps site-sync site site-serve
 
 help:
 	@printf '%s\n' \
@@ -14,14 +14,17 @@ help:
 	  'make syntax      bash -n 全部脚本' \
 	  'make lint        shellcheck -S warning -x' \
 	  'make module-order-check  模块加载顺序（调用了还没加载的函数就红）' \
+	  'make check-exitcode-docs  公开函数的返回码必须写在注释里' \
 	  'make fmt         shfmt -d -i 2 -ci（只检查）' \
 	  'make messages    重新抽取 msgid 并编译 .mo' \
 	  'make messages-check  只检查 pot 与源码是否一致（缺 xgettext 时跳过）' \
 	  'make docs        重新生成 REFERENCE.md / AGENTS.md / SKILL.md' \
 	  'make versions-check  VERSION / pot 头 / README / 站点里的版本号是否一致' \
+  'make check-docs      markdown 的 bash 代码块必须 bash -n 通过；函数名必须真实存在' \
+  'make cookbook-check  文档里说的场景数要与 Cookbook 实际场景数一致' \
 	  'make shots       按 docs/shots/*.shot 真跑命令并渲染 SVG 截图' \
 	  'make examples    跑 examples/ 下每个工程的测试' \
-	  'make check       依次跑 syntax / test / lint / module-order-check / docs-check / versions-check / check-docs / messages-check / examples / fmt' \
+	  'make check       依次跑 syntax / test / lint / module-order-check / check-exitcode-docs / docs-check / versions-check / check-docs / cookbook-check / messages-check / examples / fmt' \
 	  'make release VERSION=x.y.z  发版：升版本→重生成产物→门禁→commit→tag→push' \
 	  'make release-dry VERSION=x.y.z  同 release，但跑完还原工作树、不提交' \
 	  'make site        构建文档站（先跑 tools/site_sync.sh 从 docs/ 同步）' \
@@ -73,6 +76,10 @@ versions-check:
 check-docs:
 	@bash tools/check_docs.sh
 
+# 文档里手写的「N 个场景」必须与 Cookbook 里的实际场景数一致
+cookbook-check:
+	@bash tools/check_cookbook_count.sh
+
 # 截图是真实输出渲染的，需要用 python3；没有就跳过而不是失败
 shots:
 	@if command -v python3 >/dev/null 2>&1; then \
@@ -109,7 +116,11 @@ examples:
 module-order-check:
 	@bash tools/check_module_order.sh
 
-check: syntax test lint module-order-check docs-check versions-check check-docs messages-check examples fmt
+# 公开函数必须写明返回码 —— 返回码是接口的一部分
+check-exitcode-docs:
+	@bash tools/check_exitcode_docs.sh
+
+check: syntax test lint module-order-check check-exitcode-docs docs-check versions-check check-docs cookbook-check messages-check examples fmt
 
 install:
 	./shellkit install-self --prefix $(PREFIX)/usr

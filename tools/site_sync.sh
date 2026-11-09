@@ -13,8 +13,24 @@ ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 DOCS="$ROOT/docs"
 SITE="$ROOT/site"
 
-# 与 lib/bootstrap.sh 的加载顺序一致
-MODULES="error i18n log str validate fs os trap run retry lock net config prompt cli"
+# 模块清单从 lib/modules.txt 读 —— 与 bootstrap、shdoc 同一份真相源。
+#
+# 以前这里硬写了一份，结果加模块时忘了改这里，站点上就少了两页 API 参考
+# （http 与 scaffold），而没有任何门禁发现。第三份清单迟早还会漂。
+#
+# modules.txt 每行是「模块名 [依赖...]」，这里只取第一个字段。
+MODULES=""
+while IFS= read -r __mod_line || [ -n "$__mod_line" ]; do
+  case "$__mod_line" in
+    '' | '#'*) continue ;;
+  esac
+  # 取第一段（模块名），后面的依赖字段不要
+  __mod_name=${__mod_line%%[[:space:]]*}
+  [ -n "$__mod_name" ] || continue
+  MODULES="$MODULES $__mod_name"
+done <"$ROOT/lib/modules.txt"
+MODULES="${MODULES# }"
+[ -n "$MODULES" ] || _die 'lib/modules.txt is empty or missing' 3
 
 _say() { printf '[site-sync] %s\n' "$*" >&2; }
 _die() {
@@ -174,8 +190,11 @@ _en_notice() {
   } >"$__file" || return 1
 }
 
+# 场景数从源文件数出来，不手抄：手抄的数字必然在加场景那天开始过期。
+__cookbook_n=$(grep -c '^## [0-9]' "$DOCS/COOKBOOK.md" 2>/dev/null || true)
+[ -n "$__cookbook_n" ] || __cookbook_n=0
 _en_notice "$SITE/en/guide/cookbook.md" 'Cookbook' 'cookbook' \
-  'Fourteen recipes: editing config, verified downloads, retries, single-instance locks, interactive prompts. Every section is scenario / code / why.'
+  "$__cookbook_n recipes: editing config, verified downloads, retries, single-instance locks, interactive prompts. Every section is scenario / code / why."
 _en_notice "$SITE/en/guide/migrating.md" 'Migration guide' 'migrating' \
   'Five incremental steps for wiring shellkit into a script that already runs in production. Each step can ship on its own.'
 _en_notice "$SITE/en/guide/releasing.md" 'Releasing' 'releasing' \
@@ -188,5 +207,5 @@ for __f in "$DOCS"/shots/*.svg; do
   cp "$__f" "$SITE/.vuepress/public/shots/" || _die "failed to copy $__f"
 done
 
-_say "pages: 3 synced, 1 reference index, $__nfunc functions across 15 modules"
+_say "pages: 3 synced, 1 reference index, $__nfunc functions across $(printf '%s\n' $MODULES | wc -l | tr -d ' ') modules"
 exit 0

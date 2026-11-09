@@ -19,6 +19,35 @@ stdin 接 `/dev/null`（测试不许等人按键，否则 CI 会挂死），有 
 
 输出只有两种行：`ok` 或 `FAIL: <消息>`。**有 FAIL 行就是失败**，不看退出码也要看它。
 
+## 机器可读的输出格式
+
+CI 里真正要的是「哪个用例挂了」，不是「哪个文件挂了」。执行器有三种格式：
+
+```bash
+bash tests/run.sh                      # plain（默认，行为与旧版逐字一致）
+bash tests/run.sh --format tap         # TAP 13，测试报告工具直接吃
+bash tests/run.sh --format junit        # JUnit XML，GitHub Actions / Jenkins 收
+```
+
+其它选项：
+
+```bash
+bash tests/run.sh --jobs 4             # 并行跑（每个文件一个独立临时目录）
+bash tests/run.sh --filter '*fs*'      # 只跑文件名匹配的文件
+bash tests/run.sh --list               # 只列出将要跑的文件，不执行
+```
+
+`--filter` 收的是 shell 通配符（要自己带上 `*`）。一个文件都没匹配上时，退出码是 2
+并把可用的测试文件列出来 —— 绝不会出现「All 0 test files passed.」这种假绿。
+
+用例粒度靠测试文件里的 `# CASE: 标题` 注释切分。文件里没有 `CASE` 标记时退化成
+「文件级一条用例」，失败原因取断言打印的 `FAIL:` 行。
+
+**「有失败但报告说全过」不可能发生**：三种格式都会在有失败时返回非 0，
+而且失败会以 `not ok` / `<failure>` / `FAILED:` 的形式出现在报告里。
+这条不变量由 `tests/test_runner.sh` 守着 —— 它把真的执行器复制到一个假仓库里，
+用受控的失败用例去验每种格式。
+
 ## 断言库
 
 `tests/test_helper.sh` 是极简断言库，断言失败即 `exit 1`，由执行器标红。
@@ -69,19 +98,25 @@ unstub curl
 
 同一套办法也用于 `date`（钉死时间，测备份文件名）、`sleep`（不真睡，测重试延迟区间）。
 
-## 门禁：`make check` 的九步
+## 门禁：`make check` 的十二步
 
 | 步骤 | 拦什么 |
 | --- | --- |
 | `syntax` | `bash -n` 全部脚本与模板 |
 | `test` | `tests/run.sh` |
 | `lint` | `shellcheck -S warning -x`（模板先渲染再检查） |
+| `module-order-check` | 某模块调用了还没加载的模块的函数 |
+| `check-exitcode-docs` | 公开函数没写明返回码，或注释块与函数之间有空行 |
 | `docs-check` | 公开函数缺注释、生成物与源码不一致 |
 | `versions-check` | `VERSION` 与五处投影是否一致 |
 | `check-docs` | markdown 的 bash 代码块必须 `bash -n` 通过；函数名必须真实存在 |
+| `cookbook-check` | 文档里手写的「N 个场景」与 Cookbook 实际场景数对不上 |
 | `messages-check` | pot 与源码是否一致（缺 xgettext 时跳过） |
 | `examples` | `examples/` 下每个工程自己的 test |
 | `fmt` | `shfmt -d -i 2 -ci`（只检查，不自动改） |
+
+`check-exitcode-docs` 守的是「返回码是接口的一部分」这句话：README 这么承诺，
+就得有门禁兑现。早期写下的 16 个模块一个 `@exitcode` 都没有，接口是残的。
 
 其中 `check-docs` 是最容易被忽略的一条：它让「文档写着、代码里没有」变成构建失败。
 函数改名之后 README 里的例子会立刻红，而不是悄悄变成错的 —— AI 抓到错的例子会照抄，

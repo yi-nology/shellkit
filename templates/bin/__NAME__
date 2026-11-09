@@ -25,4 +25,16 @@ export APP_ROOT
 # 供 lib/core/cli.sh 生成 usage 前缀；跨文件使用，shellcheck 单文件看不到
 # shellcheck disable=SC2034
 SK_PROG={{NAME}}
+export SK_PROG
+
+# --completion [bash|zsh]：输出本工程的补全脚本。
+# 程序名取 SK_PROG，子命令取注册表 —— 新增子命令后重跑一次即可。
+case "${1:-}" in
+  --completion)
+    shift
+    cli_completion_script "${1:-bash}" || exit "$?"
+    exit 0
+    ;;
+esac
+
 cli_run "$@"

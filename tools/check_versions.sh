@@ -59,6 +59,20 @@ _check "site/en/index.md" "VERSION=" \
 _check "site/en/index.md" "download button" \
   $(grep -Eo 'Download [0-9]+\.[0-9]+\.[0-9]+' "$ROOT/site/en/index.md" | sed 's/^Download //')
 
+# CHANGELOG 的最新一节必须就是当前版本 —— 否则发版了但变更记录停在上一版，
+# 用户看到的「最近改了什么」是过期的。
+if [ -f "$ROOT/CHANGELOG.md" ]; then
+  _cl=$(sed -n 's/^## \([0-9][0-9]*\.[0-9][0-9]*\.[0-9][0-9]*\).*/\1/p' "$ROOT/CHANGELOG.md" | head -1)
+  if [ -z "$_cl" ]; then
+    printf 'versions-check: CHANGELOG.md has no version section\n' >&2
+    exit 5
+  fi
+  if [ "$_cl" != "$_ver" ]; then
+    printf 'versions-check: CHANGELOG.md latest says %s, VERSION says %s\n' "$_cl" "$_ver" >&2
+    exit 5
+  fi
+fi
+
 # 安装页里也有钉版本的示例：漏改就会教人装上一版
 # shellcheck disable=SC2046
 _check "site/guide/installation.md" "VERSION=" \

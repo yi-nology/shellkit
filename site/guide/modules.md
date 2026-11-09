@@ -1,6 +1,6 @@
 # 模块地图
 
-`lib/bootstrap.sh` 是唯一入口，一次性按**拓扑序**加载全部 15 个模块。你不用挑着 source，
+`lib/bootstrap.sh` 是唯一入口，一次性按**拓扑序**加载全部 17 个模块。你不用挑着 source，
 也不该复制某个模块的实现进自己的脚本 —— 那是把「同一个坑踩两遍」的另一种写法。
 
 ## 一张表
@@ -19,21 +19,43 @@
 | [retry](/reference/retry.md) | 退避重试 | `retry` |
 | [lock](/reference/lock.md) | 单实例 | `lock_acquire` `lock_release` `lock_held` |
 | [net](/reference/net.md) | 下载与就绪探测 | `net_download` `net_verify` `net_sha256` `net_wait_port` `net_wait_http` |
-| [config](/reference/config.md) | KEY=VALUE 配置 | `conf_init` `conf_get` `conf_get_any` `conf_has` `conf_set` `conf_unset` `conf_disable` `conf_keys` |
+| [http](/reference/http.md) | 发 HTTP 请求 | `net_request` `net_json` `net_escape_json` |
+| [config](/reference/config.md) | KEY=VALUE 与 dotenv 配置 | `conf_init` `conf_get` `conf_get_any` `conf_has` `conf_set` `conf_unset` `conf_disable` `conf_keys` `conf_load_dotenv` `conf_source` |
+| [scaffold](/reference/scaffold.md) | 模板变量、生成物清单、钩子 | `scaffold_vars_set` `scaffold_vars_get` `scaffold_config_load` `scaffold_render` `scaffold_manifest_read` `scaffold_run_hook` |
 | [prompt](/reference/prompt.md) | 交互 | `ask` `ask_yn` `ask_choice` `confirm` |
 | [cli](/reference/cli.md) | 注册式命令框架 | `cli_group` `cli_cmd` `cli_run` `cli_opt` `cli_opts` `cli_has` `cli_usage_global` |
 
 ## 加载顺序不是字母序
 
 拓扑序的理由：后面的模块会调用前面的。比如 `log` 要能用 `_t`（先加载 `i18n`），
-`error` 要用 `log_error`，`cli` 要用 `log_error` 和 `_t`。所以顺序是：
+`error` 要用 `log_error`，`cli` 要用 `log_error` 和 `_t`。
+
+这份顺序写在**一个文件**里 —— `lib/modules.txt`，两列：
 
 ```text
-error i18n log str validate fs os trap run retry lock net config prompt cli
+i18n
+log          i18n
+error        i18n log
+str          error
 ```
 
-`tools/shdoc.sh` 里 `MODULES` 是同一份顺序，改一处必须改两处 —— 否则生成的 API 参考
-和实际加载顺序会不一致，读者按文档找依赖关系会找错。
+第一列是模块名，第二列是它**直接依赖**的模块（空格分隔，可以不写）。
+`lib/bootstrap.sh` 按它加载，`tools/shdoc.sh` 按它生成 API 参考，文档站也按它同步 ——
+加一个模块只改这一个文件，没有第二处要对。
+
+依赖必须排在依赖者前面。放错了不用等运行时才发现：`make module-order-check` 会直接
+指出「哪个模块调用了还没加载的模块的函数」。
+
+## 只加载你要的模块
+
+默认全量加载（17 个模块）。真要瘦下来：
+
+```bash
+SHELLKIT_MODULES="log fs" . ./vendor/shellkit/lib/bootstrap.sh
+```
+
+只有列出来的模块会被加载，**它们的传递依赖会自动带上**（`i18n` 永远加载，
+因为每个模块都要翻译）。
 
 ## 按任务选模块
 

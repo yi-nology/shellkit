@@ -58,7 +58,7 @@ sha256 对不上就 `exit 5`，一个字节都不落地。
 
 <ShotFigure src="/shots/gate.svg" caption="文档里的例子改名会立刻红，不会悄悄烂掉" />
 
-## 15 个模块，一个模块一个主题
+## 17 个模块，一个模块一个主题
 
 你该做的是装配，不是重新实现一遍。每个模块的完整签名与退出码见 [API 参考](/reference/index.md)。
 
@@ -76,7 +76,9 @@ sha256 对不上就 `exit 5`，一个字节都不落地。
 | [retry](/reference/retry.md) | 退避重试，不管用法错 |
 | [lock](/reference/lock.md) | mkdir 原子锁，拿到即进清理栈 |
 | [net](/reference/net.md) | 下载带 sha256 校验与镜像回退 |
-| [config](/reference/config.md) | KEY=VALUE，环境变量优先 |
+| [http](/reference/http.md) | 发 HTTP 请求，状态码与业务错分开看 |
+| [config](/reference/config.md) | KEY=VALUE 与 dotenv，环境变量优先 |
+| [scaffold](/reference/scaffold.md) | 模板变量、生成物清单、钩子 |
 | [prompt](/reference/prompt.md) | 超时回退默认值 |
 | [cli](/reference/cli.md) | 注册即生效，动态分发 |
 
@@ -98,7 +100,7 @@ sha256 对不上就 `exit 5`，一个字节都不落地。
 | --- | --- |
 | 想花五分钟判断值不值得用 | [三十秒](/guide/quickstart.md) |
 | 已经有脚本在跑，想接库但不想重写 | [五步迁移](/guide/migrating.md) |
-| 手上有具体活：改配置、下载校验、重试、单实例 | [Cookbook](/guide/cookbook.md) 十四个场景 |
+| 手上有具体活：改配置、下载校验、重试、单实例 | [Cookbook](/guide/cookbook.md) 23 个场景 |
 | 要查某个函数的确切签名和退出码 | [API 参考](/reference/index.md) |
 | 想让 AI 替你写 | [给 AI 用](/guide/ai.md) |
 | 想先看完整工程长什么样 | [示例工程](/guide/examples.md) |

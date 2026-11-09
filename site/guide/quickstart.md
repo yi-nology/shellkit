@@ -12,8 +12,12 @@ cd shellkit
 cd /tmp/shellkit-demo && make test
 ```
 
-`doctor` 先告诉你环境缺什么（shellcheck、shfmt、gettext、python3）。**缺了也不影响核心功能** ——
-库本身零运行时依赖，缺的只是对应的检查项会跳过。
+`doctor` 做三类检查：**环境**（缺什么工具）、**库完整性**（模块文件齐不齐、有没有坏）、
+**vendor 漂移**（工程里那份副本与自带的是否逐字节一致）。
+
+**缺工具不影响核心功能** —— 库本身零运行时依赖，缺的只是对应的检查项会跳过。
+但「库坏了」或「vendor 漂移」会被抓出来并返回 5（校验失败）：前者点名缺哪个模块，
+后者点名漂了哪个文件。`--dir DIR` 可以指定要检查的工程目录。
 
 `new` 生成的工程**当场 `make test` 通过**，不是空骨架。
 
@@ -82,8 +86,16 @@ shellkit vendor .
 shellkit vendor . --check
 ```
 
-`vendor` 同步 `lib/`、`locale/`、`VERSION` 到 `vendor/shellkit`；`--check` 只逐字节比对，
-漂移返回 5，适合放进 CI 拦「有人在本地改过 vendor」这种情况。
+`vendor` 同步 `lib/`、`locale/`、`templates/`、`tests/`、`VERSION` **以及 CLI 本身**
+到 `vendor/shellkit`；`--check` 只逐字节比对，漂移返回 5，适合放进 CI 拦
+「有人在本地改过 vendor」这种情况。
+
+副本自带 CLI 与模板，所以工程被拷到一台**没装 shellkit 的机器**上时，
+仍然可以离线升级：
+
+```bash
+./vendor/shellkit/shellkit upgrade .
+```
 
 脚本顶部一行接入：
 

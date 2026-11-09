@@ -14,9 +14,19 @@ design starts.
 
 ## Can I use only one or two modules?
 
-`lib/bootstrap.sh` loads all fifteen at once. Each module is small; splitting the sourcing only complicates the
-dependency graph, and the modules are topologically ordered (`log` needs `i18n`). If you only want the testing
-capability, copy `tests/run.sh` and `tests/test_helper.sh` -- two files, zero dependencies.
+By default `lib/bootstrap.sh` loads all seventeen -- each module is small, and the lot is under 400KB.
+
+To slim it down, name the modules you want:
+
+```bash
+SHELLKIT_MODULES="log fs" . ./vendor/shellkit/lib/bootstrap.sh
+```
+
+Only the listed modules are loaded, and their **transitive dependencies come along automatically** (`i18n` is always
+loaded, because every module needs translations). An unknown module name is an error, not a silent skip.
+
+If you only want the testing capability, copy `tests/run.sh` and `tests/test_helper.sh` -- two files, zero
+dependencies.
 
 ## Why does `shellkit new` copy the library into `vendor/`?
 

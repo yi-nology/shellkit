@@ -1,6 +1,6 @@
 # Module map
 
-`lib/bootstrap.sh` is the single entry point. It loads all fifteen modules once, in **topological order**. You do not
+`lib/bootstrap.sh` is the single entry point. It loads all seventeen modules once, in **topological order**. You do not
 pick and choose what to source, and you should not copy one module's implementation into your own script -- that is
 just another way of hitting the same trap twice.
 
@@ -20,21 +20,43 @@ just another way of hitting the same trap twice.
 | [retry](/en/reference/retry.md) | retries with backoff | `retry` |
 | [lock](/en/reference/lock.md) | single instance | `lock_acquire` `lock_release` `lock_held` |
 | [net](/en/reference/net.md) | downloads and readiness probes | `net_download` `net_verify` `net_sha256` `net_wait_port` `net_wait_http` |
-| [config](/en/reference/config.md) | KEY=VALUE configuration | `conf_init` `conf_get` `conf_get_any` `conf_has` `conf_set` `conf_unset` `conf_disable` `conf_keys` |
+| [http](/en/reference/http.md) | sending HTTP requests | `net_request` `net_json` `net_escape_json` |
+| [config](/en/reference/config.md) | KEY=VALUE and dotenv configuration | `conf_init` `conf_get` `conf_get_any` `conf_has` `conf_set` `conf_unset` `conf_disable` `conf_keys` `conf_load_dotenv` `conf_source` |
+| [scaffold](/en/reference/scaffold.md) | template variables, manifests, hooks | `scaffold_vars_set` `scaffold_vars_get` `scaffold_config_load` `scaffold_render` `scaffold_manifest_read` `scaffold_run_hook` |
 | [prompt](/en/reference/prompt.md) | interaction | `ask` `ask_yn` `ask_choice` `confirm` |
 | [cli](/en/reference/cli.md) | registered-command framework | `cli_group` `cli_cmd` `cli_run` `cli_opt` `cli_opts` `cli_has` `cli_usage_global` |
 
 ## Load order is not alphabetical
 
 Topological order exists because later modules call earlier ones. `log` needs `_t` (so `i18n` loads first), `error`
-needs `log_error`, and `cli` needs both `log_error` and `_t`. Hence:
+needs `log_error`, and `cli` needs both `log_error` and `_t`.
+
+That order lives in **one file** -- `lib/modules.txt`, with two columns:
 
 ```text
-error i18n log str validate fs os trap run retry lock net config prompt cli
+i18n
+log          i18n
+error        i18n log
+str          error
 ```
 
-`tools/shdoc.sh` holds the same order in its `MODULES` list. Change one, change both -- otherwise the generated API
-reference disagrees with the real load order, and readers tracing dependencies will trace them wrong.
+The first column is the module name, the second lists its **direct** dependencies (space separated, optional).
+`lib/bootstrap.sh` loads from it, `tools/shdoc.sh` generates the API reference from it, the site syncs from it --
+adding a module means editing one file, with no second place to forget.
+
+Dependencies must come first. Getting the order wrong does not have to wait for runtime to surface:
+`make module-order-check` names the offending call directly.
+
+## Load only what you need
+
+By default everything loads (seventeen modules). To slim it down:
+
+```bash
+SHELLKIT_MODULES="log fs" . ./vendor/shellkit/lib/bootstrap.sh
+```
+
+Only the listed modules are loaded, and their **transitive dependencies come along automatically** (`i18n` is always
+loaded, because every module needs translations).
 
 ## Pick a module by task
 

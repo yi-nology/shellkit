@@ -20,6 +20,34 @@ to `/dev/null` (a test must never wait for a keypress or CI hangs), and applies 
 Output has exactly two shapes: `ok` or `FAIL: <message>`. **Any FAIL line means failure** -- and you have to look at it,
 not just at the exit code.
 
+## Machine-readable output
+
+What CI actually needs is *which case failed*, not which file. The runner has three formats:
+
+```bash
+bash tests/run.sh                      # plain (default; behaviour is byte-for-byte the old one)
+bash tests/run.sh --format tap         # TAP 13, straight into any test reporter
+bash tests/run.sh --format junit        # JUnit XML, for GitHub Actions / Jenkins
+```
+
+Other options:
+
+```bash
+bash tests/run.sh --jobs 4             # run in parallel (each file gets its own temp root)
+bash tests/run.sh --filter '*fs*'      # only files whose name matches
+bash tests/run.sh --list               # list what would run, run nothing
+```
+
+`--filter` takes a shell glob (add your own `*`). When it matches nothing the runner exits 2 and lists the
+available test files -- an empty run is never reported as green.
+
+Case granularity comes from `# CASE: title` comments inside the test file. A file without any `CASE` marker
+degrades to one file-level case, and the failure reason is the `FAIL:` line the assertion printed.
+
+**"A failure reported as all green" cannot happen**: every format returns non-zero when something fails, and the
+failure shows up as `not ok` / `<failure>` / `FAILED:` in the report. `tests/test_runner.sh` holds that invariant
+down -- it copies the real runner into a fake repository and drives it with controlled failing cases.
+
 ## Assertions
 
 `tests/test_helper.sh` is a deliberately minimal assertion library. A failed assertion exits 1, and the runner marks
@@ -72,19 +100,26 @@ unstub curl
 The same approach works for `date` (freeze time, assert on backup file names) and `sleep` (do not actually sleep,
 still assert on the retry delay window).
 
-## The gate: nine steps of `make check`
+## The gate: twelve steps of `make check`
 
 | Step | What it blocks |
 | --- | --- |
 | `syntax` | `bash -n` over every script and template |
 | `test` | `tests/run.sh` |
 | `lint` | `shellcheck -S warning -x` (templates are rendered before checking) |
+| `module-order-check` | a module calling a function from a module loaded later |
+| `check-exitcode-docs` | a public function that does not document its return code, or whose comment block is separated from it by a blank line |
 | `docs-check` | public functions without a comment, generated artefacts out of sync |
 | `versions-check` | `VERSION` against its five projections |
 | `check-docs` | every bash block in markdown must pass `bash -n`, and every function name must exist |
+| `cookbook-check` | the hand-written "N scenarios" in the docs does not match the real cookbook |
 | `messages-check` | pot versus sources (skipped when `xgettext` is absent) |
 | `examples` | each project's own test under `examples/` |
 | `fmt` | `shfmt -d -i 2 -ci` (checks, never rewrites) |
+
+`check-exitcode-docs` backs the promise "the return code is part of the interface". The README makes that promise,
+so a gate has to keep it. The sixteen modules written before the rule existed carried no `@exitcode` at all -- the
+interface was half missing.
 
 `check-docs` is the easiest to overlook: it turns "documented but not implemented" into a build failure. Rename a
 function and the example in the README goes red immediately instead of silently becoming wrong -- and an AI that

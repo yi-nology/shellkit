@@ -6,22 +6,27 @@
 make check
 ```
 
-All nine steps must be green. To run one step on its own:
+All twelve steps must be green. To run one step on its own:
 
 ```bash
 bash tests/run.sh
 ./shellkit docs --check
 bash tools/check_versions.sh
 bash tools/check_docs.sh
+bash tools/check_module_order.sh
+bash tools/check_exitcode_docs.sh
 ```
 
-## Adding a module means four edits; miss one and the gate goes red
+## Adding a module means three edits; miss one and the gate goes red
 
 1. Write `lib/core/<name>.sh`: every public function **must** be preceded by a comment on the line directly above
-   (`docs-check` blocks otherwise).
-2. Insert it into the module sequence in `lib/bootstrap.sh` -- in **dependency order**, not alphabetical order.
-3. Add it at the same position in `MODULES` in `tools/shdoc.sh` (the two lists must agree).
-4. Write `tests/test_<name>.sh`: the `tests/test_*.sh` glob executes it automatically.
+   (`docs-check` blocks otherwise), and it must document its return code (`check-exitcode-docs` blocks otherwise).
+2. Add one line to `lib/modules.txt` -- the **single source of truth** for the module list:
+   `lib/bootstrap.sh` loads from it, `tools/shdoc.sh` generates the API reference from it, the site syncs from it.
+   Two columns: **the module name, then the modules it depends on** (space separated, optional).
+   Put it in **dependency order**, not alphabetical order; a missing dependency declaration or a wrong order makes
+   `module-order-check` name the offending call directly.
+3. Write `tests/test_<name>.sh`: the `tests/test_*.sh` glob executes it automatically.
 
 Functions marked `@internal` are not exported and are exempt from the comment-coverage check; internal functions
 whose names start with an underscore (`_sk_*`) are exempt as well.
