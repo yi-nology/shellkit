@@ -11,6 +11,10 @@ dad8685 test(cli): 回归 —— 选项值写进与内部局部同名的变量�
 d9729f1 docs(site): 门禁表补两条新门禁（命名空间 / 模块数）
 8e6d8c7 docs(site): 约定页讲清「出参名撞上内部局部变量会静默失效」这个坑
 3f742f3 feat(man): 从注册表与函数注释生成 man page
+732745b fix(test): 三个测试在 Linux 上会假红
+5bae973 fix(man): 模块存在性判断别用 grep -q 管道
+eaf6948 feat(gate): 新门禁 —— 管道里不能有会提前退出的消费者
+72228fd docs(gate): 约定页与 AGENTS.md 补「管道早退」这个坑
 
 ## 0.9.0 — 2026-11-09
 
