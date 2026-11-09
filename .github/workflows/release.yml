@@ -32,7 +32,7 @@ jobs:
           mkdir -p "dist/$name"
           # 只放跑起来需要的东西：生成器、库、模板、语言包、文档、测试
           cp -R shellkit install.sh lib templates locale po tools tests docs skills examples "dist/$name/"
-          cp README.md AGENTS.md VERSION LICENSE Makefile "dist/$name/"
+          cp README.md AGENTS.md VERSION LICENSE NOTICE Makefile "dist/$name/"
           rm -rf "dist/$name/docs/superpowers"
           chmod +x "dist/$name/shellkit" "dist/$name/install.sh"
           tar -C dist -czf "dist/$name.tar.gz" "$name"
@@ -46,6 +46,14 @@ jobs:
           work=$(mktemp -d)
           tar -C "$work" -xzf "dist/shellkit-$version.tar.gz"
           cd "$work/shellkit-$version"
+          # 许可文件必须随包走：MIT 要求版权声明随每一份副本分发，
+          # NOTICE 里的上游署名同理。漏了不会有任何报错，只有收到律师函时才知道。
+          for f in LICENSE NOTICE; do
+            if [ ! -s "$f" ]; then
+              echo "the release tarball is missing $f" >&2
+              exit 1
+            fi
+          done
           bash tests/run.sh
           ./shellkit doctor || true
           ./shellkit new "$work/demo" --cmd start
