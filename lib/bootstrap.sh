@@ -41,7 +41,24 @@ else
 fi
 export SK_VERSION
 
-for _sk_module in error i18n log str validate fs os trap run retry lock net config prompt cli; do
+# 模块加载顺序来自 lib/modules.txt —— 顺序只有一处，不再两处各写一份。
+# 少写一个模块不是灾难：tools/check_module_order.sh 会查出来。
+_sk_module_list() {
+  local __f="$SHELLKIT_HOME/lib/modules.txt" __line
+  [ -r "$__f" ] || return 1
+  while IFS= read -r __line || [ -n "$__line" ]; do
+    case "$__line" in
+      '' | '#'*) continue ;;
+    esac
+    printf '%s\n' "$__line"
+  done <"$__f"
+}
+
+for _sk_module in $(_sk_module_list); do
+  if [ ! -f "$SHELLKIT_HOME/lib/core/${_sk_module}.sh" ]; then
+    printf 'shellkit: module listed in modules.txt is missing: %s\n' "${_sk_module}" >&2
+    return 1 2>/dev/null || exit 1
+  fi
   if ! . "$SHELLKIT_HOME/lib/core/${_sk_module}.sh"; then
     printf 'shellkit: failed to load module: %s\n' "${_sk_module}" >&2
     return 1 2>/dev/null || exit 1

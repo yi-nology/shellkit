@@ -109,6 +109,54 @@ cli_usage_global() {
   return 0
 }
 
+# cli_completion_script [bash|zsh] —— 生成补全脚本
+#
+# 子命令名取自注册表，所以新加一个 cli_cmd，补全里自动就有了 ——
+# 不用像别的框架那样单独维护一份命令列表。
+# 程序名取 SK_PROG（生成出来的工程可以在自己的入口里设成自己的名字）。
+cli_completion_script() {
+  local __shell=${1:-bash} __i=0 __words="" __name __prog=${SK_PROG:-shellkit}
+  case "$__shell" in
+    bash | zsh) ;;
+    *)
+      log_error "$(_t 'unsupported shell for completion'): $__shell"
+      return "$SK_USAGE"
+      ;;
+  esac
+  while [ "$__i" -lt "${#SK_CLI_NAMES[@]}" ]; do
+    __name=${SK_CLI_NAMES[$__i]}
+    __words="$__words $__name"
+    __i=$((__i + 1))
+  done
+  if [ "$__shell" = "bash" ]; then
+    cat <<EOF
+# $__prog completion for bash
+# 由 cli_completion_script 生成；新增子命令后重新生成即可。
+# 下面两行的美元符号在源码里是转义过的：heredoc 不转义就会在生成时把数组和命令替换掉。
+_${__prog}_completions() {
+  local cur
+  cur="\${COMP_WORDS[COMP_CWORD]}"
+  COMPREPLY=(\$(compgen -W "$__words" -- "\$cur"))
+  return 0
+}
+complete -F _${__prog}_completions $__prog
+EOF
+  else
+    cat <<EOF
+#compdef $__prog
+# $__prog completion for zsh
+# 由 cli_completion_script 生成；新增子命令后重新生成即可。
+_${__prog}() {
+  local -a commands
+  commands=($__words)
+  _describe 'command' commands
+}
+compdef _${__prog} $__prog
+EOF
+  fi
+  return 0
+}
+
 _sk_suggest() {
   local __n=${1:-} __x __i=0 __hit=""
   while [ "$__i" -lt "${#SK_CLI_NAMES[@]}" ]; do

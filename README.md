@@ -9,6 +9,20 @@
 基线是 **Bash 3.2+**：macOS 自带的 `/bin/bash` 就是 3.2.57，Linux 全系、
 macOS 原生 bash、Alpine 的 busybox 之外的主流发行版都能直接跑。
 
+## 和同类项目怎么分工
+
+这个圈子里每个项目只占一格。shellkit 占的是「写运维脚本时的约束」这一格，
+并且把**门禁**做到了同类项目都没做的程度：
+
+| 你想解决的问题 | 用谁 | 为什么不自己写 |
+|---|---|---|
+| 给 Bash 脚本写单元测试 | [bats](https://github.com/bats-core/bats-core) / [bashunit](https://github.com/TypedDevs/bashunit) / [shellspec](https://github.com/shellspec/shellspec) | 现成的断言、mock、报告格式比自研强；shellkit 的 `tests/` 用自己的断言库，但借鉴了这三家的能力清单 |
+| 跑命令、写日志、原子改文件、幂等 | **shellkit** | 这四件事在每个工程里各写一遍且写法各异；这里给的是统一约定与固定退出码 |
+| 通用脚手架（Python / Node / Go 项目） | [cookiecutter](https://github.com/cookiecutter/cookiecutter) / [copier](https://github.com/copier-org/copier) | 它们不管 Bash 3.2 与运维脚本的约束；shellkit 的 `new` / `upgrade` 走的是同一套变量+清单+钩子机制 |
+| Shell 静态检查与格式化 | [shellcheck](https://github.com/koalaman/shellcheck) / [shfmt](https://github.com/mvdan/sh) | 这两个是工具不是库；shellkit 只是在 `make check` 里调它们 |
+| 版本管理 / 任务编排 | [mise](https://github.com/jdx/mise) | 那是「装什么工具」的问题，跟「怎么写一个脚本」无关 |
+| 曾经想找的「Bash 库 + 脚手架」 | [bash-oo-framework](https://github.com/niieani/bash-oo-framework) | 最接近的先例，2023 年底停更。它堆了 OOP / 类型系统 / 异常 —— shellkit 走的是反方向：扁平函数 + 固定退出码 + 不改调用方的 shell 选项 |
+
 ## 先找你自己
 
 站点版（**VuePress 文档站**，中英双语、可搜索、带真跑出来的终端截图）：
@@ -171,9 +185,11 @@ log_info "starting on port $port"     # 走 stderr，所以上面那行永远是
 | `retry` | `retry` | 退避重试；用法错与校验失败默认不重试 |
 | `lock` | `lock_acquire` `lock_release` `lock_held` | mkdir 原子锁（macOS 没有 flock），拿到即挂进清理栈 |
 | `net` | `net_download` `net_verify` `net_wait_port` `net_wait_http` | 下载带 sha256 缓存校验与镜像回退 |
-| `config` | `conf_init` `conf_get` `conf_get_any` `conf_has` `conf_set` `conf_unset` `conf_keys` | `KEY=VALUE`；值未变不写盘 |
+| `http` | `net_request` `net_json` `net_escape_json` | 发请求：状态码、响应体、响应头分开给；JSON 交给 jq / python3 解析 |
+| `config` | `conf_init` `conf_get` `conf_get_any` `conf_has` `conf_set` `conf_unset` `conf_keys` `conf_load_dotenv` `conf_source` | `KEY=VALUE` 与 dotenv；值未变不写盘 |
+| `scaffold` | `scaffold_vars_set` `scaffold_vars_get` `scaffold_manifest_read` `scaffold_render` | 模板变量渲染、生成物清单、生成前后钩子 |
 | `prompt` | `ask` `ask_yn` `ask_choice` `confirm` | 超时回退默认值；EOF 与超时区分处理 |
-| `cli` | `cli_group` `cli_cmd` `cli_run` `cli_opt` `cli_opts` | 注册即生效，`declare -F` 动态分发 |
+| `cli` | `cli_group` `cli_cmd` `cli_run` `cli_opt` `cli_opts` `cli_completion_script` | 注册即生效，`declare -F` 动态分发 |
 
 ### 退出码
 
@@ -197,6 +213,9 @@ log_info "starting on port $port"     # 走 stderr，所以上面那行永远是
 `SHELLKIT_DRY_RUN=1`（`run` 只打印不执行）、
 `SHELLKIT_RETRY_DELAY`/`SHELLKIT_RETRY_BACKOFF`/`SHELLKIT_RETRY_MAX_DELAY`/`SHELLKIT_RETRY_ON`、
 `SHELLKIT_LOCK_DIR`（默认 `${TMPDIR:-/tmp}`）、`SHELLKIT_LOCK_STALE`（秒，超时视为僵锁）。
+
+`SHELLKIT_LOG_LEVEL=debug|info|warn|error`（默认 info）、`SHELLKIT_LOG_FORMAT=text|json`（默认 text）、
+`SHELLKIT_LOG_FILE=PATH`（追加写日志文件）。默认行为与以前完全一样，不设这三个变量就不用管。
 
 ## 清理、幂等、重试、单实例
 
@@ -249,6 +268,45 @@ cli_run "$@"
 
 错误只报一次：`log_error` 打印一次并记进 `SK_ERRMSG`（最后一条错误），不会重复刷屏。
 未知命令按前缀给候选（`Did you mean: deploy`）。
+
+## 脚手架的演化
+
+`new` 只负责第一次。工程交付之后怎么跟上库和模板的改进，是脚手架真正值钱的地方：
+
+```bash
+shellkit new ./ops-tool --cmd deploy --cmd status     # 第一次
+shellkit upgrade ./ops-tool --check                   # 只看会改什么，不落盘
+shellkit upgrade ./ops-tool                           # 落盘
+```
+
+`new` 会在工程里留一份 `.shellkit-manifest`（工程名、模板版本、每个文件的指纹），
+`upgrade` 靠它判断哪些文件可以安全重放、哪些被你改过 —— 改过的**跳过并告警**，
+不会把你的修改覆盖掉。
+
+模板变量写在 `templates/template.config` 里（`KEY=VALUE` + 默认值），
+也可以在命令行覆盖：
+
+```bash
+shellkit new ./ops-tool --set SERVICE_NAME=api --set SERVICE_PORT=8080
+```
+
+生成前后可以挂钩子（`templates/template.hooks.d/pre`、`post`，各是一段可执行 shell）：
+`git init`、装依赖、拉 CI 模板都放这里。
+
+用别人（或自己）的模板：
+
+```bash
+shellkit new ./ops-tool --template ~/my-templates/service
+```
+
+## 命令补全
+
+```bash
+shellkit completion bash > /etc/bash_completion.d/shellkit
+shellkit completion zsh  > "${fpath[1]}/_shellkit"
+```
+
+子命令列表从注册表生成 —— 加了 `cli_cmd` 之后重新生成一次就行，不用维护第二份清单。
 
 ## 国际化
 
@@ -334,7 +392,7 @@ lib/bootstrap.sh          唯一入口，按拓扑序加载
 lib/core/*.sh             15 个模块
 templates/                shellkit new 的模板
 tests/                    断言库 + 逐文件执行器 + 每个模块一个测试
-tools/                    shdoc.awk 渲染 / coverage.awk 查漏 / check_docs.sh 门禁 / term_shot.py 截图
+tools/                    shdoc.awk 渲染 / comment_coverage.awk 查漏 / check_docs.sh 门禁 / term_shot.py 截图
 examples/                 两个能直接跑的完整工程
 po/messages.sh            msgid 抽取与 .mo 编译
 locale/{en,zh_CN,zh_Hant}
@@ -351,5 +409,13 @@ tools/site_links.sh       构建产物上的链接门禁（主题自带的 links
 
 ## 许可
 
-GPL-3.0-or-later，见 [LICENSE](LICENSE)。骨架演化自 jumpserver/installer（GPLv3），
-按同一许可证分发，原署名保留在 LICENSE 里。
+MIT，见 [LICENSE](LICENSE)。
+
+设计骨架参考自 [jumpserver/installer](https://github.com/jumpserver/installer)（GPLv3），
+原署名保留在 [NOTICE](NOTICE) 里。shellkit 的代码是独立实现 —— 与上游逐行比对，
+代码行零重合，未复制上游代码。
+
+选 MIT 而不是 GPL-3.0，是因为这个库的定位就是**被别人 vendor 走**：下游把
+`lib/` 拷进自己的工程。GPL-3.0 的传染性会把下游的闭源产品也拖进去，
+这对库来说是硬约束。作为库被使用的同类项目（bash-oo-framework、bats、
+shellspec、cookiecutter、copier、mise）全部用 MIT/BSD/Apache。

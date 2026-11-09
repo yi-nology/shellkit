@@ -69,6 +69,17 @@ if [ -f "$po" ]; then
   assert_eq "1" "$empty" "every msgid in zh_CN has a translation (only the header may be empty)"
 fi
 
+# fuzzy 译文必须为 0。
+# msgmerge 会把新 msgid「模糊匹配」到不相干的旧条目上，于是
+# "invalid concurrency" 会继承 "无效的选择" 这种译文 —— 而上一条断言只看
+# msgstr 非空，垃圾译文照样过门。模糊标记是唯一的线索，必须清干净。
+for _lang in zh_CN zh_Hant; do
+  _po="$TEST_ROOT/locale/$_lang/LC_MESSAGES/shellkit.po"
+  [ -f "$_po" ] || continue
+  _fuzzy=$(grep -c '^#, fuzzy' "$_po" || true)
+  assert_eq "0" "$_fuzzy" "no fuzzy translation survives in $_lang"
+done
+
 # ---------------------------------------------------------------------------
 # issue #23：xgettext 会把传给它的文件名原样写进 `#:` 注释。
 # 传绝对路径时，pot 里嵌着本机的 /Users/xxx，换台机器一跑 messages-check 就红；

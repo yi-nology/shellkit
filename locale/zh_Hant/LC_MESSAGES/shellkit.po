@@ -4,7 +4,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: shellkit\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-11-09 03:37+0800\n"
+"POT-Creation-Date: 2026-11-09 18:44+0800\n"
 "PO-Revision-Date: 2026-11-08 00:00+0800\n"
 "Last-Translator: shellkit contributors\n"
 "Language-Team: shellkit contributors\n"
@@ -44,6 +44,9 @@ msgstr "關閉彩色輸出"
 msgid "non-interactive, use defaults"
 msgstr "非互動模式，全部取預設值"
 
+msgid "unsupported shell for completion"
+msgstr "不支援的補全 shell"
+
 msgid "Did you mean"
 msgstr "您是不是想用"
 
@@ -77,6 +80,18 @@ msgstr "選項需要一個值"
 msgid "configuration file path is required"
 msgstr "必須提供設定檔路徑"
 
+msgid "invalid configuration format"
+msgstr "非法的設定格式"
+
+msgid "skipping invalid configuration line"
+msgstr "跳過無效的設定行"
+
+msgid "skipping invalid dotenv line"
+msgstr "跳過無效的 dotenv 行"
+
+msgid "Required file not found"
+msgstr "找不到必要的檔案"
+
 msgid "invalid configuration key"
 msgstr "非法的設定鍵名"
 
@@ -94,9 +109,6 @@ msgstr "找不到必要的指令"
 
 msgid "This action must be run as root"
 msgstr "這個操作需要 root 權限"
-
-msgid "Required file not found"
-msgstr "找不到必要的檔案"
 
 msgid "Bash version is too old"
 msgstr "Bash 版本過舊"
@@ -128,6 +140,42 @@ msgstr "拒絕覆蓋非符號連結檔案"
 msgid "refusing to use a symlinked temporary directory"
 msgstr "拒絕使用符號連結指向的暫存目錄"
 
+msgid "URL is required"
+msgstr "必須提供 URL"
+
+msgid "invalid HTTP method"
+msgstr "非法的 HTTP 方法"
+
+msgid "missing value for option"
+msgstr "選項缺少取值"
+
+msgid "cannot use both --data and --json"
+msgstr "--data 與 --json 不能同時使用"
+
+msgid "invalid timeout value"
+msgstr "非法的逾時值"
+
+msgid "curl is required for HTTP requests"
+msgstr "HTTP 請求需要 curl"
+
+msgid "invalid URL"
+msgstr "非法的 URL"
+
+msgid "HTTP request failed"
+msgstr "HTTP 請求失敗"
+
+msgid "cannot write response body to file"
+msgstr "無法把回應體寫入檔案"
+
+msgid "jq or python3 is required to parse JSON"
+msgstr "解析 JSON 需要 jq 或 python3"
+
+msgid "invalid JSON response"
+msgstr "非法的 JSON 回應"
+
+msgid "JSON path not found"
+msgstr "找不到 JSON 路徑"
+
 msgid "invalid lock name"
 msgstr "非法的鎖名"
 
@@ -139,6 +187,9 @@ msgstr "已有另一個實例在執行"
 
 msgid "lock is held by another process"
 msgstr "鎖被另一個程序持有"
+
+msgid "no write permission"
+msgstr "沒有寫入權限"
 
 msgid "no checksum configured for"
 msgstr "沒有為該檔案設定校驗和"
@@ -218,6 +269,54 @@ msgstr "run 需要一條命令"
 msgid "command failed"
 msgstr "命令執行失敗"
 
+msgid "usage: run_concurrent N [--timeout SEC] -- COMMAND..."
+msgstr "用法：run_concurrent N [--timeout SEC] -- 命令..."
+
+msgid "invalid concurrency"
+msgstr "非法的並行數"
+
+msgid "invalid timeout"
+msgstr "非法的逾時值"
+
+msgid "run_concurrent requires a command"
+msgstr "run_concurrent 需要一條命令"
+
+msgid "cannot create a temporary directory"
+msgstr "無法建立暫存目錄"
+
+msgid "timeout command not found, running without a timeout"
+msgstr "找不到 timeout 命令，將不設逾時執行"
+
+msgid "concurrent instances failed"
+msgstr "並行實例中有失敗"
+
+msgid "invalid template variable name"
+msgstr "非法的模板變數名"
+
+msgid "template config not found"
+msgstr "找不到模板設定"
+
+msgid "skipped a malformed template variable"
+msgstr "跳過格式錯誤的模板變數"
+
+msgid "skipped an invalid template variable name"
+msgstr "跳過了非法的模板變數名"
+
+msgid "template is missing"
+msgstr "缺少範本檔案"
+
+msgid "no shellkit manifest in"
+msgstr "這裡沒有 shellkit 清單："
+
+msgid "unknown manifest key"
+msgstr "清單裡有未知的鍵"
+
+msgid "hook is not executable, skipped"
+msgstr "鉤子不可執行，已跳過"
+
+msgid "hook failed"
+msgstr "鉤子執行失敗"
+
 msgid "trap_push requires a command"
 msgstr "trap_push 需要一條命令"
 
@@ -245,9 +344,6 @@ msgstr "非法的版本號"
 msgid "path must be absolute"
 msgstr "路徑必須是絕對路徑"
 
-msgid "invalid URL"
-msgstr "非法的 URL"
-
 msgid "value not in allowed set"
 msgstr "值不在允許的集合中"
 
@@ -256,6 +352,9 @@ msgstr "產生專案"
 
 msgid "create a new project skeleton"
 msgstr "產生新專案骨架"
+
+msgid "update a generated project to the current template"
+msgstr "把產生的工程升級到當前模板"
 
 msgid "environment"
 msgstr "環境"
@@ -278,6 +377,9 @@ msgstr "文件"
 msgid "regenerate the API reference"
 msgstr "重新產生 API 參考"
 
+msgid "print a shell completion script"
+msgstr "輸出 shell 補全腳本"
+
 msgid "installation"
 msgstr "安裝"
 
@@ -290,8 +392,8 @@ msgstr "卸載已安裝的 shellkit"
 msgid "update an installed shellkit"
 msgstr "更新已安裝的 shellkit"
 
-msgid "template is missing"
-msgstr "缺少範本檔案"
+msgid "usage"
+msgstr "用法"
 
 msgid "path exists and is not a directory"
 msgstr "路徑已存在且不是目錄"
@@ -320,6 +422,15 @@ msgstr "必須提供目標目錄"
 msgid "invalid project name"
 msgstr "非法的專案名稱"
 
+msgid "template directory does not exist"
+msgstr "模板目錄不存在"
+
+msgid "--set expects KEY=VALUE"
+msgstr "--set 需要 KEY=VALUE 形式"
+
+msgid "value for"
+msgstr "取值"
+
 msgid "creating"
 msgstr "正在建立"
 
@@ -329,6 +440,9 @@ msgstr "產生工程失敗"
 msgid "the target directory was left in place for inspection"
 msgstr "目標目錄已保留，便於檢查"
 
+msgid "failed to write the project manifest"
+msgstr "寫入工程清單失敗"
+
 msgid "the generated project is incomplete"
 msgstr "產生的工程不完整"
 
@@ -337,6 +451,45 @@ msgstr "專案已產生"
 
 msgid "next steps"
 msgstr "下一步"
+
+msgid "target directory does not exist"
+msgstr "目標目錄不存在"
+
+msgid "it does not look like a shellkit-generated project"
+msgstr "看起來不是 shellkit 產生的工程"
+
+msgid "the manifest does not record a project name"
+msgstr "manifest 裡沒有記錄工程名"
+
+msgid "upgrading"
+msgstr "正在升級"
+
+msgid "template version"
+msgstr "模板版本"
+
+msgid "would add"
+msgstr "將新增"
+
+msgid "added"
+msgstr "已新增"
+
+msgid "modified locally, left alone"
+msgstr "本地已修改，保持原樣"
+
+msgid "no recorded fingerprint, left alone"
+msgstr "沒有記錄的指紋，保持原樣"
+
+msgid "would update"
+msgstr "將更新"
+
+msgid "updated"
+msgstr "已更新："
+
+msgid "failed to sync the vendored library"
+msgstr "同步程式庫副本失敗"
+
+msgid "upgrade finished"
+msgstr "升級完成"
 
 msgid "environment check"
 msgstr "環境檢查"
@@ -380,9 +533,6 @@ msgstr "樣板"
 msgid "commands"
 msgstr "指令"
 
-msgid "target directory does not exist"
-msgstr "目標目錄不存在"
-
 msgid "vendored library is out of date"
 msgstr "專案內的程式庫副本已過期"
 
@@ -397,9 +547,6 @@ msgstr "拒絕覆蓋不是 shellkit 副本的目錄"
 
 msgid "syncing"
 msgstr "正在同步"
-
-msgid "failed to sync the vendored library"
-msgstr "同步程式庫副本失敗"
 
 msgid "load it from your scripts"
 msgstr "在腳本裡這樣載入"
@@ -427,9 +574,6 @@ msgstr "文件已是最新"
 
 msgid "wrote"
 msgstr "已寫入"
-
-msgid "no write permission"
-msgstr "沒有寫入權限"
 
 msgid "try a writable prefix"
 msgstr "換一個可寫的前綴"
@@ -523,12 +667,6 @@ msgstr "正在更新："
 
 msgid "update failed"
 msgstr "更新失敗："
-
-msgid "updated"
-msgstr "已更新："
-
-msgid "cannot create a temporary directory"
-msgstr "無法建立暫存目錄"
 
 msgid "running"
 msgstr "正在執行"

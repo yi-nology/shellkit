@@ -121,7 +121,7 @@ shellkit vendor . --check    # 只比对，不写盘
 
 不会改变结果的修复（可以直接升）：`fs_ensure_line` / `fs_ensure_block` 对含反斜杠的文本不再
 重复追加；`net_wait_port` 不再关调用方的 fd 3、也不再永久改掉 stderr；`_tn` 的复数分支真的
-走 gettext 了；`shellkit list` 列全 9 个子命令；`docs --check` 缺 `tools/coverage.awk` 时
+走 gettext 了；`shellkit list` 列全 9 个子命令；`docs --check` 缺 `tools/comment_coverage.awk` 时
 不再静默变绿；`install-self` 补装 `tools/`、`docs/`、`AGENTS.md`。`cli_run` 里那段「补印
 `SK_ERRMSG`」的死代码删掉了 —— `log_error` 本来就打印过，这份永远不触发，`SK_ERRMSG` 仍然
 保留为「最后一条错误」。
@@ -148,6 +148,37 @@ shellkit vendor . --check    # 只比对，不写盘
 
 新增门禁：`make versions-check`（`VERSION` 与 pot 头、README、站点的版本引用是否一致）已并入
 `make check`。新增命令：`make release VERSION=x.y.z` / `make release-dry VERSION=x.y.z`。
+
+### 0.7.0 → 0.8.0：会改变结果的行为变化
+
+**先说最重要的一条：许可证从 GPL-3.0-or-later 换成了 MIT。**
+
+这一条影响的是**你能不能把 shellkit 放进闭源工程**。GPL-3.0 的传染性会要求你的整个下游产品
+也以 GPL-3.0 开源；MIT 没有这个约束。vendor 进来的库不再传染。
+
+| 变化 | 以前 | 现在 | 你会在哪里撞到 |
+|---|---|---|---|
+| 许可证 | GPL-3.0-or-later | MIT（见 `LICENSE`），原上游署名保留在 `NOTICE` | 闭源工程 vendor `shellkit` 时不再被传染；已经按 GPL-3.0 发行的下游**不需要**改（MIT 兼容 GPL-3.0，许可可以并存） |
+| `tools/coverage.awk` | 名字叫 coverage，实际查的是注释覆盖率 | 改名 `tools/comment_coverage.awk` | 自己写过引用这个文件名的脚本要改；它从来不是代码覆盖率工具 |
+| 模块清单 | `lib/bootstrap.sh` 与 `tools/shdoc.sh` 各有一份，漏一处就红 | 唯一真相源 `lib/modules.txt`，两处都从它读 | 打过 `lib/bootstrap.sh` 补丁的脚本要改；新增 `make module-order-check` 门禁自动查依赖顺序 |
+| `_t` 传参 | gettext 直接收 msgid | msgid 以 `-` 开头时自动补 `--` | 只有形如 `--set expects KEY=VALUE` 的提示受影响；其余 msgid 行为不变 |
+| `log_debug` 出声条件 | 只有 `SHELLKIT_DEBUG=1` | `SHELLKIT_DEBUG=1` **或** `SHELLKIT_LOG_LEVEL=debug` | 之前设了 `SHELLKIT_LOG_LEVEL=debug` 却没有效果的人现在会看到 debug 输出（这本来就是那个变量的意图） |
+| `shellkit list` | 列 9 个子命令 | 列 11 个（多 `upgrade` 与 `completion`） | 拿 `list` 输出做断言的脚本会看到多两行 |
+| `shellkit new` | 只有 `--name` / `--cmd` | 多 `--template` / `--set` / `--yes` | 旧调用完全不受影响 |
+| `shellkit upgrade` | 不存在 | 新增：把生成的工程升级到当前模板 | 新命令，不影响旧代码 |
+| `shellkit completion` | 不存在 | 新增：输出 bash / zsh 补全脚本 | 新命令，不影响旧代码 |
+
+新增的库能力（都是加法，既有函数的行为一个字没改）：
+
+- `net_request` / `net_json` / `net_escape_json` —— HTTP 客户端。`net_request` 把状态码、响应体、
+  响应头分开给出；`net_json` 用 jq（没有就 python3）解析，不自己手写 JSON 解析器。
+- `run_concurrent N [--timeout SEC] -- CMD...` —— 同一条命令并发跑 N 份。stdout 给成功数，
+  stderr 给逐实例标注的输出，返回第一个失败实例的退出码。
+- `conf_load_dotenv` / `conf_source` / `conf_init --format env\|dotenv` —— dotenv 解析。
+  `conf_load_dotenv` 只进配置层（不 export，避免盖掉调用方自己的环境变量）；要 export 用 `conf_source`。
+- `SHELLKIT_LOG_LEVEL` / `SHELLKIT_LOG_FORMAT=json` / `SHELLKIT_LOG_FILE` —— 结构化日志。
+  默认值保持今天的样子，既有脚本一行不用改。
+- `scaffold_*` —— 脚手架的变量渲染、清单与钩子，被 `shellkit new` 与 `shellkit upgrade` 共用。
 
 ### 0.6.0 → 0.7.0：会改变结果的行为变化
 

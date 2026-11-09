@@ -6,16 +6,14 @@
 set -u
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 
-# 按 bootstrap 的加载顺序输出，读者按「先有什么、后有什么」看
-MODULES="error i18n log str validate fs os trap run retry lock net config prompt cli"
-
-printf '# API 参考\n\n'
-printf '> 由 tools/shdoc.sh 从源码注释生成，请勿手工编辑。改完注释跑 shellkit docs。\n>\n'
-printf '> 函数上方注释块的第一行即摘要；@brief / @param / @exitcode / @example / @see 可选，@internal 表示不导出。\n\n'
-
-for m in $MODULES; do
+# 顺序来自 lib/modules.txt，与 lib/bootstrap.sh 同源 —— 不会再出现
+# 「bootstrap 加载了但文档没写」这种漂移。
+while IFS= read -r m; do
+  case "$m" in
+    '' | '#'*) continue ;;
+  esac
   f="$ROOT/lib/core/$m.sh"
   if [ -f "$f" ]; then
     awk -v mod="$m" -f "$ROOT/tools/shdoc.awk" "$f"
   fi
-done
+done <"$ROOT/lib/modules.txt"

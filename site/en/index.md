@@ -102,4 +102,6 @@ Read more in [Conventions](/en/guide/conventions.md) and [Bash 3.2](/en/guide/ba
 
 ## License
 
-GPL-3.0-or-later. The skeleton evolved from [jumpserver/installer](https://github.com/jumpserver/installer) and is distributed under the same license, with the original attribution kept in LICENSE.
+MIT — see [LICENSE](https://github.com/yi-nology/shellkit/blob/main/LICENSE).
+
+The design skeleton was inspired by [jumpserver/installer](https://github.com/jumpserver/installer) (GPLv3); the original attribution is kept in [NOTICE](https://github.com/yi-nology/shellkit/blob/main/NOTICE). shellkit's code is an independent implementation — no code was copied from upstream.

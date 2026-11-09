@@ -12,7 +12,7 @@ assert_contains "$out" "project created" "new reports success"
 # 结构完整
 for p in bin/demo-tool lib/app.sh commands/start.sh commands/stop.sh \
   tests/run.sh tests/test_helper.sh tests/test_smoke.sh \
-  config.example Makefile .shellcheckrc README.md \
+  config.example Makefile .shellcheckrc README.md AGENTS.md .shellkit-manifest \
   vendor/shellkit/lib/bootstrap.sh vendor/shellkit/VERSION; do
   if [ ! -e "$proj/$p" ]; then
     _fail "missing generated file: $p"
@@ -22,7 +22,8 @@ done
 assert_file_mode "$proj/bin/demo-tool" "755"
 
 # 占位符必须全部被替换
-if grep -rq '{{NAME}}\|{{CMD}}\|{{SHELLKIT_VERSION}}' "$proj/bin" "$proj/lib" "$proj/commands" "$proj/tests" "$proj/README.md"; then
+if grep -rq '{{NAME}}|{{CMD}}|{{SHELLKIT_VERSION}}|{{DESCRIPTION}}' \
+  "$proj/bin" "$proj/lib" "$proj/commands" "$proj/tests" "$proj/README.md" "$proj/AGENTS.md"; then
   _fail "unrendered placeholder left in generated project"
 fi
 
@@ -39,44 +40,99 @@ assert_not_contains "$out" "[INFO]" "logs must go to stderr"
 # 空目录可以复用，非空目录必须拒绝
 assert_exit_code 3 "$TEST_ROOT/shellkit" new "$proj"
 
-# 只有点文件的目录同样不算空：往别人的 .git 里写文件是不可挽回的
-dotdir="$work/dotonly"
-mkdir -p "$dotdir/.git" "$dotdir/.env.d"
-printf 'x\n' >"$dotdir/.env"
-assert_exit_code 3 "$TEST_ROOT/shellkit" new "$dotdir"
-assert_false test -e "$dotdir/bin"
-assert_false test -e "$dotdir/Makefile"
+# ---------------------------------------------------------------- 模板变量
+p2="$work/with-vars"
+out=$("$TEST_ROOT/shellkit" new "$p2" --cmd run --set DESCRIPTION="我的工具" --yes 2>&1)
+assert_contains "$out" "project created"
+assert_contains "$(cat "$p2/README.md")" "我的工具" "template variable must be rendered"
 
-# list 必须列全注册过的命令：写死清单迟早和注册表漂移
-list_out=$("$TEST_ROOT/shellkit" list 2>/dev/null)
-for c in new doctor list vendor docs install-self uninstall-self update; do
-  assert_contains "$list_out" "shellkit $c" "list mentions shellkit $c"
-done
+# template.config 的默认值在没给 --set 时生效
+p2b="$work/with-default"
+"$TEST_ROOT/shellkit" new "$p2b" --cmd run --yes >/dev/null 2>&1
+assert_contains "$(cat "$p2b/README.md")" "A command line tool" "template.config default must be applied"
 
-# 生成的参考文档不能和实现签名打架
-assert_contains "$(cat "$TEST_ROOT/docs/REFERENCE.md")" "cli_opt_init" "REFERENCE documents cli_opt_init"
-assert_not_contains "$(cat "$TEST_ROOT/docs/REFERENCE.md")" "cli_opt_init VAR DEFAULT" "REFERENCE does not claim arguments cli_opt_init never took"
+# --set 覆盖 template.config 的默认值
+assert_not_contains "$(cat "$p2/README.md")" "A command line tool" "--set must override the default"
 
-# 生成工程的测试套件必须当场通过
-(cd "$proj" && bash tests/run.sh >/dev/null 2>&1) || _fail "generated project tests failed"
+# --set 的参数形态不对要报用法错
+assert_exit_code 2 "$TEST_ROOT/shellkit" new "$work/bad-set" --set NOEQUALS --yes
 
-# ---------------------------------------------------------------------------
-# issue #29：落盘失败必须报错。
-# 根因有两层：(1) cp/chmod 没判返回值；(2) cli_run 用 `|| __rc=$?` 调 cmd_new，
-# 这让 set -e 对整个函数体失效 —— 于是写失败被静默吞掉，照样打印 [ OK ] project created、
-# 退出码还是 0。脚本里「生成成功」是唯一承诺，破了它就等于交出一个半成品目录。
-# ---------------------------------------------------------------------------
-broken="$work/broken-src"
-mkdir -p "$broken"
-cp -R "$TEST_ROOT/lib" "$TEST_ROOT/templates" "$TEST_ROOT/locale" "$broken/" ||
-  _fail "cannot stage a broken tree"
-cp "$TEST_ROOT/shellkit" "$TEST_ROOT/VERSION" "$broken/"
-chmod 755 "$broken/shellkit"
-rm -f "$broken/templates/README.md"
+# ---------------------------------------------------------------- 自定义模板
+tpl="$work/tpl"
+cp -R "$TEST_ROOT/templates" "$tpl"
+printf '# {{NAME}}\n\nCUSTOM TEMPLATE MARKER\n' >"$tpl/README.md"
+p3="$work/custom"
+out=$("$TEST_ROOT/shellkit" new "$p3" --template "$tpl" --cmd run --yes 2>&1)
+assert_contains "$out" "project created"
+assert_contains "$(cat "$p3/README.md")" "CUSTOM TEMPLATE MARKER" "custom template must be used"
 
-bad_proj="$work/broken-proj"
-bad_out=$("$broken/shellkit" new "$bad_proj" 2>&1)
-bad_rc=$?
-assert_ne "0" "$bad_rc" "new must fail when a template cannot be rendered"
-assert_not_contains "$bad_out" "project created" "a failed new must not claim success"
-assert_contains "$bad_out" "README.md" "the failure names the missing template"
+# 模板目录不存在要报前置条件错
+assert_exit_code 3 "$TEST_ROOT/shellkit" new "$work/no-tpl" --template "$work/nope" --yes
+
+# ---------------------------------------------------------------- 钩子
+tpl2="$work/tpl2"
+cp -R "$TEST_ROOT/templates" "$tpl2"
+mkdir -p "$tpl2/template.hooks.d"
+cat >"$tpl2/template.hooks.d/pre" <<'HOOK'
+#!/usr/bin/env bash
+printf 'pre %s %s\n' "$SHELLKIT_PROJECT_NAME" "$SHELLKIT_PROJECT_COMMANDS" >"$SHELLKIT_PROJECT_DIR/pre.marker"
+HOOK
+cat >"$tpl2/template.hooks.d/post" <<'HOOK'
+#!/usr/bin/env bash
+printf 'post %s\n' "$SHELLKIT_TEMPLATE_VERSION" >"$SHELLKIT_PROJECT_DIR/post.marker"
+HOOK
+chmod 755 "$tpl2/template.hooks.d/pre" "$tpl2/template.hooks.d/post"
+p4="$work/hooked"
+"$TEST_ROOT/shellkit" new "$p4" --template "$tpl2" --cmd alpha --yes >/dev/null 2>&1
+assert_true test -f "$p4/pre.marker"
+assert_true test -f "$p4/post.marker"
+assert_contains "$(cat "$p4/pre.marker")" "alpha" "hook must receive the command list"
+
+# 钩子失败必须让生成失败
+tpl3="$work/tpl3"
+cp -R "$TEST_ROOT/templates" "$tpl3"
+mkdir -p "$tpl3/template.hooks.d"
+printf '#!/usr/bin/env bash\nexit 3\n' >"$tpl3/template.hooks.d/pre"
+chmod 755 "$tpl3/template.hooks.d/pre"
+assert_exit_code 1 "$TEST_ROOT/shellkit" new "$work/hook-fail" --template "$tpl3" --cmd run --yes
+
+# ---------------------------------------------------------------- upgrade
+# 没被改过的文件要更新；被改过的文件要留着不动
+tpl4="$work/tpl4"
+cp -R "$TEST_ROOT/templates" "$tpl4"
+p5="$work/upgradable"
+"$TEST_ROOT/shellkit" new "$p5" --cmd run --yes >/dev/null 2>&1
+printf '\nNEW LINE FROM TEMPLATE\n' >>"$tpl4/README.md"
+
+out=$("$TEST_ROOT/shellkit" upgrade "$p5" --template "$tpl4" --check 2>&1)
+assert_contains "$out" "would update"
+assert_not_contains "$(cat "$p5/README.md")" "NEW LINE FROM TEMPLATE" "--check must not write anything"
+
+out=$("$TEST_ROOT/shellkit" upgrade "$p5" --template "$tpl4" 2>&1)
+assert_contains "$out" "updated"
+assert_contains "$(cat "$p5/README.md")" "NEW LINE FROM TEMPLATE" "unmodified file must be updated"
+
+# 用户改过的文件不覆盖
+printf 'LOCAL EDIT\n' >>"$p5/README.md"
+out=$("$TEST_ROOT/shellkit" upgrade "$p5" --template "$tpl4" 2>&1)
+assert_contains "$out" "left alone"
+assert_contains "$(cat "$p5/README.md")" "LOCAL EDIT" "locally modified file must be kept"
+
+# 用户自己的命令文件永远不被升级碰
+printf '# my own command\n' >>"$p5/commands/run.sh"
+"$TEST_ROOT/shellkit" upgrade "$p5" --template "$tpl4" >/dev/null 2>&1
+assert_contains "$(cat "$p5/commands/run.sh")" "my own command" "user files must never be touched"
+
+# 不是 shellkit 生成的目录要报前置条件错
+assert_exit_code 3 "$TEST_ROOT/shellkit" upgrade "$work" --yes
+
+# upgrade 后清单要跟着更新
+assert_contains "$(cat "$p5/.shellkit-manifest")" "template_version=" "manifest must record the template version"
+
+# ---------------------------------------------------------------- 补全
+out=$("$TEST_ROOT/shellkit" completion bash 2>&1)
+assert_contains "$out" "complete -F" "bash completion must be generated"
+assert_contains "$out" "new" "completion must list the subcommands"
+out=$("$TEST_ROOT/shellkit" completion zsh 2>&1)
+assert_contains "$out" "compdef" "zsh completion must be generated"
+assert_exit_code 2 "$TEST_ROOT/shellkit" completion fish

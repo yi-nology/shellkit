@@ -37,7 +37,8 @@ if ! require_bash 3 2; then
 fi
 
 cli_group "$(_t 'project generation')"
-cli_cmd new "$(_t 'create a new project skeleton')" "new <dir> [--name NAME] [--cmd NAME]..."
+cli_cmd new "$(_t 'create a new project skeleton')" "new <dir> [--name NAME] [--cmd NAME]... [--template DIR] [--set K=V] [--yes]"
+cli_cmd upgrade "$(_t 'update a generated project to the current template')" "upgrade <dir> [--check] [--force]"
 cli_group "$(_t 'environment')"
 cli_cmd doctor "$(_t 'check the runtime environment')" "doctor"
 cli_cmd list "$(_t 'list templates and library modules')" "list"
@@ -45,30 +46,114 @@ cli_group "$(_t 'existing projects')"
 cli_cmd vendor "$(_t 'sync the library into an existing project')" "vendor <dir> [--check]"
 cli_group "$(_t 'documentation')"
 cli_cmd docs "$(_t 'regenerate the API reference')" "docs [--check]"
+cli_cmd completion "$(_t 'print a shell completion script')" "completion [bash|zsh]"
 cli_group "$(_t 'installation')"
 cli_cmd install-self "$(_t 'install shellkit into PATH')" "install-self [--prefix DIR]"
 cli_cmd uninstall-self "$(_t 'remove an installed shellkit')" "uninstall-self [--prefix DIR]"
 cli_cmd update "$(_t 'update an installed shellkit')" "update [--check] [--from FILE] [--sha256 SUM] [--prefix DIR]"
 
-# _sk_render SRC DST NAME VERSION [CMD]
+# _sk_render SRC DST —— 用当前模板变量渲染文件（薄封装，逻辑在 scaffold 模块）
 #   占位符用双花括号形式，避免和 shell 的美元大括号混淆。
 #   返回非 0 表示没写出来。调用方必须判——set -e 在 cli_run 的 `||` 列表里失效，
 #   不判的话 sed 失败只会留下一个空文件，然后照样打印 [ OK ]（issue #29）。
 _sk_render() {
-  local __src=$1 __dst=$2 __name=$3 __ver=$4
-  local __cmd=""
-  if [ "$#" -ge 5 ]; then
-    __cmd=$5
+  local __src=$1 __dst=$2
+  if [ "$#" -lt 2 ]; then
+    log_error "$(_t 'usage'): _sk_render SRC DST"
+    return "$SK_USAGE"
   fi
-  if [ ! -f "$__src" ]; then
-    log_error "$(_t 'template is missing'): $__src"
-    return 1
+  scaffold_render "$__src" "$__dst" || return 1
+  return 0
+}
+
+# _sk_new_owned_list NAME —— 模板自有文件清单（相对路径，一行一个）
+#
+# 「自有」= 模板说了算、升级时可以覆盖的文件。
+# commands/ 下的实现与 tests/test_smoke.sh 是用户自己的，升级时一律不动。
+_sk_new_owned_list() {
+  local __name=$1
+  printf 'bin/%s\n' "$__name"
+  printf 'lib/app.sh\n'
+  printf 'README.md\n'
+  printf 'AGENTS.md\n'
+  printf 'Makefile\n'
+  printf '.shellcheckrc\n'
+  printf 'tests/test_helper.sh\n'
+  printf 'tests/run.sh\n'
+}
+
+# _sk_new_render_owned TPLDIR DESTDIR NAME —— 把模板自有的文件渲染到 DESTDIR
+#   模板目录里没有的测试文件从仓库自己的 tests/ 取（生成工程要带测试基建）。
+#   返回非 0 表示有文件没写出来。
+_sk_new_render_owned() {
+  local __tpl=$1 __dest=$2 __name=$3
+  local __rel __src __mode
+  while IFS= read -r __rel; do
+    [ -n "$__rel" ] || continue
+    case "$__rel" in
+      bin/*)
+        __src="$__tpl/bin/__NAME__"
+        __mode=755
+        ;;
+      lib/app.sh)
+        __src="$__tpl/lib/app.sh"
+        __mode=644
+        ;;
+      README.md)
+        __src="$__tpl/README.md"
+        __mode=644
+        ;;
+      AGENTS.md)
+        __src="$__tpl/AGENTS.md"
+        __mode=644
+        ;;
+      Makefile)
+        __src="$__tpl/Makefile"
+        __mode=644
+        ;;
+      .shellcheckrc)
+        __src="$__tpl/.shellcheckrc"
+        __mode=644
+        ;;
+      tests/test_helper.sh)
+        __src="$__tpl/tests/test_helper.sh"
+        [ -f "$__src" ] || __src="$SELF_DIR/tests/test_helper.sh"
+        __mode=644
+        ;;
+      tests/run.sh)
+        __src="$__tpl/tests/run.sh"
+        [ -f "$__src" ] || __src="$SELF_DIR/tests/run.sh"
+        __mode=755
+        ;;
+      *)
+        continue
+        ;;
+    esac
+    if [ ! -f "$__src" ]; then
+      log_error "$(_t 'template is missing'): $__src"
+      return 1
+    fi
+    fs_ensure_dir "$(dirname "$__dest/$__rel")" 755 || return 1
+    scaffold_render "$__src" "$__dest/$__rel" || return 1
+    if [ "$__mode" = "755" ]; then
+      chmod 755 "$__dest/$__rel" || return 1
+    fi
+  done <<EOF
+$(_sk_new_owned_list "$__name")
+EOF
+  return 0
+}
+
+# _sk_copy_legal DEST —— 把 LICENSE 与 NOTICE 拷进目标目录
+# MIT 许可证要求「软件的所有副本都要带上版权声明与许可声明」。
+# vendor 出去的副本和装出来的副本都是副本，所以两份文件都得跟着走。
+_sk_copy_legal() {
+  local __dest=$1
+  if [ -f "$SELF_DIR/LICENSE" ]; then
+    cp -f "$SELF_DIR/LICENSE" "$__dest/LICENSE" || return 1
   fi
-  if ! sed -e "s|{{NAME}}|$__name|g" \
-    -e "s|{{SHELLKIT_VERSION}}|$__ver|g" \
-    -e "s|{{CMD}}|$__cmd|g" \
-    "$__src" >"$__dst"; then
-    return 1
+  if [ -f "$SELF_DIR/NOTICE" ]; then
+    cp -f "$SELF_DIR/NOTICE" "$__dest/NOTICE" || return 1
   fi
   return 0
 }
@@ -84,6 +169,8 @@ _sk_vendor_install() {
   cp -R "$SELF_DIR/lib" "$__dest/lib" || return 1
   cp -R "$SELF_DIR/locale" "$__dest/locale" || return 1
   cp "$SELF_DIR/VERSION" "$__dest/VERSION" || return 1
+  # MIT 许可证要求「副本里带上版权声明」，所以 vendor 出来的副本必须带 LICENSE 与 NOTICE
+  _sk_copy_legal "$__dest" || return 1
   return 0
 }
 
@@ -131,8 +218,9 @@ _sk_valid_name() {
 #   集中成函数是为了只判一次错：散在 cmd_new 里逐句 `|| return $SK_ERR` 又长又容易漏，
 #   而漏一处就是「写失败仍打印 [ OK ] project created」。
 _sk_new_generate() {
-  local __dir=$1 __name=$2 __cmd __first=""
-  shift 2
+  local __dir=$1 __name=$2 __tpl=$3
+  shift 3
+  local __cmd __first=""
   if [ "$#" -gt 0 ]; then
     __first=$1
   fi
@@ -147,30 +235,40 @@ _sk_new_generate() {
   _sk_vendor_install "$__dir" || return 1
   log_info "$(_t 'vendored library'): vendor/shellkit ($SK_VERSION)"
 
-  _sk_render "$SK_TPL_DIR/bin/__NAME__" "$__dir/bin/$__name" "$__name" "$SK_VERSION" || return 1
-  chmod 755 "$__dir/bin/$__name" || return 1
+  # {{CMD}} 默认指向第一个命令：模板里的 README 与 AGENTS.md 会拿它举例
+  scaffold_vars_set CMD "$__first" || return 1
 
-  _sk_render "$SK_TPL_DIR/lib/app.sh" "$__dir/lib/app.sh" "$__name" "$SK_VERSION" || return 1
+  # 模板自有的文件：升级时会被覆盖的那些
+  _sk_new_render_owned "$__tpl" "$__dir" "$__name" || return 1
 
+  # 用户自有的文件：命令实现、示例配置、冒烟测试
   for __cmd in "$@"; do
-    _sk_render "$SK_TPL_DIR/commands/__CMD__.sh" "$__dir/commands/$__cmd.sh" \
-      "$__name" "$SK_VERSION" "$__cmd" || return 1
+    scaffold_vars_set CMD "$__cmd" || return 1
+    _sk_render "$__tpl/commands/__CMD__.sh" "$__dir/commands/$__cmd.sh" || return 1
     log_info "$(_t 'added command'): $__cmd"
   done
 
-  _sk_render "$SK_TPL_DIR/config.example" "$__dir/config.example" "$__name" "$SK_VERSION" || return 1
-  _sk_render "$SK_TPL_DIR/tests/test_smoke.sh" "$__dir/tests/test_smoke.sh" \
-    "$__name" "$SK_VERSION" "$__first" || return 1
+  _sk_render "$__tpl/config.example" "$__dir/config.example" || return 1
+  scaffold_vars_set CMD "$__first" || return 1
+  _sk_render "$__tpl/tests/test_smoke.sh" "$__dir/tests/test_smoke.sh" || return 1
   chmod 755 "$__dir/tests/test_smoke.sh" || return 1
-  _sk_render "$SK_TPL_DIR/README.md" "$__dir/README.md" "$__name" "$SK_VERSION" || return 1
-  _sk_render "$SK_TPL_DIR/AGENTS.md" "$__dir/AGENTS.md" "$__name" "$SK_VERSION" "$__first" || return 1
-  cp "$SK_TPL_DIR/.shellcheckrc" "$__dir/.shellcheckrc" || return 1
-  # 必须渲染：模板里有 {{NAME}}，原样拷走会让 make lint 的 bin/*{{NAME}} 一条都匹配不上
-  _sk_render "$SK_TPL_DIR/Makefile" "$__dir/Makefile" "$__name" "$SK_VERSION" || return 1
+  # 恢复成第一个命令：清单里记的 {{CMD}} 要和生成时一致，升级才不会漂
+  scaffold_vars_set CMD "$__first" || return 1
+  return 0
+}
 
-  cp "$SELF_DIR/tests/test_helper.sh" "$__dir/tests/test_helper.sh" || return 1
-  cp "$SELF_DIR/tests/run.sh" "$__dir/tests/run.sh" || return 1
-  chmod 755 "$__dir/tests/run.sh" || return 1
+# _sk_new_run_hooks WHICH TPLDIR DIR NAME CMDS... —— 跑模板钩子（pre / post）
+#   钩子脚本放在模板目录的 template.hooks.d/ 下，pre 在落盘前跑，post 在落盘后跑。
+#   钩子拿到的环境变量：SHELLKIT_PROJECT_DIR / SHELLKIT_PROJECT_NAME /
+#   SHELLKIT_PROJECT_COMMANDS / SHELLKIT_TEMPLATE_VERSION，以及每个模板变量。
+_sk_new_run_hooks() {
+  local __which=$1 __tpl=$2 __dir=$3 __name=$4
+  shift 4
+  local __cmds="$*"
+  scaffold_vars_set PROJECT_NAME "$__name" || return 1
+  scaffold_vars_set PROJECT_COMMANDS "$__cmds" || return 1
+  scaffold_vars_set TEMPLATE_VERSION "$SK_VERSION" || return 1
+  scaffold_run_hook "$__tpl/template.hooks.d/$__which" "$__dir" || return "$SK_ERR"
   return 0
 }
 
@@ -208,8 +306,10 @@ _sk_new_verify() {
 }
 
 cmd_new() {
-  local __dir="" __name="" __opt="" __val=""
+  local __dir="" __name="" __tpl="" __opt="" __val="" __yes=0
+  local __line __key __val2 __ans __setv __cmds_csv
   local -a __cmds=()
+  local -a __sets=()
 
   while [ "$#" -gt 0 ]; do
     case "$1" in
@@ -217,7 +317,10 @@ cmd_new() {
         cli_usage_cmd new
         return "$SK_OK"
         ;;
-      --name | --cmd)
+      -y | --yes)
+        __yes=1
+        ;;
+      --name | --cmd | --template | --set)
         __opt=$1
         shift
         if [ "$#" -eq 0 ]; then
@@ -225,15 +328,24 @@ cmd_new() {
           return "$SK_USAGE"
         fi
         __val=$1
-        if [ "$__opt" = "--name" ]; then
-          __name=$__val
-        else
-          if ! _sk_valid_name "$__val"; then
-            log_error "$(_t 'invalid command name'): $__val"
-            return "$SK_USAGE"
-          fi
-          __cmds[${#__cmds[@]}]=$__val
-        fi
+        case "$__opt" in
+          --name)
+            __name=$__val
+            ;;
+          --cmd)
+            if ! _sk_valid_name "$__val"; then
+              log_error "$(_t 'invalid command name'): $__val"
+              return "$SK_USAGE"
+            fi
+            __cmds[${#__cmds[@]}]=$__val
+            ;;
+          --template)
+            __tpl=$__val
+            ;;
+          --set)
+            __sets[${#__sets[@]}]=$__val
+            ;;
+        esac
         ;;
       --name=*)
         __name="${1#*=}"
@@ -245,6 +357,12 @@ cmd_new() {
           return "$SK_USAGE"
         fi
         __cmds[${#__cmds[@]}]=$__val
+        ;;
+      --template=*)
+        __tpl="${1#*=}"
+        ;;
+      --set=*)
+        __sets[${#__sets[@]}]="${1#*=}"
         ;;
       --?*)
         log_error "$(_t 'unknown option'): $1"
@@ -276,6 +394,56 @@ cmd_new() {
   if [ "${#__cmds[@]}" -eq 0 ]; then
     __cmds[0]=run
   fi
+  if [ -z "$__tpl" ]; then
+    __tpl="$SK_TPL_DIR"
+  elif [ ! -d "$__tpl" ]; then
+    log_error "$(_t 'template directory does not exist'): $__tpl"
+    return "$SK_PRECOND"
+  fi
+
+  # 模板变量：先读 template.config 里的默认值，再让 --set 覆盖，最后问还没值的
+  if [ -f "$__tpl/template.config" ]; then
+    scaffold_config_load "$__tpl/template.config" || return "$SK_PRECOND"
+  fi
+  for __setv in ${__sets[@]+"${__sets[@]}"}; do
+    case "$__setv" in
+      *=*) ;;
+      *)
+        log_error "$(_t '--set expects KEY=VALUE'): $__setv"
+        return "$SK_USAGE"
+        ;;
+    esac
+    __key=${__setv%%=*}
+    __val2=${__setv#*=}
+    if ! scaffold_vars_set "$__key" "$__val2"; then
+      return "$SK_USAGE"
+    fi
+  done
+  scaffold_vars_set NAME "$__name" || return "$SK_USAGE"
+  scaffold_vars_set SHELLKIT_VERSION "$SK_VERSION" || return "$SK_USAGE"
+
+  # 还没值的变量问一次；非交互（--yes 或 SHELLKIT_NONINTERACTIVE=1）就留空
+  if [ "$__yes" -eq 0 ] && [ "${SHELLKIT_NONINTERACTIVE:-0}" != "1" ]; then
+    while IFS= read -r __line; do
+      case "$__line" in
+        *=*) ;;
+        *) continue ;;
+      esac
+      __key=${__line%%=*}
+      __val2=${__line#*=}
+      [ -n "$__val2" ] && continue
+      case "$__key" in
+        NAME | SHELLKIT_VERSION) continue ;;
+      esac
+      __ans=""
+      if ask __ans "$(_t 'value for') $__key" ""; then
+        scaffold_vars_set "$__key" "$__ans" || return "$SK_USAGE"
+      fi
+    done <<EOF
+$SK_SCAFFOLD_VARS
+EOF
+  fi
+
   if ! _sk_check_dir "$__dir"; then
     return "$SK_PRECOND"
   fi
@@ -283,12 +451,31 @@ cmd_new() {
   log_section "$(_t 'creating'): $__dir"
   # 注意 set -e 在这里是靠不住的：cmd_new 由 cli_run 用 `|| __rc=$?` 调用，
   # 整个函数体因此不在 errexit 的保护下（issue #29）。所以每处落盘都显式判错。
-  if ! _sk_new_generate "$__dir" "$__name" ${__cmds[@]+"${__cmds[@]}"}; then
+  fs_ensure_dir "$__dir" 755 || return "$SK_PRECOND"
+  if ! _sk_new_run_hooks pre "$__tpl" "$__dir" "$__name" "${__cmds[@]}"; then
     log_error "$(_t 'failed to generate the project'): $__dir"
     log_info "$(_t 'the target directory was left in place for inspection')"
     return "$SK_ERR"
   fi
+  if ! _sk_new_generate "$__dir" "$__name" "$__tpl" ${__cmds[@]+"${__cmds[@]}"}; then
+    log_error "$(_t 'failed to generate the project'): $__dir"
+    log_info "$(_t 'the target directory was left in place for inspection')"
+    return "$SK_ERR"
+  fi
+  __cmds_csv=$(
+    IFS=,
+    printf '%s' "${__cmds[*]}"
+  )
+  if ! scaffold_manifest_write "$__dir" "$__name" "$__cmds_csv" "$SK_VERSION" \
+    "$(_sk_new_owned_list "$__name")"; then
+    log_error "$(_t 'failed to write the project manifest'): $__dir"
+    return "$SK_ERR"
+  fi
   if ! _sk_new_verify "$__dir" "$__name" ${__cmds[@]+"${__cmds[@]}"}; then
+    log_error "$(_t 'the generated project is incomplete'): $__dir"
+    return "$SK_ERR"
+  fi
+  if ! _sk_new_run_hooks post "$__tpl" "$__dir" "$__name" "${__cmds[@]}"; then
     log_error "$(_t 'the generated project is incomplete'): $__dir"
     return "$SK_ERR"
   fi
@@ -298,7 +485,204 @@ cmd_new() {
   printf '  %s\n' "$(_t 'next steps')"
   printf '    cd %s\n' "$__dir"
   printf '    make test\n'
+  printf '    shellkit upgrade %s\n' "$__dir"
   return "$SK_OK"
+}
+
+# ---------- upgrade ----------
+#
+# 把生成出来的工程升级到当前模板。
+#
+# 判断能不能覆盖的依据是清单里记的指纹：文件的 sha256 与生成时一致，说明
+# 你没动过它，可以安全覆盖；不一致说明你改过，一律留着不动并告警。
+# 你的 commands/ 与 tests/test_smoke.sh 从来不在「模板自有」清单里，所以
+# 升级永远不碰它们。
+
+cmd_upgrade() {
+  local __dir="" __tpl="$SK_TPL_DIR" __check=0 __force=0
+  local __name __rel __old __cur __new __tmp __cmds_csv
+  local __updated=0 __skipped=0 __added=0
+
+  while [ "$#" -gt 0 ]; do
+    case "$1" in
+      -h | --help)
+        cli_usage_cmd upgrade
+        return "$SK_OK"
+        ;;
+      --check)
+        __check=1
+        ;;
+      --force)
+        __force=1
+        ;;
+      -y | --yes)
+        # 与全局开关同义：升级过程中不交互，需要确认时直接放弃本地改动
+        SHELLKIT_NONINTERACTIVE=1
+        export SHELLKIT_NONINTERACTIVE
+        ;;
+      --template)
+        shift
+        if [ "$#" -eq 0 ]; then
+          log_error "$(_t 'option requires a value'): --template"
+          return "$SK_USAGE"
+        fi
+        __tpl=$1
+        ;;
+      --template=*)
+        __tpl="${1#*=}"
+        ;;
+      --?*)
+        log_error "$(_t 'unknown option'): $1"
+        return "$SK_USAGE"
+        ;;
+      *)
+        if [ -n "$__dir" ]; then
+          log_error "$(_t 'only one target directory is allowed'): $1"
+          return "$SK_USAGE"
+        fi
+        __dir=$1
+        ;;
+    esac
+    shift
+  done
+
+  if [ -z "$__dir" ]; then
+    log_error "$(_t 'target directory is required')"
+    cli_usage_cmd upgrade
+    return "$SK_USAGE"
+  fi
+  if [ ! -d "$__dir" ]; then
+    log_error "$(_t 'target directory does not exist'): $__dir"
+    return "$SK_PRECOND"
+  fi
+  if [ ! -d "$__tpl" ]; then
+    log_error "$(_t 'template directory does not exist'): $__tpl"
+    return "$SK_PRECOND"
+  fi
+
+  if ! scaffold_manifest_read "$__dir"; then
+    log_info "$(_t 'it does not look like a shellkit-generated project'): $__dir"
+    return "$SK_PRECOND"
+  fi
+  __name="$SK_MANIFEST_NAME"
+  if [ -z "$__name" ]; then
+    log_error "$(_t 'the manifest does not record a project name'): $__dir"
+    return "$SK_VERIFY"
+  fi
+
+  log_section "$(_t 'upgrading'): $__dir"
+  log_info "$(_t 'template version'): ${SK_MANIFEST_TEMPLATE_VERSION:-unknown} -> $SK_VERSION"
+
+  # 变量从清单里读回来，再用当前的工程名与模板版本覆盖
+  scaffold_vars_set NAME "$__name" || return "$SK_USAGE"
+  scaffold_vars_set SHELLKIT_VERSION "$SK_VERSION" || return "$SK_USAGE"
+
+  __tmp=$(mktemp -d "${TMPDIR:-/tmp}/shellkit-upgrade.XXXXXX") || return "$SK_ERR"
+  if ! _sk_new_render_owned "$__tpl" "$__tmp" "$__name"; then
+    rm -rf "${__tmp:?}"
+    return "$SK_ERR"
+  fi
+
+  while IFS= read -r __rel; do
+    [ -n "$__rel" ] || continue
+    __old=$(scaffold_manifest_file_sum "$__dir" "$__rel" 2>/dev/null) || __old=""
+    __cur=""
+    if [ -f "$__dir/$__rel" ]; then
+      __cur=$(os_sha256 "$__dir/$__rel" 2>/dev/null) || __cur=""
+    fi
+    __new=""
+    if [ -f "$__tmp/$__rel" ]; then
+      __new=$(os_sha256 "$__tmp/$__rel" 2>/dev/null) || __new=""
+    fi
+
+    if [ ! -f "$__dir/$__rel" ]; then
+      if [ "$__check" = "1" ]; then
+        log_info "$(_t 'would add'): $__rel"
+      elif [ -f "$__tmp/$__rel" ]; then
+        fs_ensure_dir "$(dirname "$__dir/$__rel")" 755 || {
+          rm -rf "${__tmp:?}"
+          return "$SK_ERR"
+        }
+        cp -f "$__tmp/$__rel" "$__dir/$__rel" || {
+          rm -rf "${__tmp:?}"
+          return "$SK_ERR"
+        }
+        log_ok "$(_t 'added'): $__rel"
+        __added=$((__added + 1))
+      fi
+      continue
+    fi
+
+    if [ "$__force" != "1" ] && [ -n "$__old" ] && [ "$__cur" != "$__old" ]; then
+      log_warn "$(_t 'modified locally, left alone'): $__rel"
+      __skipped=$((__skipped + 1))
+      continue
+    fi
+    if [ -z "$__old" ] && [ "$__force" != "1" ]; then
+      log_warn "$(_t 'no recorded fingerprint, left alone'): $__rel"
+      __skipped=$((__skipped + 1))
+      continue
+    fi
+    if [ "$__new" = "$__cur" ]; then
+      continue
+    fi
+    if [ "$__check" = "1" ]; then
+      log_info "$(_t 'would update'): $__rel"
+      __updated=$((__updated + 1))
+      continue
+    fi
+    cp -f "$__tmp/$__rel" "$__dir/$__rel" || {
+      rm -rf "${__tmp:?}"
+      return "$SK_ERR"
+    }
+    log_ok "$(_t 'updated'): $__rel"
+    __updated=$((__updated + 1))
+  done <<EOF
+$(_sk_new_owned_list "$__name")
+EOF
+
+  rm -rf "${__tmp:?}"
+
+  if [ "$__check" != "1" ]; then
+    if ! _sk_vendor_install "$__dir"; then
+      log_error "$(_t 'failed to sync the vendored library')"
+      return "$SK_ERR"
+    fi
+    __cmds_csv="$SK_MANIFEST_COMMANDS"
+    if ! scaffold_manifest_write "$__dir" "$__name" "$__cmds_csv" "$SK_VERSION" \
+      "$(_sk_new_owned_list "$__name")"; then
+      log_error "$(_t 'failed to write the project manifest'): $__dir"
+      return "$SK_ERR"
+    fi
+  fi
+
+  printf '\n'
+  log_ok "$(_t 'upgrade finished'): $__updated updated, $__added added, $__skipped left alone"
+  return "$SK_OK"
+}
+
+# ---------- completion ----------
+
+cmd_completion() {
+  local __shell="bash"
+  while [ "$#" -gt 0 ]; do
+    case "$1" in
+      -h | --help)
+        cli_usage_cmd completion
+        return "$SK_OK"
+        ;;
+      bash | zsh)
+        __shell=$1
+        ;;
+      *)
+        log_error "$(_t 'unknown option'): $1"
+        return "$SK_USAGE"
+        ;;
+    esac
+    shift
+  done
+  cli_completion_script "$__shell"
+  return $?
 }
 
 # ---------- doctor ----------
@@ -488,9 +872,9 @@ cmd_vendor() {
 _sk_docs_coverage() {
   local __f __missing __line __bad=0 __rc=0
   for __f in "$SELF_DIR"/lib/core/*.sh; do
-    # 必须接住 awk 自己的退出码：缺 tools/coverage.awk 时它只往 stderr 抱怨，
+    # 必须接住 awk 自己的退出码：缺 tools/comment_coverage.awk 时它只往 stderr 抱怨，
     # 只看输出是否为空会让整个检查静默变绿。
-    __missing=$(awk -v file="$(basename "$__f")" -f "$SELF_DIR/tools/coverage.awk" "$__f" 2>&1)
+    __missing=$(awk -v file="$(basename "$__f")" -f "$SELF_DIR/tools/comment_coverage.awk" "$__f" 2>&1)
     __rc=$?
     if [ "$__rc" -ne 0 ]; then
       log_error "$(_t 'failed to check doc comments'): $(basename "$__f")"
@@ -742,6 +1126,8 @@ cmd_install_self() {
     cp -f "$SELF_DIR/AGENTS.md" "$__dest/AGENTS.md" || return "$SK_ERR"
   fi
   cp -f "$SELF_DIR/VERSION" "$__dest/VERSION" || return "$SK_ERR"
+  # MIT 许可证要求「副本里带上版权声明」：装出来的副本也必须带 LICENSE 与 NOTICE
+  _sk_copy_legal "$__dest" || return "$SK_ERR"
   cp -f "$SELF_DIR/shellkit" "$__dest/shellkit" || return "$SK_ERR"
   chmod 755 "$__dest/shellkit" || return "$SK_ERR"
 
@@ -867,9 +1253,12 @@ _sk_update_run() {
     fi
   else
     log_info "$(_t 'checking for a newer version')"
-    net_download "$SHELLKIT_RELEASE_API" "$__tmp/release.json" || return $?
-    __tag=$(sed -n 's/.*"tag_name"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' \
-      "$__tmp/release.json" | head -1)
+    # 用 net_json 取版本号，而不是用 sed 去正则抠 JSON ——
+    # 上游换一个 forge 或改一下字段顺序，那行正则就静默失配了。
+    __tag=$(net_json GET "$SHELLKIT_RELEASE_API" --path tag_name 2>/dev/null) || {
+      log_error "$(_t 'cannot read the latest version from the release API')"
+      return "$SK_VERIFY"
+    }
     __ver=${__tag#v}
     if [ -z "$__ver" ]; then
       log_error "$(_t 'cannot read the latest version from the release API')"

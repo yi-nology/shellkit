@@ -6,10 +6,27 @@ set -u
 # 产物与源一致（四份：REFERENCE / AGENTS / templates/AGENTS / skills/SKILL）
 assert_exit_code 0 bash "$TEST_ROOT/shellkit" docs --check
 
-# 模块序列在两个文件里各有一份，改了不同步会让文档缺模块却没人发现
-boot=$(sed -n 's/^for _sk_module in \(.*\); do$/\1/p' "$TEST_ROOT/lib/bootstrap.sh")
-doc=$(sed -n 's/^MODULES="\(.*\)"$/\1/p' "$TEST_ROOT/tools/shdoc.sh")
-assert_eq "$boot" "$doc" "module list drift between bootstrap.sh and shdoc.sh"
+# 模块序列只有一份真相源：lib/modules.txt。bootstrap.sh 与 shdoc.sh 都从它读，
+# 所以「两处顺序不一致」这个漂移源已经消除 —— 这里守住新的不变量。
+#
+# 1) modules.txt 里列的每个模块都要有对应源码文件
+while IFS= read -r m; do
+  case "$m" in
+    '' | '#'*) continue ;;
+  esac
+  if [ ! -f "$TEST_ROOT/lib/core/$m.sh" ]; then
+    _fail "module listed in modules.txt has no source: $m"
+  fi
+done <"$TEST_ROOT/lib/modules.txt"
+
+# 2) 两个加载方都必须从 modules.txt 读，不能再各自写死一份清单
+assert_contains "$(cat "$TEST_ROOT/lib/bootstrap.sh")" "lib/modules.txt" \
+  "bootstrap.sh must load the module list from lib/modules.txt"
+assert_contains "$(cat "$TEST_ROOT/tools/shdoc.sh")" "lib/modules.txt" \
+  "shdoc.sh must read the module list from lib/modules.txt"
+
+# 3) 依赖顺序门禁本身要绿：某个模块调用了还没加载的模块的函数必须被抓住
+assert_exit_code 0 bash "$TEST_ROOT/tools/check_module_order.sh"
 
 # 文档门禁本身
 assert_exit_code 0 bash "$TEST_ROOT/tools/check_docs.sh"

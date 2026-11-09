@@ -7,13 +7,16 @@
 
 ## 地图
 
-    shellkit                  生成器 CLI（new / doctor / list / vendor / docs / install-self / uninstall-self / update）
+    shellkit                  生成器 CLI（new / upgrade / doctor / list / vendor / docs / completion /
+                              install-self / uninstall-self / update）
     install.sh                一键安装脚本：取版本 → 下载 release → 校验 sha256 → 交给 install-self
-    lib/bootstrap.sh          唯一入口：按拓扑序 source lib/core/*.sh
-    lib/core/<module>.sh      15 个模块，一个模块一个主题
+    lib/bootstrap.sh          唯一入口：按 lib/modules.txt 的顺序 source lib/core/*.sh
+    lib/modules.txt           模块加载顺序的唯一真相源（bootstrap 与 shdoc 都读它）
+    lib/core/<module>.sh      17 个模块，一个模块一个主题
     templates/                shellkit new 的模板（含 __NAME__ / __CMD__ 占位符）
     tests/                    自研断言 + 逐文件执行器 + 每个模块一个测试
-    tools/                    shdoc.awk / coverage.awk / ai_doc.sh / check_docs.sh / term_shot.py
+    tools/                    shdoc.awk / comment_coverage.awk / ai_doc.sh / check_docs.sh / term_shot.py
+                              check_module_order.sh（模块依赖顺序门禁）
                               release.sh（一条命令发版）/ check_versions.sh（版本引用一致性）
                               site_sync.sh（docs/ → 站点页面）/ site_links.sh（产物链接门禁）
     docs/                     README 之外的深度文档；REFERENCE.md 与 AGENTS.md 是生成物
@@ -22,16 +25,18 @@
     site/                     VuePress 2 文档站（手写页 + docs/ 同步页；Actions 构建，产物不进 git 历史）
     locale/{en,zh_CN,zh_Hant} gettext 目录，msgid 一律英文
 
-## 加一个模块要改四处，少一处就红
+## 加一个模块要改三处，少一处就红
 
 1. 写 `lib/core/<name>.sh`：公开函数上方**必须**紧邻注释行，否则 `make docs-check` 红。
-2. `lib/bootstrap.sh` 的模块序列里插入 —— 按依赖拓扑序，不是字母序。
-3. `tools/shdoc.sh` 的 `MODULES` 里加同一位置（两处顺序必须一致）。
-4. 写 `tests/test_<name>.sh`。测试文件名被 `tests/test_*.sh` 通配到就自动执行。
+2. 在 `lib/modules.txt` 里加一行 —— 按依赖拓扑序，不是字母序。
+   顺序只有这一份真相源：`lib/bootstrap.sh` 按它加载，`tools/shdoc.sh` 按它生成 API 参考。
+   放错位置不要紧，`make module-order-check` 会指出「哪个模块调用了还没加载的函数」。
+3. 写 `tests/test_<name>.sh`。测试文件名被 `tests/test_*.sh` 通配到就自动执行。
 
 ## 门禁
 
-    make check     # syntax + test + lint + docs-check + versions-check + check-docs + messages-check + examples + fmt，CI 也是这组
+    make check     # syntax + test + lint + module-order-check + docs-check + versions-check +
+                  # check-docs + messages-check + examples + fmt，CI 也是这组
 
 `docs-check` 会拦两种事：公开函数缺注释、`docs/` 里的生成物与源码不一致。
 `lint` 是 `shellcheck -S warning -x`，模板会先渲染再检查（占位符不是合法语法）。
@@ -51,6 +56,7 @@
     ./shellkit docs --check          # 只看文档产物是否最新
     bash tools/check_versions.sh     # 只看版本引用是否一致
     bash tools/check_docs.sh         # 只看文档里的示例是否仍然成立
+    bash tools/check_module_order.sh  # 只看模块加载顺序对不对
     make site                         # 构建文档站（先从 docs/ 同步，再查产物内部链接）
 
 ## 发版

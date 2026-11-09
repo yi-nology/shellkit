@@ -11,9 +11,16 @@ fi
 export SK_GETTEXT
 
 # _t MSG
+#
+# gettext 把以 - 开头的参数当选项，所以 msgid 以短横开头时（像
+# '--set expects KEY=VALUE'）必须在前面加一个 -- 让它停止解析选项。
+# 只有真的要传短横开头时才加：多加会让 gettext 把 -- 当成 msgid 本身。
 _t() {
   if [ -n "${SK_GETTEXT:-}" ]; then
-    "$SK_GETTEXT" "$@"
+    case "${1:-}" in
+      -*) "$SK_GETTEXT" -- "$@" ;;
+      *) "$SK_GETTEXT" "$@" ;;
+    esac
   else
     printf '%s' "${1:-}"
   fi

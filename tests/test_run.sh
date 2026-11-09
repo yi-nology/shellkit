@@ -63,3 +63,46 @@ assert_eq "[dry-run] touch '$d/with space'" "$out" "dry-run quotes a path with a
 
 msg=$(bash -c ". '$TEST_ROOT/lib/bootstrap.sh'; run sh -c 'exit 4' 'a b'" 2>&1 >/dev/null || true)
 assert_contains "$msg" "'a b'" "the failure message keeps argument boundaries"
+
+# ---- run_concurrent ----
+
+# stdout 只给数据：成功实例的数量
+ok=$(run_concurrent 3 -- sh -c 'echo hi' 2>/dev/null)
+assert_eq "3" "$ok" "run_concurrent reports the number of successes on stdout"
+
+# 每个实例的输出逐行带 [i/N] 前缀，走 stderr
+err=$(run_concurrent 2 -- sh -c 'echo line1; echo line2' 2>&1 1>/dev/null)
+assert_contains "$err" "[1/2] line1"
+assert_contains "$err" "[1/2] line2"
+assert_contains "$err" "[2/2] line1"
+
+# 有实例失败时返回第一个失败的退出码
+rc=0
+run_concurrent 3 -- sh -c 'exit 0' >/dev/null 2>&1 || rc=$?
+assert_eq "0" "$rc" "run_concurrent succeeds when every instance succeeds"
+
+rc=0
+run_concurrent 3 -- sh -c 'exit 7' >/dev/null 2>&1 || rc=$?
+assert_eq "7" "$rc" "run_concurrent returns the failing instance exit code"
+
+rc=0
+run_concurrent 2 -- sh -c 'exit 0' >/dev/null 2>&1 || rc=$?
+assert_eq "0" "$rc" "run_concurrent returns 0 when all instances succeed"
+
+# 参数错是 SK_USAGE
+rc=0
+run_concurrent abc -- true >/dev/null 2>&1 || rc=$?
+assert_eq "2" "$rc" "run_concurrent rejects a non-numeric count"
+
+rc=0
+run_concurrent 0 -- true >/dev/null 2>&1 || rc=$?
+assert_eq "2" "$rc" "run_concurrent rejects a count below one"
+
+rc=0
+run_concurrent 2 >/dev/null 2>&1 || rc=$?
+assert_eq "2" "$rc" "run_concurrent requires a command"
+
+# dry-run 只打印不执行
+out=$(SHELLKIT_DRY_RUN=1 run_concurrent 2 -- touch "$d/concurrent" 2>&1)
+assert_contains "$out" "[dry-run]"
+assert_false test -f "$d/concurrent"

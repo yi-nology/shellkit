@@ -1,0 +1,32 @@
+# shellkit 核心模块的加载顺序。一个模块一行，按依赖拓扑序排。
+#
+# 这是「顺序」的唯一真相源：lib/bootstrap.sh 按它加载，tools/shdoc.sh 按它生成
+# API 参考。以前顺序写死在两个文件里，加一个模块要改两处，漏一处就红。
+#
+# 加一个模块现在只改三处：
+#   1. 写 lib/core/<name>.sh（公开函数上方必须紧邻注释行）
+#   2. 在这里加一行（放在它依赖的模块之后）
+#   3. 写 tests/test_<name>.sh
+#
+# 顺序对不对由 tools/check_module_order.sh 自动查：某个模块调用了还没加载的
+# 模块的函数，门禁会红。写错顺序不用等到运行时才发现。
+#
+# error 必须在 str/validate/fs 之前：_sk_need_args 定义在 error 里，很多模块都在用。
+
+i18n
+log
+error
+str
+validate
+trap
+fs
+os
+scaffold
+run
+retry
+lock
+net
+http
+config
+prompt
+cli

@@ -105,4 +105,8 @@ sha256 对不上就 `exit 5`，一个字节都不落地。
 
 ## 许可
 
-GPL-3.0-or-later。骨架演化自 [jumpserver/installer](https://github.com/jumpserver/installer)，按同一许可证分发，原署名保留在 LICENSE 里。
+MIT，见 [LICENSE](https://github.com/yi-nology/shellkit/blob/main/LICENSE)。
+
+设计骨架参考自 [jumpserver/installer](https://github.com/jumpserver/installer)（GPLv3），
+原署名保留在 [NOTICE](https://github.com/yi-nology/shellkit/blob/main/NOTICE) 里；
+shellkit 的代码是独立实现，未复制上游代码。

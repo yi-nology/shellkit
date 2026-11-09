@@ -4,7 +4,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: shellkit\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-11-09 03:37+0800\n"
+"POT-Creation-Date: 2026-11-09 18:44+0800\n"
 "PO-Revision-Date: 2026-11-08 00:00+0800\n"
 "Last-Translator: shellkit contributors\n"
 "Language-Team: shellkit contributors\n"
@@ -44,6 +44,9 @@ msgstr ""
 msgid "non-interactive, use defaults"
 msgstr ""
 
+msgid "unsupported shell for completion"
+msgstr ""
+
 msgid "Did you mean"
 msgstr ""
 
@@ -77,6 +80,18 @@ msgstr ""
 msgid "configuration file path is required"
 msgstr ""
 
+msgid "invalid configuration format"
+msgstr ""
+
+msgid "skipping invalid configuration line"
+msgstr ""
+
+msgid "skipping invalid dotenv line"
+msgstr ""
+
+msgid "Required file not found"
+msgstr ""
+
 msgid "invalid configuration key"
 msgstr ""
 
@@ -93,9 +108,6 @@ msgid "Required command not found"
 msgstr ""
 
 msgid "This action must be run as root"
-msgstr ""
-
-msgid "Required file not found"
 msgstr ""
 
 msgid "Bash version is too old"
@@ -128,6 +140,42 @@ msgstr ""
 msgid "refusing to use a symlinked temporary directory"
 msgstr ""
 
+msgid "URL is required"
+msgstr ""
+
+msgid "invalid HTTP method"
+msgstr ""
+
+msgid "missing value for option"
+msgstr ""
+
+msgid "cannot use both --data and --json"
+msgstr ""
+
+msgid "invalid timeout value"
+msgstr ""
+
+msgid "curl is required for HTTP requests"
+msgstr ""
+
+msgid "invalid URL"
+msgstr ""
+
+msgid "HTTP request failed"
+msgstr ""
+
+msgid "cannot write response body to file"
+msgstr ""
+
+msgid "jq or python3 is required to parse JSON"
+msgstr ""
+
+msgid "invalid JSON response"
+msgstr ""
+
+msgid "JSON path not found"
+msgstr ""
+
 msgid "invalid lock name"
 msgstr ""
 
@@ -138,6 +186,9 @@ msgid "another instance is running"
 msgstr ""
 
 msgid "lock is held by another process"
+msgstr ""
+
+msgid "no write permission"
 msgstr ""
 
 msgid "no checksum configured for"
@@ -218,6 +269,54 @@ msgstr ""
 msgid "command failed"
 msgstr ""
 
+msgid "usage: run_concurrent N [--timeout SEC] -- COMMAND..."
+msgstr ""
+
+msgid "invalid concurrency"
+msgstr ""
+
+msgid "invalid timeout"
+msgstr ""
+
+msgid "run_concurrent requires a command"
+msgstr ""
+
+msgid "cannot create a temporary directory"
+msgstr ""
+
+msgid "timeout command not found, running without a timeout"
+msgstr ""
+
+msgid "concurrent instances failed"
+msgstr ""
+
+msgid "invalid template variable name"
+msgstr ""
+
+msgid "template config not found"
+msgstr ""
+
+msgid "skipped a malformed template variable"
+msgstr ""
+
+msgid "skipped an invalid template variable name"
+msgstr ""
+
+msgid "template is missing"
+msgstr ""
+
+msgid "no shellkit manifest in"
+msgstr ""
+
+msgid "unknown manifest key"
+msgstr ""
+
+msgid "hook is not executable, skipped"
+msgstr ""
+
+msgid "hook failed"
+msgstr ""
+
 msgid "trap_push requires a command"
 msgstr ""
 
@@ -245,9 +344,6 @@ msgstr ""
 msgid "path must be absolute"
 msgstr ""
 
-msgid "invalid URL"
-msgstr ""
-
 msgid "value not in allowed set"
 msgstr ""
 
@@ -255,6 +351,9 @@ msgid "project generation"
 msgstr ""
 
 msgid "create a new project skeleton"
+msgstr ""
+
+msgid "update a generated project to the current template"
 msgstr ""
 
 msgid "environment"
@@ -278,6 +377,9 @@ msgstr ""
 msgid "regenerate the API reference"
 msgstr ""
 
+msgid "print a shell completion script"
+msgstr ""
+
 msgid "installation"
 msgstr ""
 
@@ -290,7 +392,7 @@ msgstr ""
 msgid "update an installed shellkit"
 msgstr ""
 
-msgid "template is missing"
+msgid "usage"
 msgstr ""
 
 msgid "path exists and is not a directory"
@@ -320,6 +422,15 @@ msgstr ""
 msgid "invalid project name"
 msgstr ""
 
+msgid "template directory does not exist"
+msgstr ""
+
+msgid "--set expects KEY=VALUE"
+msgstr ""
+
+msgid "value for"
+msgstr ""
+
 msgid "creating"
 msgstr ""
 
@@ -329,6 +440,9 @@ msgstr ""
 msgid "the target directory was left in place for inspection"
 msgstr ""
 
+msgid "failed to write the project manifest"
+msgstr ""
+
 msgid "the generated project is incomplete"
 msgstr ""
 
@@ -336,6 +450,45 @@ msgid "project created"
 msgstr ""
 
 msgid "next steps"
+msgstr ""
+
+msgid "target directory does not exist"
+msgstr ""
+
+msgid "it does not look like a shellkit-generated project"
+msgstr ""
+
+msgid "the manifest does not record a project name"
+msgstr ""
+
+msgid "upgrading"
+msgstr ""
+
+msgid "template version"
+msgstr ""
+
+msgid "would add"
+msgstr ""
+
+msgid "added"
+msgstr ""
+
+msgid "modified locally, left alone"
+msgstr ""
+
+msgid "no recorded fingerprint, left alone"
+msgstr ""
+
+msgid "would update"
+msgstr ""
+
+msgid "updated"
+msgstr ""
+
+msgid "failed to sync the vendored library"
+msgstr ""
+
+msgid "upgrade finished"
 msgstr ""
 
 msgid "environment check"
@@ -380,9 +533,6 @@ msgstr ""
 msgid "commands"
 msgstr ""
 
-msgid "target directory does not exist"
-msgstr ""
-
 msgid "vendored library is out of date"
 msgstr ""
 
@@ -396,9 +546,6 @@ msgid "refusing to overwrite a directory that is not a shellkit vendor"
 msgstr ""
 
 msgid "syncing"
-msgstr ""
-
-msgid "failed to sync the vendored library"
 msgstr ""
 
 msgid "load it from your scripts"
@@ -426,9 +573,6 @@ msgid "documentation is up to date"
 msgstr ""
 
 msgid "wrote"
-msgstr ""
-
-msgid "no write permission"
 msgstr ""
 
 msgid "try a writable prefix"
@@ -522,12 +666,6 @@ msgid "updating"
 msgstr ""
 
 msgid "update failed"
-msgstr ""
-
-msgid "updated"
-msgstr ""
-
-msgid "cannot create a temporary directory"
 msgstr ""
 
 msgid "running"
