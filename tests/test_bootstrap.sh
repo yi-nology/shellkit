@@ -115,3 +115,13 @@ rc=0
 out=$(bash "$g/root/tools/check_module_order.sh" 2>&1) || rc=$?
 assert_ne "0" "$rc" "the gate must reject a dependency that is listed after its user"
 assert_contains "$out" "is listed after" "the gate must say which dependency is out of order"
+
+# (c) 扫描器自己坏了：门禁必须红，不能「什么都没扫到 ⇒ 算通过」
+#
+# 这是真踩过的坑：awk 报错时输出里没有门禁认识的行，门禁就以为一切正常 ——
+# 工具崩了与检查通过必须分得开。
+printf 'if (\n' >>"$g/root/tools/module_order.awk"
+rc=0
+out=$(bash "$g/root/tools/check_module_order.sh" 2>&1) || rc=$?
+assert_ne "0" "$rc" "the gate must fail when the scanner itself breaks"
+assert_contains "$out" "scanner failed" "the gate must say the scanner failed"
