@@ -6,7 +6,7 @@ SOURCES := shellkit install.sh lib/bootstrap.sh $(wildcard lib/core/*.sh) \
 TEMPLATES := $(shell find templates -type f)
 SHOTS := $(wildcard docs/shots/*.shot)
 
-.PHONY: help test syntax lint lint-templates fmt messages messages-check docs docs-check versions-check check-docs cookbook-check shots examples check install release release-dry site-deps site-sync site site-serve local-names-check module-count-check
+.PHONY: help test syntax lint lint-templates fmt messages messages-check docs docs-check versions-check check-docs cookbook-check shots examples check install release release-dry site-deps site-sync site site-serve local-names-check module-count-check pipe-safety-check
 
 help:
 	@printf '%s\n' \
@@ -17,6 +17,7 @@ help:
 	  'make check-exitcode-docs  公开函数的返回码必须写在注释里' \
 	  'make local-names-check  库内部命名空间与出参保留名校验' \
 	  'make module-count-check  文档里的模块数必须与 lib/modules.txt 一致' \
+	  'make pipe-safety-check  管道里不能有会提前退出的消费者（SIGPIPE + pipefail 会误判失败）' \
 	  'make fmt         shfmt -d -i 2 -ci（只检查）' \
 	  'make messages    重新抽取 msgid 并编译 .mo' \
 	  'make messages-check  只检查 pot 与源码是否一致（缺 xgettext 时跳过）' \
@@ -26,7 +27,7 @@ help:
   'make cookbook-check  文档里说的场景数要与 Cookbook 实际场景数一致' \
 	  'make shots       按 docs/shots/*.shot 真跑命令并渲染 SVG 截图' \
 	  'make examples    跑 examples/ 下每个工程的测试' \
-	  'make check       依次跑 syntax / test / lint / module-order-check / check-exitcode-docs / local-names-check / module-count-check / docs-check / versions-check / check-docs / cookbook-check / messages-check / examples / fmt' \
+	  'make check       依次跑 syntax / test / lint / module-order-check / check-exitcode-docs / local-names-check / module-count-check / pipe-safety-check / docs-check / versions-check / check-docs / cookbook-check / messages-check / examples / fmt' \
 	  'make release VERSION=x.y.z  发版：升版本→重生成产物→门禁→commit→tag→push' \
 	  'make release-dry VERSION=x.y.z  同 release，但跑完还原工作树、不提交' \
 	  'make site        构建文档站（先跑 tools/site_sync.sh 从 docs/ 同步）' \
@@ -130,7 +131,12 @@ local-names-check:
 module-count-check:
 	@bash tools/check_module_count.sh
 
-check: syntax test lint module-order-check check-exitcode-docs local-names-check module-count-check docs-check versions-check check-docs cookbook-check messages-check examples fmt
+# 管道里不能有会提前退出的消费者：grep -q / head 会把上游 SIGPIPE 打死（141），
+# 调用方开了 pipefail 时整条管道判失败 —— 而且是竞态，本机常绿、CI 必炸
+pipe-safety-check:
+	@bash tools/check_pipe_safety.sh
+
+check: syntax test lint module-order-check check-exitcode-docs local-names-check module-count-check pipe-safety-check docs-check versions-check check-docs cookbook-check messages-check examples fmt
 
 install:
 	./shellkit install-self --prefix $(PREFIX)/usr
