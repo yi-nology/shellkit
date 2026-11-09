@@ -147,6 +147,25 @@ while IFS= read -r __line; do
   TEST_FILES+=("$__line")
 done <"$TMP/files.list"
 
+# 过滤器一个都没匹配上时必须报错。
+# 「All 0 test files passed.」是假绿：用户以为自己跑了一组测试，其实什么都没跑。
+if [ "${#TEST_FILES[@]}" -eq 0 ]; then
+  if [ -n "$FILTER" ]; then
+    printf '没有测试文件匹配过滤器：%s\n' "$FILTER" >&2
+  else
+    printf '没有找到任何测试文件：%s/tests/test_*.sh\n' "$ROOT" >&2
+  fi
+  printf '可用的测试文件：\n' >&2
+  for __f in "$ROOT"/tests/test_*.sh; do
+    [ -f "$__f" ] || continue
+    if [ "${__f##*/}" = "test_helper.sh" ]; then
+      continue
+    fi
+    printf '  %s\n' "${__f##*/}" >&2
+  done
+  exit 2
+fi
+
 if [ "$LIST_ONLY" -eq 1 ]; then
   for __file in ${TEST_FILES[@]+"${TEST_FILES[@]}"}; do
     printf '%s\n' "${__file##*/}"
@@ -322,19 +341,27 @@ _failure_message() {
 }
 
 # 抽出文件里的 `# CASE: 标题` 标记，输出「行号<TAB>标题」
+#
+# 结果必须写进 $out，不能往 stdout 打：stdout 是 TAP/JUnit 报告本身，
+# 混进一行「12\t某个用例名」会让 JUnit 变成非法 XML、TAP 解析器直接报错。
+# 读和写要用两个文件 —— 边读 $out 边往 $out 追加会死循环。
 _markers_of() {
   local file=$1
   local out=$2
   local line ln name
-  grep -nE '^[[:space:]]*#[[:space:]]*CASE:[[:space:]]*[^[:space:]]' "$file" >"$out" 2>/dev/null || true
+  local raw
+  raw=$(grep -nE '^[[:space:]]*#[[:space:]]*CASE:[[:space:]]*[^[:space:]]' "$file" 2>/dev/null || true)
+  : >"$out"
   while IFS= read -r line; do
     [ -n "$line" ] || continue
     ln=${line%%:*}
     name=${line#*:}
     name=${name#*CASE:}
     name=${name#"${name%%[![:space:]]*}"}
-    printf '%s\t%s\n' "$ln" "$name"
-  done <"$out"
+    printf '%s\t%s\n' "$ln" "$name" >>"$out"
+  done <<SK_EOF
+$raw
+SK_EOF
 }
 
 # 重跑一次带 xtrace，定位失败发生在哪一行、属于哪个用例。
