@@ -2,6 +2,14 @@
 本文件由 `tools/release.sh` 在发版时自动追加，已发布的小节不要手改。
 最新的在最前面。每一条对应一个提交 —— 要看「为什么」而不是「改了什么」，读 `docs/MIGRATING.md`。
 
+## 0.9.0 — 2026-11-09
+
+143d489 feat(api): 公开函数全部写明返回码，并加门禁守着
+e263f16 feat(modules): 模块清单两列化 + SHELLKIT_MODULES 按需加载 + 依赖门禁
+d363cf4 feat(vendor,doctor): 副本自带 CLI 与模板；doctor 做三类自检
+a377b54 feat(test): 执行器支持 TAP/JUnit/并行/过滤，并给执行器自己补上回归测试
+8d856bd feat(docs): 消灭第三份模块清单 + CHANGELOG 自动生成 + 两道新门禁
+
 ## 0.8.1 — 2026-11-09
 
 - 60dcbb6 docs(ai): 把新 API 补进「常见任务的落点」表
