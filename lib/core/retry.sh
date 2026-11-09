@@ -25,6 +25,9 @@ _sk_retry_allowed() {
 }
 
 # retry ATTEMPTS CMD... —— 失败退避重试；用法错与校验失败不重试
+# @exitcode 0 最终成功
+# @exitcode 2 参数错（次数不是正整数）
+# @exitcode 其他 被重试命令自身的退出码（放弃重试时返回它）
 retry() {
   if [ "$#" -lt 2 ]; then
     log_error "$(_t 'usage: retry ATTEMPTS COMMAND...')"

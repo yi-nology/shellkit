@@ -44,6 +44,8 @@ _sk_shell_quote() {
 }
 
 # str_trim VAR —— 去掉首尾空白，原地改写该变量
+# @exitcode 0 成功
+# @exitcode 2 参数错（变量名非法）
 str_trim() {
   local __n=${1:-} __v
   _sk_need_args "$#" 1 "str_trim VAR" || return $?
@@ -55,6 +57,8 @@ str_trim() {
 }
 
 # str_lower VAR —— 转小写，原地改写该变量（3.2 没有大写展开语法）
+# @exitcode 0 成功
+# @exitcode 2 参数错（变量名非法）
 str_lower() {
   local __n=${1:-} __v
   _sk_need_args "$#" 1 "str_lower VAR" || return $?
@@ -64,6 +68,8 @@ str_lower() {
 }
 
 # str_upper VAR —— 转大写，原地改写该变量（3.2 没有大写展开语法）
+# @exitcode 0 成功
+# @exitcode 2 参数错（变量名非法）
 str_upper() {
   local __n=${1:-} __v
   _sk_need_args "$#" 1 "str_upper VAR" || return $?
@@ -73,6 +79,8 @@ str_upper() {
 }
 
 # str_contains HAYSTACK NEEDLE —— 返回码；空 needle 恒返回 1
+# @exitcode 0 包含该子串
+# @exitcode 1 不包含（或 needle 为空）
 str_contains() {
   if [ -z "${2:-}" ]; then
     return 1
@@ -84,6 +92,8 @@ str_contains() {
 }
 
 # str_starts_with STR PREFIX —— 前缀匹配；用返回码而不是布尔值
+# @exitcode 0 匹配
+# @exitcode 1 不匹配（或前缀为空）
 str_starts_with() {
   if [ -z "${2:-}" ]; then
     return 1
@@ -95,6 +105,8 @@ str_starts_with() {
 }
 
 # str_ends_with STR SUFFIX —— 后缀匹配；用返回码而不是布尔值
+# @exitcode 0 匹配
+# @exitcode 1 不匹配（或后缀为空）
 str_ends_with() {
   if [ -z "${2:-}" ]; then
     return 1
@@ -106,6 +118,8 @@ str_ends_with() {
 }
 
 # str_repeat VAR COUNT STRING —— 把字符串重复 N 次写进变量
+# @exitcode 0 成功
+# @exitcode 2 参数错（变量名非法或次数不是数字）
 str_repeat() {
   local __n=${1:-} __count=${2:-} __s=${3:-} __out="" __i=0
   _sk_need_args "$#" 3 "str_repeat VAR COUNT STRING" || return $?

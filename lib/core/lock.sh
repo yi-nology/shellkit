@@ -131,6 +131,9 @@ _sk_lock_hook() {
 }
 
 # lock_acquire NAME [WAIT_SEC] —— 0 成功；SK_PRECOND 被占用/超时；SK_USAGE 名字非法
+# @exitcode 0 拿到锁（并挂进清理栈）
+# @exitcode 2 锁名非法
+# @exitcode 3 别人正持有（超时或僵锁）
 lock_acquire() {
   local __name=${1:-} __wait=${2:-0} __dir __i=0 __stale_tries=0
   if ! _sk_lock_name_ok "$__name"; then
@@ -166,6 +169,9 @@ lock_acquire() {
 }
 
 # lock_release NAME —— 只释放自己持有的锁
+# @exitcode 0 释放成功（或本来就没锁）
+# @exitcode 2 锁名非法
+# @exitcode 3 锁被别的进程持有
 lock_release() {
   local __name=${1:-} __dir __pid
   if ! _sk_lock_name_ok "$__name"; then
@@ -187,6 +193,9 @@ lock_release() {
 }
 
 # lock_held NAME —— 返回码判断是否被占；被占时 stdout 输出持有者 pid
+# @exitcode 0 锁着
+# @exitcode 1 没锁
+# @exitcode 2 锁名非法
 lock_held() {
   local __name=${1:-} __dir __pid
   if ! _sk_lock_name_ok "$__name"; then

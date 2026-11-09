@@ -23,6 +23,9 @@ _sk_run_quote() {
 }
 
 # run [--always] [--no-die] CMD... —— 执行命令，失败即 die；--no-die 只返回码
+# @exitcode 0 命令成功
+# @exitcode 2 用法错（没给命令）
+# @exitcode 其他 命令自身的退出码；默认模式下失败会 die，--no-die 只返回码
 run() {
   local __always=0 __die=1 __rc=0 __shown
   while :; do
@@ -70,6 +73,9 @@ run() {
 #
 # 返回码：全部成功返回 0；有实例失败则返回第一个失败实例的退出码。
 # 注意：这里不用 die —— die 的 exit 在 if / || 里会退出整个 shell。
+# @exitcode 0 全部实例成功（stdout 输出成功实例数）
+# @exitcode 2 参数错（并发数不是正整数、超时值非法、没给命令）
+# @exitcode 其他 第一个失败实例的退出码
 run_concurrent() {
   if [ "$#" -eq 0 ]; then
     log_error "$(_t 'usage: run_concurrent N [--timeout SEC] -- COMMAND...')"

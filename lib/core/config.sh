@@ -185,6 +185,8 @@ _sk_conf_layer_del() {
 # --format 决定文件怎么解析：auto（默认，老行为 + 容忍 dotenv 写法）、
 # env（严格 KEY=VALUE）、dotenv（完整 dotenv 语义）。
 # 严格格式（env / dotenv）下不合规的行会在载入时报警并跳过。
+# @exitcode 0 成功（文件不存在当成空配置）
+# @exitcode 2 参数错（没给路径或格式不认识）
 conf_init() {
   local __file="" __format="auto" __seen=0 __line __lineno=0 __rc
   while [ $# -gt 0 ]; do
@@ -256,13 +258,17 @@ conf_init() {
 }
 
 # conf_file —— 当前生效的配置文件路径；未初始化时为空
+# @exitcode 0 总是成功（stdout 输出当前配置文件路径）
 conf_file() { printf '%s\n' "${SK_CONF_FILE:-}"; }
 
 # conf_format —— 当前生效的配置格式（auto|env|dotenv）
+# @exitcode 0 总是成功（stdout 输出当前解析格式）
 conf_format() { printf '%s\n' "${SK_CONF_FORMAT:-auto}"; }
 
 # conf_get KEY [DEFAULT] —— 只输出值；未初始化或无文件时返回默认值
 # 取值顺序：配置层 > 配置文件。键存在但值为空时返回空串，不回落默认值。
+# @exitcode 0 成功（stdout 输出值；没配过就输出默认值）
+# @exitcode 2 键名非法
 conf_get() {
   local __key=${1:-} __default=${2:-} __file=${SK_CONF_FILE:-} __line __value="" __found=0 __rc
   if ! validate_key "$__key"; then
@@ -296,6 +302,9 @@ conf_get() {
 }
 
 # conf_has KEY —— 返回码 0/1
+# @exitcode 0 键存在
+# @exitcode 1 键不存在
+# @exitcode 2 键名非法
 conf_has() {
   local __key=${1:-} __file=${SK_CONF_FILE:-} __line
   if ! validate_key "$__key"; then
@@ -320,6 +329,8 @@ conf_has() {
 }
 
 # conf_get_any KEY [DEFAULT] —— 环境变量 > 配置层 > 配置文件 > 默认值
+# @exitcode 0 成功（stdout 输出值：环境变量 > 配置层 > 配置文件 > 默认值）
+# @exitcode 2 键名非法
 conf_get_any() {
   local __key=${1:-} __default=${2:-} __env=""
   if ! _sk_is_name "$__key"; then
@@ -344,6 +355,9 @@ conf_get_any() {
 # 往里塞东西会盖掉调用方自己的设置。确实要导出时用 conf_source。
 #
 # 非法行跳过并告警，不整体失败。文件不存在返回 SK_PRECOND。
+# @exitcode 0 载入成功（非法行跳过并告警）
+# @exitcode 2 没给路径
+# @exitcode 3 文件不存在
 conf_load_dotenv() {
   local __file=${1:-} __line __lineno=0 __rc
   if ! validate_not_empty "$__file"; then
@@ -371,6 +385,9 @@ conf_load_dotenv() {
 
 # conf_source FILE —— 把 dotenv 文件的键导出为环境变量（供子进程继承）
 # 与 conf_load_dotenv 的区别：这里明确要 export，所以只导环境变量，不进配置层。
+# @exitcode 0 导出成功（键进环境变量）
+# @exitcode 2 没给路径
+# @exitcode 3 文件不存在
 conf_source() {
   local __file=${1:-} __line __lineno=0 __rc
   if ! validate_not_empty "$__file"; then
@@ -399,6 +416,10 @@ conf_source() {
 }
 
 # conf_set KEY VALUE —— 校验 + 值未变则跳过 + 原子写 + 600
+# @exitcode 0 写成功（值没变就不写盘）
+# @exitcode 2 键名非法或值含换行
+# @exitcode 3 还没 conf_init
+# @exitcode 1 写文件失败
 conf_set() {
   local __key=${1:-} __value=${2:-} __file=${SK_CONF_FILE:-} __line __tmp __origin __replaced=0
   if ! validate_key "$__key"; then
@@ -450,6 +471,9 @@ conf_set() {
 }
 
 # conf_unset KEY —— 删掉一个键；幂等，键不存在也算成功
+# @exitcode 0 删成功（或本来就没有这个键）
+# @exitcode 2 键名非法
+# @exitcode 1 写文件失败
 conf_unset() {
   local __key=${1:-} __file=${SK_CONF_FILE:-} __line __tmp
   if ! validate_key "$__key"; then
@@ -479,6 +503,9 @@ conf_unset() {
 }
 
 # conf_disable KEY —— 把 KEY=VALUE 改成注释行，保留原值
+# @exitcode 0 注释掉成功（或本来就没有这个键）
+# @exitcode 2 键名非法
+# @exitcode 1 写文件失败
 conf_disable() {
   local __key=${1:-} __file=${SK_CONF_FILE:-} __line __tmp
   if ! validate_key "$__key"; then
@@ -508,6 +535,7 @@ conf_disable() {
 }
 
 # conf_keys —— 逐行输出键名（配置层的键在前，文件里的键在后，不重复）
+# @exitcode 0 总是成功（stdout 逐行输出键名）
 conf_keys() {
   local __file=${SK_CONF_FILE:-} __line __i=0
   while [ "$__i" -lt "$SK_CONF_N" ]; do

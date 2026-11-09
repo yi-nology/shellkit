@@ -17,12 +17,16 @@ _sk_os_detect() {
 _sk_os_detect
 
 # os_name —— linux | darwin | other
+# @exitcode 0 总是成功（stdout 输出 darwin/linux）
 os_name() { printf '%s\n' "$SK_OS"; }
 
 # os_arch —— x86_64 | aarch64 | other
+# @exitcode 0 总是成功（stdout 输出架构）
 os_arch() { printf '%s\n' "$SK_ARCH"; }
 
 # os_is_root —— 当前是否以 root 身份运行
+# @exitcode 0 是 root
+# @exitcode 1 不是 root
 os_is_root() {
   if [ "$(id -u 2>/dev/null)" = "0" ]; then
     return 0
@@ -31,6 +35,9 @@ os_is_root() {
 }
 
 # os_has_cmd CMD... —— 零参数返回 SK_USAGE（空真会让前置检查静默通过）
+# @exitcode 0 命令都在
+# @exitcode 1 有命令找不到
+# @exitcode 2 没给参数
 os_has_cmd() {
   local __c
   _sk_need_args "$#" 1 "os_has_cmd CMD..." || return $?
@@ -59,9 +66,14 @@ _sk_pkg_mgr() {
 }
 
 # os_pkg_manager —— 本机的包管理器名（apt-get/yum/dnf/zypper/apk）；没有则返回 1
+# @exitcode 0 找到了（stdout 输出包管理器名）
+# @exitcode 1 找不到支持的包管理器
 os_pkg_manager() { _sk_pkg_mgr; }
 
 # os_pkg_update —— 刷新包索引；没有受支持的包管理器返回 SK_PRECOND(3)
+# @exitcode 0 更新成功
+# @exitcode 3 找不到支持的包管理器
+# @exitcode 其他 包管理器自身的退出码
 os_pkg_update() {
   local __mgr
   __mgr=$(_sk_pkg_mgr) || {
@@ -78,6 +90,9 @@ os_pkg_update() {
 }
 
 # os_pkg_install PKG... —— 用本机包管理器装包；没有受支持的包管理器返回 SK_PRECOND(3)
+# @exitcode 0 安装成功
+# @exitcode 3 找不到支持的包管理器
+# @exitcode 其他 包管理器自身的退出码
 os_pkg_install() {
   local __mgr
   __mgr=$(_sk_pkg_mgr) || {
@@ -94,6 +109,8 @@ os_pkg_install() {
 }
 
 # os_sed_i ARGS... —— 就地编辑；Darwin 的 sed 必须给个备份后缀
+# @exitcode 0 成功
+# @exitcode 其他 sed 自身的退出码
 os_sed_i() {
   if [ "$SK_OS" = "darwin" ]; then
     sed -i '' "$@"
@@ -103,6 +120,9 @@ os_sed_i() {
 }
 
 # os_md5 FILE —— 文件的 md5；两种工具都没有时返回 1
+# @exitcode 0 成功（stdout 输出校验和）
+# @exitcode 2 没给参数
+# @exitcode 1 没有 md5sum 也没有 md5
 os_md5() {
   local __f=${1:-}
   _sk_need_args "$#" 1 "os_md5 FILE" || return $?
@@ -116,6 +136,9 @@ os_md5() {
 }
 
 # os_sha256 FILE —— 文件的 sha256；两种工具都没有时返回 1
+# @exitcode 0 成功（stdout 输出校验和）
+# @exitcode 2 没给参数
+# @exitcode 1 没有 sha256sum 也没有 shasum
 os_sha256() {
   local __f=${1:-}
   _sk_need_args "$#" 1 "os_sha256 FILE" || return $?

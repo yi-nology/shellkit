@@ -10,6 +10,8 @@ SK_CLI_GROUPS=()
 SK_CLI_GROUP_TITLE=""
 
 # cli_group TITLE —— 后续注册的命令归入该分组
+# @exitcode 0 成功
+# @exitcode 2 分组名非法
 cli_group() {
   SK_CLI_GROUP_TITLE=${1:-}
 }
@@ -23,6 +25,8 @@ _sk_is_cmd_name() {
 }
 
 # cli_cmd NAME DESC [USAGE] —— 注册一个子命令；要写在命令文件末尾
+# @exitcode 0 注册成功
+# @exitcode 2 命令名非法或与已有命令重名
 cli_cmd() {
   local __name=${1:-} __desc=${2:-} __usage=${3:-}
   if ! _sk_is_cmd_name "$__name"; then
@@ -41,6 +45,8 @@ cli_cmd() {
 }
 
 # cli_has NAME —— 该命令是否已注册
+# @exitcode 0 有这个命令
+# @exitcode 1 没有
 cli_has() {
   local __n=${1:-} __x
   if [ "${#SK_CLI_NAMES[@]}" -eq 0 ]; then
@@ -58,6 +64,7 @@ cli_has() {
 _sk_cmd_fn() { printf 'cmd_%s' "$(printf '%s' "${1:-}" | tr '-' '_')"; }
 
 # cli_usage_cmd NAME —— 打印单个子命令的用法行
+# @exitcode 0 总是成功（把用法打到 stdout）
 cli_usage_cmd() {
   local __name=${1:-} __i=0 __prog
   __prog=${SK_PROG:-$(basename "$0")}
@@ -77,6 +84,7 @@ cli_usage_cmd() {
 }
 
 # cli_usage_global —— 打印总用法：命令按分组，选项固定五条
+# @exitcode 0 总是成功（把用法打到 stdout）
 cli_usage_global() {
   local __i=0 __max=8 __len __grp="" __prog
   __prog=${SK_PROG:-$(basename "$0")}
@@ -114,6 +122,8 @@ cli_usage_global() {
 # 子命令名取自注册表，所以新加一个 cli_cmd，补全里自动就有了 ——
 # 不用像别的框架那样单独维护一份命令列表。
 # 程序名取 SK_PROG（生成出来的工程可以在自己的入口里设成自己的名字）。
+# @exitcode 0 成功（stdout 输出补全脚本）
+# @exitcode 2 不认识的 shell
 cli_completion_script() {
   local __shell=${1:-bash} __i=0 __words="" __name __prog=${SK_PROG:-shellkit}
   case "$__shell" in
@@ -177,6 +187,10 @@ _sk_suggest() {
 }
 
 # cli_run ARGS... —— 分发入口：吃全局选项后按名字找同名 cmd_ 前缀的函数
+# @exitcode 0 命令成功
+# @exitcode 2 用法错（没有命令、选项不认识、命令不存在）
+# @exitcode 1 命令有 handler 但没实现
+# @exitcode 其他 命令自身的退出码
 cli_run() {
   local __name="" __fn="" __rc=0
   while [ "$#" -gt 0 ]; do
@@ -266,6 +280,7 @@ SK_OPT_ARGS=()
 SK_OPTS_LEFT=()
 
 # cli_opt_init —— 清空选项注册表。不接受参数；变量默认值请自己先赋好
+# @exitcode 0 总是成功（清空上一轮的选项状态）
 cli_opt_init() {
   SK_OPT_VARS=()
   SK_OPT_LONGS=()
@@ -276,6 +291,8 @@ cli_opt_init() {
 }
 
 # cli_opt VAR LONG [SHORT] [TAKES_ARG] —— 注册一个选项；第四个参数为 1 表示这个选项要吃值
+# @exitcode 0 注册成功
+# @exitcode 2 选项名非法
 cli_opt() {
   local __var=${1:-} __long=${2:-} __short=${3:-} __arg=${4:-0}
   _sk_need_args "$#" 2 "cli_opt VAR LONG [SHORT] [TAKES_ARG]" || return $?
@@ -352,6 +369,8 @@ _sk_opt_set() {
 }
 
 # cli_opts ARGS... —— 按 cli_opt 注册的规则解析子命令选项；剩余位置参数进 SK_OPTS_LEFT
+# @exitcode 0 解析成功（剩余位置参数在 SK_OPTS_LEFT）
+# @exitcode 2 选项不认识或缺值
 cli_opts() {
   local __idx="" __opt=""
   SK_OPTS_LEFT=()

@@ -69,6 +69,8 @@ _sk_scaffold_store_get() {
 }
 
 # scaffold_vars_set KEY VALUE —— 设一个模板变量
+# @exitcode 0 设置成功
+# @exitcode 2 变量名非法
 scaffold_vars_set() {
   local __key=${1:-} __value=${2:-}
   if ! validate_key "$__key"; then
@@ -80,6 +82,8 @@ scaffold_vars_set() {
 }
 
 # scaffold_vars_get KEY [DEFAULT] —— 读一个模板变量；未设置时给默认值
+# @exitcode 0 找到（stdout 输出值）
+# @exitcode 1 没有这个变量
 scaffold_vars_get() {
   local __key=${1:-} __default=${2:-}
   if ! validate_key "$__key"; then
@@ -90,6 +94,7 @@ scaffold_vars_get() {
 }
 
 # scaffold_vars_list —— 逐行输出 KEY=VALUE
+# @exitcode 0 总是成功（stdout 逐行输出变量名）
 scaffold_vars_list() {
   local __line __rest="$SK_SCAFFOLD_VARS"
   while [ -n "$__rest" ]; do
@@ -108,6 +113,9 @@ scaffold_vars_list() {
 #
 # 格式与 conf 模块一致：KEY=VALUE，# 开头是注释。
 # 值为空是合法的（表示「这个变量默认没有值，生成时问用户」）。
+# @exitcode 0 载入成功
+# @exitcode 2 参数错
+# @exitcode 3 找不到配置文件
 scaffold_config_load() {
   local __file=${1:-} __line __key __value
   _sk_need_args "$#" 1 "scaffold_config_load FILE" || return $?
@@ -151,6 +159,9 @@ _sk_sed_repl_escape() {
 #
 # 未声明的 {{KEY}} 原样保留（这样模板里的示例占位符不会被误伤）。
 # 返回非 0 表示没写出来，调用方必须判。
+# @exitcode 0 渲染成功（stdout 输出渲染后的文本）
+# @exitcode 2 参数错
+# @exitcode 1 渲染失败
 scaffold_render() {
   local __src=${1:-} __dst=${2:-} __sedfile __rc=0 __line __key __value __esc
   _sk_need_args "$#" 2 "scaffold_render SRC DST" || return $?
@@ -187,6 +198,9 @@ EOF
 #
 # 写 DIR/.shellkit-manifest。FILELIST 是换行分隔的相对路径（模板自有的文件），
 # 每个文件记一个 sha256 —— 升级时靠它判断「这个文件用户动过没有」。
+# @exitcode 0 清单写好
+# @exitcode 2 参数错
+# @exitcode 1 写文件失败
 scaffold_manifest_write() {
   local __dir=${1:-} __name=${2:-} __cmds=${3:-} __tver=${4:-} __files=${5:-}
   local __out="$__dir/.shellkit-manifest" __tmp __line __rel __sum
@@ -231,6 +245,8 @@ EOF
 # scaffold_manifest_read DIR —— 读 DIR/.shellkit-manifest
 #
 # 标量进 SK_MANIFEST_* 公开变量，@var 条目进模板变量表。
+# @exitcode 0 清单读到了
+# @exitcode 3 这里不是 shellkit 生成的工程
 scaffold_manifest_read() {
   local __dir=${1:-} __file __line __rest
   _sk_need_args "$#" 1 "scaffold_manifest_read DIR" || return $?
@@ -271,6 +287,8 @@ scaffold_manifest_read() {
 }
 
 # scaffold_manifest_get KEY —— 读 manifest 里的一个标量
+# @exitcode 0 找到（stdout 输出值）
+# @exitcode 1 清单里没有这个键
 scaffold_manifest_get() {
   local __key=${1:-}
   case "$__key" in
@@ -287,6 +305,7 @@ scaffold_manifest_get() {
 }
 
 # scaffold_manifest_list_files —— 逐行输出模板自有的文件（相对路径）
+# @exitcode 0 总是成功（stdout 逐行输出清单里的文件）
 scaffold_manifest_list_files() {
   local __dir=${1:-} __file __line __rel
   _sk_need_args "$#" 1 "scaffold_manifest_list_files DIR" || return $?
@@ -304,6 +323,8 @@ scaffold_manifest_list_files() {
 }
 
 # scaffold_manifest_file_sum DIR RELPATH —— 读 manifest 里记的某个文件的 sha256
+# @exitcode 0 成功（stdout 输出校验和）
+# @exitcode 1 算不出校验和
 scaffold_manifest_file_sum() {
   local __dir=${1:-} __rel=${2:-} __file __line
   _sk_need_args "$#" 2 "scaffold_manifest_file_sum DIR RELPATH" || return $?
@@ -326,6 +347,9 @@ scaffold_manifest_file_sum() {
 # 环境变量里会带上：SHELLKIT_PROJECT_DIR / SHELLKIT_PROJECT_NAME /
 # SHELLKIT_PROJECT_COMMANDS / SHELLKIT_TEMPLATE_VERSION，以及每个模板变量。
 # 钩子不存在就跳过；不可执行就跳过并告警（不因为钩子没设执行位就让生成失败）。
+# @exitcode 0 钩子成功（或没有钩子）
+# @exitcode 2 参数错
+# @exitcode 1 钩子执行失败
 scaffold_run_hook() {
   local __file=${1:-} __dir=${2:-} __line __key __value
   _sk_need_args "$#" 2 "scaffold_run_hook FILE PROJECT_DIR" || return $?

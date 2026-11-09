@@ -61,6 +61,10 @@ _sk_ask_raw() {
 }
 
 # ask VAR PROMPT [DEFAULT] [TIMEOUT] —— 问一个问题，把答案写进 VAR；超时或 EOF 回退默认值
+# @exitcode 0 拿到答案（超时或 EOF 时回退默认值）
+# @exitcode 2 参数错（变量名非法）
+# @exitcode 3 非交互且没有默认值，或超时且没有默认值
+# @exitcode 1 输入被意外关闭
 ask() {
   local __var=${1:-} __prompt=${2:-} __default=${3:-} __timeout=${4:-} __msg
   _sk_need_args "$#" 2 "ask VAR PROMPT [DEFAULT] [TIMEOUT]" || return $?
@@ -76,6 +80,10 @@ ask() {
 }
 
 # ask_yn VAR PROMPT [DEFAULT=y] [TIMEOUT] —— 结果写入 y 或 n
+# @exitcode 0 拿到 y 或 n
+# @exitcode 2 参数错，或连续三次都不是 y/n
+# @exitcode 3 非交互且没有默认值，或超时且没有默认值
+# @exitcode 1 输入被意外关闭
 ask_yn() {
   local __var=${1:-} __prompt=${2:-} __default=${3:-y} __timeout=${4:-} _sk_ans="" _sk_tries=0 _sk_msg _sk_hint
   _sk_need_args "$#" 2 "ask_yn VAR PROMPT [DEFAULT] [TIMEOUT]" || return $?
@@ -111,6 +119,10 @@ ask_yn() {
 }
 
 # ask_choice VAR PROMPT "a|b|c" [DEFAULT] [TIMEOUT] —— 多选一；超时或 EOF 回退默认值
+# @exitcode 0 拿到一个合法选项
+# @exitcode 2 参数错，或连续三次都不是合法选项
+# @exitcode 3 非交互且没有默认值，或超时且没有默认值
+# @exitcode 1 输入被意外关闭
 ask_choice() {
   local __var=${1:-} __prompt=${2:-} __choices=${3:-} __default=${4:-} __timeout=${5:-} _sk_ans="" _sk_tries=0 _sk_msg
   _sk_need_args "$#" 3 "ask_choice VAR PROMPT 'a|b|c' [DEFAULT] [TIMEOUT]" || return $?
@@ -146,6 +158,11 @@ ask_choice() {
 }
 
 # confirm PROMPT [DEFAULT=n] [TIMEOUT] —— 只返回码
+# @exitcode 0 用户答 y
+# @exitcode 1 用户答 n
+# @exitcode 2 参数错，或连续三次都不是 y/n
+# @exitcode 3 非交互且没有默认值，或超时且没有默认值
+# @exitcode 1 输入被意外关闭
 confirm() {
   local __prompt=${1:-} __default=${2:-n} __timeout=${3:-} _sk_confirm_ans=""
   ask_yn _sk_confirm_ans "$__prompt" "$__default" "$__timeout" || return $?

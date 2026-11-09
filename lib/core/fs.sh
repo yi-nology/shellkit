@@ -4,6 +4,9 @@
 SK_TMPDIR=""
 
 # fs_ensure_dir DIR [MODE] —— 幂等建目录；给了 MODE 就 chmod
+# @exitcode 0 目录已存在或建好
+# @exitcode 2 没给参数
+# @exitcode 1 mkdir 失败
 fs_ensure_dir() {
   local __dir=${1:-} __mode=${2:-}
   _sk_need_args "$#" 1 "fs_ensure_dir DIR [MODE]" || return $?
@@ -17,6 +20,9 @@ fs_ensure_dir() {
 }
 
 # fs_atomic_write FILE CONTENT [MODE] —— 原子写文件；默认权限 600，父目录不存在会先建
+# @exitcode 0 写成功（临时文件 + mv，原文件权限保留）
+# @exitcode 2 没给参数
+# @exitcode 1 建目录、落临时文件或改名失败
 fs_atomic_write() {
   local __file=${1:-} __content=${2:-} __mode=${3:-600} __dir __tmp
   _sk_need_args "$#" 2 "fs_atomic_write FILE CONTENT [MODE]" || return $?
@@ -36,6 +42,9 @@ fs_atomic_write() {
 }
 
 # fs_backup FILE [KEEP] —— 产出 FILE.bak.YYYYmmddHHMMSS，按名升序保留最新 KEEP 份
+# @exitcode 0 备份成功（或文件本来就不存在）
+# @exitcode 2 参数错（保留份数不是正整数）
+# @exitcode 1 备份失败
 fs_backup() {
   local __file=${1:-} __keep=${2:-3} __stamp __bak __x __i=0 __total __seq=0
   local -a __list=()
@@ -96,6 +105,9 @@ _sk_fs_has_newline() {
 }
 
 # fs_ensure_line FILE LINE —— 整行精确匹配；不存在才追加。幂等。
+# @exitcode 0 文件已含该行或已写入
+# @exitcode 2 参数错（行为空或含换行）
+# @exitcode 1 写文件失败
 fs_ensure_line() {
   local __file=${1:-} __line=${2:-} __tmp
   _sk_need_args "$#" 1 "fs_ensure_line FILE LINE" || return $?
@@ -133,6 +145,9 @@ fs_ensure_line() {
 }
 
 # fs_ensure_block FILE BEGIN END CONTENT —— 标记块内内容整体替换；没有就追加。幂等。
+# @exitcode 0 区块已存在或已写入
+# @exitcode 2 参数错（区块标识非法）
+# @exitcode 1 写文件失败
 fs_ensure_block() {
   local __file=${1:-} __begin=${2:-} __end=${3:-} __content=${4:-}
   local __tmp __cf __src
@@ -203,6 +218,9 @@ fs_ensure_block() {
 }
 
 # fs_ensure_symlink TARGET LINK —— 已是正确链接则不动；否者替换（绝不覆盖普通文件）
+# @exitcode 0 软链已就位
+# @exitcode 2 参数错
+# @exitcode 1 建链失败
 fs_ensure_symlink() {
   local __target=${1:-} __link=${2:-} __cur
   _sk_need_args "$#" 2 "fs_ensure_symlink TARGET LINK" || return $?
@@ -242,6 +260,8 @@ _sk_tmp_base() {
 # fs_tmpdir —— 确保临时目录存在并输出路径。
 # 目录名按 UID+进程号确定，因此同一进程内的 $(...) 子 shell 拿到的是同一个目录；
 # 它不注册 trap，外部有 EXIT 需求请用 fs_tmp_init。
+# @exitcode 0 成功（stdout 输出临时目录路径）
+# @exitcode 1 建不了临时目录
 fs_tmpdir() {
   local __base __dir
   if [ -n "${SK_TMPDIR:-}" ] && [ -d "$SK_TMPDIR" ]; then
@@ -265,6 +285,8 @@ fs_tmpdir() {
 # fs_tmp_init —— 在当前 shell 初始化临时目录，并把清理动作推进清理栈。
 # 与 0.1.0 的差别：以前「调用方已有 EXIT trap 就放弃清理」，现在改为入栈，
 # 与调用方自己的 trap 共存（trap_install 会链式保留已有 EXIT trap）。
+# @exitcode 0 成功（初始化当前工程的临时目录）
+# @exitcode 1 建不了临时目录
 fs_tmp_init() {
   if ! fs_tmpdir >/dev/null; then
     return 1

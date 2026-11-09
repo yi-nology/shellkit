@@ -23,6 +23,8 @@ _sk_exit_code_ok() {
 }
 
 # die CODE MSG... —— CODE 必须是 0-255；不合法按用法错误退出 2，而不是让 exit 截成 255
+# @exitcode 0 不会返回（直接退出进程）
+# @exitcode 2 退出码不是合法数字
 die() {
   local __code=${1:-}
   if [ "$#" -gt 0 ]; then
@@ -37,6 +39,9 @@ die() {
 }
 
 # fail CODE MSG...  —— 不退出，只返回码；CODE 校验同 die
+# @exitcode 0 不会返回（除非退出码是 0）
+# @exitcode 2 退出码不是合法数字
+# @exitcode 其他 按给定的退出码返回，不退出进程
 fail() {
   local __code=${1:-}
   if [ "$#" -gt 0 ]; then
@@ -51,6 +56,9 @@ fail() {
 }
 
 # require_cmd CMD... —— 零参数返回 SK_USAGE（否则 `require_cmd "$EMPTY"` 会静默通过）
+# @exitcode 0 命令都在
+# @exitcode 2 没给参数
+# @exitcode 3 有命令找不到
 require_cmd() {
   local __c
   _sk_need_args "$#" 1 "require_cmd CMD..." || return $?
@@ -64,6 +72,8 @@ require_cmd() {
 }
 
 # require_root —— 必须是 root 运行；否则返回 SK_PRECOND(3)
+# @exitcode 0 已经是 root
+# @exitcode 3 不是 root
 require_root() {
   if [ "$(id -u 2>/dev/null)" = "0" ]; then
     return 0
@@ -73,6 +83,9 @@ require_root() {
 }
 
 # require_file PATH... —— 零参数返回 SK_USAGE
+# @exitcode 0 文件都在
+# @exitcode 2 没给参数
+# @exitcode 3 有文件不存在
 require_file() {
   local __f
   _sk_need_args "$#" 1 "require_file PATH..." || return $?
@@ -86,6 +99,9 @@ require_file() {
 }
 
 # require_bash MAJOR [MINOR] —— 当前 bash 版本是否达标；不达标返回 SK_PRECOND(3)
+# @exitcode 0 版本够新
+# @exitcode 2 没给参数
+# @exitcode 3 版本太老
 require_bash() {
   local __need_major=${1:-3} __need_minor=${2:-0}
   local __major=${BASH_VERSINFO[0]:-0} __minor=${BASH_VERSINFO[1]:-0}

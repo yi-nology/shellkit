@@ -20,6 +20,8 @@ _SK_TRAP_SAVED_TERM=""
 _SK_TRAP_SAVED_HUP=""
 
 # trap_push CMD... —— 注册一个清理动作；后注册的先执行
+# @exitcode 0 压栈成功
+# @exitcode 2 没给命令
 trap_push() {
   if [ "$#" -eq 0 ]; then
     log_error "$(_t 'trap_push requires a command')"
@@ -31,6 +33,7 @@ trap_push() {
 }
 
 # trap_pop —— 丢弃最近注册的一个动作（不执行）
+# @exitcode 0 弹栈成功（或栈本来就是空的）
 trap_pop() {
   if [ "$_SK_TRAP_N" -gt 0 ]; then
     _SK_TRAP_N=$((_SK_TRAP_N - 1))
@@ -40,6 +43,7 @@ trap_pop() {
 }
 
 # trap_list —— 逐行输出已注册的动作（调试用）
+# @exitcode 0 总是成功（stdout 逐行输出栈里的命令）
 trap_list() {
   local __i=0
   while [ "$__i" -lt "$_SK_TRAP_N" ]; do
@@ -50,6 +54,7 @@ trap_list() {
 }
 
 # trap_cleanup —— 逆序执行全部清理动作；幂等；单个失败不中断其余
+# @exitcode 0 清理完成（单个清理失败不中断其余）
 trap_cleanup() {
   local __i __cmd
   if [ "${_SK_TRAP_RUNNING:-0}" = "1" ]; then
@@ -212,6 +217,7 @@ _sk_trap_on_hup() {
 # 表现为「( ... ) 里的 lock_acquire 拿到锁却没在退出时释放」。
 # 所以：我们自己装的 trap（含子 shell 里的残影）一律重装一遍（重装同处理器无害），
 # 并且绝不把它当成「调用方原有的 handler」捕获下来，否则清理时会自噬。
+# @exitcode 0 装好了（链式保留调用方已有的 EXIT trap，幂等）
 trap_install() {
   local __sig
   for __sig in EXIT INT TERM HUP; do

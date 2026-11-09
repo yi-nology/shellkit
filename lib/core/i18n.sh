@@ -15,6 +15,7 @@ export SK_GETTEXT
 # gettext 把以 - 开头的参数当选项，所以 msgid 以短横开头时（像
 # '--set expects KEY=VALUE'）必须在前面加一个 -- 让它停止解析选项。
 # 只有真的要传短横开头时才加：多加会让 gettext 把 -- 当成 msgid 本身。
+# @exitcode 0 总是成功（找不到译文时原样输出 msgid）
 _t() {
   if [ -n "${SK_GETTEXT:-}" ]; then
     case "${1:-}" in
@@ -27,6 +28,7 @@ _t() {
 }
 
 # _tn SINGULAR PLURAL N
+# @exitcode 0 总是成功（n=1 用单数，其余用复数）
 _tn() {
   if [ "${3:-0}" = "1" ]; then
     _t "$1"
