@@ -148,15 +148,17 @@ if command -v jq >/dev/null 2>&1 || command -v python3 >/dev/null 2>&1; then
   net_json GET "https://api.example.com/v1/items" --path data.items.9.name \
     >"$d/stdout.txt" 2>"$d/stderr.txt" || rc=$?
   assert_eq "5" "$rc" "an out-of-range array index returns SK_VERIFY"
+
+  # 响应不是合法 JSON -> SK_VERIFY(5)
+  # 这一条也要有解析器才判得出来：没有 jq 也没有 python3 时 net_json 返回的是 3
+  # （前置条件不满足），拿它当 5 断言就是假红。
+  export FAKE_BODY='this is not json'
+  rc=0
+  net_json GET "https://api.example.com/v1/items" >"$d/stdout.txt" 2>"$d/stderr.txt" || rc=$?
+  assert_eq "5" "$rc" "a non-JSON response returns SK_VERIFY"
 else
   printf 'skip: no jq and no python3, the net_json parsing cases are not run\n' >&2
 fi
-
-# 响应不是合法 JSON -> SK_VERIFY(5)
-export FAKE_BODY='this is not json'
-rc=0
-net_json GET "https://api.example.com/v1/items" >"$d/stdout.txt" 2>"$d/stderr.txt" || rc=$?
-assert_eq "5" "$rc" "a non-JSON response returns SK_VERIFY"
 
 # 没有 jq 也没有 python3 -> SK_PRECOND(3)
 stub curl --stdout '200' --body "$FAKE_CURL_BODY"
