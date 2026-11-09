@@ -40,19 +40,26 @@
 ## 门禁
 
     make check     # syntax + test + lint + module-order-check + check-exitcode-docs +
-                  # docs-check + versions-check + check-docs + cookbook-check +
-                  # messages-check + examples + fmt，CI 也是这组
+                  # local-names-check + docs-check + versions-check + check-docs +
+                  # cookbook-check + messages-check + examples + fmt，CI 也是这组
 
 `docs-check` 会拦两种事：公开函数缺注释、`docs/` 里的生成物与源码不一致。
 `lint` 是 `shellcheck -S warning -x`，模板会先渲染再检查（占位符不是合法语法）。
+`local-names-check` 拦的是「同名遮蔽」：出参名撞上出参链路上的某个 local 时，
+内容会静默写丢（见下面第 4 条）。
 
-## 三个已经踩过的坑
+## 四个已经踩过的坑
 
 1. **bash 3.2 与 5 的 trap 语义不同**：子 shell 里 `trap -p EXIT`，3.2 读到空，5.x 仍打印
    父 shell 的 trap 但子 shell 退出时不执行。所以幂等不能只查 `trap -p`，看到是自己的
    处理器就重装一遍（重装无害），也绝不把自己的处理器当调用方的捕获下来。
 2. **`$(trap -p ...)` 永远读不到东西**：命令替换本身是子 shell。要重定向到文件再 `cat`。
 3. **空数组在 `set -u` 下遍历会报 unbound variable**：一律 `${arr[@]+"${arr[@]}"}`。
+4. **`printf -v` 写的是「最近一层声明了该名字的作用域」**：出参名一旦和出参链路上某个
+   `local` 同名，内容就写回自己那层，调用方拿到的还是原值 —— 不报错、不崩，只是静默失效。
+   prompt.sh 曾因此让交互式 `ask` 永远拿不到用户输入。公开出参入口一律先调
+   `_sk_check_out_name` 挡住保留名；链路上新增局部变量要同步进那份名单
+   （`tools/check_local_names.sh` 会查漂移）。
 
 ## 本场景的验证
 
@@ -62,6 +69,7 @@
     bash tools/check_versions.sh     # 只看版本引用是否一致
     bash tools/check_docs.sh         # 只看文档里的示例是否仍然成立
     bash tools/check_module_order.sh  # 只看模块加载顺序对不对
+    bash tools/check_local_names.sh  # 只看命名空间与出参保留名单对不对
     bash tools/check_exitcode_docs.sh # 只看公开函数有没有写明返回码
     bash tools/check_cookbook_count.sh # 只看文档里说的场景数对不对
     make site                         # 构建文档站（先从 docs/ 同步，再查产物内部链接）

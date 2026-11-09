@@ -23,7 +23,7 @@
 
 ## 常见任务
 
-- [Cookbook](./cookbook.md) —— 23 个场景，每节都是「场景 / 代码 / 为什么」。
+- [Cookbook](./cookbook.md) —— 24 个场景，每节都是「场景 / 代码 / 为什么」。
 - [CLI 框架](./cli.md) —— 注册式命令、帮助自动生成、选项解析。
 - [国际化](./i18n.md) —— msgid 英文、pot/po/mo、缺 gettext 时的降级。
 - [测试与门禁](./testing.md) —— 断言库、逐文件执行器、`make check` 每一步拦什么。

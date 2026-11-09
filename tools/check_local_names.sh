@@ -18,7 +18,8 @@
 #   bash tools/check_local_names.sh   # 0 合格；5 不合格
 set -u
 
-ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." &>/dev/null && pwd)"
+# SHELLKIT_CHECK_ROOT 只给自测用：在一棵假的树副本上跑本门禁。
+ROOT="${SHELLKIT_CHECK_ROOT:-$(cd "$(dirname "${BASH_SOURCE[0]}")/.." &>/dev/null && pwd)}"
 _bad=0
 
 _fail() {
@@ -102,6 +103,24 @@ _fn_body() {
   return 0
 }
 
+# _fn_names FILE —— 打印文件里所有函数名（每行一个）
+_fn_names() {
+  local __file=$1 __line __head
+  while IFS= read -r __line || [ -n "$__line" ]; do
+    __head=${__line%%\{*}
+    __head=${__head%"${__head##*[![:space:]]}"}
+    case "$__head" in
+      *\(\))
+        __head=${__head%\(\)}
+        case "$__head" in
+          "" | *[!A-Za-z0-9_]*) continue ;;
+        esac
+        printf '%s\n' "$__head"
+        ;;
+    esac
+  done <"$__file"
+}
+
 # _fn_locals FILE FUNC —— 打印该函数声明的具名局部变量（每行一个）
 _fn_locals() {
   local __body
@@ -164,12 +183,41 @@ for __f in "$ROOT"/lib/core/*.sh "$ROOT"/lib/bootstrap.sh "$ROOT"/shellkit; do
   _check_locals "$__f"
 done
 
-# 规则 2：链路上每个具名局部变量都必须在保留名单里
+# 规则 2：出参链路上的每个具名局部变量都必须在保留名单里
+#   两部分：
+#     2a 自动 —— 凡是出现动态出参（printf -v "$..."）的函数，它声明的每个具名局部变量
+#         都必须在名单里。新写一个出参函数而不进名单，门禁立刻红。
+#     2b 硬名单 —— 把「出参」转手交给私有函数的公开入口（ask / cli_opts 之类），
+#         它们自己的局部变量同样在链路上，一并列进 CHAIN_FUNCS 盯着。
 __guard=$(_guard_list) || {
   _fail "读不到 _sk_check_out_name 的保留名单（str.sh 被改坏了？）"
   __guard=""
 }
 if [ -n "$__guard" ]; then
+  for __cand in "$ROOT"/lib/core/*.sh; do
+    [ -f "$__cand" ] || continue
+    for __fn in $(_fn_names "$__cand"); do
+      # 私有函数（名字带 _ 前缀）的出参只来自库内部，名字由我们自己保证；
+      # 它们靠下面 CHAIN_FUNCS 那份硬名单盯着（被公开入口用到的那些）。
+      case "$__fn" in
+        _*) continue ;;
+      esac
+      __body=$(_fn_body "$__cand" "$__fn") || continue
+      case "$__body" in
+        *'printf -v "$'*) ;;
+        *) continue ;;
+      esac
+      for __name in $(_fn_locals "$__cand" "$__fn"); do
+        case "$__name" in
+          __*) ;;
+          *) continue ;;
+        esac
+        if ! printf '%s\n' "$__guard" | grep -qx "$__name"; then
+          _fail "$__fn() 的局部变量 $__name 没进 _sk_check_out_name 的保留名单（用这个名字的调用方会静默拿到旧值）"
+        fi
+      done
+    done
+  done
   for __fn in $CHAIN_FUNCS; do
     __file=""
     for __cand in "$ROOT"/lib/core/*.sh; do
@@ -188,13 +236,32 @@ if [ -n "$__guard" ]; then
         *) continue ;;
       esac
       if ! printf '%s\n' "$__guard" | grep -qx "$__name"; then
-        _fail "$__fn() 的局部变量 $__name 没进 _sk_check_out_name 的保留名单（会用这个名字的调用方会静默拿到旧值）"
+        _fail "$__fn() 的局部变量 $__name 没进 _sk_check_out_name 的保留名单（用这个名字的调用方会静默拿到旧值）"
       fi
     done
   done
 fi
 
 # 规则 3：公开的出参入口必须挡住保留名
+#   3a 自动 —— 凡是公开的（名字不以 _ 开头）动态出参函数，都必须调 _sk_check_out_name
+#   3b 硬名单 —— 转手交给私有函数的公开入口同样要挡
+for __cand in "$ROOT"/lib/core/*.sh; do
+  [ -f "$__cand" ] || continue
+  for __fn in $(_fn_names "$__cand"); do
+    case "$__fn" in
+      _*) continue ;;
+    esac
+    __body=$(_fn_body "$__cand" "$__fn") || continue
+    case "$__body" in
+      *'printf -v "$'*) ;;
+      *) continue ;;
+    esac
+    case "$__body" in
+      *_sk_check_out_name*) ;;
+      *) _fail "$__fn() 是公开出参入口，必须调用 _sk_check_out_name 挡住保留名" ;;
+    esac
+  done
+done
 for __fn in $OUT_PARAM_FUNCS; do
   __file=""
   for __cand in "$ROOT"/lib/core/*.sh; do
