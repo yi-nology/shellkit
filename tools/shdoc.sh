@@ -8,7 +8,12 @@ ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 
 # 顺序来自 lib/modules.txt，与 lib/bootstrap.sh 同源 —— 不会再出现
 # 「bootstrap 加载了但文档没写」这种漂移。
-while IFS= read -r m; do
+# 清单是两列的：第一列模块名，第二列它依赖的模块。模块名取第一列。
+while IFS= read -r line || [ -n "$line" ]; do
+  case "$line" in
+    '' | '#'*) continue ;;
+  esac
+  m="${line%%[[:space:]]*}"
   case "$m" in
     '' | '#'*) continue ;;
   esac

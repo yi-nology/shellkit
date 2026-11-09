@@ -10,7 +10,12 @@ assert_exit_code 0 bash "$TEST_ROOT/shellkit" docs --check
 # 所以「两处顺序不一致」这个漂移源已经消除 —— 这里守住新的不变量。
 #
 # 1) modules.txt 里列的每个模块都要有对应源码文件
-while IFS= read -r m; do
+while IFS= read -r line || [ -n "$line" ]; do
+  case "$line" in
+    '' | '#'*) continue ;;
+  esac
+  # 清单是两列的：第一列模块名，第二列它依赖的模块。模块名取第一列。
+  m="${line%%[[:space:]]*}"
   case "$m" in
     '' | '#'*) continue ;;
   esac
