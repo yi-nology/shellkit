@@ -1,88 +1,377 @@
-// 主题调色板覆盖。变量名来自 @vuepress/theme-default 的 palette 约定。
-// 深色是默认：与原来手写落地页的 #0b0e13 / #3fb950 保持一致。
+// ============================================================================
+// shellkit 文档站的视觉层。
+//
+// 原则：内容是主角，界面是背景。所以这一层只做三件事 ——
+//   1. 调色板：把主题默认的紫换成项目自己的绿，并把深色调到不刺眼的低饱和度；
+//   2. 层级：标题、正文、代码、表格、引用各有明确的视觉区别，而不是全都靠颜色；
+//   3. 密度：行高、字距、留白按长时间阅读调，而不是按「塞满一屏」调。
+//
+// 选择器纪律：VuePress 2 的类名和 VuePress 1 不一样，写之前先看产物 HTML。
+//   内容容器是 [vp-content]（不是 .vp-doc）；导航是 .vp-navbar/.vp-site-name；
+//   侧栏是 .vp-sidebar/.vp-sidebar-item；当前项是 .route-link-active。
+//   本文件里的每条规则都对着 site/.vuepress/dist 的真实 DOM 校验过。
+// ============================================================================
+
+// ---------- 排版基础 ----------
 
 :root {
   --vp-font-family-base: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto,
     'PingFang SC', 'Hiragino Sans GB', 'Microsoft YaHei', sans-serif;
   --vp-font-family-mono: SFMono-Regular, Menlo, Consolas, 'DejaVu Sans Mono', monospace;
-  --content-width: 880px;
 
+  // 正文窄一点、行长短一点，读起来不跳行
+  --content-width: 860px;
+
+  // 浅色：绿但压暗，保证正文里的链接有足够对比度
   --vp-c-accent: #1a7f37;
   --vp-c-accent-bg: #1a7f37;
-  --vp-c-accent-hover: #2ea043;
-  --vp-c-accent-soft: rgba(26, 127, 55, 0.14);
+  --vp-c-accent-hover: #155e29;
+  --vp-c-accent-soft: rgba(26, 127, 55, 0.12);
 }
 
 [data-theme='dark'] {
-  --vp-c-accent: #3fb950;
+  --vp-c-accent: #56d364;
   --vp-c-accent-bg: #2ea043;
-  --vp-c-accent-hover: #4ec46a;
-  --vp-c-accent-soft: rgba(63, 185, 80, 0.16);
+  --vp-c-accent-hover: #6ee77a;
+  --vp-c-accent-soft: rgba(86, 211, 100, 0.14);
 
-  --vp-c-bg: #0b0e13;
-  --vp-c-bg-alt: #0e131a;
-  --vp-c-bg-elv: #11161d;
-  --vp-c-bg-soft: #131a22;
-  --vp-c-border: #222b36;
-  --vp-c-divider: #1b232d;
-  --vp-c-gutter: #0b0e13;
+  // 背景不用纯黑：纯黑让代码块的对比显得刺眼
+  --vp-c-bg: #0d1117;
+  --vp-c-bg-alt: #10161d;
+  --vp-c-bg-elv: #151b23;
+  --vp-c-bg-soft: #161d26;
+  --vp-c-border: #232c38;
+  --vp-c-border-hard: #2f3a48;
+  --vp-c-divider: #1c242e;
+  --vp-c-gutter: #0d1117;
 
   --vp-c-text: #e6edf3;
   --vp-c-text-mute: #9aa6b2;
   --vp-c-text-subtle: #7d8894;
 }
 
-// 行内代码与正文里的命令：给一点底色，但不抢眼
-div[class*='language-'] {
-  border-radius: 8px;
-}
+// ---------- 正文层级 ----------
 
-.vp-doc {
+// 主题对标题用的是「负 margin + 大 padding」的锚点补偿（padding-top 里含
+// header-offset），所以这里只改字号/字重/字距和下边距，不动 margin-top，
+// 否则标题跳到锚点位置时会被吸顶导航挡住。
+[vp-content] {
+  line-height: 1.75;
+
+  h1 {
+    font-size: 2rem;
+    font-weight: 650;
+    letter-spacing: -0.02em;
+    margin-bottom: 1.2rem;
+  }
+
+  h2 {
+    font-size: 1.5rem;
+    font-weight: 620;
+    letter-spacing: -0.015em;
+    margin-bottom: 0.7rem;
+    // 标题下面一条细分隔线：章节之间一眼分得开
+    padding-bottom: 0.55rem;
+    border-bottom: 1px solid var(--vp-c-divider);
+  }
+
+  h3 {
+    font-size: 1.2rem;
+    font-weight: 600;
+    margin-bottom: 0.5rem;
+  }
+
+  h4 {
+    font-size: 1.05rem;
+    font-weight: 600;
+    margin-bottom: 0.4rem;
+  }
+
+  p {
+    margin: 1rem 0;
+  }
+
+  // 链接：正文里靠颜色 + 下划线，不只靠颜色 —— 色觉障碍也要能分辨
+  a:not(.header-anchor) {
+    font-weight: 500;
+    text-underline-offset: 3px;
+  }
+
+  strong {
+    font-weight: 620;
+  }
+
+  ul,
+  ol {
+    padding-left: 1.35rem;
+  }
+
+  li {
+    margin: 0.35rem 0;
+  }
+
+  hr {
+    margin: 2rem 0;
+    border: none;
+    border-top: 1px solid var(--vp-c-divider);
+  }
+
+  img {
+    border-radius: 8px;
+  }
+
+  // 表格：主题默认几乎没给表格样式，这里补齐 —— 表头重底、正文行细横线、
+  // 单元格留白，整张表才有「能读」的密度。
   table {
     display: table;
     width: 100%;
+    font-size: 0.94rem;
+    border-collapse: collapse;
+    margin: 1.2rem 0;
+  }
+
+  th,
+  td {
+    padding: 0.55rem 0.75rem;
+    vertical-align: top;
+    border-bottom: 1px solid var(--vp-c-divider);
+    text-align: left;
   }
 
   th {
+    background: var(--vp-c-bg-soft);
+    font-weight: 600;
     white-space: nowrap;
+    border-bottom: 1px solid var(--vp-c-border);
   }
 
-  td:first-child {
-    white-space: nowrap;
+  tr:hover td {
+    background: var(--vp-c-bg-soft);
   }
 
+  // 引用块：左侧一条线 + 浅底，作为「这是引用」而不是「这是一段正文」
   blockquote {
-    border-left-color: var(--vp-c-accent);
+    border-left: 3px solid var(--vp-c-accent);
+    background: var(--vp-c-bg-soft);
+    padding: 0.6rem 1.1rem;
+    border-radius: 0 6px 6px 0;
+    margin: 1.4rem 0;
+
+    p {
+      margin: 0.4rem 0;
+    }
   }
 }
 
-// 侧边栏条目多一点留白，15 个模块看起来才不挤
+// ---------- 代码 ----------
+
+// 代码块：圆角 + 细边框。底色交给 Prism 配色自己管 ——
+// 这里一旦覆盖底色，Prism 的前景色就可能和底色对不上（正文变隐形）。
+div[class*='language-'] {
+  border-radius: 8px;
+  border: 1px solid var(--vp-c-divider);
+}
+
+// 复制按钮与代码块对齐
+.vp-copy-code-button {
+  border-radius: 6px;
+}
+
+// 代码组页签
+.vp-code-tabs {
+  border-radius: 8px;
+  overflow: hidden;
+}
+
+// 行内代码：底色很淡，只做「这是代码」的提示
+:not(pre) > code {
+  background: var(--vp-c-bg-soft);
+  border: 1px solid var(--vp-c-divider);
+  border-radius: 4px;
+  padding: 0.1em 0.35em;
+  font-size: 0.88em;
+}
+
+// ---------- 导航与侧栏 ----------
+
+.vp-navbar {
+  backdrop-filter: saturate(180%) blur(12px);
+}
+
+// 站点名（不是 .vp-navbar-title，VuePress 2 里是 .vp-site-name）
+.vp-site-name {
+  font-weight: 650;
+  letter-spacing: -0.01em;
+}
+
+.vp-navbar-item {
+  font-weight: 500;
+}
+
+// 侧栏：条目行高更松，分组标题更明确
 .vp-sidebar-item {
-  line-height: 1.5;
+  line-height: 1.6;
+  font-size: 0.92rem;
 }
 
-// 首页 hero 的字标稍微收紧，长中文标题不至于换行太碎
-.vp-hero-info {
-  max-width: 46rem;
+.vp-sidebar-heading {
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  color: var(--vp-c-text-subtle);
 }
 
-// 首页/指南里的终端截图（ShotFigure 组件）：给一圈边框，深浅色都不脏
+// 当前项：加粗 + 主色，在长侧栏里一眼可辨
+.vp-sidebar-item.route-link-active {
+  font-weight: 600;
+  color: var(--vp-c-accent);
+}
+
+// ---------- 首页 hero ----------
+
+.vp-hero {
+  padding: 3.2rem 0 2.4rem;
+}
+
+.vp-hero h1 {
+  font-size: 2.6rem;
+  font-weight: 700;
+  letter-spacing: -0.03em;
+  line-height: 1.2;
+}
+
+.vp-hero-description {
+  font-size: 1.05rem;
+  line-height: 1.7;
+  color: var(--vp-c-text-mute);
+  max-width: 40rem;
+  margin: 1.2rem auto 0;
+}
+
+.vp-hero-actions {
+  margin-top: 2rem;
+}
+
+.vp-hero-action-button {
+  border-radius: 8px;
+  padding: 0.7rem 1.5rem;
+  font-size: 0.95rem;
+  font-weight: 550;
+  transition: background-color 0.2s, border-color 0.2s, color 0.2s;
+}
+
+// 次级按钮：描边，层次清楚但不抢主按钮
+.vp-hero-action-button.secondary {
+  border-color: var(--vp-c-border);
+  color: var(--vp-c-text);
+  background: var(--vp-c-bg-soft);
+}
+
+.vp-hero-action-button.secondary:hover {
+  border-color: var(--vp-c-accent);
+  color: var(--vp-c-accent);
+}
+
+// ---------- 首页特性卡片 ----------
+
+// 六条特性做成卡片：统一边框、圆角、内边距与悬停反馈，
+// 对齐成整齐的网格，而不是六段各怀心意的文字。
+.vp-features {
+  border-top: none;
+  margin-top: 3rem;
+  padding-top: 0;
+  gap: 1rem;
+  // 三列固定网格：六条特性排成两行三列，列宽一致、行高一致
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  align-items: stretch;
+}
+
+.vp-feature {
+  // 主题默认是 flex-basis:30% + max-width:30%，在 grid 里会把每列压到三成宽，
+  // 必须把 max-width 放开，否则三列网格排不开。
+  flex: none;
+  max-width: none;
+  padding: 1.15rem 1.25rem;
+  border: 1px solid var(--vp-c-divider);
+  border-radius: 10px;
+  background: var(--vp-c-bg-soft);
+  transition: border-color 0.2s, background-color 0.2s, transform 0.2s;
+}
+
+.vp-feature:hover {
+  border-color: var(--vp-c-accent);
+  background: var(--vp-c-bg-alt);
+  transform: translateY(-2px);
+}
+
+.vp-feature h2 {
+  font-size: 1.05rem;
+  font-weight: 620;
+  margin: 0 0 0.5rem;
+  letter-spacing: -0.01em;
+}
+
+.vp-feature p {
+  font-size: 0.92rem;
+  line-height: 1.65;
+  color: var(--vp-c-text-mute);
+  margin: 0;
+}
+
+// ---------- 终端截图 ----------
+
+// 图 + 说明：说明文字压在图下方居中，字号略小、颜色更淡
 .sk-shot {
-  margin: 1.6rem 0;
+  margin: 1.8rem 0;
 
   img {
     display: block;
     width: 100%;
-    border: 1px solid var(--vp-c-divider);
+    border: 1px solid var(--vp-c-border);
     border-radius: 10px;
     background: var(--vp-c-bg-alt);
   }
 
   figcaption {
-    margin-top: 0.55rem;
-    font-size: 0.86rem;
-    line-height: 1.5;
-    color: var(--vp-c-text-mute);
+    margin-top: 0.7rem;
+    font-size: 0.85rem;
+    line-height: 1.55;
+    color: var(--vp-c-text-subtle);
     text-align: center;
+  }
+}
+
+// ---------- 搜索与主题切换按钮 ----------
+
+.search-box,
+.vp-toggle-color-mode-button,
+.vp-toggle-sidebar-button {
+  border-radius: 8px;
+}
+
+// ---------- 无障碍 ----------
+
+:focus-visible {
+  outline: 2px solid var(--vp-c-accent);
+  outline-offset: 2px;
+}
+
+::selection {
+  background: var(--vp-c-accent-soft);
+}
+
+// ---------- 打印：导航、侧栏都去掉 ----------
+
+@media print {
+  .vp-navbar,
+  .vp-sidebar,
+  .vp-page-meta,
+  .vp-page-nav,
+  .vp-back-to-top-button {
+    display: none !important;
+  }
+
+  [vp-content] {
+    max-width: 100%;
   }
 }

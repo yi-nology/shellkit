@@ -40,7 +40,7 @@ export default defineUserConfig({
 
   head: [
     ['link', { rel: 'icon', href: '/shellkit/favicon.svg', type: 'image/svg+xml' }],
-    ['meta', { name: 'theme-color', content: '#0b0e13' }],
+    ['meta', { name: 'theme-color', content: '#0d1117' }],
     ['meta', { name: 'author', content: 'yi-nology' }],
     ['meta', { property: 'og:type', content: 'website' }],
     ['meta', { property: 'og:site_name', content: 'shellkit' }],
@@ -72,6 +72,17 @@ export default defineUserConfig({
     docsRepo: 'yi-nology/shellkit',
     docsBranch: 'main',
     docsDir: 'site',
+
+    // Prism 默认只有一套 nord 深色配色，浅色模式下代码正文会变成近白色、
+    // 压在浅底上等于隐形。这里浅色用 coldark-cold、深色用 nord。
+    themePlugins: {
+      prismjs: {
+        themes: {
+          light: 'coldark-cold',
+          dark: 'nord',
+        },
+      },
+    },
 
     locales: {
       '/': {
