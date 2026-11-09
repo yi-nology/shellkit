@@ -4,7 +4,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: shellkit\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-11-09 19:52+0800\n"
+"POT-Creation-Date: 2026-11-09 20:47+0800\n"
 "PO-Revision-Date: 2026-11-08 00:00+0800\n"
 "Last-Translator: shellkit contributors\n"
 "Language-Team: shellkit contributors\n"
@@ -239,14 +239,14 @@ msgstr "輸入逾時，使用預設值"
 msgid "Input closed unexpectedly"
 msgstr "輸入被意外關閉"
 
-msgid "default"
-msgstr "預設"
-
 msgid "please answer y or n"
 msgstr "請回答 y 或 n"
 
 msgid "default value is not one of the choices"
 msgstr "預設值不在選項之中"
+
+msgid "default"
+msgstr "預設"
 
 msgid "invalid choice"
 msgstr "無效的選擇"
@@ -316,6 +316,9 @@ msgstr "鉤子不可執行，已跳過"
 
 msgid "hook failed"
 msgstr "鉤子執行失敗"
+
+msgid "reserved variable name"
+msgstr "變數名稱用了庫保留名（__ / _sk_ 前綴）"
 
 msgid "trap_push requires a command"
 msgstr "trap_push 需要一條命令"

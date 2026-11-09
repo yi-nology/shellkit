@@ -511,9 +511,9 @@ cmd_new() {
       case "$__key" in
         NAME | SHELLKIT_VERSION) continue ;;
       esac
-      __ans=""
-      if ask __ans "$(_t 'value for') $__key" ""; then
-        scaffold_vars_set "$__key" "$__ans" || return "$SK_USAGE"
+      __ask_result=""
+      if ask __ask_result "$(_t 'value for') $__key" ""; then
+        scaffold_vars_set "$__key" "$__ask_result" || return "$SK_USAGE"
       fi
     done <<EOF
 $SK_SCAFFOLD_VARS

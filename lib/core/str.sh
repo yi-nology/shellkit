@@ -9,6 +9,26 @@ _sk_is_name() {
   return 0
 }
 
+# _sk_check_out_name NAME —— 出参变量名校验；撞上内部保留名返回 2
+#   为什么只挡这一份名单，而不是「__ 前缀一律拒绝」：
+#   printf -v 写的是「最近一层声明了该名字的作用域」，所以真正会出事的是
+#   「目标变量名 == 出参链路上某一层的局部变量名」。这份名单就是那条链路上的
+#   全部具名局部变量 —— 只有这些名字会静默失效，其余名字（哪怕带 __ 前缀）都安全。
+#   名单由 tools/check_local_names.sh 守着：链路上新增局部变量而没进名单，门禁就红。
+#   用法：_sk_check_out_name "$__n" || return $?
+_sk_check_out_name() {
+  case "${1:-}" in
+    __ans | __answer | __arg | __buf | __choices | __confirm_ans | __count | \
+      __default | __hint | __i | __idx | __long | __msg | __n | __opt | \
+      __opt_var | __out | __prompt | __rc | __s | __short | __start | \
+      __timeout | __tries | __v | __val | __var)
+      log_error "$(_t 'reserved variable name'): ${1:-}"
+      return "$SK_USAGE"
+      ;;
+  esac
+  return 0
+}
+
 # _sk_ref_get NAME —— 输出间接变量值。名字已校验，不会注入。
 _sk_ref_get() {
   local __n=$1
@@ -45,11 +65,12 @@ _sk_shell_quote() {
 
 # str_trim VAR —— 去掉首尾空白，原地改写该变量
 # @exitcode 0 成功
-# @exitcode 2 参数错（变量名非法）
+# @exitcode 2 参数错（变量名非法或用了库保留名）
 str_trim() {
   local __n=${1:-} __v
   _sk_need_args "$#" 1 "str_trim VAR" || return $?
   _sk_is_name "$__n" || return "$SK_USAGE"
+  _sk_check_out_name "$__n" || return $?
   __v=$(_sk_ref_get "$__n") || return $?
   __v="${__v#"${__v%%[![:space:]]*}"}"
   __v="${__v%"${__v##*[![:space:]]}"}"
@@ -58,22 +79,24 @@ str_trim() {
 
 # str_lower VAR —— 转小写，原地改写该变量（3.2 没有大写展开语法）
 # @exitcode 0 成功
-# @exitcode 2 参数错（变量名非法）
+# @exitcode 2 参数错（变量名非法或用了库保留名）
 str_lower() {
   local __n=${1:-} __v
   _sk_need_args "$#" 1 "str_lower VAR" || return $?
   _sk_is_name "$__n" || return "$SK_USAGE"
+  _sk_check_out_name "$__n" || return $?
   __v=$(_sk_ref_get "$__n") || return $?
   printf -v "$__n" '%s' "$(printf '%s' "$__v" | tr '[:upper:]' '[:lower:]')"
 }
 
 # str_upper VAR —— 转大写，原地改写该变量（3.2 没有大写展开语法）
 # @exitcode 0 成功
-# @exitcode 2 参数错（变量名非法）
+# @exitcode 2 参数错（变量名非法或用了库保留名）
 str_upper() {
   local __n=${1:-} __v
   _sk_need_args "$#" 1 "str_upper VAR" || return $?
   _sk_is_name "$__n" || return "$SK_USAGE"
+  _sk_check_out_name "$__n" || return $?
   __v=$(_sk_ref_get "$__n") || return $?
   printf -v "$__n" '%s' "$(printf '%s' "$__v" | tr '[:lower:]' '[:upper:]')"
 }
@@ -119,11 +142,12 @@ str_ends_with() {
 
 # str_repeat VAR COUNT STRING —— 把字符串重复 N 次写进变量
 # @exitcode 0 成功
-# @exitcode 2 参数错（变量名非法或次数不是数字）
+# @exitcode 2 参数错（变量名非法、用了库保留名或次数不是数字）
 str_repeat() {
   local __n=${1:-} __count=${2:-} __s=${3:-} __out="" __i=0
   _sk_need_args "$#" 3 "str_repeat VAR COUNT STRING" || return $?
   _sk_is_name "$__n" || return "$SK_USAGE"
+  _sk_check_out_name "$__n" || return $?
   case "$__count" in
     '' | *[!0-9]*) return "$SK_USAGE" ;;
   esac

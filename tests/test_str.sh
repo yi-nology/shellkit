@@ -37,3 +37,14 @@ assert_exit_code 2 str_trim "bad-name"
 v="keep"
 assert_exit_code 2 str_trim "bad-name"
 assert_eq "keep" "$v" "invalid name must not touch the variable"
+
+# 出参名撞上出参链路上的局部变量时必须拒绝：以前是静默失效（值写回函数自己那层，
+# 调用方拿到的还是旧值）。名单之外的变量名照常能用 —— 不是「__ 前缀一律拒绝」。
+assert_exit_code 2 str_trim __n 2>/dev/null
+assert_exit_code 2 str_lower __v 2>/dev/null
+assert_exit_code 2 str_upper __n 2>/dev/null
+assert_exit_code 2 str_repeat __out 2 "x" 2>/dev/null
+
+__custom="  trim me  "
+str_trim __custom
+assert_eq "trim me" "$__custom" "a __-prefixed name outside the reserved list still works"

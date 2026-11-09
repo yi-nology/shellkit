@@ -144,9 +144,9 @@ cli_completion_script() {
 # 由 cli_completion_script 生成；新增子命令后重新生成即可。
 # 下面两行的美元符号在源码里是转义过的：heredoc 不转义就会在生成时把数组和命令替换掉。
 _${__prog}_completions() {
-  local cur
-  cur="\${COMP_WORDS[COMP_CWORD]}"
-  COMPREPLY=(\$(compgen -W "$__words" -- "\$cur"))
+  local __cur
+  __cur="\${COMP_WORDS[COMP_CWORD]}"
+  COMPREPLY=(\$(compgen -W "$__words" -- "\$__cur"))
   return 0
 }
 complete -F _${__prog}_completions $__prog
@@ -157,9 +157,9 @@ EOF
 # $__prog completion for zsh
 # 由 cli_completion_script 生成；新增子命令后重新生成即可。
 _${__prog}() {
-  local -a commands
-  commands=($__words)
-  _describe 'command' commands
+  local -a __commands
+  __commands=($__words)
+  _describe 'command' __commands
 }
 compdef _${__prog} $__prog
 EOF
@@ -291,8 +291,9 @@ cli_opt_init() {
 }
 
 # cli_opt VAR LONG [SHORT] [TAKES_ARG] —— 注册一个选项；第四个参数为 1 表示这个选项要吃值
+#   VAR 是「选项值要写进的变量名」，不能用库保留名（__ / _sk_ 前缀）。
 # @exitcode 0 注册成功
-# @exitcode 2 选项名非法
+# @exitcode 2 选项名非法，或变量名用了库保留名
 cli_opt() {
   local __var=${1:-} __long=${2:-} __short=${3:-} __arg=${4:-0}
   _sk_need_args "$#" 2 "cli_opt VAR LONG [SHORT] [TAKES_ARG]" || return $?
@@ -300,6 +301,7 @@ cli_opt() {
     log_error "$(_t 'invalid variable name'): $__var"
     return "$SK_USAGE"
   fi
+  _sk_check_out_name "$__var" || return $?
   case "$__long" in
     --?*) ;;
     *)
@@ -359,12 +361,14 @@ _sk_opt_idx_short() {
 }
 
 _sk_opt_set() {
-  local __idx=${1:-} __val=${2:-} __target
+  # 目标变量名放在 __opt_var：这个名字不能和调用方注册的变量名撞上，
+  # 否则选项值会写进自己这层、调用方永远读不到（模板里的 --target 就踩过这个）。
+  local __idx=${1:-} __val=${2:-} __opt_var
   if [ -z "$__idx" ]; then
     return "$SK_USAGE"
   fi
-  __target=${SK_OPT_VARS[$__idx]}
-  printf -v "$__target" '%s' "$__val"
+  __opt_var=${SK_OPT_VARS[$__idx]}
+  printf -v "$__opt_var" '%s' "$__val"
   return 0
 }
 

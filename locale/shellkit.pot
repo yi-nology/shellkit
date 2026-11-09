@@ -8,7 +8,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: shellkit 0.9.0\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-11-09 20:02+0800\n"
+"POT-Creation-Date: 2026-11-09 20:47+0800\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language-Team: LANGUAGE <LL@li.org>\n"
@@ -242,13 +242,13 @@ msgstr ""
 msgid "Input closed unexpectedly"
 msgstr ""
 
-msgid "default"
-msgstr ""
-
 msgid "please answer y or n"
 msgstr ""
 
 msgid "default value is not one of the choices"
+msgstr ""
+
+msgid "default"
 msgstr ""
 
 msgid "invalid choice"
@@ -318,6 +318,9 @@ msgid "hook is not executable, skipped"
 msgstr ""
 
 msgid "hook failed"
+msgstr ""
+
+msgid "reserved variable name"
 msgstr ""
 
 msgid "trap_push requires a command"
