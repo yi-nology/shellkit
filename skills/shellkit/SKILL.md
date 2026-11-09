@@ -107,6 +107,12 @@ shellkit 是一个 Bash 库加脚手架：日志、配置、下载校验、重�
 | 问用户一个问题 | `ask` / `ask_yn` / `ask_choice` / `confirm`（都支持超时与默认值） |
 | 加一个子命令 | `cli_cmd` 注册 + `cmd_<name>` 实现，分发器不用动 |
 | 输出中文/英文 | `_t 'english msgid'`，译文在 `locale/` |
+| 调 HTTP 接口 | `net_request GET URL [--header 'K: V'] [--json BODY]`（`SK_HTTP_CODE` / `SK_HTTP_BODY` / `SK_HTTP_HEADERS`）；要 JSON 就 `net_json ... --path a.b.c` |
+| 读 dotenv | `conf_load_dotenv FILE`（只进配置层）；要导出给子进程用 `conf_source FILE` |
+| 同一条命令并发跑 N 份 | `run_concurrent 8 -- ./deploy.sh`（stdout 给成功数，stderr 逐实例标注） |
+| 日志要能进采集系统 | `SHELLKIT_LOG_FORMAT=json`；按级别过滤用 `SHELLKIT_LOG_LEVEL=warn`；落文件用 `SHELLKIT_LOG_FILE=/var/log/x.log` |
+| 新工程要带自定义变量 | `shellkit new ./x --set KEY=VALUE`；变量声明在模板的 `template.config` |
+| 已有工程跟上模板更新 | `shellkit upgrade ./x`（本地改过的文件会跳过并告警） |
 
 ### 交付前自检
 
