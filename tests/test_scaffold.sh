@@ -244,3 +244,24 @@ p7="$work/meta-chars"
 out=$("$TEST_ROOT/shellkit" new "$p7" --cmd run --set 'DESCRIPTION=a&b|c\d' --yes 2>&1)
 assert_contains "$out" "project created"
 assert_contains "$(cat "$p7/README.md")" 'a&b|c\d' "sed metacharacters must survive the whole new pipeline"
+
+# ---------------------------------------------------------------- 变量值里带换行
+#
+# 变量装在一个「换行分隔」的容器里（SK_SCAFFOLD_VARS）—— 值里的换行会被当成容器
+# 自己的分隔符：值的后半截变成一行垃圾，渲染时整段被丢掉，**静默截断**，
+# 而 new 照样退出 0、照样报「project created」。
+# 所以这种值必须被直接拒绝，而不是悄悄丢一半。
+rc=0
+scaffold_vars_set NLVALUE "第一行
+第二行" >/dev/null 2>&1 || rc=$?
+assert_ne "0" "$rc" "a template variable value with a newline must be rejected"
+assert_eq "" "$(scaffold_vars_get NLVALUE)" "the rejected value must not be stored at all"
+
+# 端到端：new 带上这种值必须失败，且不能留下一个「少了一半」的工程
+p8="$work/newline-value"
+rc=0
+out=$("$TEST_ROOT/shellkit" new "$p8" --cmd run --set "DESCRIPTION=第一行
+第二行" --yes 2>&1) || rc=$?
+assert_ne "0" "$rc" "new must fail when a template variable value contains a newline"
+assert_contains "$out" "newline" "the failure must say what is wrong"
+assert_false test -e "$p8" "the rejected project must not be created at all"

@@ -25,6 +25,15 @@ SK_MANIFEST_FORMAT=""
 # _sk_scaffold_store_set KEY VALUE —— 在变量表里写一个键
 _sk_scaffold_store_set() {
   local __key=$1 __value=$2 __out="" __line __rest="$SK_SCAFFOLD_VARS" __found=0
+  # 值里不能有换行：变量装在一个「换行分隔」的容器里（SK_SCAFFOLD_VARS），
+  # 值里的换行会被当成容器自己的分隔符 —— 值的后半截变成一行垃圾，
+  # 渲染时整段被丢掉，**静默截断**。所以这里直接拒绝，不让它走到那一步。
+  case "$__value" in
+    *$'\n'*)
+      log_error "$(_t 'the template variable value must not contain a newline'): $__key"
+      return "$SK_USAGE"
+      ;;
+  esac
   while [ -n "$__rest" ]; do
     __line=${__rest%%$'\n'*}
     if [ "$__line" = "$__rest" ]; then
@@ -73,14 +82,16 @@ _sk_scaffold_store_get() {
 
 # scaffold_vars_set KEY VALUE —— 设一个模板变量
 # @exitcode 0 设置成功
-# @exitcode 2 变量名非法
+# @exitcode 2 变量名非法，或值里有换行（变量表一行一个，装不下多行值）
 scaffold_vars_set() {
   local __key=${1:-} __value=${2:-}
   if ! validate_key "$__key"; then
     log_error "$(_t 'invalid template variable name'): $__key"
     return "$SK_USAGE"
   fi
-  _sk_scaffold_store_set "$__key" "$__value"
+  # 存储失败要往上带：写死 return 0 会把「值不合法」这类错误吃掉，
+  # 调用方以为设好了，实际值根本没进去。
+  _sk_scaffold_store_set "$__key" "$__value" || return $?
   return 0
 }
 

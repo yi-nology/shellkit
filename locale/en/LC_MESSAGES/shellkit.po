@@ -4,7 +4,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: shellkit\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-11-11 00:35+0800\n"
+"POT-Creation-Date: 2026-11-11 01:59+0800\n"
 "PO-Revision-Date: 2026-11-08 00:00+0800\n"
 "Last-Translator: shellkit contributors\n"
 "Language-Team: shellkit contributors\n"
@@ -324,6 +324,9 @@ msgid "no items to process"
 msgstr ""
 
 msgid "some items failed"
+msgstr ""
+
+msgid "the template variable value must not contain a newline"
 msgstr ""
 
 msgid "invalid template variable name"

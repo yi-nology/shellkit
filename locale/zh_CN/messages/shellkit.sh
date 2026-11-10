@@ -107,6 +107,7 @@ _sk_msg_lookup_shellkit() {
     'parallel_map requires a command') printf '%s' 'parallel_map 需要一条命令' ;;
     'no items to process') printf '%s' '没有要处理的条目' ;;
     'some items failed') printf '%s' '有条目失败' ;;
+    'the template variable value must not contain a newline') printf '%s' '模板变量的值不能包含换行' ;;
     'invalid template variable name') printf '%s' '非法的模板变量名' ;;
     'template config not found') printf '%s' '找不到模板配置' ;;
     'skipped a malformed template variable') printf '%s' '跳过格式错误的模板变量' ;;
