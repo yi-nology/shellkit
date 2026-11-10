@@ -524,7 +524,17 @@ scaffold_render SRC DST —— 用当前模板变量渲染文件 未声明的 {{
 
 ### `scaffold_manifest_write`
 
-scaffold_manifest_write DIR NAME COMDS TEMPLATE_VERSION FILELIST 写 DIR/.shellkit-manifest。FILELIST 是换行分隔的相对路径（模板自有的文件）， 每个文件记一个 sha256 —— 升级时靠它判断「这个文件用户动过没有」。
+scaffold_manifest_write DIR NAME COMDS TEMPLATE_VERSION [FILELIST] 写 DIR/.shellkit-manifest。FILELIST 是换行分隔的相对路径（模板自有的文件）， 每个文件记一个 sha256 —— 升级时靠它判断「这个文件用户动过没有」。 记的是**基线**：上次成功应用的模板内容的指纹。生成工程时文件刚由模板渲染出来， 当前内容 == 模板内容，两者一样，所以这里直接取当前文件的 sha256。 升级时的基线由 scaffold_manifest_write_baselines 推进 —— 跳过的文件基线不动，否则下一次升级就会把用户的修改当成「没动过」而覆盖掉。
+
+**退出码**
+
+- 0 清单写好
+- 2 参数错
+- 1 写文件失败
+
+### `scaffold_manifest_write_baselines`
+
+scaffold_manifest_write_baselines DIR NAME COMDS TEMPLATE_VERSION FILELIST BASELINES 与 scaffold_manifest_write 写同一个格式的清单，但基线由调用方给： BASELINES 是换行分隔的「相对路径=指纹」，指纹可以为空（表示没有指纹）。 BASELINES 里没提到的文件，基线记为空。 为什么要有这个入口：升级时「用户改过、被跳过的文件」不能把基线推进到用户 的内容上 —— 推进了下一次升级就会覆盖掉用户的修改。只有真正成功应用了 模板的文件才能推进基线。
 
 **退出码**
 
@@ -598,6 +608,16 @@ run_concurrent N [--timeout SEC] -- CMD... —— 把同一条命令并发跑 N 
 - 0 全部实例成功（stdout 输出成功实例数）
 - 2 参数错（并发数不是正整数、超时值非法、没给命令）
 - 其他 第一个失败实例的退出码
+
+### `parallel_map`
+
+parallel_map N [--timeout SEC] -- CMD... —— 把一批不同的目标分给 N 个并发实例 与 run_concurrent 明确区分：   run_concurrent —— 同一条命令并发跑 N 份（每个实例自己从环境变量读目标）   parallel_map   —— 每个实例跑一条不同的目标，条目从标准输入读 条目一行一个（空行跳过），每个实例执行的命令是「CMD... 条目」—— 条目作为最后一个参数追加在后面：   printf '%s\n' web1 web2 web3 | parallel_map 3 -- ./restart-service 输出约定（stdout 只给数据）：   stdout —— 每行一条结果：<条目>\t<退出码>（条目里有制表符时，取最后一个制表符之后的部分）   stderr —— 每个实例的 stdout/stderr，逐行带 [i/N] 前缀；失败明细也在这里 返回码：全部成功返回 0；有条目失败则返回第一个失败条目的退出码。 并发是「按批」的：一批最多 N 个，跑完这一批再下一批。这样不需要锁， 也不会有两个实例抢同一条目；代价是一批里最慢的那个会拖住整批。
+
+**退出码**
+
+- 0 全部条目成功（stdout 输出每个条目的结果）
+- 2 参数错（并发数不是正整数、超时值非法、没给命令）
+- 其他 第一个失败条目的退出码
 
 ## retry
 

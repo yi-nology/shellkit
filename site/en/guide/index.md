@@ -24,7 +24,7 @@ Every page stands on its own; the cross-links tell you where to go next.
 
 ## Common tasks
 
-- [Cookbook](./cookbook.md) -- 24 scenarios, each one *scenario / code / why*.
+- [Cookbook](./cookbook.md) -- 25 scenarios, each one *scenario / code / why*.
 - [CLI framework](./cli.md) -- registered commands, generated help, option parsing.
 - [Internationalisation](./i18n.md) -- English msgids, pot/po/mo, and degrading gracefully without gettext.
 - [Testing and gates](./testing.md) -- the assertion library, the per-file runner, what each `make check` step blocks.

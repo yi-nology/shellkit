@@ -121,6 +121,116 @@ _sk_conf_assign() {
   return 2
 }
 
+# _sk_conf_dotenv_token VALUE —— 生成 dotenv 里能读回原值的写法
+#
+# 取值端只做两件事：剥最外层的一对引号、去行尾空白。所以「原样」不是总能用 ——
+# 值本身带行尾空白、或首尾是同一个引号时，读回来就不是它了。
+# 这里逐个候选试一遍，用取值端自己验算：读回来等于原值才算数。
+_sk_conf_dotenv_token() {
+  local __v=${1:-} __cand
+  _sk_conf_dotenv_value "$__v"
+  if [ "$_SK_CONF_DVAL" = "$__v" ]; then
+    printf '%s' "$__v"
+    return 0
+  fi
+  __cand="\"$__v\""
+  _sk_conf_dotenv_value "$__cand"
+  if [ "$_SK_CONF_DVAL" = "$__v" ]; then
+    printf '%s' "$__cand"
+    return 0
+  fi
+  __cand="'$__v'"
+  _sk_conf_dotenv_value "$__cand"
+  if [ "$_SK_CONF_DVAL" = "$__v" ]; then
+    printf '%s' "$__cand"
+    return 0
+  fi
+  printf '%s' "$__v"
+  return 0
+}
+
+# _sk_conf_line_style LINE FORMAT —— 这行按哪种语义写回去：env 还是 dotenv
+#
+# auto 模式下逐行判断：老形态（KEY=VALUE，键合法）按 env 写，其余按 dotenv 写。
+# env 写 = 值原样（取回来就是原值）；dotenv 写 = 值要能读回来（引号与空白按 dotenv 规则）。
+_sk_conf_line_style() {
+  local __line=${1:-} __fmt=${2:-auto}
+  case "$__fmt" in
+    env)
+      printf 'env\n'
+      return 0
+      ;;
+    dotenv)
+      printf 'dotenv\n'
+      return 0
+      ;;
+  esac
+  if _sk_conf_env_shape "$__line"; then
+    printf 'env\n'
+  else
+    printf 'dotenv\n'
+  fi
+  return 0
+}
+
+# _sk_conf_render_line LINE KEY VALUE FORMAT —— 把一行赋值改写成新值
+#
+# 保留原来的写法：export 前缀留着，引号风格留着（值里出现同一个引号就换成
+# 能读回来的那种写法）。这样 conf_set 改一个 dotenv 文件，不会把它改成另一种风格。
+# @exitcode 0 总是成功（stdout 输出改写后的那一行）
+_sk_conf_render_line() {
+  local __line=${1:-} __key=${2:-} __value=${3:-} __fmt=${4:-auto}
+  local __style __body __prefix="" __quote="" __raw
+  __style=$(_sk_conf_line_style "$__line" "$__fmt")
+  if [ "$__style" = "env" ]; then
+    printf '%s=%s\n' "$__key" "$__value"
+    return 0
+  fi
+  __body="$__line"
+  __body="${__body#"${__body%%[![:space:]]*}"}"
+  case "$__body" in
+    export[[:space:]]*)
+      __prefix="export "
+      __body=${__body#export}
+      __body="${__body#"${__body%%[![:space:]]*}"}"
+      ;;
+  esac
+  __raw="${__body#*=}"
+  case "$__raw" in
+    '"'*'"') __quote='"' ;;
+    "'"*"'") __quote="'" ;;
+  esac
+  if [ -n "$__quote" ]; then
+    case "$__value" in
+      *"$__quote"*) __quote="" ;;
+    esac
+  fi
+  if [ -n "$__quote" ]; then
+    printf '%s%s=%s%s%s\n' "$__prefix" "$__key" "$__quote" "$__value" "$__quote"
+  else
+    printf '%s%s=%s\n' "$__prefix" "$__key" "$(_sk_conf_dotenv_token "$__value")"
+  fi
+  return 0
+}
+
+# _sk_conf_new_line KEY VALUE FORMAT —— 追加一个新键时该怎么写
+#
+# env 与 auto：原样写（KEY=VALUE），取回来就是原值。
+# dotenv：值要能读回来，带行尾空白或首尾引号的值会被加上引号。
+# @exitcode 0 总是成功（stdout 输出新行）
+_sk_conf_new_line() {
+  local __key=${1:-} __value=${2:-} __fmt=${3:-auto}
+  case "$__fmt" in
+    dotenv)
+      printf '%s=%s\n' "$__key" "$(_sk_conf_dotenv_token "$__value")"
+      ;;
+    *)
+      printf '%s=%s\n' "$__key" "$__value"
+      ;;
+  esac
+  return 0
+}
+
 # _sk_conf_layer_set KEY VALUE —— 写配置层；同键覆盖
 _sk_conf_layer_set() {
   local __key=${1:-} __val=${2:-} __i=0
@@ -422,6 +532,7 @@ conf_source() {
 # @exitcode 1 写文件失败
 conf_set() {
   local __key=${1:-} __value=${2:-} __file=${SK_CONF_FILE:-} __line __tmp __origin __replaced=0
+  local __fmt=${SK_CONF_FORMAT:-auto}
   if ! validate_key "$__key"; then
     log_error "$(_t 'invalid configuration key'): $__key"
     return "$SK_USAGE"
@@ -441,22 +552,22 @@ conf_set() {
   fs_ensure_dir "$(dirname "$__file")" "" || return 1
   __tmp=$(mktemp "$__file.tmp.XXXXXX") || return 1
   if [ -f "$__file" ]; then
+    # 找行用取值端同一套规则：export 前缀、引号、格式语义都认。
+    # 只按 "KEY=" 开头去匹配，dotenv 文件里的 export KEY=... 会被漏掉 ——
+    # 删不掉、也改不掉，下次读取又把旧值拿回来。
     while IFS= read -r __line || [ -n "$__line" ]; do
-      case "$__line" in
-        "${__key}="*)
-          if [ "$__replaced" -eq 0 ]; then
-            printf '%s=%s\n' "$__key" "$__value"
-            __replaced=1
-          fi
-          ;;
-        *)
-          printf '%s\n' "$__line"
-          ;;
-      esac
+      if _sk_conf_assign "$__line" "$__fmt" && [ "$_SK_CONF_PKEY" = "$__key" ]; then
+        if [ "$__replaced" -eq 0 ]; then
+          _sk_conf_render_line "$__line" "$__key" "$__value" "$__fmt"
+          __replaced=1
+        fi
+        continue
+      fi
+      printf '%s\n' "$__line"
     done <"$__file" >"$__tmp"
   fi
   if [ "$__replaced" -eq 0 ]; then
-    printf '%s=%s\n' "$__key" "$__value" >>"$__tmp"
+    _sk_conf_new_line "$__key" "$__value" "$__fmt" >>"$__tmp"
   fi
   chmod 600 "$__tmp" 2>/dev/null || true
   if ! mv -f "$__tmp" "$__file"; then
@@ -476,6 +587,7 @@ conf_set() {
 # @exitcode 1 写文件失败
 conf_unset() {
   local __key=${1:-} __file=${SK_CONF_FILE:-} __line __tmp
+  local __fmt=${SK_CONF_FORMAT:-auto}
   if ! validate_key "$__key"; then
     return "$SK_USAGE"
   fi
@@ -487,11 +599,12 @@ conf_unset() {
     return 0
   fi
   __tmp=$(mktemp "$__file.tmp.XXXXXX") || return 1
+  # 与取值端同规则地认键：export KEY=... 也算这个键
   while IFS= read -r __line || [ -n "$__line" ]; do
-    case "$__line" in
-      "${__key}="*) ;;
-      *) printf '%s\n' "$__line" ;;
-    esac
+    if _sk_conf_assign "$__line" "$__fmt" && [ "$_SK_CONF_PKEY" = "$__key" ]; then
+      continue
+    fi
+    printf '%s\n' "$__line"
   done <"$__file" >"$__tmp"
   chmod 600 "$__tmp" 2>/dev/null || true
   if ! mv -f "$__tmp" "$__file"; then
@@ -508,6 +621,7 @@ conf_unset() {
 # @exitcode 1 写文件失败
 conf_disable() {
   local __key=${1:-} __file=${SK_CONF_FILE:-} __line __tmp
+  local __fmt=${SK_CONF_FORMAT:-auto}
   if ! validate_key "$__key"; then
     return "$SK_USAGE"
   fi
@@ -520,10 +634,11 @@ conf_disable() {
   fi
   __tmp=$(mktemp "$__file.tmp.XXXXXX") || return 1
   while IFS= read -r __line || [ -n "$__line" ]; do
-    case "$__line" in
-      "${__key}="*) printf '# %s\n' "$__line" ;;
-      *) printf '%s\n' "$__line" ;;
-    esac
+    if _sk_conf_assign "$__line" "$__fmt" && [ "$_SK_CONF_PKEY" = "$__key" ]; then
+      printf '# %s\n' "$__line"
+      continue
+    fi
+    printf '%s\n' "$__line"
   done <"$__file" >"$__tmp"
   chmod 600 "$__tmp" 2>/dev/null || true
   if ! mv -f "$__tmp" "$__file"; then

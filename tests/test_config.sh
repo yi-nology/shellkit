@@ -125,3 +125,62 @@ printf 'APP_NAME=demo\n' >"$fmt_file"
 conf_init "$fmt_file" --format dotenv >/dev/null 2>&1
 assert_eq "demo" "$(conf_get APP_NAME)" "conf_init --format dotenv reads dotenv files"
 assert_eq "dotenv" "$(conf_format)" "conf_format reports the active format"
+
+# ---- dotenv 的写回必须与读取端一致 ----
+# 读的时候认 export 前缀，写的时候也必须认：否则 conf_unset 说删掉了，
+# 文件里那一行还在，下一次读取又把旧值拿回来。
+d4=$(tmpdir)
+w_file="$d4/app.env"
+printf 'export W_TOKEN=old-secret\nW_PLAIN=plain-value\n' >"$w_file"
+conf_init "$w_file" --format dotenv >/dev/null 2>&1
+
+conf_set W_TOKEN new-secret >/dev/null 2>&1
+assert_contains "$(cat "$w_file")" "export W_TOKEN=new-secret" "conf_set must keep the export prefix"
+assert_eq "new-secret" "$(conf_get W_TOKEN)" "conf_set must write a value that reads back"
+
+conf_unset W_TOKEN >/dev/null 2>&1
+assert_not_contains "$(cat "$w_file")" "W_TOKEN" "conf_unset must remove an exported key too"
+assert_false conf_has W_TOKEN "conf_unset must really drop the key"
+assert_eq "plain-value" "$(conf_get W_PLAIN)" "conf_unset must not touch the other keys"
+
+conf_disable W_PLAIN >/dev/null 2>&1
+assert_contains "$(cat "$w_file")" "# W_PLAIN=plain-value" "conf_disable must comment the line out"
+assert_false conf_has W_PLAIN "a commented key must not be readable"
+
+# 带引号的值：写回之后仍然读得回同一个值
+d5=$(tmpdir)
+q_file="$d5/quoted.env"
+printf 'Q_ONE="quoted value"\n' >"$q_file"
+conf_init "$q_file" --format dotenv >/dev/null 2>&1
+assert_eq "quoted value" "$(conf_get Q_ONE)" "dotenv: the quotes are stripped on read"
+conf_set Q_ONE "other value" >/dev/null 2>&1
+assert_eq "other value" "$(conf_get Q_ONE)" "conf_set must keep a quoted value readable"
+
+# 值里带行尾空白：不加引号读回来会被去尾空白，写回必须自己处理
+d6=$(tmpdir)
+wsp_file="$d6/space.env"
+printf 'W_SPACED=plain\n' >"$wsp_file"
+conf_init "$wsp_file" --format dotenv >/dev/null 2>&1
+conf_set W_SPACED "trailing " >/dev/null 2>&1
+assert_eq "trailing " "$(conf_get W_SPACED)" "a value with trailing spaces must survive a rewrite"
+
+# 新增一个键：写回时也要能读回来
+d7=$(tmpdir)
+new_file="$d7/new.env"
+printf 'EXISTING=one\n' >"$new_file"
+conf_init "$new_file" --format dotenv >/dev/null 2>&1
+conf_set ADDED two >/dev/null 2>&1
+assert_eq "two" "$(conf_get ADDED)" "a new key must be readable right away"
+assert_contains "$(cat "$new_file")" "ADDED=two" "the new key must land in the file"
+
+# 默认的 auto 格式：老形态的值原样保留，export 行也要认
+d8=$(tmpdir)
+auto_file="$d8/auto.env"
+printf 'export AUTO_KEY=auto-value\nA_PLAIN=plain\n' >"$auto_file"
+conf_init "$auto_file" >/dev/null 2>&1
+assert_eq "auto-value" "$(conf_get AUTO_KEY)" "auto: the export prefix is readable"
+conf_set AUTO_KEY "changed value" >/dev/null 2>&1
+assert_eq "changed value" "$(conf_get AUTO_KEY)" "auto: conf_set must write a value that reads back"
+conf_unset AUTO_KEY >/dev/null 2>&1
+assert_not_contains "$(cat "$auto_file")" "AUTO_KEY" "auto: conf_unset must remove an exported key"
+assert_eq "plain" "$(conf_get A_PLAIN)" "auto: the untouched key keeps its value"

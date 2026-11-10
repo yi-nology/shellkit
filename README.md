@@ -32,7 +32,7 @@ https://yi-nology.github.io/shellkit/ —— 中文在 `/`，英文在 `/en/`。
 |---|---|
 | 想花五分钟判断值不值得用 | 往下读「三十秒」 |
 | 已经有脚本在跑，想接库但不想重写 | [docs/MIGRATING.md](docs/MIGRATING.md)：五步渐进，每一步都能单独上线 |
-| 手上有具体活：改配置、下载校验、重试、单实例、交互确认 | [docs/COOKBOOK.md](docs/COOKBOOK.md)：24 个场景，每节都是「场景 / 代码 / 为什么」 |
+| 手上有具体活：改配置、下载校验、重试、单实例、交互确认 | [docs/COOKBOOK.md](docs/COOKBOOK.md)：25 个场景，每节都是「场景 / 代码 / 为什么」 |
 | 想让 AI 替你写 | 根目录的 [AGENTS.md](AGENTS.md)；`shellkit new` 生成的工程也自带一份，写清了这行的坑 |
 | 要查某个函数的确切签名和退出码 | [docs/REFERENCE.md](docs/REFERENCE.md)：从源码注释生成，不会和代码漂移 |
 | 想先看完整工程长什么样 | [examples/deploy-service](examples/deploy-service)、[examples/fetch-release](examples/fetch-release) |

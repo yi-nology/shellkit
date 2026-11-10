@@ -156,6 +156,31 @@ shellkit vendor . --check    # 只比对，不写盘
 `make check`。新增命令：`make release VERSION=x.y.z` / `make release-dry VERSION=x.y.z`。
 
 
+### 0.10.0 → 0.11.0：会改变结果的行为变化
+
+这一版修的是**升级会覆盖用户修改**这一类问题，顺手把「写回与读取不一致」「日志泄密」
+两处一起收掉。凡是行为变了的地方都列在下表里。
+
+| 变化 | 以前 | 现在 | 你会在哪里撞到 |
+|---|---|---|---|
+| `shellkit upgrade` 覆盖用户改过的文件 | 第一次升级跳过（提示「modified locally」），**第二次升级就会覆盖掉** —— 清单里记的是「文件当前内容」，不是「模板基线」 | 跳过的文件基线不动，**连续升多少次都保留用户的修改** | 改过 `README.md` / `AGENTS.md` / `bin/*` 等模板自有文件的工程 |
+| 旧清单（0.10.x 及以前生成）的升级 | 直接按清单里的指纹判断 | 指纹可能已被旧版写成「用户改过的内容」，无法与旧模板核对的文件**一律保持原样**并给出提示；确认过再用 `--force` 覆盖 | 0.10.x 时代生成、并且升过级的工程 |
+| `.shellkit-manifest` 的内容 | 无版本标记 | 多一行 `manifest_version=2`（基线可信的标记） | 直接读这个文件的脚本 |
+| `conf_unset` / `conf_disable` / `conf_set` 对 dotenv 文件 | 只认 `KEY=` 开头的行：`export API_KEY=secret` **删不掉**，下次读取又拿回旧值 | 与读取端同一套规则：`export` 前缀、引号、格式语义都认 | 用 `--format dotenv` 的工程 |
+| `run` / `run_concurrent` 失败时的日志 | 完整打印命令行 —— 口令与令牌会进日志文件 | 敏感参数脱敏成 `***`（`KEY=VALUE`、`--password VALUE`、`Authorization:` 三种形态）；普通参数照原样打印 | 任何会把命令行写进日志的脚本 |
+| `run_concurrent` 里被信号杀死的实例 | 没留下退出状态 ⇒ **当成成功**（成功数虚高） | 判定为失败，并说明是哪个实例没有状态 | 实例被 OOM killer 或超时信号杀掉的场景 |
+
+新增的能力（都是加法，既有行为不变）：
+
+- `parallel_map N [--timeout SEC] -- CMD...` —— 条目从标准输入读（一行一个），每个实例
+  跑一条**不同的**目标（条目作为最后一个参数）。与 `run_concurrent` 明确分工：后者跑的是
+  同一条命令 N 份。stdout 一行一条结果 `<条目>\t<退出码>`，stderr 是各实例的输出。
+- 日志脱敏可以用 `SHELLKIT_REDACT=0` 关掉 —— 调试时用；关掉的这一刻起，口令就会进日志。
+- 新增 `tests/bats/` —— bats-core 用例，每个 `@test` 一个独立进程；
+  `make bats-check` 跑它（bats 是外部依赖，不进 `make check`；CI 里有专门的 job）。
+- CI 的门禁统一走 `make check`（本地与 CI 同一组检查），工具版本全部钉死；
+  兼容矩阵扩到 Debian 12 与 Rocky Linux 9（容器里跑同一组门禁）。
+
 ### 0.9.0 → 0.10.0：会改变结果的行为变化
 
 这一版修的是**一类静默失效的缺陷**。Bash 的 `printf -v` 写的是「最近一层声明了该名字的

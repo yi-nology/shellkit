@@ -22,6 +22,11 @@ while [ -L "$__self" ]; do
 done
 SELF_DIR="$(cd -P "$(dirname "$__self")" &>/dev/null && pwd)"
 
+# 升级过程中的基线表（文件与它各自的模板基线）。用全局是因为 bash 3.2
+# 没有 nameref，数组没法当参数传给函数。
+_SK_UPGRADE_RELS=()
+_SK_UPGRADE_BASES=()
+
 # _sk_preflight_modules —— 提前把每个模块过一遍语法
 #   bash 对 sourced 文件里的语法错误是致命的：整个脚本当场退出，doctor 连话都说不出来。
 #   所以在 source 之前先查一遍，坏了就走降级路径，把「哪个模块坏了」报出来。
@@ -575,10 +580,30 @@ EOF
 # 你的 commands/ 与 tests/test_smoke.sh 从来不在「模板自有」清单里，所以
 # 升级永远不碰它们。
 
+# _sk_upgrade_save_manifest DIR NAME CMDS FILELIST —— 按 _SK_UPGRADE_BASES 写清单
+#
+# 升级过程中随时可以调用：清单必须始终反映「已经成功应用了哪些模板」。
+# 否则一次写到一半的失败，会让剩下的文件永远停在「没有指纹」的状态 ——
+# 明明是模板能覆盖的文件，却再也拿不到更新。
+# @exitcode 0 清单写好
+# @exitcode 1 写文件失败
+_sk_upgrade_save_manifest() {
+  local __dir=${1:-} __name=${2:-} __cmds_txt=${3:-} __filelist=${4:-}
+  local __i=0 __baselines="" __rel
+  while [ "$__i" -lt "${#_SK_UPGRADE_BASES[@]}" ]; do
+    __rel=${_SK_UPGRADE_RELS[$__i]}
+    __baselines="${__baselines}${__rel}=${_SK_UPGRADE_BASES[$__i]}"$'\n'
+    __i=$((__i + 1))
+  done
+  scaffold_manifest_write_baselines "$__dir" "$__name" "$__cmds_txt" "$SK_VERSION" \
+    "$__filelist" "$__baselines"
+}
+
 cmd_upgrade() {
   local __dir="" __tpl="$SK_TPL_DIR" __check=0 __force=0
   local __name __rel __old __cur __new __tmp __cmds_csv __vdir
   local __updated=0 __skipped=0 __added=0
+  local __baselines="" __legacy=0 __oldtpl="" __oldtpl_hash=""
 
   while [ "$#" -gt 0 ]; do
     case "$1" in
@@ -660,9 +685,54 @@ cmd_upgrade() {
     return "$SK_ERR"
   fi
 
+  # 旧清单（没有 manifest_version，或版本 < 2）记的是「文件当时的内容」，
+  # 而不是「模板基线」。如果旧版升级跑过，那个指纹很可能就是用户改过的内容 ——
+  # 拿它当基线，下一次升级就会把用户的修改当成「没动过」而覆盖掉。
+  # 这种清单先渲染一份「用旧版本号」的模板作对照：对得上说明文件还是模板原样，
+  # 可以放心更新；对不上说明可能带着用户的修改，一律不动。
+  case "${SK_MANIFEST_FORMAT:-}" in
+    2 | 3) __legacy=0 ;;
+    *) __legacy=1 ;;
+  esac
+  if [ "$__legacy" = "1" ]; then
+    __oldtpl=$(mktemp -d "${TMPDIR:-/tmp}/shellkit-upgrade-old.XXXXXX") || {
+      rm -rf "${__tmp:?}"
+      return "$SK_ERR"
+    }
+    if [ -n "${SK_MANIFEST_TEMPLATE_VERSION:-}" ]; then
+      scaffold_vars_set SHELLKIT_VERSION "$SK_MANIFEST_TEMPLATE_VERSION" || true
+    fi
+    if ! _sk_new_render_owned "$__tpl" "$__oldtpl" "$__name"; then
+      scaffold_vars_set SHELLKIT_VERSION "$SK_VERSION" || true
+      rm -rf "${__tmp:?}" "${__oldtpl:?}"
+      return "$SK_ERR"
+    fi
+    scaffold_vars_set SHELLKIT_VERSION "$SK_VERSION" || true
+    log_warn "$(_t 'the manifest predates the fingerprint baseline; files that cannot be verified are left alone'): $__dir"
+  fi
+
+  # 基线表：只有真正成功应用了模板的文件才能推进基线。
+  # 跳过的文件保持原来的基线（或留空）—— 推进了就等于把用户改过的内容
+  # 记成「模板基线」，下一次升级就会覆盖掉用户的修改。
+  #
+  # 先把清单里已有的基线全部读进来：升级中途失败时，已经处理过的文件推进基线，
+  # 还没处理到的文件保留旧基线 —— 清单始终与磁盘上的实际状态对得上。
+  local __i=0 __oldsum
+  _SK_UPGRADE_RELS=()
+  _SK_UPGRADE_BASES=()
   while IFS= read -r __rel; do
     [ -n "$__rel" ] || continue
-    __old=$(scaffold_manifest_file_sum "$__dir" "$__rel" 2>/dev/null) || __old=""
+    __oldsum=$(scaffold_manifest_file_sum "$__dir" "$__rel" 2>/dev/null) || __oldsum=""
+    _SK_UPGRADE_RELS[${#_SK_UPGRADE_RELS[@]}]=$__rel
+    _SK_UPGRADE_BASES[${#_SK_UPGRADE_BASES[@]}]=$__oldsum
+  done <<EOF
+$(_sk_new_owned_list "$__name")
+EOF
+
+  __i=0
+  while [ "$__i" -lt "${#_SK_UPGRADE_RELS[@]}" ]; do
+    __rel=${_SK_UPGRADE_RELS[$__i]}
+    __old=${_SK_UPGRADE_BASES[$__i]}
     __cur=""
     if [ -f "$__dir/$__rel" ]; then
       __cur=$(os_sha256 "$__dir/$__rel" 2>/dev/null) || __cur=""
@@ -673,52 +743,89 @@ cmd_upgrade() {
     fi
 
     if [ ! -f "$__dir/$__rel" ]; then
+      # 工程里没有这个文件：模板里有就补回去
+      if [ -z "$__new" ]; then
+        continue
+      fi
       if [ "$__check" = "1" ]; then
         log_info "$(_t 'would add'): $__rel"
-      elif [ -f "$__tmp/$__rel" ]; then
-        fs_ensure_dir "$(dirname "$__dir/$__rel")" 755 || {
-          rm -rf "${__tmp:?}"
-          return "$SK_ERR"
-        }
-        cp -f "$__tmp/$__rel" "$__dir/$__rel" || {
-          rm -rf "${__tmp:?}"
-          return "$SK_ERR"
-        }
-        log_ok "$(_t 'added'): $__rel"
-        __added=$((__added + 1))
+        continue
       fi
+      fs_ensure_dir "$(dirname "$__dir/$__rel")" 755 || {
+        rm -rf "${__tmp:?}" ${__oldtpl:+"$__oldtpl"}
+        return "$SK_ERR"
+      }
+      cp -f "$__tmp/$__rel" "$__dir/$__rel" || {
+        rm -rf "${__tmp:?}" ${__oldtpl:+"$__oldtpl"}
+        return "$SK_ERR"
+      }
+      log_ok "$(_t 'added'): $__rel"
+      __added=$((__added + 1))
+      _SK_UPGRADE_BASES[$__i]=$__new
+      __i=$((__i + 1))
       continue
     fi
 
     if [ "$__force" != "1" ] && [ -n "$__old" ] && [ "$__cur" != "$__old" ]; then
+      # 用户改过：留着不动，基线也不推进
       log_warn "$(_t 'modified locally, left alone'): $__rel"
       __skipped=$((__skipped + 1))
+      __i=$((__i + 1))
       continue
     fi
     if [ -z "$__old" ] && [ "$__force" != "1" ]; then
       log_warn "$(_t 'no recorded fingerprint, left alone'): $__rel"
       __skipped=$((__skipped + 1))
+      __i=$((__i + 1))
       continue
     fi
+    if [ -z "$__new" ]; then
+      # 模板里已经没有这个文件了：保持现状，基线不动
+      __i=$((__i + 1))
+      continue
+    fi
+    if [ "$__legacy" = "1" ] && [ "$__force" != "1" ]; then
+      # 旧清单：这个文件是不是模板原样，说不准（指纹可能被旧版升级写成了
+      # 用户改过的内容）。用「旧版本号渲染的模板」当对照：对不上就不能覆盖。
+      __oldtpl_hash=""
+      if [ -f "$__oldtpl/$__rel" ]; then
+        __oldtpl_hash=$(os_sha256 "$__oldtpl/$__rel" 2>/dev/null) || __oldtpl_hash=""
+      fi
+      if [ -n "$__oldtpl_hash" ] && [ "$__oldtpl_hash" != "$__cur" ]; then
+        log_warn "$(_t 'cannot be verified against the old template, left alone'): $__rel"
+        __skipped=$((__skipped + 1))
+        # 基线留空：宁可永远不覆盖，也不要覆盖掉用户改过的东西
+        _SK_UPGRADE_BASES[$__i]=""
+        __i=$((__i + 1))
+        continue
+      fi
+    fi
     if [ "$__new" = "$__cur" ]; then
+      _SK_UPGRADE_BASES[$__i]=$__new
+      __i=$((__i + 1))
       continue
     fi
     if [ "$__check" = "1" ]; then
       log_info "$(_t 'would update'): $__rel"
       __updated=$((__updated + 1))
+      _SK_UPGRADE_BASES[$__i]=$__new
+      __i=$((__i + 1))
       continue
     fi
-    cp -f "$__tmp/$__rel" "$__dir/$__rel" || {
-      rm -rf "${__tmp:?}"
+    if ! cp -f "$__tmp/$__rel" "$__dir/$__rel"; then
+      # 写失败：先把已经推进的基线落盘，让清单与磁盘状态对得上，
+      # 再报错退出。已经改过的文件不会再被当成「用户改过」而永远冻结。
+      _sk_upgrade_save_manifest "$__dir" "$__name" "$__cmds_csv" "$(_sk_new_owned_list "$__name")" || true
+      rm -rf "${__tmp:?}" ${__oldtpl:+"$__oldtpl"}
       return "$SK_ERR"
-    }
+    fi
     log_ok "$(_t 'updated'): $__rel"
     __updated=$((__updated + 1))
-  done <<EOF
-$(_sk_new_owned_list "$__name")
-EOF
+    _SK_UPGRADE_BASES[$__i]=$__new
+    __i=$((__i + 1))
+  done
 
-  rm -rf "${__tmp:?}"
+  rm -rf "${__tmp:?}" ${__oldtpl:+"$__oldtpl"}
 
   if [ "$__check" != "1" ]; then
     # 正在用副本自己的 CLI 升级它自己时不能再去同步：同步会先删掉副本里的
@@ -732,8 +839,7 @@ EOF
       return "$SK_ERR"
     fi
     __cmds_csv="$SK_MANIFEST_COMMANDS"
-    if ! scaffold_manifest_write "$__dir" "$__name" "$__cmds_csv" "$SK_VERSION" \
-      "$(_sk_new_owned_list "$__name")"; then
+    if ! _sk_upgrade_save_manifest "$__dir" "$__name" "$__cmds_csv" "$(_sk_new_owned_list "$__name")"; then
       log_error "$(_t 'failed to write the project manifest'): $__dir"
       return "$SK_ERR"
     fi
