@@ -42,7 +42,7 @@
 |---|---|
 | T3 流水线 | `.github/workflows/ci.yml` |
 | T2 覆盖率 | `tools/coverage.sh`、`tests/test_coverage.sh`、`tools/coverage_baseline.txt`、`Makefile` |
-| T1 变异测试 | `tools/mutation.sh`、`tests/test_mutation.sh`、`Makefile`、`reports/PLAN-BATCH4-CLOSURE.md` |
+| T1 变异测试 | `tools/mutation.sh`、`tests/test_mutation.sh`、`tests/test_meta_gates.sh`、`Makefile`、`reports/PLAN-BATCH4-CLOSURE.md` |
 
 **别人正在改、本计划一律不碰的文件**：
 `lib/core/scaffold.sh`、`docs/MIGRATING.md`、`docs/REFERENCE.md`、`locale/**`、
@@ -152,6 +152,27 @@
 升级路径的代码在 `shellkit`（CLI 的 `cmd_upgrade`）与 `lib/core/scaffold.sh` 里，
 而 `lib/core/scaffold.sh` **正被别的会话改** ⇒ 最后做，等对方提交完再动。
 
+### 先看已有地基：`tests/test_meta_gates.sh`
+
+这个文件**已经**有一套可用的变异原语（批次 2.4 落的）：
+`_meta_mutate_func` / `_meta_mutate_line` / `_meta_mutate_block` / `_meta_run` /
+`_meta_expect_red` / `_meta_expect_green`，以及四个具体变异
+（清单名校验、符号链接判定、`fs_atomic_copy` 退回 `cp -f`、http 兜底退回贪婪匹配）。
+
+**T1 是它的通用化，不是重写。** 所以：
+- 变异原语收编进 `tools/mutation.sh`（通用、可指定目标与算子）；
+- `tests/test_meta_gates.sh` 改为调用新工具，**行为必须逐字不变**：
+  四个变异仍然必须变红、未变异的副本仍然必须绿、变异目标找不到仍然直接判红。
+- 依赖仍然只有 bash + awk + 基础 coreutils（CI 的最小容器里没有 jq / python3 / curl）。
+
+### 变异位点（第一批 campaign 的目标，已核实存在）
+
+- `shellkit`（CLI）：
+  `_sk_upgrade_rel_safe`（682）、`_sk_upgrade_in_dir`（698）、`_sk_upgrade_path_ok`（724）、
+  `_sk_upgrade_writable`（759）、`_sk_upgrade_save_manifest`（650）、`_sk_vendor_install`（269）
+- `lib/core/scaffold.sh`：`scaffold_manifest_read`（324）、`scaffold_render`（191）
+- `lib/core/fs.sh`：`fs_atomic_copy`
+
 ### 要做什么
 
 - `tools/mutation.sh`：
@@ -161,6 +182,7 @@
     跑 `--test` 命令 → 非 0 退出码 ⇒ **KILLED**，0 ⇒ **SURVIVED**。
   - 输出：一张表（位点 / 运算符 / 结论）+ 变异得分 = KILLED / (KILLED + SURVIVED)。
   - 退出码：得分达标 ⇒ 0；不达标 ⇒ 1；用法错 ⇒ 2。
+  - **变异只在副本里做**，真库一个字节都不动。
 - **变异算子必须安全且确定**（只改语义，不改语法）：
   - 条件取反（`[ x = y ]` ⇒ `[ x != y ]`）
   - `||` ⇄ `&&`
