@@ -4,7 +4,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: shellkit\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-11-11 01:59+0800\n"
+"POT-Creation-Date: 2026-11-11 03:04+0800\n"
 "PO-Revision-Date: 2026-11-08 00:00+0800\n"
 "Last-Translator: shellkit contributors\n"
 "Language-Team: shellkit contributors\n"
@@ -487,6 +487,9 @@ msgstr "--set 需要 KEY=VALUE 形式"
 
 msgid "value for"
 msgstr "取值"
+
+msgid "variable left empty"
+msgstr "變數保持為空"
 
 msgid "creating"
 msgstr "正在建立"

@@ -449,9 +449,10 @@ _sk_new_verify() {
 
 cmd_new() {
   local __dir="" __name="" __tpl="" __opt="" __val="" __yes=0
-  local __line __key __val2 __ans __setv __cmds_csv
+  local __line __key __val2 __ans __setv __cmds_csv __ask_result
   local -a __cmds=()
   local -a __sets=()
+  local -a __ask_keys=()
 
   while [ "$#" -gt 0 ]; do
     case "$1" in
@@ -564,7 +565,11 @@ cmd_new() {
   scaffold_vars_set NAME "$__name" || return "$SK_USAGE"
   scaffold_vars_set SHELLKIT_VERSION "$SK_VERSION" || return "$SK_USAGE"
 
-  # 还没值的变量问一次；非交互（--yes 或 SHELLKIT_NONINTERACTIVE=1）就留空
+  # 还没值的变量问一次；非交互（--yes 或 SHELLKIT_NONINTERACTIVE=1）就留空。
+  # 两阶段：先把要问的键快照进数组，再在没有重定向的循环里提问。
+  # ask 靠 [ -t 0 ] 判断交互与否 —— 提问循环一旦挂在 heredoc/管道上，fd 0 被
+  # 输入源抢走，真终端里 ask 也判成非交互，变量静默留空而命令照常 rc=0（issue #31）。
+  __ask_keys=()
   if [ "$__yes" -eq 0 ] && [ "${SHELLKIT_NONINTERACTIVE:-0}" != "1" ]; then
     while IFS= read -r __line; do
       case "$__line" in
@@ -577,13 +582,20 @@ cmd_new() {
       case "$__key" in
         NAME | SHELLKIT_VERSION) continue ;;
       esac
-      __ask_result=""
-      if ask __ask_result "$(_t 'value for') $__key" ""; then
-        scaffold_vars_set "$__key" "$__ask_result" || return "$SK_USAGE"
-      fi
+      __ask_keys[${#__ask_keys[@]}]="$__key"
     done <<EOF
 $SK_SCAFFOLD_VARS
 EOF
+    for __key in ${__ask_keys[@]+"${__ask_keys[@]}"}; do
+      __ask_result=""
+      if ask __ask_result "$(_t 'value for') $__key" ""; then
+        scaffold_vars_set "$__key" "$__ask_result" || return "$SK_USAGE"
+      else
+        # ask 失败（非交互且没有默认值）已由它自己报过错；这里点名哪个变量
+        # 因此留空 —— 静默留空比失败更糟：生成物缺内容，命令却报成功。
+        log_warn "$(_t 'variable left empty'): $__key"
+      fi
+    done
   fi
 
   if ! _sk_check_dir "$__dir"; then
