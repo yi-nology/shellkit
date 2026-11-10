@@ -185,9 +185,12 @@ svc_daemon_reload() {
 }
 
 # svc_install_unit NAME —— 从 stdin 读 unit 内容写入系统目录并 daemon-reload
+# NAME 必须是单个合法文件名（字母数字与 :_.@+-）：它会被拼进
+# /etc/systemd/system/ 后面，带路径组件就能写到那个目录之外。
+# root 下直接写、不套 sudo（极简容器里常有 root 但没有 sudo）。
 # @exitcode 0 成功
-# @exitcode 2 缺 unit 名
-# @exitcode 3 当前平台没有 systemd
+# @exitcode 2 缺 unit 名或名字带路径组件
+# @exitcode 3 当前平台没有 systemd、拿不到 sudo
 # @exitcode 4 写入或 daemon-reload 失败
 svc_install_unit() {
   local __unit="${1:-}" __target __rc=0
@@ -195,6 +198,14 @@ svc_install_unit() {
     log_error "$(_t 'Usage'): svc_install_unit NAME"
     return "$SK_USAGE"
   fi
+  # UNIT 必须是单个合法文件名：它会被拼进 /etc/systemd/system/ 后面，
+  # 带 ../ 或 / 就能把 unit 文件写到那个目录之外 —— 而且是用 root 权限写。
+  case "$__unit" in
+    */* | *..* | .* | *[!A-Za-z0-9@:_.+-]*)
+      log_error "$(_t 'invalid unit name'): $__unit"
+      return "$SK_USAGE"
+      ;;
+  esac
   _sk_svc_need_systemd || return $?
   __target="/etc/systemd/system/$__unit"
   if [ "${SHELLKIT_DRY_RUN:-0}" = '1' ]; then
@@ -206,7 +217,13 @@ svc_install_unit() {
   else
     os_sudo_ready || return $?
   fi
-  run --no-die sudo tee "$__target" >/dev/null || __rc=$?
+  # root 就别再套 sudo：极简容器里常有 root 但没有 sudo 命令，
+  # 明明有权限却因为找不到 sudo 而失败。
+  if [ "$(id -u 2>/dev/null)" = '0' ]; then
+    run --no-die tee "$__target" >/dev/null || __rc=$?
+  else
+    run --no-die sudo tee "$__target" >/dev/null || __rc=$?
+  fi
   if [ "$__rc" -ne 0 ]; then
     return 4
   fi
