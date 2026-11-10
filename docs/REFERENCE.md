@@ -173,6 +173,20 @@ str_repeat VAR COUNT STRING —— 把字符串重复 N 次写进变量
 - 0 成功
 - 2 参数错（变量名非法、用了库保留名或次数不是数字）
 
+### `str_suggest`
+
+距离相同时取先给的那个；没有候选时返回 1。
+
+**参数**
+
+- WORD 用户输入
+- CANDIDATE 候选词，可给多个
+
+**退出码**
+
+- 0 找到候选（stdout 输出候选）
+- 1 没有候选
+
 ## validate
 
 ### `validate_not_empty`
@@ -410,6 +424,47 @@ parallel_map N [--timeout SEC] -- CMD... —— 把一批不同的目标分给 N
 - 0 全部条目成功（stdout 输出每个条目的结果）
 - 2 参数错（并发数不是正整数、超时值非法、没给命令）
 - 其他 第一个失败条目的退出码
+
+### `run_timeout`
+
+没有 perl 时退化为不带超时（直接执行）；SEC 为 0 表示不设超时。
+
+**参数**
+
+- SEC 超时秒数
+- CMD 命令与参数
+
+**退出码**
+
+- 0 命令成功
+- 2 参数错（秒数非法或没给命令）
+- 124 超时
+- 其他 命令自身的退出码
+
+### `run_func_timeout`
+
+函数在子 shell 里跑（所以改不到调用方的变量）；stdout 收集后输出，stderr 丢弃。
+
+**参数**
+
+- SEC 超时秒数
+- FN 函数名
+- ARG 传给函数的参数
+
+**退出码**
+
+- 0 函数正常结束
+- 2 参数错（秒数非法或没给函数名）
+- 143 超时（SIGTERM）
+- 其他 函数自身的退出码
+
+### `run_install_sudo_shim`
+
+这是全局副作用（改了当前 shell 的命令解析），所以必须显式调用才生效。
+
+**退出码**
+
+- 0 总是成功
 
 ## os
 
@@ -1223,6 +1278,33 @@ METHOD 不区分大小写；请求完成返回 0，状态码不算错误。
 **参见**
 
 - `net_json`
+
+### `http_github_latest_tag`
+
+查询失败时输出空串并返回 0 —— 调用方把它当「没有新版本」处理。
+
+**参数**
+
+- REPO 形如 owner/repo
+
+**退出码**
+
+- 0 完成（stdout 输出 tag；查不到时为空串）
+- 2 缺参数
+
+### `http_github_release_asset`
+
+PATTERN 是正则（匹配 browser_download_url）；没有匹配时输出空串并返回 0。
+
+**参数**
+
+- REPO 形如 owner/repo
+- PATTERN 匹配 browser_download_url 的正则
+
+**退出码**
+
+- 0 完成（stdout 输出 URL；没有匹配时为空串）
+- 2 缺参数
 
 ## config
 
