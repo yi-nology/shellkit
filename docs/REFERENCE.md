@@ -812,6 +812,141 @@ ver_eq A B —— 两个版本是否相等
 - 0 相等
 - 1 不等
 
+## status
+
+### `status_is_machine`
+
+status_is_machine —— 机器模式返回 0，人类模式返回 1
+
+**退出码**
+
+- 0 机器模式
+- 1 人类模式
+
+### `status_state_valid`
+
+status_state_valid STATE —— 状态码是否在有限集里
+
+**退出码**
+
+- 0 合法
+- 1 非法
+
+### `status_emit`
+
+status_emit STATE HUMAN_MSG —— 输出状态   人类模式用 printf %b：文案里的颜色是 ESC[... 这样的**字面转义序列**，   用 %s 会原样打印 —— 颜色会变成一堆反斜杠文本。
+
+**退出码**
+
+- 0 总是成功
+
+### `status_version`
+
+status_version VERSION —— 机器模式下输出 VERSION 行（人类模式不重复输出）
+
+**退出码**
+
+- 0 总是成功
+
+### `status_extra`
+
+status_extra KEY=VALUE —— 机器模式下输出 EXTRA 行（人类模式不重复输出）
+
+**退出码**
+
+- 0 总是成功
+
+## registry
+
+### `registry_scan`
+
+registry_scan ROOT PATTERN —— 扫描清单文件并建立索引 条目名 = 清单文件所在目录名。PATTERN 是文件名模式（如 .manifest）。
+
+**退出码**
+
+- 0 总是成功
+
+### `registry_get`
+
+registry_get NAME KEY —— 取字段值（未声明时为空） KEY 以**字面量**参与匹配：它是调用方传进来的字段名，不该有正则语义。
+
+**退出码**
+
+- 0 总是成功（未声明时 stdout 为空）
+
+### `registry_list`
+
+registry_list —— 列出全部条目名（每行一个）
+
+**退出码**
+
+- 0 总是成功
+
+### `registry_visible`
+
+registry_visible NAME FIELD —— 条目在当前平台是否可见 字段为空 ⇒ 未声明平台限制 ⇒ 可见。平台列表用逗号或空格分隔都行。
+
+**退出码**
+
+- 0 可见
+- 1 不可见
+
+### `registry_deps`
+
+registry_deps NAME FIELD —— 传递依赖（拓扑序，空格分隔，不含自身）
+
+**退出码**
+
+- 0 成功
+- 1 有环
+
+### `registry_topo`
+
+registry_topo FIELD —— 全体拓扑序（空格分隔）
+
+**退出码**
+
+- 0 成功
+- 1 有环
+
+## profile
+
+### `profile_write`
+
+profile_write FILE —— 创建/清空 profile 文件
+
+**退出码**
+
+- 0 成功
+- 2 缺参数
+- 1 写不了
+
+### `profile_append`
+
+profile_append FILE MODULE [KEY=VALUE...] —— 追加一条
+
+**退出码**
+
+- 0 成功
+- 2 缺参数
+- 1 写不了
+
+### `profile_parse`
+
+profile_parse FILE —— 解析 profile 输出：<模块名><TAB><k=v,k=v>（每行一个） 注释从**第一个 #** 起截断（与 unix_script 的 profile 解析同口径）。
+
+**退出码**
+
+- 0 总是成功
+
+### `profile_env`
+
+profile_env MODULE_TAB_KV PREFIX —— 把键值对变成环境变量赋值（每行一个）
+
+**退出码**
+
+- 0 总是成功
+
 ## scaffold
 
 ### `scaffold_vars_set`

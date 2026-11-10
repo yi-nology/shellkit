@@ -86,6 +86,7 @@ _sk_msg_lookup_shellkit() {
     'default value is not one of the choices') printf '%s' '預設值不在選項之中' ;;
     'default') printf '%s' '預設' ;;
     'invalid choice') printf '%s' '無效的選擇' ;;
+    'circular dependency detected') printf '%s' '檢測到循環依賴' ;;
     'usage: retry ATTEMPTS COMMAND...') printf '%s' '用法: retry 次數 命令...' ;;
     'invalid retry count') printf '%s' '非法的重試次數' ;;
     'attempt failed, retrying') printf '%s' '本次嘗試失敗，正在重試' ;;

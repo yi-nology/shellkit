@@ -437,7 +437,7 @@ shellkit                  生成器入口（也 source 自己的库）
 lib/bootstrap.sh          唯一入口，按 lib/modules.txt 的顺序加载
                           SHELLKIT_MODULES="log fs" 只加载这两个模块和它们的传递依赖
 lib/modules.txt           模块清单的唯一真相源：模块名 + 它依赖的模块
-lib/core/*.sh             20 个模块
+lib/core/*.sh             23 个模块
 templates/                shellkit new 的模板
 tests/                    断言库 + 逐文件执行器 + 每个模块一个测试
 tools/                    shdoc.awk 渲染 / comment_coverage.awk 查漏 / check_docs.sh 门禁 / term_shot.py 截图

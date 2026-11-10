@@ -14,7 +14,7 @@
                               SHELLKIT_MODULES="log fs" 只加载这两个模块和它们的传递依赖
     lib/modules.txt           模块清单的唯一真相源：两列 —— 模块名 + 它依赖的模块
                               （bootstrap、shdoc、站点都读它）
-    lib/core/<module>.sh      20 个模块，一个模块一个主题
+    lib/core/<module>.sh      22 个模块，一个模块一个主题
     templates/                shellkit new 的模板（含 __NAME__ / __CMD__ 占位符）
     tests/                    自研断言 + 逐文件执行器 + 每个模块一个测试
     tests/bats/               bats-core 用例（每个 @test 一个独立进程）；不进 make check，

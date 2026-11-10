@@ -4,7 +4,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: shellkit\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-11-10 19:47+0800\n"
+"POT-Creation-Date: 2026-11-10 19:59+0800\n"
 "PO-Revision-Date: 2026-11-08 00:00+0800\n"
 "Last-Translator: shellkit contributors\n"
 "Language-Team: shellkit contributors\n"
@@ -262,6 +262,9 @@ msgstr "預設"
 
 msgid "invalid choice"
 msgstr "無效的選擇"
+
+msgid "circular dependency detected"
+msgstr "檢測到循環依賴"
 
 msgid "usage: retry ATTEMPTS COMMAND..."
 msgstr "用法: retry 次數 命令..."
