@@ -11,7 +11,8 @@
 #   bash tools/check_versions.sh    # 0 一致；5 不一致；2 用法错
 set -u
 
-ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+# SHELLKIT_CHECK_ROOT 只给自测用：在一棵假的树副本上跑本门禁。
+ROOT="${SHELLKIT_CHECK_ROOT:-$(cd "$(dirname "${BASH_SOURCE[0]}")/.." &>/dev/null && pwd)}"
 _fail=0
 
 _ver="$(tr -d '[:space:]' <"$ROOT/VERSION" 2>/dev/null || true)"
@@ -99,11 +100,14 @@ _check "site/en/guide/installation.md" "tarball name" \
 # 替换规则里 —— 发版后它会留在原地，页面变成「当前版本 0.6.0 —— 下载 0.7.0」。
 # 逐条模式检查抓不到这种漏改，因为它查的是「该在的地方在不在」，不是「不该在的在不在」。
 #
-# 白名单是 bash 版本（3.2.57 之类），它与项目版本无关。
+# 白名单：
+#   - bash 版本（3.2.57 之类），与项目版本无关；
+#   - 四段及以上的点分数字（10.0.0.5 这类 IP），它们出现在示例里，不是版本号。
 _check_no_stray() {
   local __file=$1 __label=$2 __v
-  for __v in $(grep -Eo '[0-9]+\.[0-9]+\.[0-9]+' "$ROOT/$__file" 2>/dev/null | sort -u); do
+  for __v in $(grep -Eo '[0-9]+\.[0-9]+\.[0-9]+(\.[0-9]+)*' "$ROOT/$__file" 2>/dev/null | sort -u); do
     case "$__v" in
+      *.*.*.*) continue ;;
       3.2.*) continue ;;
     esac
     if [ "$__v" != "$_ver" ]; then
@@ -113,6 +117,8 @@ _check_no_stray() {
     fi
   done
 }
+# README 与站点首页是同一张脸：裸版本号的漏改两边都不许活过发版（issue #34）
+_check_no_stray "README.md" "README"
 _check_no_stray "site/index.md" "homepage"
 _check_no_stray "site/en/index.md" "homepage"
 _check_no_stray "site/guide/installation.md" "install guide"
