@@ -44,6 +44,145 @@ assert_eq "T[many items]" "$out" "_tn sends the plural form through gettext"
 out=$(PATH="$_fakebin:$PATH" bash -c '. "$1/lib/bootstrap.sh"; _tn "one item" "many items" 1' _ "$TEST_ROOT")
 assert_eq "T[one item]" "$out" "_tn sends the singular form through gettext"
 
+# ---------------------------------------------------------------------------
+# 不设任何新环境变量时，_t 的输出必须与改动前逐字一致。
+#
+# 改动前的 _t 就是「裸跑 gettext」（域名取 TEXTDOMAIN，目录取 TEXTDOMAINDIR）。
+# 所以判据是：同一个环境下，_t 的输出跟裸跑 gettext 逐字相同。
+# 三种环境各来一遍 —— 尤其 LANGUAGE=en LC_ALL=zh_CN.UTF-8 这一组：
+# gettext 自己的语言优先级是 LANGUAGE > LC_ALL，动手改就会把英文变成中文。
+# ---------------------------------------------------------------------------
+if [ -n "${SK_GETTEXT:-}" ]; then
+  for _env in "LANGUAGE=en LC_ALL=zh_CN.UTF-8" "LC_ALL=zh_CN.UTF-8" "LANGUAGE=zh_CN LC_ALL=C"; do
+    _ref=$(env $_env TEXTDOMAIN=shellkit TEXTDOMAINDIR="$TEST_ROOT/locale" gettext 'Usage' || true)
+    _got=$(env $_env "$BASH" -c '. "$1/lib/bootstrap.sh"; _t "Usage"' _ "$TEST_ROOT")
+    assert_eq "$_ref" "$_got" "_t matches plain gettext byte for byte ($_env)"
+  done
+fi
+
+# PATH 上没有 gettext 的机器：原样输出 msgid，不报错（与改动前一致）
+_minbin=$(tmpdir)
+mkdir -p "$_minbin/bin"
+for _c in tr dirname; do
+  _p=$(command -v "$_c" 2>/dev/null) || continue
+  ln -s "$_p" "$_minbin/bin/$_c"
+done
+out=$(PATH="$_minbin/bin" /bin/bash -c '. "$1/lib/bootstrap.sh"; _t "Usage"' _ "$TEST_ROOT" 2>/dev/null)
+assert_eq "Usage" "$out" "without gettext on PATH _t degrades to the English msgid"
+
+# ---------------------------------------------------------------------------
+# 多域查找 + 纯 bash 兜底表
+# ---------------------------------------------------------------------------
+
+# 自建一张「另一个域」的兜底表（域名的函数名后缀规则由 i18n.sh 决定）
+_d=$(tmpdir)
+mkdir -p "$_d/locale/zh_CN/messages"
+cat >"$_d/locale/zh_CN/messages/other.sh" <<'EOF'
+_sk_msg_lookup_other() {
+  case "$1" in
+    'probe message') printf '%s' '探针消息' ;;
+    *) return 1 ;;
+  esac
+}
+EOF
+
+out=$(SHELLKIT_LANG=zh_CN SHELLKIT_I18N_DOMAIN=other \
+  SHELLKIT_I18N_DIRS="$_d/locale" _t 'probe message')
+assert_eq "探针消息" "$out" "i18n falls back to the pure-bash table"
+
+# 未命中的 msgid 原样返回
+out=$(SHELLKIT_LANG=zh_CN SHELLKIT_I18N_DOMAIN=other \
+  SHELLKIT_I18N_DIRS="$_d/locale" _t 'not translated')
+assert_eq "not translated" "$out" "i18n returns msgid when nothing matches"
+
+# 域名与目录在 bootstrap 之后才设 —— 兜底表必须按当前配置惰性载入
+out=$("$BASH" -c '. "$1/lib/bootstrap.sh"; export SHELLKIT_LANG=zh_CN SHELLKIT_I18N_DOMAIN=other SHELLKIT_I18N_DIRS="$2"; _t "probe message"' \
+  _ "$TEST_ROOT" "$_d/locale")
+assert_eq "探针消息" "$out" "i18n picks up the domain and dirs set after bootstrap"
+
+# 缓存键必须包含语言：换一门语言不能拿上一门的译文
+out=$(SHELLKIT_LANG=zh_CN _t 'invalid command name')
+assert_eq "非法的命令名" "$out" "the zh_CN table answers"
+out=$(SHELLKIT_LANG=zh_Hant _t 'invalid command name')
+assert_eq "非法的指令名稱" "$out" "switching the language reloads the table"
+
+# SHELLKIT_NO_GETTEXT=1 + SHELLKIT_LANG：走纯 bash 兜底表
+out=$(SHELLKIT_NO_GETTEXT=1 SHELLKIT_LANG=zh_CN "$BASH" -c '. "$1/lib/bootstrap.sh"; _t "Usage"' _ "$TEST_ROOT")
+assert_eq "用法" "$out" "the pure-bash fallback table answers when gettext is off"
+
+# 多域：.mo 也要能按目录找到（不只有兜底表）
+# gettext 在 C/POSIX locale 下压根不查译文，所以这条只在系统真的装了那个 locale 时成立
+if command -v msgfmt >/dev/null 2>&1; then
+  _mo=$(tmpdir)
+  mkdir -p "$_mo/locale/zh_CN/LC_MESSAGES"
+  cat >"$_mo/other.po" <<'EOF'
+msgid ""
+msgstr ""
+"Content-Type: text/plain; charset=UTF-8\n"
+
+msgid "mo probe"
+msgstr "mo 探针"
+EOF
+  msgfmt -o "$_mo/locale/zh_CN/LC_MESSAGES/other.mo" "$_mo/other.po"
+  if locale -a 2>/dev/null | grep -i '^zh_CN' >/dev/null; then
+    out=$(LC_ALL=zh_CN.UTF-8 SHELLKIT_I18N_DOMAIN=other SHELLKIT_I18N_DIRS="$_mo/locale" \
+      "$BASH" -c '. "$1/lib/bootstrap.sh"; _t "mo probe"' _ "$TEST_ROOT")
+    assert_eq "mo 探针" "$out" "i18n finds the .mo of another domain"
+  fi
+fi
+
+# ---------------------------------------------------------------------------
+# 兜底表是生成物：必须与 po/messages.sh 生成的结果逐字节一致
+# ---------------------------------------------------------------------------
+if command -v awk >/dev/null 2>&1; then
+  _gen=$(tmpdir)
+  awk -f "$TEST_ROOT/po/po_to_sh.awk" -v domain=shellkit \
+    "$TEST_ROOT/locale/zh_CN/LC_MESSAGES/shellkit.po" >"$_gen/shellkit.sh"
+  if ! cmp -s "$_gen/shellkit.sh" "$TEST_ROOT/locale/zh_CN/messages/shellkit.sh"; then
+    _fail "the committed zh_CN fallback table is stale (run bash po/messages.sh)"
+  fi
+  # 生成出来的表必须是合法 bash，且能查到已知译文
+  bash -n "$TEST_ROOT/locale/zh_CN/messages/shellkit.sh" ||
+    _fail "the generated fallback table is not valid bash"
+  out=$(bash -c '. "$1"; _sk_msg_lookup_shellkit "invalid command name"' \
+    _ "$TEST_ROOT/locale/zh_CN/messages/shellkit.sh")
+  assert_eq "非法的命令名" "$out" "the generated fallback table answers a known msgid"
+
+  # 转义：msgid 里有单引号与通配符时，表必须原样匹配
+  _esc=$(tmpdir)
+  cat >"$_esc/esc.po" <<'EOF'
+msgid ""
+msgstr ""
+"Content-Type: text/plain; charset=UTF-8\n"
+
+msgid "it's a *glob* [x]"
+msgstr "引号与通配符：it's ok"
+EOF
+  awk -f "$TEST_ROOT/po/po_to_sh.awk" -v domain=esc "$_esc/esc.po" >"$_esc/esc.sh"
+  bash -n "$_esc/esc.sh" || _fail "the generated table with quotes is not valid bash"
+  _msgid="it's a *glob* [x]"
+  out=$(bash -c '. "$1"; _sk_msg_lookup_esc "$2"' _ "$_esc/esc.sh" "$_msgid")
+  assert_eq "引号与通配符：it's ok" "$out" \
+    "the fallback table escapes quotes and glob characters"
+fi
+
+# ---------------------------------------------------------------------------
+# --check 必须抓得住「表与生成物不一致」
+# ---------------------------------------------------------------------------
+if command -v xgettext >/dev/null 2>&1; then
+  _drift=$(tmpdir)
+  mkdir -p "$_drift/po" "$_drift/locale/zh_CN/LC_MESSAGES" "$_drift/locale/zh_CN/messages"
+  cp -R "$TEST_ROOT/lib" "$TEST_ROOT/templates" "$_drift/" || _fail "cannot stage the drift root"
+  cp "$TEST_ROOT/shellkit" "$TEST_ROOT/VERSION" "$_drift/"
+  cp "$TEST_ROOT/po/messages.sh" "$TEST_ROOT/po/po_to_sh.awk" "$_drift/po/"
+  cp "$TEST_ROOT/locale/zh_CN/LC_MESSAGES/shellkit.po" "$_drift/locale/zh_CN/LC_MESSAGES/"
+  cp "$TEST_ROOT/locale/zh_CN/messages/shellkit.sh" "$_drift/locale/zh_CN/messages/"
+  printf '\n# stale\n' >>"$_drift/locale/zh_CN/messages/shellkit.sh"
+  _msg=$(bash "$_drift/po/messages.sh" --check 2>&1 || true)
+  assert_contains "$_msg" "fallback table is stale" \
+    "--check catches a stale fallback table"
+fi
+
 # pot 与源码必须一致：否则新增的 msgid 根本进不了译文目录
 if command -v xgettext >/dev/null 2>&1; then
   assert_exit_code 0 bash "$TEST_ROOT/po/messages.sh" --check
@@ -54,7 +193,7 @@ if command -v xgettext >/dev/null 2>&1; then
   mkdir -p "$_i18n_root/po"
   cp -R "$TEST_ROOT/lib" "$TEST_ROOT/templates" "$_i18n_root/" || _fail "cannot stage the i18n root"
   cp "$TEST_ROOT/shellkit" "$TEST_ROOT/VERSION" "$_i18n_root/"
-  cp "$TEST_ROOT/po/messages.sh" "$_i18n_root/po/"
+  cp "$TEST_ROOT/po/messages.sh" "$TEST_ROOT/po/po_to_sh.awk" "$_i18n_root/po/"
   # pot 落在 locale/ 下，不在 po/ 下
   mkdir -p "$_i18n_root/locale"
   cp "$TEST_ROOT/locale/shellkit.pot" "$_i18n_root/locale/"
@@ -71,8 +210,8 @@ if [ -f "$po" ]; then
 fi
 
 # fuzzy 译文必须为 0。
-# msgmerge 会把新 msgid「模糊匹配」到不相干的旧条目上，于是
-# "invalid concurrency" 会继承 "无效的选择" 这种译文 —— 而上一条断言只看
+# msgmerge 会把新 msgid「模糊匹配」到不相干的旧条目上，
+# 于是 "invalid concurrency" 会继承 "无效的选择" 这种译文 —— 而上一条断言只看
 # msgstr 非空，垃圾译文照样过门。模糊标记是唯一的线索，必须清干净。
 for _lang in zh_CN zh_Hant; do
   _po="$TEST_ROOT/locale/$_lang/LC_MESSAGES/shellkit.po"
