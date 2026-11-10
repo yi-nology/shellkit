@@ -587,8 +587,8 @@ _sk_http_github_tag() {
   else
     # 没有解析器时的降级路径：直接在文本里扫字段。
     # 不能用 head —— 命中即退会把上游 SIGPIPE 打死（141）。
-    __out=$(printf '%s\n' "$__body" | grep '"tag_name"' | sed -n '1p' \
-      | sed -E 's/.*"tag_name"[[:space:]]*:[[:space:]]*"([^"]*)".*/\1/') || __out=""
+    __out=$(printf '%s\n' "$__body" | grep '"tag_name"' | sed -n '1p' |
+      sed -E 's/.*"tag_name"[[:space:]]*:[[:space:]]*"([^"]*)".*/\1/') || __out=""
   fi
   [ -n "$__out" ] || return 1
   printf '%s' "$__out"
@@ -604,8 +604,8 @@ _sk_http_github_asset() {
   elif command -v python3 >/dev/null 2>&1; then
     __out=$(printf '%s' "$__body" | python3 -c "$_SK_HTTP_PY_ASSETS" "$__pat" 2>/dev/null) || __out=""
   else
-    __out=$(printf '%s\n' "$__body" | grep '"browser_download_url"' | grep -E -- "$__pat" \
-      | sed -E 's/.*"browser_download_url"[[:space:]]*:[[:space:]]*"([^"]*)".*/\1/') || __out=""
+    __out=$(printf '%s\n' "$__body" | grep '"browser_download_url"' | grep -E -- "$__pat" |
+      sed -E 's/.*"browser_download_url"[[:space:]]*:[[:space:]]*"([^"]*)".*/\1/') || __out=""
   fi
   [ -n "$__out" ] || return 1
   printf '%s' "$__out" | sed -n '1p'

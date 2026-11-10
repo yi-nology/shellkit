@@ -585,7 +585,10 @@ run_func_timeout() {
   __pid=$!
   # watchdog 必须全重定向：否则它与 sleep 子进程持有外层管道的写端，
   # 函数结束后外层还要等 sleep 睡满才返回。
-  (sleep "$__secs"; kill "$__pid" 2>/dev/null) >/dev/null 2>&1 </dev/null &
+  (
+    sleep "$__secs"
+    kill "$__pid" 2>/dev/null
+  ) >/dev/null 2>&1 </dev/null &
   __wd=$!
   wait "$__pid" 2>/dev/null || __rc=$?
   kill "$__wd" 2>/dev/null || true
