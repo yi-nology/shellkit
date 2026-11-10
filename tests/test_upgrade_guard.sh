@@ -10,6 +10,7 @@
 # 两条都是静默的：退出码 0，日志里看不出来。所以只能靠断言盯住。
 set -u
 . "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/test_helper.sh"
+. "$TEST_ROOT/lib/bootstrap.sh"
 
 work=$(tmpdir)
 tpl="$work/tpl"
@@ -125,5 +126,19 @@ mk_project "$p5" "tool"
 out=$("$TEST_ROOT/shellkit" upgrade "$p5" --template "$tpl" 2>&1)
 assert_contains "$out" "upgrade finished" "a normal project must still upgrade"
 assert_exists "$p5/README.md" "a normal project must still get its files"
+
+# ---------------------------------------------------------------- 相对路径里的 .. 组件
+# _sk_upgrade_rel_safe 的 */../* 分支是防御纵深：名字校验先拦掉了 name 带 .. / 的
+# 情况，文件列表又只来自模板自有清单 —— CLI 路径当前到不了这一支。但它是
+# 「清单不可信」的最后一道闸，必须有判据（变异测试发现这里一打就活）。
+# 函数在 shellkit 里、不在库里，从源码抽出直接钉住：
+eval "$(sed -n '/^_sk_upgrade_rel_safe()/,/^}/p' "$TEST_ROOT/shellkit")"
+assert_false _sk_upgrade_rel_safe "../evil"
+assert_false _sk_upgrade_rel_safe "a/../../evil"
+assert_false _sk_upgrade_rel_safe "a/../b"
+assert_false _sk_upgrade_rel_safe "/etc/passwd"
+assert_false _sk_upgrade_rel_safe ""
+assert_true _sk_upgrade_rel_safe "bin/tool"
+assert_true _sk_upgrade_rel_safe "x..y/file"
 
 exit 0
