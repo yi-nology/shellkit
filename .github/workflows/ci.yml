@@ -108,21 +108,39 @@ jobs:
             apt-get update -qq
             apt-get install -y -qq gettext ca-certificates curl tar xz-utils make
           else
-            dnf install -y -qq gettext ca-certificates curl tar xz make
+            # Rocky 9 基础镜像自带 curl-minimal，它和同名 curl 包互斥：
+            # 硬装 curl 会报 "curl-minimal ... conflicts with curl"。
+            # curl-minimal 已经能下载文件（-fsSL 都支持），所以这里不装 curl，
+            # 只补真正缺的包；下载器在下面统一兜底。
+            dnf install -y -qq --allowerasing \
+              gettext ca-certificates tar xz make \
+              grep sed gawk findutils diffutils coreutils \
+              gmp ncurses-libs
+          fi
+          # 下载器兜底：curl / wget / python3 任选其一，缺哪个都不该让 job 挂掉。
+          if command -v curl >/dev/null 2>&1; then
+            sk_fetch() { curl -fsSL "$1" -o "$2"; }
+          elif command -v wget >/dev/null 2>&1; then
+            sk_fetch() { wget -qO "$2" "$1"; }
+          elif command -v python3 >/dev/null 2>&1; then
+            sk_fetch() { python3 -c 'import sys,urllib.request; urllib.request.urlretrieve(sys.argv[1],sys.argv[2])' "$1" "$2"; }
+          else
+            echo "no downloader available (curl/wget/python3)" >&2
+            exit 1
           fi
           mkdir -p "$HOME/.local/bin"
           case "$(uname -m)" in
             arm64 | aarch64) arch=aarch64 ;;
             *) arch=x86_64 ;;
           esac
-          curl -fsSL "https://github.com/koalaman/shellcheck/releases/download/${SHELLCHECK_VERSION}/shellcheck-${SHELLCHECK_VERSION}.linux.${arch}.tar.xz" -o /tmp/sc.tar.xz
+          sk_fetch "https://github.com/koalaman/shellcheck/releases/download/${SHELLCHECK_VERSION}/shellcheck-${SHELLCHECK_VERSION}.linux.${arch}.tar.xz" /tmp/sc.tar.xz
           tar -xJf /tmp/sc.tar.xz -C /tmp
           install -m 0755 "/tmp/shellcheck-${SHELLCHECK_VERSION}/shellcheck" "$HOME/.local/bin/shellcheck"
           case "$arch" in
             aarch64) sf="shfmt_${SHFMT_VERSION}_linux_arm64" ;;
             *) sf="shfmt_${SHFMT_VERSION}_linux_amd64" ;;
           esac
-          curl -fsSL "https://github.com/mvdan/sh/releases/download/${SHFMT_VERSION}/${sf}" -o "$HOME/.local/bin/shfmt"
+          sk_fetch "https://github.com/mvdan/sh/releases/download/${SHFMT_VERSION}/${sf}" "$HOME/.local/bin/shfmt"
           chmod 0755 "$HOME/.local/bin/shfmt"
           echo "$HOME/.local/bin" >> "$GITHUB_PATH"
           bash --version | head -1
