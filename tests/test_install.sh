@@ -67,6 +67,21 @@ assert_exit_code 0 "$sk" install-self --prefix "$prefix"
 assert_true test ! -e "$dest/lib/lib"
 assert_eq "$lines" "$(grep -vc '^#' "$dest/MANIFEST")" "manifest is stable across reinstalls"
 
+# 用装好的副本自己重装同一个 prefix：目标就是运行源，绝不允许先删后拷 ——
+# 那会把正在运行的 lib/ 删掉、安装当场半残（issue #30）
+assert_exit_code 0 "$prefix/bin/shellkit" install-self --prefix "$prefix"
+if [ ! -f "$dest/lib/bootstrap.sh" ]; then
+  _fail "self-reinstall keeps lib intact"
+fi
+assert_eq "$(cat "$TEST_ROOT/VERSION")" "$("$prefix/bin/shellkit" --version)" \
+  "the installed copy still runs after self-reinstall"
+for __leftover in "$dest.new" "$dest.old"; do
+  if [ -e "$__leftover" ]; then
+    _fail "self-reinstall must not leave staging leftovers: $__leftover"
+  fi
+done
+unset __leftover
+
 # ---------- update ----------
 
 assert_exit_code 0 "$sk" update --check --from "$fake" --prefix "$prefix"
