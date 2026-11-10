@@ -27,9 +27,9 @@ str          error
 validate     i18n
 trap         i18n log
 fs           error i18n log trap
-os           error i18n log
-scaffold     error fs i18n log os validate
 run          error i18n log str trap
+os           error i18n log run
+scaffold     error fs i18n log os validate
 retry        i18n log str
 lock         i18n log str trap
 net          error fs i18n log os

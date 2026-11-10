@@ -232,3 +232,132 @@ fi
 export XDG_CURRENT_DESKTOP="GNOME"
 assert_exit_code 0 os_is_desktop
 unset XDG_CURRENT_DESKTOP
+
+# --- 提权包管理与 sudo 就绪 -------------------------------------------------
+# 这里用真的可执行桩（不是 shell 函数）：实际执行路径是
+# `sudo env DEBIAN_FRONTEND=noninteractive apt-get ...`，env 是真二进制，
+# 只能找到 PATH 上的真文件 —— shell 函数桩它看不见。
+__sk_pb="$d/pkgbin"
+mkdir -p "$__sk_pb"
+__sk_plog="$d/pkg-argv.log"
+export SK_PKG_ARGV_LOG="$__sk_plog"
+
+cat >"$__sk_pb/id" <<'EOF'
+#!/bin/sh
+if [ "${1:-}" = "-u" ]; then
+  printf '%s' "${SK_TEST_UID:-0}"
+  exit 0
+fi
+exec /usr/bin/id "$@"
+EOF
+cat >"$__sk_pb/sudo" <<'EOF'
+#!/bin/sh
+printf 'sudo %s\n' "$*" >> "$SK_PKG_ARGV_LOG"
+if [ "${SK_SUDO_FAIL:-0}" = "1" ]; then
+  exit 1
+fi
+# 跳过 sudo 自己的选项（-n / -v 等），剩下的才是要执行的命令
+while [ $# -gt 0 ]; do
+  case "$1" in
+    -*) shift ;;
+    *) break ;;
+  esac
+done
+exec "$@"
+EOF
+cat >"$__sk_pb/apt-get" <<'EOF'
+#!/bin/sh
+printf 'apt-get %s\n' "$*" >> "$SK_PKG_ARGV_LOG"
+exit 0
+EOF
+cat >"$__sk_pb/brew" <<'EOF'
+#!/bin/sh
+printf 'brew %s\n' "$*" >> "$SK_PKG_ARGV_LOG"
+exit 0
+EOF
+cat >"$__sk_pb/dpkg" <<'EOF'
+#!/bin/sh
+printf 'dpkg %s\n' "$*" >> "$SK_PKG_ARGV_LOG"
+exit 0
+EOF
+chmod +x "$__sk_pb"/*
+
+__sk_oldpath="$PATH"
+# 故意把桩目录放到 PATH 最前：实际执行路径是
+# `sudo env DEBIAN_FRONTEND=noninteractive apt-get ...`，env 是真二进制，
+# 只认 PATH 上的真文件。
+# shellcheck disable=SC2123
+PATH="$__sk_pb:$PATH"
+hash -r
+
+# os_pkg_manager_full：认得出包管理器（apt-get 桩在 PATH 里）
+assert_eq "apt-get" "$(os_pkg_manager_full)" "os_pkg_manager_full 认得 apt-get"
+
+# 提权安装：root 直跑，不带 sudo
+export SK_TEST_UID=0
+: >"$__sk_plog"
+os_pkg_install_root curl
+assert_eq "apt-get install -y curl" "$(cat "$__sk_plog")" "os_pkg_install_root root 直跑"
+
+# 提权安装：非 root 走 sudo env DEBIAN_FRONTEND=noninteractive
+export SK_TEST_UID=1000
+: >"$__sk_plog"
+os_pkg_install_root curl
+assert_eq "sudo env DEBIAN_FRONTEND=noninteractive apt-get install -y curl
+apt-get install -y curl" "$(cat "$__sk_plog")" "os_pkg_install_root 非 root 走 sudo"
+
+# 提权卸载
+: >"$__sk_plog"
+os_pkg_remove_root curl
+assert_eq "sudo env DEBIAN_FRONTEND=noninteractive apt-get remove --purge -y curl
+apt-get remove --purge -y curl" "$(cat "$__sk_plog")" "os_pkg_remove_root"
+
+# 刷新索引：apt-get update -y（不带 env 前缀 —— 与 unix_script 的 pkg_update 逐字一致）
+: >"$__sk_plog"
+os_pkg_update_root
+assert_eq "sudo apt-get update -y
+apt-get update -y" "$(cat "$__sk_plog")" "os_pkg_update_root"
+
+# brew 不提权
+export SK_PKG_MGR_FULL=brew
+: >"$__sk_plog"
+os_pkg_install_root wget
+assert_eq "brew install wget" "$(cat "$__sk_plog")" "brew 不提权"
+: >"$__sk_plog"
+os_pkg_remove_root wget
+assert_eq "brew uninstall wget" "$(cat "$__sk_plog")" "brew 卸载不提权"
+unset SK_PKG_MGR_FULL
+
+# dry-run：只打印不执行，包管理器一个都不许被调用
+export SHELLKIT_DRY_RUN=1
+: >"$__sk_plog"
+assert_exit_code 0 os_pkg_install_root curl
+assert_eq "" "$(cat "$__sk_plog")" "dry-run 不执行包管理器"
+unset SHELLKIT_DRY_RUN
+
+# 参数校验：不给包名是用法错
+assert_exit_code 2 os_pkg_install_root
+assert_exit_code 2 os_pkg_remove_root
+assert_exit_code 2 os_pkg_installed
+
+# os_pkg_installed：走 dpkg -s（不需要提权）
+: >"$__sk_plog"
+assert_exit_code 0 os_pkg_installed curl
+assert_eq "dpkg -s curl" "$(cat "$__sk_plog")" "os_pkg_installed 走 dpkg -s"
+
+# os_sudo_ready：root 直接放行
+export SK_TEST_UID=0
+assert_exit_code 0 os_sudo_ready
+
+# os_sudo_ready：非 root 但 sudo 免密可用
+export SK_TEST_UID=1000
+assert_exit_code 0 os_sudo_ready
+
+# os_sudo_ready：sudo 一直失败 => 拿不到权限（3）
+export SK_SUDO_FAIL=1
+assert_exit_code 3 os_sudo_ready
+unset SK_SUDO_FAIL
+
+# shellcheck disable=SC2123
+PATH="$__sk_oldpath"
+hash -r

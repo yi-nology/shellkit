@@ -379,6 +379,28 @@ fs_tmp_init —— 在当前 shell 初始化临时目录，并把清理动作推
 - 0 成功（初始化当前工程的临时目录）
 - 1 建不了临时目录
 
+## run
+
+### `run`
+
+run [--always] [--no-die] CMD... —— 执行命令，失败即 die；--no-die 只返回码
+
+**退出码**
+
+- 0 命令成功
+- 2 用法错（没给命令）
+- 其他 命令自身的退出码；默认模式下失败会 die，--no-die 只返回码
+
+### `run_concurrent`
+
+run_concurrent N [--timeout SEC] -- CMD... —— 把同一条命令并发跑 N 份 典型用法：对一批目标跑同一个动作（每个实例自己从环境变量读目标）。   run_concurrent 8 -- ./deploy.sh "$target" 输出约定（stdout 只给数据）：   stdout —— 成功实例的数量，一个整数，便于直接 $(...) 取走   stderr —— 每个实例的 stdout/stderr，逐行带 [i/N] 前缀；失败明细也在这里 返回码：全部成功返回 0；有实例失败则返回第一个失败实例的退出码。 注意：这里不用 die —— die 的 exit 在 if / || 里会退出整个 shell。
+
+**退出码**
+
+- 0 全部实例成功（stdout 输出成功实例数）
+- 2 参数错（并发数不是正整数、超时值非法、没给命令）
+- 其他 第一个失败实例的退出码
+
 ## os
 
 ### `os_name`
@@ -541,6 +563,67 @@ os_is_desktop —— 当前是否在桌面环境
 - 0 在桌面环境
 - 1 不在桌面环境
 
+### `os_pkg_manager_full`
+
+os_pkg_manager_full —— 本机包管理器名（含 pacman/brew）   既有 os_pkg_manager 不认 pacman/brew，这是另一套口径（unix_script 的   detect_pkg_manager 认这两个）—— 两套并存，不改既有函数。
+
+**退出码**
+
+- 0 找到包管理器，stdout 是包管理器名
+- 1 没有找到受支持的包管理器
+
+### `os_sudo_ready`
+
+os_sudo_ready —— 确保 sudo 可用（不要求已经是 root）   已是 root 直接放行；否则先试免密（sudo -n true），不行则提示输入一次（sudo -v）。
+
+**退出码**
+
+- 0 sudo 可用
+- 3 拿不到 sudo 权限
+
+### `os_pkg_install_root`
+
+os_pkg_install_root PKG... —— 提权安装（root 直跑，否则 sudo）
+
+**退出码**
+
+- 0 安装成功
+- 2 没给包名
+- 3 没有受支持的包管理器
+- 其他 包管理器自身的退出码
+
+### `os_pkg_remove_root`
+
+os_pkg_remove_root PKG... —— 提权卸载
+
+**退出码**
+
+- 0 卸载成功
+- 2 没给包名
+- 3 没有受支持的包管理器
+- 其他 包管理器自身的退出码
+
+### `os_pkg_update_root`
+
+os_pkg_update_root —— 提权刷新包索引
+
+**退出码**
+
+- 0 成功
+- 3 没有受支持的包管理器
+- 其他 包管理器自身的退出码
+
+### `os_pkg_installed`
+
+os_pkg_installed PKG —— 包是否已安装（不需要提权）
+
+**退出码**
+
+- 0 已安装
+- 1 未安装
+- 2 没给包名
+- 3 没有受支持的包管理器
+
 ## scaffold
 
 ### `scaffold_vars_set`
@@ -643,28 +726,6 @@ scaffold_run_hook FILE PROJECT_DIR —— 跑一个模板钩子 钩子是模板�
 - 0 钩子成功（或没有钩子）
 - 2 参数错
 - 1 钩子执行失败
-
-## run
-
-### `run`
-
-run [--always] [--no-die] CMD... —— 执行命令，失败即 die；--no-die 只返回码
-
-**退出码**
-
-- 0 命令成功
-- 2 用法错（没给命令）
-- 其他 命令自身的退出码；默认模式下失败会 die，--no-die 只返回码
-
-### `run_concurrent`
-
-run_concurrent N [--timeout SEC] -- CMD... —— 把同一条命令并发跑 N 份 典型用法：对一批目标跑同一个动作（每个实例自己从环境变量读目标）。   run_concurrent 8 -- ./deploy.sh "$target" 输出约定（stdout 只给数据）：   stdout —— 成功实例的数量，一个整数，便于直接 $(...) 取走   stderr —— 每个实例的 stdout/stderr，逐行带 [i/N] 前缀；失败明细也在这里 返回码：全部成功返回 0；有实例失败则返回第一个失败实例的退出码。 注意：这里不用 die —— die 的 exit 在 if / || 里会退出整个 shell。
-
-**退出码**
-
-- 0 全部实例成功（stdout 输出成功实例数）
-- 2 参数错（并发数不是正整数、超时值非法、没给命令）
-- 其他 第一个失败实例的退出码
 
 ## retry
 

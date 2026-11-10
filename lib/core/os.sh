@@ -366,3 +366,211 @@ _sk_os_pkg_family() {
   done
   return 1
 }
+# ---------------------------------------------------------------------------
+# 提权包管理与 sudo 就绪
+#
+# 既有 os_pkg_install / os_pkg_update 语义一字不动（不提权、不认 pacman/brew）。
+# 下面这几个是**新入口**，供 unix_script 的 pkg_install / pkg_update / pkg_remove /
+# pkg_installed 转发过来 —— 传给包管理器的参数与 unix_script 现有实现逐字一致。
+#
+# 包管理器识别另起一套（含 pacman/brew），不复用 _sk_pkg_mgr：
+#   _sk_pkg_mgr 是既有函数的依赖，改它会连带改 os_pkg_install / os_pkg_update 的
+#   行为 —— 那两个函数没有 pacman 分支，认成 pacman 时会静默什么都不做还返回 0。
+#
+# dry-run 走 run --no-die：SHELLKIT_DRY_RUN=1 时只打印不执行，失败返回包管理器的
+# 退出码（不 die）—— 与 unix_script 的 pkg_* 返回码口径一致。
+# ---------------------------------------------------------------------------
+
+# _sk_pkg_mgr_full —— 完整包管理器识别（含 pacman/brew）
+#   顺序与 unix_script 的 detect_pkg_manager 一致：
+#   apt-get > dnf > yum > zypper > pacman > apk > brew
+#   可用 SK_PKG_MGR_FULL 覆盖（测试与特殊环境用）。
+# @exitcode 0 找到包管理器
+# @exitcode 1 没有找到
+_sk_pkg_mgr_full() {
+  if [ -n "${SK_PKG_MGR_FULL:-}" ]; then
+    printf '%s\n' "${SK_PKG_MGR_FULL}"
+    return 0
+  fi
+  local __m
+  for __m in apt-get dnf yum zypper pacman apk brew; do
+    command -v "$__m" >/dev/null 2>&1 || continue
+    printf '%s\n' "$__m"
+    return 0
+  done
+  return 1
+}
+
+# os_pkg_manager_full —— 本机包管理器名（含 pacman/brew）
+#   既有 os_pkg_manager 不认 pacman/brew，这是另一套口径（unix_script 的
+#   detect_pkg_manager 认这两个）—— 两套并存，不改既有函数。
+# @exitcode 0 找到包管理器，stdout 是包管理器名
+# @exitcode 1 没有找到受支持的包管理器
+os_pkg_manager_full() {
+  _sk_pkg_mgr_full
+}
+
+# _sk_sudo_prefix —— 需要提权时的 sudo 前缀；已是 root 则为空
+#   用 id -u 而不是 $EUID：EUID 在 bash 里是只读变量，测不了「非 root」这条路。
+_sk_sudo_prefix() {
+  if [ "$(id -u 2>/dev/null)" = '0' ]; then
+    printf '%s' ''
+  else
+    printf '%s' 'sudo'
+  fi
+}
+
+# os_sudo_ready —— 确保 sudo 可用（不要求已经是 root）
+#   已是 root 直接放行；否则先试免密（sudo -n true），不行则提示输入一次（sudo -v）。
+# @exitcode 0 sudo 可用
+# @exitcode 3 拿不到 sudo 权限
+os_sudo_ready() {
+  if [ "$(id -u 2>/dev/null)" = '0' ]; then
+    return 0
+  fi
+  if ! command -v sudo >/dev/null 2>&1; then
+    log_error "$(_t 'sudo is not available')"
+    return "$SK_PRECOND"
+  fi
+  if sudo -n true 2>/dev/null; then
+    return 0
+  fi
+  log_info "$(_t 'This action needs sudo, please enter your password')"
+  if sudo -v; then
+    return 0
+  fi
+  log_error "$(_t 'Cannot obtain sudo permission')"
+  return "$SK_PRECOND"
+}
+
+# _sk_pkg_exec MGR CMD... —— 按需提权执行包管理器命令
+#   brew 不提权（它本来就装在用户目录里）；已是 root 直跑；其余走 sudo。
+#   dry-run 与失败处理都交给 run。
+_sk_pkg_exec() {
+  local __mgr=${1:-}
+  shift
+  if [ "$__mgr" = 'brew' ] || [ "$(id -u 2>/dev/null)" = '0' ]; then
+    run --no-die "$@"
+  else
+    run --no-die sudo "$@"
+  fi
+  return $?
+}
+
+# os_pkg_install_root PKG... —— 提权安装（root 直跑，否则 sudo）
+# @exitcode 0 安装成功
+# @exitcode 2 没给包名
+# @exitcode 3 没有受支持的包管理器
+# @exitcode 其他 包管理器自身的退出码
+os_pkg_install_root() {
+  local __mgr
+  local -a __cmd
+  _sk_need_args "$#" 1 "os_pkg_install_root PKG..." || return $?
+  __mgr=$(_sk_pkg_mgr_full) || __mgr=''
+  if [ -z "$__mgr" ]; then
+    log_error "$(_t 'no supported package manager found')"
+    return "$SK_PRECOND"
+  fi
+  case "$__mgr" in
+    # DEBIAN_FRONTEND=noninteractive：容器/极简镜像里 tzdata 会弹 debconf 交互，
+    # 无 TTY 时可能挂死（CI 与脚本场景必须避免）
+    apt-get) __cmd=(env DEBIAN_FRONTEND=noninteractive apt-get install -y "$@") ;;
+    dnf) __cmd=(dnf install -y "$@") ;;
+    yum) __cmd=(yum install -y "$@") ;;
+    zypper) __cmd=(zypper --non-interactive install "$@") ;;
+    pacman) __cmd=(pacman -S --noconfirm --needed "$@") ;;
+    apk) __cmd=(apk add --no-cache "$@") ;;
+    brew) __cmd=(brew install "$@") ;;
+    *)
+      log_error "$(_t 'Unsupported package manager'): $__mgr"
+      return "$SK_PRECOND"
+      ;;
+  esac
+  _sk_pkg_exec "$__mgr" "${__cmd[@]}"
+}
+
+# os_pkg_remove_root PKG... —— 提权卸载
+# @exitcode 0 卸载成功
+# @exitcode 2 没给包名
+# @exitcode 3 没有受支持的包管理器
+# @exitcode 其他 包管理器自身的退出码
+os_pkg_remove_root() {
+  local __mgr
+  local -a __cmd
+  _sk_need_args "$#" 1 "os_pkg_remove_root PKG..." || return $?
+  __mgr=$(_sk_pkg_mgr_full) || __mgr=''
+  if [ -z "$__mgr" ]; then
+    log_error "$(_t 'no supported package manager found')"
+    return "$SK_PRECOND"
+  fi
+  case "$__mgr" in
+    apt-get) __cmd=(env DEBIAN_FRONTEND=noninteractive apt-get remove --purge -y "$@") ;;
+    dnf) __cmd=(dnf remove -y "$@") ;;
+    yum) __cmd=(yum remove -y "$@") ;;
+    zypper) __cmd=(zypper --non-interactive remove "$@") ;;
+    pacman) __cmd=(pacman -Rns --noconfirm "$@") ;;
+    apk) __cmd=(apk del "$@") ;;
+    brew) __cmd=(brew uninstall "$@") ;;
+    *)
+      log_error "$(_t 'Unsupported package manager'): $__mgr"
+      return "$SK_PRECOND"
+      ;;
+  esac
+  _sk_pkg_exec "$__mgr" "${__cmd[@]}"
+}
+
+# os_pkg_update_root —— 提权刷新包索引
+# @exitcode 0 成功
+# @exitcode 3 没有受支持的包管理器
+# @exitcode 其他 包管理器自身的退出码
+os_pkg_update_root() {
+  local __mgr
+  local -a __cmd
+  __mgr=$(_sk_pkg_mgr_full) || __mgr=''
+  if [ -z "$__mgr" ]; then
+    log_error "$(_t 'no supported package manager found')"
+    return "$SK_PRECOND"
+  fi
+  case "$__mgr" in
+    apt-get) __cmd=(apt-get update -y) ;;
+    dnf) __cmd=(dnf makecache) ;;
+    yum) __cmd=(yum makecache) ;;
+    zypper) __cmd=(zypper --non-interactive refresh) ;;
+    pacman) __cmd=(pacman -Sy) ;;
+    apk) __cmd=(apk update) ;;
+    brew) __cmd=(brew update) ;;
+    *)
+      log_error "$(_t 'Unsupported package manager'): $__mgr"
+      return "$SK_PRECOND"
+      ;;
+  esac
+  _sk_pkg_exec "$__mgr" "${__cmd[@]}"
+}
+
+# os_pkg_installed PKG —— 包是否已安装（不需要提权）
+# @exitcode 0 已安装
+# @exitcode 1 未安装
+# @exitcode 2 没给包名
+# @exitcode 3 没有受支持的包管理器
+os_pkg_installed() {
+  local __mgr __pkg
+  _sk_need_args "$#" 1 "os_pkg_installed PKG" || return $?
+  __pkg=$1
+  __mgr=$(_sk_pkg_mgr_full) || __mgr=''
+  if [ -z "$__mgr" ]; then
+    log_error "$(_t 'no supported package manager found')"
+    return "$SK_PRECOND"
+  fi
+  case "$__mgr" in
+    apt-get) dpkg -s "$__pkg" >/dev/null 2>&1 ;;
+    dnf | yum) rpm -q "$__pkg" >/dev/null 2>&1 ;;
+    zypper) rpm -q "$__pkg" >/dev/null 2>&1 ;;
+    pacman) pacman -Qi "$__pkg" >/dev/null 2>&1 ;;
+    apk) apk info -e "$__pkg" >/dev/null 2>&1 ;;
+    brew) brew list "$__pkg" >/dev/null 2>&1 ;;
+    *)
+      log_error "$(_t 'Unsupported package manager'): $__mgr"
+      return "$SK_PRECOND"
+      ;;
+  esac
+}

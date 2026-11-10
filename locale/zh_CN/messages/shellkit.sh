@@ -73,6 +73,10 @@ _sk_msg_lookup_shellkit() {
     'download failed') printf '%s' '下载失败' ;;
     'curl is required for HTTP probing') printf '%s' 'HTTP 探测需要 curl' ;;
     'no supported package manager found') printf '%s' '找不到支持的包管理器' ;;
+    'sudo is not available') printf '%s' 'sudo 不可用' ;;
+    'This action needs sudo, please enter your password') printf '%s' '此操作需要 sudo 权限，请输入密码：' ;;
+    'Cannot obtain sudo permission') printf '%s' '无法获取 sudo 权限' ;;
+    'Unsupported package manager') printf '%s' '不支持的包管理器' ;;
     'Non-interactive mode requires a default value') printf '%s' '非交互模式必须有默认值' ;;
     'Non-interactive, using default') printf '%s' '非交互模式，使用默认值' ;;
     'Input timed out and no default is set') printf '%s' '输入超时且没有默认值' ;;

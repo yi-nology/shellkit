@@ -4,7 +4,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: shellkit\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-11-09 21:18+0800\n"
+"POT-Creation-Date: 2026-11-10 15:35+0800\n"
 "PO-Revision-Date: 2026-11-08 00:00+0800\n"
 "Last-Translator: shellkit contributors\n"
 "Language-Team: shellkit contributors\n"
@@ -222,6 +222,18 @@ msgid "curl is required for HTTP probing"
 msgstr ""
 
 msgid "no supported package manager found"
+msgstr ""
+
+msgid "sudo is not available"
+msgstr ""
+
+msgid "This action needs sudo, please enter your password"
+msgstr ""
+
+msgid "Cannot obtain sudo permission"
+msgstr ""
+
+msgid "Unsupported package manager"
 msgstr ""
 
 msgid "Non-interactive mode requires a default value"
