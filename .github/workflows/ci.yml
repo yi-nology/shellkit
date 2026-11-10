@@ -226,3 +226,31 @@ jobs:
 
       - name: check links
         run: bash tools/site_links.sh site/.vuepress/dist
+
+  # 覆盖率棘轮：新加了一个谁都没测的公开函数 ⇒ 红。
+  # 独立 job —— 它要把整套测试在插桩副本里跑两遍（约 7 分钟），不该拖慢主矩阵的反馈。
+  coverage:
+    name: coverage ratchet
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+
+      - name: extra tooling
+        run: |
+          set -euo pipefail
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq gettext
+
+      - name: coverage
+        run: make coverage
+
+  # 变异测试：把语义变异种进升级路径守卫区，守卫用例必须 100% 杀灭。
+  # 白名单位点是「当前无判据」的显式记录 —— 杀掉一个就该把它从 --skip 里挪走。
+  mutation:
+    name: mutation campaign
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+
+      - name: campaign
+        run: make mutation
