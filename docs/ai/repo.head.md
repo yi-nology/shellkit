@@ -65,7 +65,7 @@
 只有真正成功应用了模板的文件才能推进基线；跳过的文件保持原基线。
 回归用例：`tests/test_upgrade.sh` 与 `tests/bats/scaffold.bats`（都要连升两次以上）。
 
-## 九个已经踩过的坑
+## 十个已经踩过的坑
 
 1. **bash 3.2 与 5 的 trap 语义不同**：子 shell 里 `trap -p EXIT`，3.2 读到空，5.x 仍打印
    父 shell 的 trap 但子 shell 退出时不执行。所以幂等不能只查 `trap -p`，看到是自己的
@@ -100,6 +100,10 @@
    要么整体换新；而且它替换的是符号链接**本身**，不会顺着链接写到别处。
    副作用：被杀可能留下 `<目标>.tmp.XXXXXX` 残留。
    回归用例：`tests/test_upgrade_atomic.sh`。
+10. **文档注释里的裸尖括号会炸站点构建**：生成的 reference 页是 markdown，VuePress 把它
+    当 markdown 解析 —— `<模块名>`、`<DST>` 这样的占位符会被当成 HTML 标签，
+    报 `Element is missing end tag`，站点构建整个红（`<目标>` 这种尖括号紧跟中文
+    尤其容易漏）。占位符一律包进反引号：渲染成行内代码，含义不变。
 
 ## 本场景的验证
 
