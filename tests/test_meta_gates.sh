@@ -18,129 +18,29 @@
 #
 # 依赖：只有 bash + awk + 基础 coreutils。
 # CI 的最小容器里没有 jq / python3 / curl，这个文件照样要能跑。
+#
+# 实现：变异原语收编在 tools/mutation.sh（与变异 campaign 共用一份实现，
+# 见 tests/test_mutation.sh），这里保留 _meta_* 薄包装 —— 用例、输出与
+# 三条纪律与收编前逐字一致。
 set -u
 . "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/test_helper.sh"
 
-# --------------------------------------------------------------------------
-# 工具
-# --------------------------------------------------------------------------
+. "$TEST_ROOT/tools/mutation.sh"
 
-# _meta_copy_tree DEST —— 复制一份够用的树到 DEST。
-#
-# 只复制这几个：CLI、库、模板、测试基建、locale、版本号与许可证。
-# 不复制 .git / docs / site / reports —— 对这几个用例没有影响，复制只会慢。
-# 权限必须一起复制（-p）：副本里的 shellkit 要能被执行。
-_meta_copy_tree() {
-  local dest=$1 item
-  mkdir -p "$dest" || return 1
-  for item in shellkit lib templates tests locale; do
-    [ -e "$TEST_ROOT/$item" ] || continue
-    cp -Rp "$TEST_ROOT/$item" "$dest/" || return 1
-  done
-  for item in VERSION LICENSE NOTICE; do
-    [ -f "$TEST_ROOT/$item" ] || continue
-    cp -p "$TEST_ROOT/$item" "$dest/$item" || return 1
-  done
-  return 0
-}
+# _meta_copy_tree DEST —— 复制一份够用的树到 DEST（源固定是本仓库）。
+_meta_copy_tree() { mut_copy_tree "$TEST_ROOT" "$1"; }
 
-# _meta_mutate_func FILE FUNC BODYFILE —— 把 FILE 里 FUNC 的函数体换成 BODYFILE 的内容。
-#
-# 按结构找（行首的 `name() {` 到行首单独的 `}`），不依赖函数体里的具体文本，
-# 所以函数内部被重构过也不会误伤。找不到目标就返回 1 ——
-# 调用方必须判红，不许放过（放过等于元测试自己变成假绿）。
-_meta_mutate_func() {
-  local file=$1 fn=$2 bodyfile=$3 tmp
-  tmp=$(mktemp "$TEST_TMP_ROOT/meta.XXXXXX") || return 1
-  awk -v fn="$fn" -v bf="$bodyfile" '
-    function emit(   line) {
-      while ((getline line < bf) > 0) print line
-      close(bf)
-    }
-    $0 ~ "^" fn "\\(\\)[[:space:]]*\\{" { emit(); skipping = 1; next }
-    skipping && $0 == "}" { skipping = 0; next }
-    skipping { next }
-    { print }
-  ' "$file" >"$tmp" || {
-    rm -f "$tmp"
-    return 1
-  }
-  if cmp -s "$file" "$tmp"; then
-    rm -f "$tmp"
-    printf 'MUTATION TARGET NOT FOUND: function %s in %s\n' "$fn" "$file" >&2
-    return 1
-  fi
-  cat "$tmp" >"$file"
-  rm -f "$tmp"
-  return 0
-}
+# _meta_mutate_func FILE FUNC BODYFILE —— 函数体替换（结构定位，找不到返回 1）。
+_meta_mutate_func() { mut_replace_func "$1" "$2" "$3"; }
 
-# _meta_mutate_line FILE PATTERN REPLACEMENT —— 把第一行含 PATTERN 的行换成 REPLACEMENT。
-# PATTERN 是**字面量**（内部用 index，不当正则用）—— 模式里常有 [ $ 这类字符。
-_meta_mutate_line() {
-  local file=$1 pat=$2 repl=$3 tmp n
-  n=$(grep -F -c -- "$pat" "$file" 2>/dev/null || true)
-  case "$n" in
-    '' | *[!0-9]*) n=0 ;;
-  esac
-  if [ "$n" -eq 0 ]; then
-    printf 'MUTATION TARGET NOT FOUND: %s in %s\n' "$pat" "$file" >&2
-    return 1
-  fi
-  tmp=$(mktemp "$TEST_TMP_ROOT/meta.XXXXXX") || return 1
-  awk -v pat="$pat" -v repl="$repl" '
-    !done && index($0, pat) > 0 { print repl; done = 1; next }
-    { print }
-  ' "$file" >"$tmp" || {
-    rm -f "$tmp"
-    return 1
-  }
-  cat "$tmp" >"$file"
-  rm -f "$tmp"
-  return 0
-}
+# _meta_mutate_line FILE PATTERN REPLACEMENT —— 首行含 PATTERN 的行换成 REPLACEMENT（字面量）。
+_meta_mutate_line() { mut_replace_line "$1" "$2" "$3"; }
 
-# _meta_mutate_block FILE START END REPLFILE —— 把从含 START 的行到含 END 的行
-# （含端点）整段换成 REPLFILE 的内容。START / END 都是字面量。
-_meta_mutate_block() {
-  local file=$1 start=$2 end=$3 replfile=$4 tmp n
-  n=$(grep -F -c -- "$start" "$file" 2>/dev/null || true)
-  case "$n" in
-    '' | *[!0-9]*) n=0 ;;
-  esac
-  if [ "$n" -eq 0 ]; then
-    printf 'MUTATION TARGET NOT FOUND: %s in %s\n' "$start" "$file" >&2
-    return 1
-  fi
-  tmp=$(mktemp "$TEST_TMP_ROOT/meta.XXXXXX") || return 1
-  awk -v s="$start" -v e="$end" -v rf="$replfile" '
-    function emit(   line) {
-      while ((getline line < rf) > 0) print line
-      close(rf)
-    }
-    !inside && index($0, s) > 0 { emit(); inside = 1; next }
-    inside && index($0, e) > 0 { inside = 0; next }
-    inside { next }
-    { print }
-  ' "$file" >"$tmp" || {
-    rm -f "$tmp"
-    return 1
-  }
-  cat "$tmp" >"$file"
-  rm -f "$tmp"
-  return 0
-}
+# _meta_mutate_block FILE START END REPLFILE —— START 到 END 的整段换成 REPLFILE 的内容（字面量）。
+_meta_mutate_block() { mut_replace_block "$1" "$2" "$3" "$4"; }
 
 # _meta_run DIR TESTFILE LOG —— 在 DIR 里跑 TESTFILE，返回退出码（日志写 LOG）
-_meta_run() {
-  local dir=$1 testfile=$2 log=$3 rc=0
-  mkdir -p "$dir/tmp" || return 1
-  (
-    cd "$dir" || exit 1
-    TEST_TMP_ROOT="$dir/tmp" bash "tests/$testfile"
-  ) >"$log" 2>&1 || rc=$?
-  printf '%s' "$rc"
-}
+_meta_run() { mut_run_testfile "$1" "$2" "$3"; }
 
 # _meta_expect_red INDEX LABEL TARGET MUTATOR —— 造一次变异，要求 TARGET 变红。
 #

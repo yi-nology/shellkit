@@ -9,7 +9,7 @@ SOURCES := shellkit install.sh lib/bootstrap.sh $(wildcard lib/core/*.sh) \
 TEMPLATES := $(shell find templates -type f)
 SHOTS := $(wildcard docs/shots/*.shot)
 
-.PHONY: help test syntax lint lint-templates fmt messages messages-check docs docs-check versions-check check-docs cookbook-check shots examples check install release release-dry site-deps site-sync site site-serve local-names-check module-count-check pipe-safety-check dup-functions-check
+.PHONY: help test syntax lint lint-templates fmt messages messages-check docs docs-check versions-check check-docs cookbook-check shots examples check install release release-dry site-deps site-sync site site-serve local-names-check module-count-check pipe-safety-check dup-functions-check mutation
 
 help:
 	@printf '%s\n' \
@@ -33,6 +33,7 @@ help:
 	  'make check       依次跑 syntax / test / lint / module-order-check / check-exitcode-docs / local-names-check / module-count-check / pipe-safety-check / docs-check / versions-check / check-docs / cookbook-check / messages-check / examples / fmt' \
 	  'make bats-check  跑 bats 用例（tests/bats，每个 @test 一个独立进程）' \
 	  'make coverage    公开函数级覆盖率（带白名单棘轮，不进 check）' \
+	  'make mutation    变异测试：升级路径守卫用例的判据能力（不进 check）' \
 	  'make release VERSION=x.y.z  发版：升版本→重生成产物→门禁→commit→tag→push' \
 	  'make release-dry VERSION=x.y.z  同 release，但跑完还原工作树、不提交' \
 	  'make site        构建文档站（先跑 tools/site_sync.sh 从 docs/ 同步）' \
@@ -109,6 +110,20 @@ bats-check:
 # 不进 check —— 它要把整套测试跑两遍，太慢；想收紧覆盖率就调 --min。
 coverage:
 	@bash tools/coverage.sh --min 40
+
+# 变异测试：把语义变异种进升级路径的守卫区，验证守卫用例必须 100% 杀灭
+# （位点区间锚在 _sk_upgrade_* 函数上，封顶 12 个保证跑得完）。
+# 不进 check —— 它要把守卫用例跑十几遍；回归在 tests/test_mutation.sh。
+mutation:
+	@first=$$(grep -n '^_sk_upgrade_rel_safe()' shellkit | cut -d: -f1); \
+	last=$$(grep -n '^_sk_upgrade_writable()' shellkit | cut -d: -f1); \
+	bash tools/mutation.sh --target shellkit \
+	  --from-line "$$first" --to-line "$$last" --max-sites 12 \
+	  --skip "$$((first + 3))" --skip "$$((first + 6))" \
+	  --skip "$$((first + 18))" --skip "$$((first + 19))" \
+	  --skip "$$((first + 25))" --skip "$$((first + 29)):return" \
+	  --skip "$$((first + 32))" \
+	  --test "bash tests/test_upgrade_guard.sh" --min-score 100
 
 # ---------- 文档站 ----------
 # 刻意不进 check：库的门禁不依赖 Node，没装 npm 的机器上也该能全绿。
