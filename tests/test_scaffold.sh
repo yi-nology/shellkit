@@ -194,7 +194,10 @@ rm -f "$p6/vendor/shellkit/shellkit"
 rc=0
 out=$(PATH="$work/empty-bin:/bin:/usr/bin" "$(command -v make)" -C "$p6" upgrade 2>&1) || rc=$?
 assert_ne "$rc" "0" "upgrade must fail when no shellkit is available"
-assert_contains "$out" "shellkit" "upgrade must say that shellkit is missing"
+# 不能只断 "shellkit"：测试的临时目录就叫 shellkit-tests.*，输出里的路径本身就含这个词
+# ⇒ 断言恒真。断那句「怎么装」的提示（模板 Makefile 里的原文是中文，
+# 所以断言挑里面那个不会被翻译的英文记号）。
+assert_contains "$out" "install-self" "upgrade must say how to get shellkit"
 
 # vendor 把库镜像进工程
 out=$(PATH="$TEST_ROOT:$PATH" make -C "$p6" vendor 2>&1)

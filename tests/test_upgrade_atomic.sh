@@ -108,7 +108,10 @@ printf 'OUTSIDE CONTENT\n' >"$outside"
 rm -f "$proj/README.md"
 ln -s "$outside" "$proj/README.md"
 out=$("$TEST_ROOT/shellkit" upgrade "$proj" --template "$tpl" 2>&1)
-assert_contains "$out" "symlink" "a symlinked target must be reported"
+# 断完整文案 + 结构事实：只断 "symlink" 这个词会被路径白送
+# （输出里的路径也算输出 —— 工程路径里带 symlink 时断言恒真，判据能力就没了）
+assert_contains "$out" "the target is a symlink" "a symlinked target must be reported"
+assert_true [ -L "$proj/README.md" ]
 assert_eq "OUTSIDE CONTENT" "$(cat "$outside")" "the file outside the project must stay untouched"
 
 exit 0

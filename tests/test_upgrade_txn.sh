@@ -175,7 +175,9 @@ chmod +x "$shim4/mv"
 rc=0
 out=$(PATH="$shim4:$PATH" "$TEST_ROOT/shellkit" upgrade "$proj4" --template "$tpl4" 2>&1) || rc=$?
 assert_ne "0" "$rc" "an upgrade whose manifest cannot be written must fail"
-assert_contains "$out" "manifest" "the failure must say the manifest could not be written"
+# 不能只断 "manifest"：清单文件就叫 .shellkit-manifest，输出里的路径本身就含这个词
+# ⇒ 断言恒真。断那句真正说明失败的文案。
+assert_contains "$out" "failed to write the project manifest" "the failure must say the manifest could not be written"
 assert_contains "$(cat "$proj4/README.md")" "TEMPLATE ADDITION" \
   "the files that were written before the failure must stay written"
 assert_contains "$(cat "$proj4/.shellkit-manifest")" "name=tool" \
