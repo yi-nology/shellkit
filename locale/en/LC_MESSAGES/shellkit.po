@@ -4,7 +4,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: shellkit\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-11-10 23:59+0800\n"
+"POT-Creation-Date: 2026-11-11 00:22+0800\n"
 "PO-Revision-Date: 2026-11-08 00:00+0800\n"
 "Last-Translator: shellkit contributors\n"
 "Language-Team: shellkit contributors\n"
@@ -535,13 +535,10 @@ msgstr ""
 msgid "the target is a symlink, left alone"
 msgstr ""
 
-msgid "would add"
+msgid "the target path is blocked by a file"
 msgstr ""
 
-msgid "failed to write the file"
-msgstr ""
-
-msgid "added"
+msgid "the target is a directory, refusing to overwrite"
 msgstr ""
 
 msgid "modified locally, left alone"
@@ -553,7 +550,19 @@ msgstr ""
 msgid "cannot be verified against the old template, left alone"
 msgstr ""
 
+msgid "the target directory is not writable"
+msgstr ""
+
+msgid "would add"
+msgstr ""
+
 msgid "would update"
+msgstr ""
+
+msgid "failed to write the file"
+msgstr ""
+
+msgid "added"
 msgstr ""
 
 msgid "updated"

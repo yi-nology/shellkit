@@ -4,7 +4,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: shellkit\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-11-10 23:59+0800\n"
+"POT-Creation-Date: 2026-11-11 00:22+0800\n"
 "PO-Revision-Date: 2026-11-08 00:00+0800\n"
 "Last-Translator: shellkit contributors\n"
 "Language-Team: shellkit contributors\n"
@@ -535,14 +535,11 @@ msgstr "拒絕寫到工程目錄之外"
 msgid "the target is a symlink, left alone"
 msgstr "目標是符號連結，保持原樣"
 
-msgid "would add"
-msgstr "將新增"
+msgid "the target path is blocked by a file"
+msgstr "目標的父路徑是個檔案，建不出來"
 
-msgid "failed to write the file"
-msgstr "寫檔案失敗"
-
-msgid "added"
-msgstr "已新增"
+msgid "the target is a directory, refusing to overwrite"
+msgstr "目標位置是個目錄，拒絕覆蓋"
 
 msgid "modified locally, left alone"
 msgstr "本地已修改，保持原樣"
@@ -553,8 +550,20 @@ msgstr "沒有記錄的指紋，保持原樣"
 msgid "cannot be verified against the old template, left alone"
 msgstr "無法與舊範本核對，保持原樣"
 
+msgid "the target directory is not writable"
+msgstr "目標目錄不可寫"
+
+msgid "would add"
+msgstr "將新增"
+
 msgid "would update"
 msgstr "將更新"
+
+msgid "failed to write the file"
+msgstr "寫檔案失敗"
+
+msgid "added"
+msgstr "已新增"
 
 msgid "updated"
 msgstr "已更新："

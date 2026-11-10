@@ -65,7 +65,7 @@
 只有真正成功应用了模板的文件才能推进基线；跳过的文件保持原基线。
 回归用例：`tests/test_upgrade.sh` 与 `tests/bats/scaffold.bats`（都要连升两次以上）。
 
-## 十个已经踩过的坑
+## 十一个已经踩过的坑
 
 1. **bash 3.2 与 5 的 trap 语义不同**：子 shell 里 `trap -p EXIT`，3.2 读到空，5.x 仍打印
    父 shell 的 trap 但子 shell 退出时不执行。所以幂等不能只查 `trap -p`，看到是自己的
@@ -104,6 +104,11 @@
     当 markdown 解析 —— `<模块名>`、`<DST>` 这样的占位符会被当成 HTML 标签，
     报 `Element is missing end tag`，站点构建整个红（`<目标>` 这种尖括号紧跟中文
     尤其容易漏）。占位符一律包进反引号：渲染成行内代码，含义不变。
+11. **vendor 目录要整体换，不要就地改**：就地改（先 `rm -rf` 再 `cp -R`）中途失败会留下
+    **半份库** —— 工程的脚本当场就找不到 `vendor/shellkit/lib/bootstrap.sh`，整套东西都坏了。
+    现在是「先铺到 `vendor/.shellkit-new`，再整体换上去」：中途失败旧副本完好无损。
+    换的动作是两次 rename，中间有一个极短的窗口；窗口里被打断会留下 `vendor/.shellkit-old`，
+    下次同步会把它清掉。
 
 ## 本场景的验证
 

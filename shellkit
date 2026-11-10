@@ -224,11 +224,53 @@ _sk_copy_legal() {
   return 0
 }
 
+# _sk_vendor_stage STAGE —— 把整份库副本铺到候选目录里
+#
+# 只管铺，不管换：铺失败由调用方清候选目录，原来的副本一个字节都不动。
+_sk_vendor_stage() {
+  local __stage=$1
+  # ${__stage:?} 是安全阀：万一变量异常为空，绝不让 rm 落到 /lib 上
+  # tools/ 与 docs/ 是 shellkit 仓库自己的门禁输入，**不进副本**：
+  # 副本的职责是「库能跟着工程走 + 工程能自己升级」，不是把仓库整套搬过去。
+  # 少了它们，副本里的 shellkit docs 会明确报前置条件错（见 cmd_docs）。
+  rm -rf "${__stage:?}/lib" "${__stage:?}/locale" "${__stage:?}/templates" "${__stage:?}/tests" || return 1
+  _sk_copy_tree "$SELF_DIR/lib" "$__stage/lib" || return 1
+  _sk_copy_tree "$SELF_DIR/locale" "$__stage/locale" || return 1
+  _sk_copy_tree "$SELF_DIR/templates" "$__stage/templates" || return 1
+  # 只拷测试基建的两份文件：副本要能跑「渲染模板 → 生成工程」这条链，
+  # 而渲染要 tests/test_helper.sh 与 tests/run.sh。整份 tests/ 有几十个
+  # 仓库自测文件，工程用不上，不该进 vendor。
+  fs_ensure_dir "$__stage/tests" 755 || return 1
+  cp -f "$SELF_DIR/tests/test_helper.sh" "$__stage/tests/test_helper.sh" || return 1
+  cp -f "$SELF_DIR/tests/run.sh" "$__stage/tests/run.sh" || return 1
+  chmod 755 "$__stage/tests/run.sh" || return 1
+  cp "$SELF_DIR/VERSION" "$__stage/VERSION" || return 1
+  # 副本必须自带 CLI：工程被 vendor 到别的机器时，PATH 上不一定有 shellkit。
+  # 没有 CLI，副本就永远升不了级 —— 而升级正是 vendor 这套机制存在的理由。
+  cp -f "$SELF_DIR/shellkit" "$__stage/shellkit" || return 1
+  chmod 755 "$__stage/shellkit" || return 1
+  # MIT 许可证要求「副本里带上版权声明」，所以 vendor 出来的副本必须带 LICENSE 与 NOTICE
+  _sk_copy_legal "$__stage" || return 1
+  return 0
+}
+
 # _sk_vendor_install DIR —— 把库整目录同步进 DIR/vendor/shellkit。
-# 用"整目录替换"而不是逐文件覆盖：模块被删掉时不会留残骸。
+#
+# 用「整目录替换」而不是逐文件覆盖：模块被删掉时不会留残骸。
+#
+# 同步不是就地改：先把整份副本铺到 vendor/.shellkit-new，再整体换上去。
+# 就地改（先 rm -rf 再 cp -R）中途失败会留下半份库 —— 工程的脚本当场就找不到
+# vendor/shellkit/lib/bootstrap.sh，整套东西都坏了。
+# 换的动作是两次 rename（旧的挪开、新的挪进来），中间有一个极短的窗口；
+# 窗口里被打断会留下 vendor/.shellkit-old，下次同步会把它清掉。
+#
+# 旧副本里用户自己加的文件要留着：候选目录先把旧内容原样搬进去，
+# 再在上面做同样的替换动作 —— 与旧行为一致，只是不再就地改。
 _sk_vendor_install() {
-  local __dir=$1 __dest
+  local __dir=$1 __dest __stage __old
   __dest="$__dir/vendor/shellkit"
+  __stage="$__dir/vendor/.shellkit-new"
+  __old="$__dir/vendor/.shellkit-old"
   # vendor/ 必须是工程里的真目录：
   # 它要是指向别处的符号链接，后面的 rm -rf + cp -R 就写到工程之外去了。
   if [ -L "$__dir/vendor" ]; then
@@ -236,35 +278,41 @@ _sk_vendor_install() {
     return 1
   fi
   # vendor/shellkit 本身也不能是符号链接：
-  # rm -rf "$__dest/lib" 会顺着它删到工程外面去。
+  # 顺着它删会删到工程外面去。
   if [ -L "$__dest" ]; then
     log_error "$(_t 'the vendored library is a symlink, refusing to install'): $__dest"
     return 1
   fi
-  fs_ensure_dir "$__dest" 755 || return 1
-  # ${__dest:?} 是安全阀：万一变量异常为空，绝不让 rm 落到 /lib 上
-  # tools/ 与 docs/ 是 shellkit 仓库自己的门禁输入，**不进副本**：
-  # 副本的职责是「库能跟着工程走 + 工程能自己升级」，不是把仓库整套搬过去。
-  # 少了它们，副本里的 shellkit docs 会明确报前置条件错（见 cmd_docs）。
-  rm -rf "${__dest:?}/lib" "${__dest:?}/locale" "${__dest:?}/templates" || return 1
-  cp -R "$SELF_DIR/lib" "$__dest/lib" || return 1
-  cp -R "$SELF_DIR/locale" "$__dest/locale" || return 1
-  cp -R "$SELF_DIR/templates" "$__dest/templates" || return 1
-  # 只拷测试基建的两份文件：副本要能跑「渲染模板 → 生成工程」这条链，
-  # 而渲染要 tests/test_helper.sh 与 tests/run.sh。整份 tests/ 有几十个
-  # 仓库自测文件，工程用不上，不该进 vendor。
-  rm -rf "${__dest:?}/tests"
-  fs_ensure_dir "$__dest/tests" 755 || return 1
-  cp -f "$SELF_DIR/tests/test_helper.sh" "$__dest/tests/test_helper.sh" || return 1
-  cp -f "$SELF_DIR/tests/run.sh" "$__dest/tests/run.sh" || return 1
-  chmod 755 "$__dest/tests/run.sh" || return 1
-  cp "$SELF_DIR/VERSION" "$__dest/VERSION" || return 1
-  # 副本必须自带 CLI：工程被 vendor 到别的机器时，PATH 上不一定有 shellkit。
-  # 没有 CLI，副本就永远升不了级 —— 而升级正是 vendor 这套机制存在的理由。
-  cp -f "$SELF_DIR/shellkit" "$__dest/shellkit" || return 1
-  chmod 755 "$__dest/shellkit" || return 1
-  # MIT 许可证要求「副本里带上版权声明」，所以 vendor 出来的副本必须带 LICENSE 与 NOTICE
-  _sk_copy_legal "$__dest" || return 1
+  # 上一次换到一半留下的残骸：清掉，别让它越攒越多
+  rm -rf "$__stage" "$__old" 2>/dev/null || true
+  fs_ensure_dir "$__stage" 755 || return 1
+  # 旧副本里可能有用户自己加的文件：先原样搬进候选目录，别顺手删掉
+  if [ -d "$__dest" ]; then
+    cp -R "$__dest/." "$__stage/" || {
+      rm -rf "$__stage" 2>/dev/null || true
+      return 1
+    }
+  fi
+  _sk_vendor_stage "$__stage" || {
+    rm -rf "$__stage" 2>/dev/null || true
+    return 1
+  }
+  # 换上去：旧的挪开、新的挪进来。两次 rename 都在同一个文件系统里。
+  if [ -e "$__dest" ] || [ -L "$__dest" ]; then
+    if ! mv "$__dest" "$__old"; then
+      rm -rf "$__stage" 2>/dev/null || true
+      return 1
+    fi
+  fi
+  if ! mv "$__stage" "$__dest"; then
+    # 换不上去就把旧的挪回去，别让工程变成「没有库」的状态
+    if [ -e "$__old" ]; then
+      mv "$__old" "$__dest" 2>/dev/null || true
+    fi
+    rm -rf "$__stage" 2>/dev/null || true
+    return 1
+  fi
+  rm -rf "$__old" 2>/dev/null || true
   return 0
 }
 
@@ -668,11 +716,67 @@ _sk_upgrade_in_dir() {
   return 1
 }
 
+# _sk_upgrade_path_ok BASE REL —— 目标的父路径每一级都建得出来吗
+#
+# 相对路径的目录部分要逐级看：中间哪一级已经是个普通文件，后面就建不出来
+# （fs_ensure_dir 会失败）—— 而那已经是半路上了。
+# 哪一级还不存在就停：剩下的由 fs_ensure_dir 建，它要的是上级的写权限。
+_sk_upgrade_path_ok() {
+  local __base=${1:-} __rel=${2:-} __rest __part
+  local __dir=$__base
+  if [ -z "$__base" ] || [ -z "$__rel" ]; then
+    return 1
+  fi
+  __rest=$(dirname "$__rel")
+  if [ "$__rest" = "." ]; then
+    return 0
+  fi
+  while [ -n "$__rest" ] && [ "$__rest" != "." ]; do
+    __part=${__rest%%/*}
+    if [ "$__rest" = "$__part" ]; then
+      __rest=""
+    else
+      __rest=${__rest#*/}
+    fi
+    __dir="$__dir/$__part"
+    if [ -e "$__dir" ] || [ -L "$__dir" ]; then
+      [ -d "$__dir" ] || return 1
+      continue
+    fi
+    break
+  done
+  return 0
+}
+# _sk_upgrade_writable TARGET —— 这个目标写得进去吗
+#
+# 写文件靠的是「目录可写」（rename 要的是目录的写权限），不是文件自己的权限。
+# 目标所在的目录还不存在就向上找到第一个存在的祖先，判它可写 ——
+# 中间目录由 fs_ensure_dir 建出来，建目录要的是它上级的写权限。
+#
+# 为什么要在动文件之前查：不可写却硬写，就会停在半路 ——
+# 前几个文件已是新版，这个文件写不进去，清单也落不下去。
+# 提前查出来直接退出，工程一个字节都不动。
+_sk_upgrade_writable() {
+  local __tgt=${1:-} __dir __parent
+  if [ -z "$__tgt" ]; then
+    return 1
+  fi
+  __dir=$(dirname "$__tgt")
+  while [ ! -d "$__dir" ]; do
+    __parent=$(dirname "$__dir")
+    if [ "$__parent" = "$__dir" ]; then
+      return 1
+    fi
+    __dir=$__parent
+  done
+  [ -w "$__dir" ] || return 1
+  return 0
+}
 cmd_upgrade() {
   local __dir="" __tpl="$SK_TPL_DIR" __check=0 __force=0
-  local __name __rel __old __cur __new __tmp __cmds_csv __vdir
+  local __name __rel __old __cur __new __tmp __cmds_csv __vdir __act
   local __dirabs="" __target=""
-  local __updated=0 __skipped=0 __added=0
+  local __updated=0 __skipped=0 __added=0 __vsync=0
   local __baselines="" __legacy=0 __oldtpl="" __oldtpl_hash=""
 
   while [ "$#" -gt 0 ]; do
@@ -815,15 +919,29 @@ cmd_upgrade() {
 $(_sk_new_owned_list "$__name")
 EOF
 
+  # ---------- 阶段一：决策与校验（一个文件都不动）----------
+  #
+  # 升级是事务：先把新模板渲染到候选目录，再对每个目标决定「新增 / 更新 /
+  # 跳过」，并把能提前发现的问题全部发现完，然后才动工程里的文件。
+  #
+  # 这一阶段撞上致命问题必须在动文件之前退出 —— 否则工程会停在半升状态：
+  # 前几个文件已是新版、后几个还是旧版，清单也对不上磁盘。
+  #
+  # 动作表 _SK_UPGRADE_ACTS[i] 与 _SK_UPGRADE_RELS[i] 一一对应：
+  #   A = 新增（工程里没有，模板里有）
+  #   U = 更新（工程里是模板原样，要用新版盖回去）
+  #   S = 跳过（用户改过 / 没有指纹 / 目标是符号链接 / 模板里已经没有这个文件）
+  _SK_UPGRADE_ACTS=()
   __i=0
   while [ "$__i" -lt "${#_SK_UPGRADE_RELS[@]}" ]; do
     __rel=${_SK_UPGRADE_RELS[$__i]}
     __old=${_SK_UPGRADE_BASES[$__i]}
+    __act="S"
 
     # 目标路径的三个不变量：
     #   1) 相对路径里没有 .. 组件，也不是绝对路径
     #   2) 解析之后落在工程目录之内（中间目录是符号链接也不行）
-    #   3) 目标本身不是符号链接 —— cp 会跟随它写穿，把内容写到工程之外
+    #   3) 目标本身不是符号链接 —— 跟着它写会把内容写到工程之外
     # 前两条不满足是清单有问题（不可信输入），直接报错退出；
     # 第三条不满足是工程里本来就这么摆着的，跳过并提示，用户的东西不动。
     __target="$__dirabs/$__rel"
@@ -835,8 +953,23 @@ EOF
     if [ -L "$__target" ]; then
       log_warn "$(_t 'the target is a symlink, left alone'): $__rel"
       __skipped=$((__skipped + 1))
+      _SK_UPGRADE_ACTS[${#_SK_UPGRADE_ACTS[@]}]="S"
       __i=$((__i + 1))
       continue
+    fi
+    # 目标的父路径建不出来（中间某一级是个普通文件）：同样是「等走到那一步才炸」。
+    if ! _sk_upgrade_path_ok "$__dirabs" "$__rel"; then
+      log_error "$(_t 'the target path is blocked by a file'): $__rel"
+      _sk_upgrade_cleanup "$__tmp" "$__oldtpl"
+      return "$SK_VERIFY"
+    fi
+    # 目标位置已经是个目录：文件写不进去，等走到那一步才炸就晚了。
+    # 这属于「工程坏了」，不是「这个文件跳过就行」—— 所以在这里退出，
+    # 一个文件都不改。
+    if [ -d "$__dir/$__rel" ]; then
+      log_error "$(_t 'the target is a directory, refusing to overwrite'): $__rel"
+      _sk_upgrade_cleanup "$__tmp" "$__oldtpl"
+      return "$SK_VERIFY"
     fi
 
     __cur=""
@@ -851,49 +984,30 @@ EOF
     if [ ! -f "$__dir/$__rel" ]; then
       # 工程里没有这个文件：模板里有就补回去
       if [ -z "$__new" ]; then
+        _SK_UPGRADE_ACTS[${#_SK_UPGRADE_ACTS[@]}]="S"
+        __i=$((__i + 1))
         continue
       fi
-      if [ "$__check" = "1" ]; then
-        log_info "$(_t 'would add'): $__rel"
-        continue
-      fi
-      fs_ensure_dir "$(dirname "$__dir/$__rel")" 755 || {
-        _sk_upgrade_cleanup "$__tmp" "$__oldtpl"
-        return "$SK_ERR"
-      }
-      # 原子写：临时文件 + rename。写盘被打断时目标仍是旧内容（完整），
-      # 不是半截文件；目标要是符号链接，替换的是链接本身，不会写穿到别处。
-      fs_atomic_copy "$__tmp/$__rel" "$__dir/$__rel" || {
-        log_error "$(_t 'failed to write the file'): $__rel"
-        _sk_upgrade_cleanup "$__tmp" "$__oldtpl"
-        return "$SK_ERR"
-      }
-      log_ok "$(_t 'added'): $__rel"
-      __added=$((__added + 1))
-      _SK_UPGRADE_BASES[$__i]=$__new
-      __i=$((__i + 1))
-      continue
-    fi
-
-    if [ "$__force" != "1" ] && [ -n "$__old" ] && [ "$__cur" != "$__old" ]; then
+      __act="A"
+    elif [ "$__force" != "1" ] && [ -n "$__old" ] && [ "$__cur" != "$__old" ]; then
       # 用户改过：留着不动，基线也不推进
       log_warn "$(_t 'modified locally, left alone'): $__rel"
       __skipped=$((__skipped + 1))
+      _SK_UPGRADE_ACTS[${#_SK_UPGRADE_ACTS[@]}]="S"
       __i=$((__i + 1))
       continue
-    fi
-    if [ -z "$__old" ] && [ "$__force" != "1" ]; then
+    elif [ -z "$__old" ] && [ "$__force" != "1" ]; then
       log_warn "$(_t 'no recorded fingerprint, left alone'): $__rel"
       __skipped=$((__skipped + 1))
+      _SK_UPGRADE_ACTS[${#_SK_UPGRADE_ACTS[@]}]="S"
       __i=$((__i + 1))
       continue
-    fi
-    if [ -z "$__new" ]; then
+    elif [ -z "$__new" ]; then
       # 模板里已经没有这个文件了：保持现状，基线不动
+      _SK_UPGRADE_ACTS[${#_SK_UPGRADE_ACTS[@]}]="S"
       __i=$((__i + 1))
       continue
-    fi
-    if [ "$__legacy" = "1" ] && [ "$__force" != "1" ]; then
+    elif [ "$__legacy" = "1" ] && [ "$__force" != "1" ]; then
       # 旧清单：这个文件是不是模板原样，说不准（指纹可能被旧版升级写成了
       # 用户改过的内容）。用「旧版本号渲染的模板」当对照：对不上就不能覆盖。
       __oldtpl_hash=""
@@ -905,21 +1019,62 @@ EOF
         __skipped=$((__skipped + 1))
         # 基线留空：宁可永远不覆盖，也不要覆盖掉用户改过的东西
         _SK_UPGRADE_BASES[$__i]=""
+        _SK_UPGRADE_ACTS[${#_SK_UPGRADE_ACTS[@]}]="S"
         __i=$((__i + 1))
         continue
       fi
-    fi
-    if [ "$__new" = "$__cur" ]; then
+    elif [ "$__new" = "$__cur" ]; then
       _SK_UPGRADE_BASES[$__i]=$__new
+      _SK_UPGRADE_ACTS[${#_SK_UPGRADE_ACTS[@]}]="S"
+      __i=$((__i + 1))
+      continue
+    else
+      __act="U"
+    fi
+
+    # 要写的目标：所在目录必须可写。不可写却硬写，就会停在半路 ——
+    # 前面的文件已是新版，这个文件写不进去，清单也落不下去。
+    # 这里查出来就退出：工程一个字节都不动。
+    # --check 也照同样的口径报：这次升级能不能做成，是同一个问题。
+    if ! _sk_upgrade_writable "$__target"; then
+      log_error "$(_t 'the target directory is not writable'): $__rel"
+      _sk_upgrade_cleanup "$__tmp" "$__oldtpl"
+      return "$SK_VERIFY"
+    fi
+
+    _SK_UPGRADE_ACTS[${#_SK_UPGRADE_ACTS[@]}]=$__act
+    __i=$((__i + 1))
+  done
+
+  # ---------- 阶段二：切换（逐个原子替换）----------
+  #
+  # 每个文件都是「临时文件 + rename」：失败要么什么都没发生、要么整体换新，
+  # 不会留下半截文件。中途失败时，已经换新的保持新版、没换的保持旧版，
+  # 清单按磁盘的实际状态落盘 —— 不假装成功，也不假装没改过。
+  __i=0
+  while [ "$__i" -lt "${#_SK_UPGRADE_RELS[@]}" ]; do
+    __rel=${_SK_UPGRADE_RELS[$__i]}
+    __act=${_SK_UPGRADE_ACTS[$__i]}
+    if [ "$__act" != "A" ] && [ "$__act" != "U" ]; then
       __i=$((__i + 1))
       continue
     fi
     if [ "$__check" = "1" ]; then
-      log_info "$(_t 'would update'): $__rel"
-      __updated=$((__updated + 1))
-      _SK_UPGRADE_BASES[$__i]=$__new
+      if [ "$__act" = "A" ]; then
+        log_info "$(_t 'would add'): $__rel"
+      else
+        log_info "$(_t 'would update'): $__rel"
+        __updated=$((__updated + 1))
+      fi
       __i=$((__i + 1))
       continue
+    fi
+    if [ "$__act" = "A" ]; then
+      fs_ensure_dir "$(dirname "$__dir/$__rel")" 755 || {
+        _sk_upgrade_save_manifest "$__dir" "$__name" "$__cmds_csv" "$(_sk_new_owned_list "$__name")" || true
+        _sk_upgrade_cleanup "$__tmp" "$__oldtpl"
+        return "$SK_ERR"
+      }
     fi
     # 原子写：临时文件 + rename。写盘被打断时目标仍是旧内容（完整），
     # 不是半截文件；目标要是符号链接，替换的是链接本身，不会写穿到别处。
@@ -933,8 +1088,14 @@ EOF
       _sk_upgrade_cleanup "$__tmp" "$__oldtpl"
       return "$SK_ERR"
     fi
-    log_ok "$(_t 'updated'): $__rel"
-    __updated=$((__updated + 1))
+    if [ "$__act" = "A" ]; then
+      log_ok "$(_t 'added'): $__rel"
+      __added=$((__added + 1))
+    else
+      log_ok "$(_t 'updated'): $__rel"
+      __updated=$((__updated + 1))
+    fi
+    __new=$(os_sha256 "$__tmp/$__rel" 2>/dev/null) || __new=""
     _SK_UPGRADE_BASES[$__i]=$__new
     __i=$((__i + 1))
   done
@@ -946,15 +1107,22 @@ EOF
     # lib/ 再从它自己拷回去（源没了），而且 CLI 会往自己身上 cp。
     __vdir="$__dir/vendor/shellkit"
     __vdir=$(cd "$__vdir" 2>/dev/null && pwd -P) || __vdir="$__dir/vendor/shellkit"
+    __vsync=0
     if [ "$__vdir" = "$SELF_DIR" ]; then
       log_info "$(_t 'already running from the vendored copy'): $SELF_DIR"
     elif ! _sk_vendor_install "$__dir"; then
       log_error "$(_t 'failed to sync the vendored library')"
-      return "$SK_ERR"
+      __vsync=1
     fi
     __cmds_csv="$SK_MANIFEST_COMMANDS"
+    # 清单必须落盘，而且必须与磁盘上的实际状态一致 ——
+    # vendor 同步失败不回滚已经写好的文件，那清单就不能停在旧基线上：
+    # 停在旧基线上，这些文件在下次升级里会被判成「用户改过」，永远冻结。
     if ! _sk_upgrade_save_manifest "$__dir" "$__name" "$__cmds_csv" "$(_sk_new_owned_list "$__name")"; then
       log_error "$(_t 'failed to write the project manifest'): $__dir"
+      return "$SK_ERR"
+    fi
+    if [ "$__vsync" = "1" ]; then
       return "$SK_ERR"
     fi
   fi
