@@ -30,7 +30,7 @@ fs           error i18n log trap
 run          error i18n log str trap
 os           error i18n log run
 svc          error i18n log os run
-ver          i18n log
+ver          error i18n log
 status       i18n log
 registry     error i18n log os
 profile      error fs i18n log
