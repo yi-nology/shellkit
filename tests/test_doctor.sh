@@ -88,3 +88,14 @@ out=$(run_doctor bash "$TEST_ROOT/shellkit" doctor --bogus 2>&1) && rc=0 || rc=$
 assert_eq 2 "$rc" "an unknown option is a usage error"
 out=$(run_doctor bash "$TEST_ROOT/shellkit" doctor --dir 2>&1) && rc=0 || rc=$?
 assert_eq 2 "$rc" "an option without a value is a usage error"
+
+# CASE: SHELLKIT_MODULES 是「直接用库」的按需加载开关，不该影响 CLI ——
+# 泄漏进来时 os 模块没加载，doctor 把 command not found 伪装成「缺工具」。
+# 判据：设与不设该变量，doctor 的输出必须一字不差（issue #32）。
+plain_rc=0
+plain=$(run_doctor bash "$TEST_ROOT/shellkit" doctor --dir "$work" 2>&1) || plain_rc=$?
+limited_rc=0
+limited=$(run_doctor env SHELLKIT_MODULES="cli log fs" bash "$TEST_ROOT/shellkit" doctor --dir "$work" 2>&1) || limited_rc=$?
+assert_eq "$plain_rc" "$limited_rc" "SHELLKIT_MODULES must not change doctor's exit code"
+assert_not_contains "$limited" "command not found" "SHELLKIT_MODULES must not leak into the CLI"
+assert_eq "$plain" "$limited" "SHELLKIT_MODULES must not change doctor's output"

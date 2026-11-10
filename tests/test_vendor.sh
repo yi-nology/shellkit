@@ -61,3 +61,16 @@ printf '# drift\n' >>"$proj/vendor/shellkit/shellkit"
 assert_exit_code 5 "$TEST_ROOT/shellkit" vendor "$proj" --check
 assert_exit_code 0 "$TEST_ROOT/shellkit" vendor "$proj"
 assert_exit_code 0 "$TEST_ROOT/shellkit" vendor "$proj" --check
+
+# 用工程自带的副本同步本工程（README 记载的离线升级用法）：目标就是运行源，
+# 绝不允许先删后拷 —— 那会把 vendor/shellkit/{lib,locale,templates} 删空、
+# 工程入口当场报废（issue #30）。--check 绿的时候，真正的同步也必须绿。
+assert_exit_code 0 bash "$proj/vendor/shellkit/shellkit" vendor "$proj" --check
+assert_exit_code 0 bash "$proj/vendor/shellkit/shellkit" vendor "$proj"
+if [ ! -f "$proj/vendor/shellkit/lib/bootstrap.sh" ]; then
+  _fail "self-sync keeps the vendored lib intact"
+fi
+assert_eq "$(cat "$TEST_ROOT/VERSION")" "$(cat "$proj/vendor/shellkit/VERSION")" \
+  "self-sync still lands the right version"
+assert_exit_code 0 bash "$proj/bin/app" --version
+assert_exit_code 0 "$TEST_ROOT/shellkit" vendor "$proj" --check

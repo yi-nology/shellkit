@@ -50,6 +50,12 @@ _sk_preflight_modules() {
   return 0
 }
 
+# SHELLKIT_MODULES 是「直接用库」的按需加载开关（lib/bootstrap.sh 据此裁模块集），
+# 只该影响用户自己的脚本。CLI 需要完整模块集：环境里带着它跑 doctor，os 模块
+# 没被加载，os_has_cmd 全部 command not found —— 「缺工具」的假诊断比没有诊断
+# 更糟（issue #32）。在 source bootstrap 之前清掉，CLI 恒定全量加载。
+unset SHELLKIT_MODULES
+
 # 加载库。模块缺失或损坏时 bootstrap 会当场中止整个脚本 ——
 # 但 doctor 的职责之一正是报出「少了哪个模块」，所以这里容错：
 # 失败就记下来，转入只做自检的降级路径。
@@ -449,9 +455,10 @@ _sk_new_verify() {
 
 cmd_new() {
   local __dir="" __name="" __tpl="" __opt="" __val="" __yes=0
-  local __line __key __val2 __ans __setv __cmds_csv
+  local __line __key __val2 __ans __setv __cmds_csv __ask_result
   local -a __cmds=()
   local -a __sets=()
+  local -a __ask_keys=()
 
   while [ "$#" -gt 0 ]; do
     case "$1" in
@@ -564,7 +571,11 @@ cmd_new() {
   scaffold_vars_set NAME "$__name" || return "$SK_USAGE"
   scaffold_vars_set SHELLKIT_VERSION "$SK_VERSION" || return "$SK_USAGE"
 
-  # 还没值的变量问一次；非交互（--yes 或 SHELLKIT_NONINTERACTIVE=1）就留空
+  # 还没值的变量问一次；非交互（--yes 或 SHELLKIT_NONINTERACTIVE=1）就留空。
+  # 两阶段：先把要问的键快照进数组，再在没有重定向的循环里提问。
+  # ask 靠 [ -t 0 ] 判断交互与否 —— 提问循环一旦挂在 heredoc/管道上，fd 0 被
+  # 输入源抢走，真终端里 ask 也判成非交互，变量静默留空而命令照常 rc=0（issue #31）。
+  __ask_keys=()
   if [ "$__yes" -eq 0 ] && [ "${SHELLKIT_NONINTERACTIVE:-0}" != "1" ]; then
     while IFS= read -r __line; do
       case "$__line" in
@@ -577,13 +588,20 @@ cmd_new() {
       case "$__key" in
         NAME | SHELLKIT_VERSION) continue ;;
       esac
-      __ask_result=""
-      if ask __ask_result "$(_t 'value for') $__key" ""; then
-        scaffold_vars_set "$__key" "$__ask_result" || return "$SK_USAGE"
-      fi
+      __ask_keys[${#__ask_keys[@]}]="$__key"
     done <<EOF
 $SK_SCAFFOLD_VARS
 EOF
+    for __key in ${__ask_keys[@]+"${__ask_keys[@]}"}; do
+      __ask_result=""
+      if ask __ask_result "$(_t 'value for') $__key" ""; then
+        scaffold_vars_set "$__key" "$__ask_result" || return "$SK_USAGE"
+      else
+        # ask 失败（非交互且没有默认值）已由它自己报过错；这里点名哪个变量
+        # 因此留空 —— 静默留空比失败更糟：生成物缺内容，命令却报成功。
+        log_warn "$(_t 'variable left empty'): $__key"
+      fi
+    done
   fi
 
   if ! _sk_check_dir "$__dir"; then
@@ -1822,8 +1840,17 @@ _sk_running_prefix() {
 # _sk_copy_tree SRC DST —— 整目录替换
 # cp -R 的坑：DST 已存在时会把 SRC 塞成 DST/SRC（二次安装就多一层 lib/lib），
 # 所以先删。${__dst:?} 是安全阀：变量异常为空时绝不让 rm 落到 /lib 上。
+# 同一性护栏：SRC 与 DST 解析后是同一个目录时直接返回 —— 「先删后拷」删掉的
+# 正是运行中的源，cp 必然失败，安装当场半残（issue #30）。
 _sk_copy_tree() {
-  local __src=$1 __dst=$2
+  local __src=$1 __dst=$2 __src_real __dst_real
+  if [ -d "$__src" ] && [ -d "$__dst" ]; then
+    __src_real=$(cd -P "$__src" 2>/dev/null && pwd) || return 1
+    __dst_real=$(cd -P "$__dst" 2>/dev/null && pwd) || return 1
+    if [ "$__src_real" = "$__dst_real" ]; then
+      return 0
+    fi
+  fi
   if [ -e "$__dst" ]; then
     rm -rf "${__dst:?}" || return 1
   fi
@@ -1880,7 +1907,7 @@ _sk_tree_version() {
 }
 
 cmd_install_self() {
-  local __prefix="/usr/local" __dest __bin
+  local __prefix="/usr/local" __dest __bin __stage __old
   while [ "$#" -gt 0 ]; do
     case "$1" in
       --prefix)
@@ -1918,45 +1945,121 @@ cmd_install_self() {
     return "$SK_PRECOND"
   fi
 
+  # 安装不是就地改：整份副本先铺进 stage，再用两次 rename 整体换上去 ——
+  # 与 _sk_vendor_install 同一套做法（写文件必原子）。就地逐棵树「先删后拷」
+  # 有两类自毁场景（issue #30）：
+  #   - 「从装好的副本重装同一个 prefix」时，被删的正是正在运行的源，cp 必然失败；
+  #   - 中途失败（磁盘满、权限）留下半份库，没有任何回滚。
+  # 换上去的动作是 rename，旧副本在新的完整就位之前一个字节都不会动；
+  # 失败时把旧的挪回去，安装保持可用。
+  __stage="$__dest.new"
+  __old="$__dest.old"
+  # 上一次换到一半留下的残骸：清掉，别让它越攒越多
+  rm -rf "$__stage" "$__old" 2>/dev/null || true
+  fs_ensure_dir "$__stage" 755 || return "$SK_PRECOND"
+
   log_section "$(_t 'installing'): $__dest"
-  _sk_copy_tree "$SELF_DIR/lib" "$__dest/lib" || return "$SK_ERR"
-  _sk_copy_tree "$SELF_DIR/templates" "$__dest/templates" || return "$SK_ERR"
-  _sk_copy_tree "$SELF_DIR/locale" "$__dest/locale" || return "$SK_ERR"
+  _sk_copy_tree "$SELF_DIR/lib" "$__stage/lib" || {
+    rm -rf "$__stage" 2>/dev/null || true
+    return "$SK_ERR"
+  }
+  _sk_copy_tree "$SELF_DIR/templates" "$__stage/templates" || {
+    rm -rf "$__stage" 2>/dev/null || true
+    return "$SK_ERR"
+  }
+  _sk_copy_tree "$SELF_DIR/locale" "$__stage/locale" || {
+    rm -rf "$__stage" 2>/dev/null || true
+    return "$SK_ERR"
+  }
   # 只装得进源码树里真有的东西：vendor 出来的副本可能没有 skills/
   if [ -d "$SELF_DIR/skills" ]; then
-    _sk_copy_tree "$SELF_DIR/skills" "$__dest/skills" || return "$SK_ERR"
+    _sk_copy_tree "$SELF_DIR/skills" "$__stage/skills" || {
+      rm -rf "$__stage" 2>/dev/null || true
+      return "$SK_ERR"
+    }
   fi
   # tools/ 与 docs/ 是文档门禁的输入：少了它们，装完的副本第一次跑 docs 就会崩
   if [ -d "$SELF_DIR/tools" ]; then
-    _sk_copy_tree "$SELF_DIR/tools" "$__dest/tools" || return "$SK_ERR"
+    _sk_copy_tree "$SELF_DIR/tools" "$__stage/tools" || {
+      rm -rf "$__stage" 2>/dev/null || true
+      return "$SK_ERR"
+    }
   fi
   if [ -d "$SELF_DIR/docs" ]; then
-    _sk_copy_tree "$SELF_DIR/docs" "$__dest/docs" || return "$SK_ERR"
+    _sk_copy_tree "$SELF_DIR/docs" "$__stage/docs" || {
+      rm -rf "$__stage" 2>/dev/null || true
+      return "$SK_ERR"
+    }
   fi
   # tests/ 必须一起装：`shellkit new` 会把 tests/test_helper.sh 与 tests/run.sh
   # 拷进新工程，装好的副本里没有它们，新工程 make test 必然 127（issue #28）。
   if [ -d "$SELF_DIR/tests" ]; then
-    _sk_copy_tree "$SELF_DIR/tests" "$__dest/tests" || return "$SK_ERR"
+    _sk_copy_tree "$SELF_DIR/tests" "$__stage/tests" || {
+      rm -rf "$__stage" 2>/dev/null || true
+      return "$SK_ERR"
+    }
   fi
   if [ -f "$SELF_DIR/AGENTS.md" ]; then
-    cp -f "$SELF_DIR/AGENTS.md" "$__dest/AGENTS.md" || return "$SK_ERR"
+    cp -f "$SELF_DIR/AGENTS.md" "$__stage/AGENTS.md" || {
+      rm -rf "$__stage" 2>/dev/null || true
+      return "$SK_ERR"
+    }
   fi
-  cp -f "$SELF_DIR/VERSION" "$__dest/VERSION" || return "$SK_ERR"
+  cp -f "$SELF_DIR/VERSION" "$__stage/VERSION" || {
+    rm -rf "$__stage" 2>/dev/null || true
+    return "$SK_ERR"
+  }
   # MIT 许可证要求「副本里带上版权声明」：装出来的副本也必须带 LICENSE 与 NOTICE
-  _sk_copy_legal "$__dest" || return "$SK_ERR"
-  cp -f "$SELF_DIR/shellkit" "$__dest/shellkit" || return "$SK_ERR"
-  chmod 755 "$__dest/shellkit" || return "$SK_ERR"
+  _sk_copy_legal "$__stage" || {
+    rm -rf "$__stage" 2>/dev/null || true
+    return "$SK_ERR"
+  }
+  cp -f "$SELF_DIR/shellkit" "$__stage/shellkit" || {
+    rm -rf "$__stage" 2>/dev/null || true
+    return "$SK_ERR"
+  }
+  chmod 755 "$__stage/shellkit" || {
+    rm -rf "$__stage" 2>/dev/null || true
+    return "$SK_ERR"
+  }
 
-  if ! _sk_manifest_write "$__dest"; then
+  if ! _sk_manifest_write "$__stage"; then
     log_error "$(_t 'failed to write the install manifest'): $__dest/MANIFEST"
+    rm -rf "$__stage" 2>/dev/null || true
     return "$SK_ERR"
   fi
 
-  rm -f "$__bin"
-  if ! ln -s "$__dest/shellkit" "$__bin"; then
+  # 换上去：旧的挪开、新的挪进来。两次 rename 都在同一个文件系统里。
+  # 正跑在装好的副本上时（SELF_DIR == __dest），被挪开的正是运行中的目录 ——
+  # 脚本靠已打开的 fd 继续执行，rename 不影响它；这正是 vendor 自同步已验证过的路径。
+  if [ -e "$__dest" ] || [ -L "$__dest" ]; then
+    if ! mv "$__dest" "$__old"; then
+      rm -rf "$__stage" 2>/dev/null || true
+      return "$SK_ERR"
+    fi
+  fi
+  if ! mv "$__stage" "$__dest"; then
+    # 换不上去就把旧的挪回去，别让机器变成「没有 shellkit」的状态
+    if [ -e "$__old" ]; then
+      mv "$__old" "$__dest" 2>/dev/null || true
+    fi
+    rm -rf "$__stage" 2>/dev/null || true
+    return "$SK_ERR"
+  fi
+  rm -rf "$__old" 2>/dev/null || true
+
+  # 软链也走临时名 + rename：rm 再 ln 中间有个「bin 里没有 shellkit」的窗口
+  rm -f "$__bin.tmp.$$" 2>/dev/null || true
+  if ! ln -s "$__dest/shellkit" "$__bin.tmp.$$"; then
+    rm -f "$__bin.tmp.$$" 2>/dev/null || true
     log_error "$(_t 'failed to create symlink'): $__bin"
     return "$SK_ERR"
   fi
+  mv -f "$__bin.tmp.$$" "$__bin" || {
+    rm -f "$__bin.tmp.$$" 2>/dev/null || true
+    log_error "$(_t 'failed to create symlink'): $__bin"
+    return "$SK_ERR"
+  }
   log_ok "$(_t 'installed'): $__bin"
   return "$SK_OK"
 }

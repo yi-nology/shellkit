@@ -161,6 +161,7 @@ _sk_msg_lookup_shellkit() {
     'template directory does not exist') printf '%s' '模板目錄不存在' ;;
     '--set expects KEY=VALUE') printf '%s' '--set 需要 KEY=VALUE 形式' ;;
     'value for') printf '%s' '取值' ;;
+    'variable left empty') printf '%s' '變數保持為空' ;;
     'creating') printf '%s' '正在建立' ;;
     'failed to generate the project') printf '%s' '產生工程失敗' ;;
     'the target directory was left in place for inspection') printf '%s' '目標目錄已保留，便於檢查' ;;
