@@ -86,3 +86,15 @@ assert_eq "1" "$(registry_list | grep -c '')" "registry_scan_multi works with a 
 # 不存在的根目录：不炸
 registry_scan_multi '.manifest' "$d/nosuchdir"
 assert_eq "" "$(registry_list)" "scanning a missing directory yields nothing"
+
+# registry_add：登记单份清单文件（不扫目录）
+one="$d/single/.manifest"
+mkdir -p "$d/single"
+printf 'LABEL=Single\nDEPS=\n' >"$one"
+registry_scan_multi '.manifest' "$d/nosuchdir"
+registry_add solo "$one"
+assert_eq "Single" "$(registry_get solo LABEL)" "registry_add registers a single manifest"
+assert_contains "$(registry_list)" "solo" "registry_add puts the entry in the index"
+# 同名再登记一次：保持第一次的路径，不重复登记
+registry_add solo "$d/other/.manifest"
+assert_eq "1" "$(registry_list | grep -c '^solo$')" "registry_add does not register the same name twice"

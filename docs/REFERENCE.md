@@ -913,6 +913,19 @@ status_extra KEY=VALUE —— 机器模式下输出 EXTRA 行（人类模式不�
 
 ## registry
 
+### `registry_add`
+
+与 registry_scan 的区别：registry_scan 扫目录，registry_add 登记单份文件。
+
+**参数**
+
+- NAME 条目名
+- PATH 清单文件路径
+
+**退出码**
+
+- 0 总是成功
+
 ### `registry_scan`
 
 registry_scan ROOT PATTERN —— 扫描清单文件并建立索引 条目名 = 清单文件所在目录名。PATTERN 是文件名模式（如 .manifest）。

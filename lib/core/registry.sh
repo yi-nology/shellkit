@@ -26,20 +26,33 @@ _registry_scan_one() {
     [ -f "$__f" ] || continue
     __dir="$(dirname "$__f")"
     __name="$(basename "$__dir")"
-    case " $_REGISTRY_ENTRIES " in
-      *" $__name "*) continue ;;
-    esac
-    if [ -z "$_REGISTRY_ENTRIES" ]; then
-      _REGISTRY_ENTRIES="$__name"
-    else
-      _REGISTRY_ENTRIES="$_REGISTRY_ENTRIES $__name"
-    fi
-    if [ -z "$_REGISTRY_FILES" ]; then
-      _REGISTRY_FILES="$__name=$__f"
-    else
-      printf -v _REGISTRY_FILES '%s\n%s' "$_REGISTRY_FILES" "$__name=$__f"
-    fi
+    registry_add "$__name" "$__f"
   done
+  return 0
+}
+
+# registry_add NAME PATH —— 把一份清单文件登记进索引（条目名 = NAME）
+# @brief 与 registry_scan 的区别：registry_scan 扫目录，registry_add 登记单份文件。
+# @param NAME 条目名
+# @param PATH 清单文件路径
+# @exitcode 0 总是成功
+registry_add() {
+  local __name=${1:-} __path=${2:-}
+  [ -n "$__name" ] && [ -n "$__path" ] || return 0
+  [ -f "$__path" ] || return 0
+  case " $_REGISTRY_ENTRIES " in
+    *" $__name "*) return 0 ;;
+  esac
+  if [ -z "$_REGISTRY_ENTRIES" ]; then
+    _REGISTRY_ENTRIES="$__name"
+  else
+    _REGISTRY_ENTRIES="$_REGISTRY_ENTRIES $__name"
+  fi
+  if [ -z "$_REGISTRY_FILES" ]; then
+    _REGISTRY_FILES="$__name=$__path"
+  else
+    printf -v _REGISTRY_FILES '%s\n%s' "$_REGISTRY_FILES" "$__name=$__path"
+  fi
   return 0
 }
 
