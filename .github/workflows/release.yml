@@ -32,7 +32,9 @@ jobs:
           mkdir -p "dist/$name"
           # 只放跑起来需要的东西：生成器、库、模板、语言包、文档、测试
           cp -R shellkit install.sh lib templates locale po tools tests docs skills examples "dist/$name/"
-          cp README.md AGENTS.md VERSION LICENSE NOTICE Makefile "dist/$name/"
+          # CHANGELOG 必须随包走：tests/ 里有会读它的用例（test_versions_gate.sh），
+          # 漏了它打包后的 smoke test 会红 —— 0.13.0 的 release 就是这么失败的。
+          cp README.md AGENTS.md VERSION LICENSE NOTICE Makefile CHANGELOG.md "dist/$name/"
           rm -rf "dist/$name/docs/superpowers"
           chmod +x "dist/$name/shellkit" "dist/$name/install.sh"
           tar -C dist -czf "dist/$name.tar.gz" "$name"

@@ -15,12 +15,34 @@ cp "$GATE" "$FAKE/tools_gate.sh" 2>/dev/null || {
   mkdir -p "$FAKE"
   cp "$GATE" "$FAKE/tools_gate.sh"
 }
-for f in VERSION README.md CHANGELOG.md \
-  site/index.md site/en/index.md \
-  site/guide/installation.md site/en/guide/installation.md \
-  locale/shellkit.pot; do
-  cp "$TEST_ROOT/$f" "$FAKE/$f" || _fail "cannot copy $f"
-done
+
+# 输入文件在假树里**现造**，不从真树拷：
+#   - release tarball 里没有 site/ 与 CHANGELOG.md，从真树拷会在包内脆断
+#     （0.13.0 的 release smoke test 就是在这里红的）；
+#   - 现造还有个好处：判据不随真树内容漂移 —— 真树里万一混进裸版本号，
+#     用例不会被带偏。
+# 本用例测的是「门禁的判据」，输入是什么内容无关紧要，只要引用一致即可。
+ver=1.2.3
+printf '%s\n' "$ver" >"$FAKE/VERSION"
+printf 'curl -fsSL https://example.invalid/install.sh | VERSION=%s bash\n' "$ver" >"$FAKE/README.md"
+printf '## %s — 2026-01-01\n\nsome entries\n' "$ver" >"$FAKE/CHANGELOG.md"
+{
+  printf 'curl -fsSL https://example.invalid/install.sh | VERSION=%s bash\n' "$ver"
+  printf '当前版本 **[下载 %s](https://example.invalid)**。\n' "$ver"
+} >"$FAKE/site/index.md"
+{
+  printf 'curl -fsSL https://example.invalid/install.sh | VERSION=%s bash\n' "$ver"
+  printf 'Current version **[Download %s](https://example.invalid)**.\n' "$ver"
+} >"$FAKE/site/en/index.md"
+{
+  printf 'curl -fsSL https://example.invalid/install.sh | VERSION=%s bash\n' "$ver"
+  printf 'shellkit-%s.tar.gz\n' "$ver"
+} >"$FAKE/site/guide/installation.md"
+{
+  printf 'curl -fsSL https://example.invalid/install.sh | VERSION=%s bash\n' "$ver"
+  printf 'shellkit-%s.tar.gz\n' "$ver"
+} >"$FAKE/site/en/guide/installation.md"
+printf '"Project-Id-Version: shellkit %s\\n"\n' "$ver" >"$FAKE/locale/shellkit.pot"
 
 run_gate() {
   SHELLKIT_CHECK_ROOT="$FAKE" bash "$FAKE/tools_gate.sh" 2>&1
