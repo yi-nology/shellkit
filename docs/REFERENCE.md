@@ -417,7 +417,7 @@ run_concurrent N [--timeout SEC] -- CMD... —— 把同一条命令并发跑 N 
 
 ### `parallel_map`
 
-parallel_map N [--timeout SEC] -- CMD... —— 把一批不同的目标分给 N 个并发实例 与 run_concurrent 明确区分：   run_concurrent —— 同一条命令并发跑 N 份（每个实例自己从环境变量读目标）   parallel_map   —— 每个实例跑一条不同的目标，条目从标准输入读 条目一行一个（空行跳过），每个实例执行的命令是「CMD... 条目」—— 条目作为最后一个参数追加在后面：   printf '%s\n' web1 web2 web3 | parallel_map 3 -- ./restart-service 输出约定（stdout 只给数据）：   stdout —— 每行一条结果：<条目>\t<退出码>（条目里有制表符时，取最后一个制表符之后的部分）   stderr —— 每个实例的 stdout/stderr，逐行带 [i/N] 前缀；失败明细也在这里 返回码：全部成功返回 0；有条目失败则返回第一个失败条目的退出码。 并发是「按批」的：一批最多 N 个，跑完这一批再下一批。这样不需要锁， 也不会有两个实例抢同一条目；代价是一批里最慢的那个会拖住整批。
+parallel_map N [--timeout SEC] -- CMD... —— 把一批不同的目标分给 N 个并发实例 与 run_concurrent 明确区分：   run_concurrent —— 同一条命令并发跑 N 份（每个实例自己从环境变量读目标）   parallel_map   —— 每个实例跑一条不同的目标，条目从标准输入读 条目一行一个（空行跳过），每个实例执行的命令是「CMD... 条目」—— 条目作为最后一个参数追加在后面：   printf '%s\n' web1 web2 web3 | parallel_map 3 -- ./restart-service 输出约定（stdout 只给数据）：   stdout —— 每行一条结果：`<条目>`\t`<退出码>`（条目里有制表符时，取最后一个制表符之后的部分）   stderr —— 每个实例的 stdout/stderr，逐行带 [i/N] 前缀；失败明细也在这里 返回码：全部成功返回 0；有条目失败则返回第一个失败条目的退出码。 并发是「按批」的：一批最多 N 个，跑完这一批再下一批。这样不需要锁， 也不会有两个实例抢同一条目；代价是一批里最慢的那个会拖住整批。
 
 **退出码**
 
@@ -936,7 +936,7 @@ registry_scan ROOT PATTERN —— 扫描清单文件并建立索引 条目名 = 
 
 ### `registry_scan_multi`
 
-（如 unix_script 的 <分类>/<模块>/.manifest 布局：每个分类目录各扫一次）。
+（如 unix_script 的 `<分类>`/`<模块>`/.manifest 布局：每个分类目录各扫一次）。
 
 **参数**
 
@@ -1014,7 +1014,7 @@ profile_append FILE MODULE [KEY=VALUE...] —— 追加一条
 
 ### `profile_parse`
 
-profile_parse FILE —— 解析 profile 输出：<模块名><TAB><k=v,k=v>（每行一个） 注释从**第一个 #** 起截断（与 unix_script 的 profile 解析同口径）。
+profile_parse FILE —— 解析 profile 输出：`<模块名>``<TAB>``<k=v,k=v>`（每行一个） 注释从**第一个 #** 起截断（与 unix_script 的 profile 解析同口径）。
 
 **退出码**
 

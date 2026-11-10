@@ -323,7 +323,7 @@ run_concurrent() {
 #   printf '%s\n' web1 web2 web3 | parallel_map 3 -- ./restart-service
 #
 # 输出约定（stdout 只给数据）：
-#   stdout —— 每行一条结果：<条目>\t<退出码>（条目里有制表符时，取最后一个制表符之后的部分）
+#   stdout —— 每行一条结果：`<条目>`\t`<退出码>`（条目里有制表符时，取最后一个制表符之后的部分）
 #   stderr —— 每个实例的 stdout/stderr，逐行带 [i/N] 前缀；失败明细也在这里
 #
 # 返回码：全部成功返回 0；有条目失败则返回第一个失败条目的退出码。

@@ -2,7 +2,7 @@
 #
 # profile 文件格式原语。
 #
-# 文件每行一条：<模块名> [key=value ...]   # 注释
+# 文件每行一条：`<模块名>` [key=value ...]   # 注释
 # 解析结果用 TAB 分隔「模块名」与「逗号分隔的键值对」，方便 shell 逐行处理。
 #
 # 「导哪些模块、哪些键」「应用时怎么装」是领域逻辑，留给调用方；
@@ -42,7 +42,7 @@ profile_append() {
 }
 
 # profile_parse FILE —— 解析 profile
-# 输出：<模块名><TAB><k=v,k=v>（每行一个）
+# 输出：`<模块名>``<TAB>``<k=v,k=v>`（每行一个）
 # 注释从**第一个 #** 起截断（与 unix_script 的 profile 解析同口径）。
 # @exitcode 0 总是成功
 profile_parse() {
