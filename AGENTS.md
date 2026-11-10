@@ -14,7 +14,7 @@
                               SHELLKIT_MODULES="log fs" 只加载这两个模块和它们的传递依赖
     lib/modules.txt           模块清单的唯一真相源：两列 —— 模块名 + 它依赖的模块
                               （bootstrap、shdoc、站点都读它）
-    lib/core/<module>.sh      19 个模块，一个模块一个主题
+    lib/core/<module>.sh      20 个模块，一个模块一个主题
     templates/                shellkit new 的模板（含 __NAME__ / __CMD__ 占位符）
     tests/                    自研断言 + 逐文件执行器 + 每个模块一个测试
     tools/                    shdoc.awk / comment_coverage.awk / ai_doc.sh / check_docs.sh / term_shot.py
@@ -41,6 +41,7 @@
 
     make check     # syntax + test + lint + module-order-check + check-exitcode-docs +
                   # local-names-check + module-count-check + pipe-safety-check +
+                  # dup-functions-check +
                   # docs-check + versions-check + check-docs +
                   # cookbook-check + messages-check + examples + fmt，CI 也是这组
 
@@ -50,6 +51,8 @@
 内容会静默写丢（见下面第 4 条）。
 `pipe-safety-check` 拦的是「管道早退」：`grep -q` / `head` 命中即退，上游被 SIGPIPE 打死，
 调用方开了 `pipefail` 时整条管道误判失败（见下面第 5 条）。
+`dup-functions-check` 拦的是「同名函数定义了两遍」：bash 后定义覆盖先定义，
+先写的那份悄悄失效 —— 不报错、不崩，只是你以为在跑 A、其实在跑 B。
 
 ## 五个已经踩过的坑
 

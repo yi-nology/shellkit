@@ -30,6 +30,7 @@ fs           error i18n log trap
 run          error i18n log str trap
 os           error i18n log run
 svc          error i18n log os run
+ver          i18n log
 scaffold     error fs i18n log os validate
 retry        i18n log str
 lock         i18n log str trap

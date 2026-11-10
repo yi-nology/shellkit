@@ -49,7 +49,7 @@ shellkit vendor .
 ```
 your-project/
 └─ vendor/shellkit/
-   ├─ lib/           19 个模块（bootstrap.sh + core/*.sh）
+   ├─ lib/           20 个模块（bootstrap.sh + core/*.sh）
    ├─ locale/        gettext 译文（en / zh_CN / zh_Hant）
    ├─ templates/     脚手架模板（副本自己就能 new / upgrade）
    ├─ tests/         测试基建（test_helper.sh + run.sh）
@@ -69,7 +69,7 @@ set -euo pipefail
 . "$(cd "$(dirname "$0")/.." && pwd)/vendor/shellkit/lib/bootstrap.sh"
 ```
 
-就这些。`bootstrap.sh` 会按拓扑序把 19 个模块加载好，设置 `SK_*` 常量与退出码，
+就这些。`bootstrap.sh` 会按拓扑序把 20 个模块加载好，设置 `SK_*` 常量与退出码，
 **不改你的 shell 选项、不改 cwd**——你的脚本还是你说了算。
 
 ### 为什么是 `vendor/` 而不是装到系统里

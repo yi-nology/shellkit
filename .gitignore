@@ -7,3 +7,6 @@ locale/**/*.mo~
 
 # 文档站的 node 依赖（site/.gitignore 里也有一份，双保险）
 site/node_modules/
+
+# 本地运行时落在仓库根的临时件（内容是 skill 清单，不是仓库产物）
+.DOCS.*

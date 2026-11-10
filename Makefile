@@ -6,7 +6,7 @@ SOURCES := shellkit install.sh lib/bootstrap.sh $(wildcard lib/core/*.sh) \
 TEMPLATES := $(shell find templates -type f)
 SHOTS := $(wildcard docs/shots/*.shot)
 
-.PHONY: help test syntax lint lint-templates fmt messages messages-check docs docs-check versions-check check-docs cookbook-check shots examples check install release release-dry site-deps site-sync site site-serve local-names-check module-count-check pipe-safety-check
+.PHONY: help test syntax lint lint-templates fmt messages messages-check docs docs-check versions-check check-docs cookbook-check shots examples check install release release-dry site-deps site-sync site site-serve local-names-check module-count-check pipe-safety-check dup-functions-check
 
 help:
 	@printf '%s\n' \
@@ -131,12 +131,16 @@ local-names-check:
 module-count-check:
 	@bash tools/check_module_count.sh
 
+# 同一个文件里不能有重复的函数定义（bash 后定义覆盖先定义，前面的悄悄失效）
+dup-functions-check:
+	@bash tools/check_dup_functions.sh
+
 # 管道里不能有会提前退出的消费者：grep -q / head 会把上游 SIGPIPE 打死（141），
 # 调用方开了 pipefail 时整条管道判失败 —— 而且是竞态，本机常绿、CI 必炸
 pipe-safety-check:
 	@bash tools/check_pipe_safety.sh
 
-check: syntax test lint module-order-check check-exitcode-docs local-names-check module-count-check pipe-safety-check docs-check versions-check check-docs cookbook-check messages-check examples fmt
+check: syntax test lint module-order-check check-exitcode-docs local-names-check module-count-check pipe-safety-check dup-functions-check docs-check versions-check check-docs cookbook-check messages-check examples fmt
 
 install:
 	./shellkit install-self --prefix $(PREFIX)/usr

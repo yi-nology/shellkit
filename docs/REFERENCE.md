@@ -765,6 +765,43 @@ svc_install_unit NAME —— 从 stdin 读 unit 内容写入系统目录并 daem
 - 3 当前平台没有 systemd
 - 4 写入或 daemon-reload 失败
 
+## ver
+
+### `ver_cmp`
+
+ver_cmp A B —— 比较两个版本号
+
+**退出码**
+
+- 0 总是成功（stdout 输出 -1 / 0 / 1：A<B / A=B / A>B）
+
+### `ver_gt`
+
+ver_gt A B —— A 是否比 B 新
+
+**退出码**
+
+- 0 A > B
+- 1 不是
+
+### `ver_lt`
+
+ver_lt A B —— A 是否比 B 旧
+
+**退出码**
+
+- 0 A < B
+- 1 不是
+
+### `ver_eq`
+
+ver_eq A B —— 两个版本是否相等
+
+**退出码**
+
+- 0 相等
+- 1 不等
+
 ## scaffold
 
 ### `scaffold_vars_set`

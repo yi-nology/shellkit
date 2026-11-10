@@ -14,7 +14,7 @@ design starts.
 
 ## Can I use only one or two modules?
 
-By default `lib/bootstrap.sh` loads all 19 modules -- each module is small, and the lot is under 400KB.
+By default `lib/bootstrap.sh` loads all 20 modules -- each module is small, and the lot is under 400KB.
 
 To slim it down, name the modules you want:
 
