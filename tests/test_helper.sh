@@ -5,6 +5,14 @@ TEST_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." &>/dev/null && pwd)"
 TEST_TMP_ROOT="${TEST_TMP_ROOT:-$(mktemp -d "${TMPDIR:-/tmp}/shellkit-tests.XXXXXX")}"
 export TEST_ROOT TEST_TMP_ROOT
 
+# 输出语言固定成英文：断言里写的是英文文案（msgid 本身就是英文），
+# 而输出会被本地化 —— 中文 locale 的机器上，168 条文案断言会整片炸红
+#（国产系统默认 zh_CN.UTF-8，正是批次 4.2 要上的流水线）。
+# SHELLKIT_LANG 的优先级最高（SHELLKIT_LANG → LC_ALL → LC_MESSAGES → LANG → en），
+# 设成 en 就与系统 locale、gettext 在不在都无关了。
+# 要测本地化行为的用例自己写 SHELLKIT_LANG=zh_CN 覆盖掉这一行。
+export SHELLKIT_LANG=en
+
 _fail() {
   printf 'FAIL: %s\n' "$*" >&2
   exit 1

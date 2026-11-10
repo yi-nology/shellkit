@@ -12,7 +12,9 @@ if [ -n "${SK_GETTEXT:-}" ] && [ -f "$mo" ]; then
   msg=""
   # 不加 -q：grep -q 命中即退，locale 会被 SIGPIPE 打死，pipefail 下这条判断就成了假绿
   if locale -a 2>/dev/null | grep -i '^zh_CN' >/dev/null; then
-    msg=$(LC_ALL=zh_CN.UTF-8 LANG=zh_CN.UTF-8 bash -c '. "$1/lib/bootstrap.sh"; _t "Usage"' _ "$TEST_ROOT")
+    # SHELLKIT_LANG= 空值 = 「不设」：这条要的就是「按系统 locale 选语言」，
+    # 而 test_helper.sh 统一把 SHELLKIT_LANG 设成 en 了 —— 这里必须显式放开。
+    msg=$(SHELLKIT_LANG='' LC_ALL=zh_CN.UTF-8 LANG=zh_CN.UTF-8 bash -c '. "$1/lib/bootstrap.sh"; _t "Usage"' _ "$TEST_ROOT")
   fi
   if [ "$msg" = "用法" ]; then
     assert_eq "用法" "$msg" "zh_CN translation applies"
@@ -53,7 +55,8 @@ assert_eq "T[one item]" "$out" "_tn sends the singular form through gettext"
 # gettext 自己的语言优先级是 LANGUAGE > LC_ALL，动手改就会把英文变成中文。
 # ---------------------------------------------------------------------------
 if [ -n "${SK_GETTEXT:-}" ]; then
-  for _env in "LANGUAGE=en LC_ALL=zh_CN.UTF-8" "LC_ALL=zh_CN.UTF-8" "LANGUAGE=zh_CN LC_ALL=C"; do
+  # 同样要放开 SHELLKIT_LANG：这三条比的就是「按系统 locale 选语言」的行为
+  for _env in "SHELLKIT_LANG= LANGUAGE=en LC_ALL=zh_CN.UTF-8" "SHELLKIT_LANG= LC_ALL=zh_CN.UTF-8" "SHELLKIT_LANG= LANGUAGE=zh_CN LC_ALL=C"; do
     _ref=$(env $_env TEXTDOMAIN=shellkit TEXTDOMAINDIR="$TEST_ROOT/locale" gettext 'Usage' || true)
     _got=$(env $_env "$BASH" -c '. "$1/lib/bootstrap.sh"; _t "Usage"' _ "$TEST_ROOT")
     assert_eq "$_ref" "$_got" "_t matches plain gettext byte for byte ($_env)"
@@ -125,7 +128,7 @@ msgstr "mo 探针"
 EOF
   msgfmt -o "$_mo/locale/zh_CN/LC_MESSAGES/other.mo" "$_mo/other.po"
   if locale -a 2>/dev/null | grep -i '^zh_CN' >/dev/null; then
-    out=$(LC_ALL=zh_CN.UTF-8 SHELLKIT_I18N_DOMAIN=other SHELLKIT_I18N_DIRS="$_mo/locale" \
+    out=$(SHELLKIT_LANG='' LC_ALL=zh_CN.UTF-8 SHELLKIT_I18N_DOMAIN=other SHELLKIT_I18N_DIRS="$_mo/locale" \
       "$BASH" -c '. "$1/lib/bootstrap.sh"; _t "mo probe"' _ "$TEST_ROOT")
     assert_eq "mo 探针" "$out" "i18n finds the .mo of another domain"
   fi
