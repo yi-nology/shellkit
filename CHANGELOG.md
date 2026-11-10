@@ -2,6 +2,15 @@
 本文件由 `tools/release.sh` 在发版时自动追加，已发布的小节不要手改。
 最新的在最前面。每一条对应一个提交 —— 要看「为什么」而不是「改了什么」，读 `docs/MIGRATING.md`。
 
+## 0.11.0 — 2026-11-10
+
+2cfb087 fix(test): 真下载的用例在「没有 curl 也没有 wget」的机器上判红
+802591b fix: 按评估逐条修掉 —— upgrade 不再覆盖用户修改、dotenv 写回一致、日志脱敏、并发器加固
+a9f531c fix(ci): 容器 job 的 shell 是 sh 不是 bash —— set -o pipefail 直接是非法选项
+a4519b6 fix(ci): 兼容矩阵容器 job 装包策略修正 —— Rocky 9 装不上 curl
+c1be6d3 fix(site): package-lock 的 tarball 地址改回官方源 —— CI 拉 npmmirror 直接挂死
+797eecc fix(site): 回滚误删的 lock 条目 —— 只保留 registry 主机替换
+
 ## 0.10.0 — 2026-11-09
 
 6ea9be4 fix(prompt): 交互式 ask 拿不到用户输入，并给整类「同名遮蔽」加门禁
