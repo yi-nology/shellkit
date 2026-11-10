@@ -474,6 +474,73 @@ os_sha256 FILE —— 文件的 sha256；两种工具都没有时返回 1
 - 2 没给参数
 - 1 没有 sha256sum 也没有 shasum
 
+### `os_release_field`
+
+os_release_field KEY [FILE] —— 读 os-release 风格文件的字段值
+
+**参数**
+
+- KEY 字段名（ID / ID_LIKE / PRETTY_NAME / NAME ...）
+- FILE 文件路径；缺省依次尝试 /etc/os-release、/usr/lib/os-release
+
+**退出码**
+
+- 0 总是成功（读不到时 stdout 为空）
+- 2 KEY 为空
+
+### `os_distro_id`
+
+os_distro_id [FILE] —— 小写的发行版 ID
+
+**参数**
+
+- FILE os-release 文件路径；缺省读本机的
+
+**退出码**
+
+- 0 总是成功（读不到时 stdout 为空）
+
+### `os_distro_name`
+
+os_distro_name [FILE] —— 发行版显示名（PRETTY_NAME，空则回退 NAME）
+
+**参数**
+
+- FILE os-release 文件路径；缺省读本机的
+
+**退出码**
+
+- 0 总是成功（读不到时 stdout 为空）
+
+### `os_distro_family`
+
+os_distro_family [FILE] —— 发行版族：debian|rhel|suse|arch|alpine|unknown 判定顺序：包管理器实测 -> ID_LIKE 词表 -> ID 词表
+
+**参数**
+
+- FILE os-release 文件路径；缺省走主机模式（先按包管理器实测）
+
+**退出码**
+
+- 0 总是成功（判不出时输出 unknown）
+
+### `os_desktop_env`
+
+os_desktop_env —— 桌面环境：ukui|dde|gnome|kde|xfce|mate|cinnamon|lxqt|budgie|none 判定口径与 unix_script 的 detect_desktop 逐字等价：所有线索拼成一个串， 再按桌面类型优先级匹配（ukui > dde > kde > gnome > xfce > mate > cinnamon > lxqt > budgie）
+
+**退出码**
+
+- 0 总是成功（没有线索时输出 none）
+
+### `os_is_desktop`
+
+os_is_desktop —— 当前是否在桌面环境
+
+**退出码**
+
+- 0 在桌面环境
+- 1 不在桌面环境
+
 ## scaffold
 
 ### `scaffold_vars_set`

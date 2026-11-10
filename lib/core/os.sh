@@ -150,3 +150,219 @@ os_sha256() {
     return 1
   fi
 }
+
+# ---------------------------------------------------------------------------
+# 发行版与桌面环境检测
+#
+# 这几个函数是 unix_script 的 detect_distro / detect_desktop 的下沉版本，
+# 输出必须与原实现逐字一致（设计文档：门面转发与原实现「逐字等价」）：
+#   - 字段读取：剥引号；找不到键 / 文件不可读 => stdout 空、退出码 0
+#   - 族判定：三段式（包管理器实测 -> ID_LIKE 词表 -> ID 词表）
+#   - 桌面判定：所有线索拼成一个串，再按桌面类型优先级匹配
+#
+# 与原实现的两处刻意差异（都不改变可观察结果）：
+#   1. KEY 用 awk 的 -v 传（当字符串，不当代码）—— 原实现把 KEY 拼进 sed 正则，是个注入面。
+#   2. 桌面线索里的 kwin_x11 仍按原样进串：它的名字里没有 plasma/kde，单独不构成线索
+#      （真实 KDE 会话必然带 plasmashell / startplasma-x11）。
+#
+# 麒麟（kylin）刻意不进 ID 硬表：服务器版是 RHEL 系、桌面版是 Ubuntu 系，
+# 硬编码任一族都会误判一半 —— 它靠 ID_LIKE 判定。
+# ---------------------------------------------------------------------------
+
+# _sk_os_lower TEXT —— 转小写（bash 3.2 没有 ${v^^}）
+_sk_os_lower() {
+  printf '%s' "${1:-}" | tr '[:upper:]' '[:lower:]'
+}
+
+# os_release_field KEY [FILE] —— 读 os-release 风格文件的字段值
+# @param KEY 字段名（ID / ID_LIKE / PRETTY_NAME / NAME ...）
+# @param FILE 文件路径；缺省依次尝试 /etc/os-release、/usr/lib/os-release
+# @exitcode 0 总是成功（读不到时 stdout 为空）
+# @exitcode 2 KEY 为空
+os_release_field() {
+  local __key=${1:-} __file=${2:-} __f __v
+  _sk_need_args "$#" 1 "os_release_field KEY [FILE]" || return $?
+  if [ -z "$__key" ]; then
+    log_error "$(_t 'Usage'): os_release_field KEY [FILE]"
+    return "$SK_USAGE"
+  fi
+  if [ -z "$__file" ]; then
+    for __f in /etc/os-release /usr/lib/os-release; do
+      if [ -r "$__f" ]; then
+        __file="$__f"
+        break
+      fi
+    done
+  fi
+  if [ -z "$__file" ] || [ ! -r "$__file" ]; then
+    return 0
+  fi
+  # 只认行首的 KEY= 这一种写法；KEY 用 awk 的 -v 传（当字符串，不当代码）
+  __v=$(awk -v k="$__key" 'index($0, k "=") == 1 && !f { print substr($0, length(k) + 2); f = 1 }' "$__file" 2>/dev/null) || __v=""
+  [ -n "$__v" ] || return 0
+  # 剥引号：前导一个、末尾一个，各自独立；剩下的中间若还带引号 => 整体不匹配（返回空）
+  case "$__v" in
+    \"*) __v="${__v#\"}" ;;
+    \'*) __v="${__v#\'}" ;;
+  esac
+  case "$__v" in
+    *\") __v="${__v%\"}" ;;
+    *\') __v="${__v%\'}" ;;
+  esac
+  case "$__v" in
+    *\"* | *\'*) __v='' ;;
+  esac
+  printf '%s' "$__v"
+  return 0
+}
+
+# os_distro_id [FILE] —— 小写的发行版 ID
+# @param FILE os-release 文件路径；缺省读本机的
+# @exitcode 0 总是成功（读不到时 stdout 为空）
+os_distro_id() {
+  local __id
+  __id=$(os_release_field ID "${1:-}") || __id=""
+  _sk_os_lower "$__id"
+  return 0
+}
+
+# os_distro_name [FILE] —— 发行版显示名（PRETTY_NAME，空则回退 NAME）
+# @param FILE os-release 文件路径；缺省读本机的
+# @exitcode 0 总是成功（读不到时 stdout 为空）
+os_distro_name() {
+  local __v
+  __v=$(os_release_field PRETTY_NAME "${1:-}") || __v=""
+  if [ -z "$__v" ]; then
+    __v=$(os_release_field NAME "${1:-}") || __v=""
+  fi
+  printf '%s' "$__v"
+  return 0
+}
+
+# os_distro_family [FILE] —— 发行版族：debian|rhel|suse|arch|alpine|unknown
+# 判定顺序：包管理器实测 -> ID_LIKE 词表 -> ID 词表
+# @param FILE os-release 文件路径；缺省走主机模式（先按包管理器实测）
+# @exitcode 0 总是成功（判不出时输出 unknown）
+os_distro_family() {
+  local __file=${1:-} __id __like __fam
+  # 主机模式先按包管理器实测；给了文件就只看这个文件，不许混入本机包管理器
+  if [ -z "$__file" ]; then
+    __fam=$(_sk_os_pkg_family) || __fam=""
+    if [ -n "$__fam" ]; then
+      printf '%s' "$__fam"
+      return 0
+    fi
+  fi
+  # 族判定 ②：ID_LIKE 词表（麒麟靠它区分服务器版 / 桌面版）
+  __like=$(_sk_os_lower "$(os_release_field ID_LIKE "$__file")") || __like=""
+  case "$__like" in
+    *debian* | *ubuntu* | *mint*)
+      printf '%s' 'debian'
+      return 0
+      ;;
+    *rhel* | *fedora* | *centos* | *euler* | *anolis* | *amzn*)
+      printf '%s' 'rhel'
+      return 0
+      ;;
+    *suse*)
+      printf '%s' 'suse'
+      return 0
+      ;;
+    *arch* | *manjaro*)
+      printf '%s' 'arch'
+      return 0
+      ;;
+    *alpine*)
+      printf '%s' 'alpine'
+      return 0
+      ;;
+  esac
+  # 族判定 ③：ID 词表兜底。kylin 刻意不入表 —— 服务器版基于 RHEL 系、桌面版基于 Ubuntu 系，
+  # 硬编码任何一个族都会误判一半场景，交由 ①实测 / ②ID_LIKE 决定
+  __id=$(_sk_os_lower "$(os_release_field ID "$__file")") || __id=""
+  case "$__id" in
+    debian | ubuntu | deepin | openkylin | uos | linuxmint | kali)
+      printf '%s' 'debian'
+      return 0
+      ;;
+    centos | rhel | rocky | almalinux | fedora | amzn | ol | openeuler | anolis)
+      printf '%s' 'rhel'
+      return 0
+      ;;
+    opensuse* | sles)
+      printf '%s' 'suse'
+      return 0
+      ;;
+    arch | manjaro)
+      printf '%s' 'arch'
+      return 0
+      ;;
+    alpine)
+      printf '%s' 'alpine'
+      return 0
+      ;;
+  esac
+  printf '%s' 'unknown'
+  return 0
+}
+
+# os_desktop_env —— 桌面环境：ukui|dde|gnome|kde|xfce|mate|cinnamon|lxqt|budgie|none
+# 判定口径与 unix_script 的 detect_desktop 逐字等价：所有线索拼成一个串，
+# 再按桌面类型优先级匹配（ukui > dde > kde > gnome > xfce > mate > cinnamon > lxqt > budgie）
+# @exitcode 0 总是成功（没有线索时输出 none）
+os_desktop_env() {
+  local __clues='' __v __b
+  # 三个线索环境变量（XDG_CURRENT_DESKTOP 可能是冒号分隔的列表）
+  for __v in "${XDG_CURRENT_DESKTOP:-}" "${XDG_SESSION_DESKTOP:-}" "${DESKTOP_SESSION:-}"; do
+    [ -n "$__v" ] || continue
+    __clues="$__clues $(_sk_os_lower "$__v")"
+  done
+  # 会话二进制也算线索
+  for __b in ukui-session kwin_x11 startdde dde-desktop gnome-session gnome-shell \
+    plasmashell startplasma-x11 xfce4-session mate-session cinnamon-session lxsession; do
+    command -v "$__b" >/dev/null 2>&1 || continue
+    __clues="$__clues $__b"
+  done
+  case "$__clues" in
+    *ukui*) printf '%s' 'ukui' ;;
+    *dde* | *deepin*) printf '%s' 'dde' ;;
+    *plasma* | *kde*) printf '%s' 'kde' ;;
+    *gnome*) printf '%s' 'gnome' ;;
+    *xfce*) printf '%s' 'xfce' ;;
+    *mate*) printf '%s' 'mate' ;;
+    *cinnamon*) printf '%s' 'cinnamon' ;;
+    *lxqt* | *lxsession*) printf '%s' 'lxqt' ;;
+    *budgie*) printf '%s' 'budgie' ;;
+    *) printf '%s' 'none' ;;
+  esac
+  return 0
+}
+
+# os_is_desktop —— 当前是否在桌面环境
+# @exitcode 0 在桌面环境
+# @exitcode 1 不在桌面环境
+os_is_desktop() {
+  local __env
+  __env=$(os_desktop_env) || __env='none'
+  if [ -z "$__env" ] || [ "$__env" = 'none' ]; then
+    return 1
+  fi
+  return 0
+}
+
+# _sk_os_pkg_family —— 按包管理器实测发行版族；没有支持的包管理器返回 1
+_sk_os_pkg_family() {
+  local __m
+  for __m in apt-get dnf yum zypper pacman apk; do
+    command -v "$__m" >/dev/null 2>&1 || continue
+    case "$__m" in
+      apt-get) printf '%s' 'debian' ;;
+      dnf | yum) printf '%s' 'rhel' ;;
+      zypper) printf '%s' 'suse' ;;
+      pacman) printf '%s' 'arch' ;;
+      apk) printf '%s' 'alpine' ;;
+    esac
+    return 0
+  done
+  return 1
+}
