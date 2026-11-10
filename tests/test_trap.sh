@@ -139,3 +139,16 @@ out=$(
 assert_contains "$out" "cleanup"
 assert_contains "$out" "rc=143" "a bare TERM exits with 128+15"
 assert_not_contains "$out" "survived"
+
+# CASE: 装 trap 时临时文件只删一次
+#   trap_install 要看 4 个信号的 trap 定义。以前每个信号读两遍（先判断是不是
+#   自己装的处理器，再取调用方原来的 handler），每读一遍新建+删除一个临时文件
+#   就是 8 次 rm —— 在 rm 走回收站包装器、审计钩子或网络文件系统的机器上，
+#   一次 rm 要 1–9 秒，光「装一次 trap」就白扔几秒，而这是每个脚本启动都要付的钱。
+#   现在必须：一次读完、临时文件只删一次。
+calls=$(
+  stub rm --exit 0 --body 'command rm "$@"'
+  trap_install
+  wc -l <"$(_sk_stub_log rm)" | tr -d ' '
+)
+assert_true test "$calls" -le 1

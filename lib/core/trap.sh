@@ -101,20 +101,64 @@ _sk_trap_has() {
   return 1
 }
 
-# _sk_trap_read SIG —— 把当前 shell 里该信号的 trap 定义读进 _SK_TRAP_CUR。
-# 关键：不能用 $(trap -p ...) —— 命令替换在子 shell 里执行，而子 shell 会把已捕获的
-# trap 重置为默认，于是永远读到空。这里用重定向（在当前 shell 执行）绕开。
+# 读 trap 定义这件事的两条硬约束：
+#
+#   1) 必须在当前 shell 里执行 trap -p —— 不能用 $(trap -p ...)：命令替换在子
+#      shell 里跑，而子 shell 会把已捕获的 trap 重置为默认，于是永远读到空。
+#      所以只能重定向到文件再读回来。
+#   2) 整个过程只能删一次文件 —— trap_install 要看 4 个信号（EXIT/INT/TERM/HUP），
+#      以前每个信号读两遍（先判断「是不是我们自己装的处理器」，再取调用方原来的
+#      handler），每读一遍新建+删除一个临时文件就是 8 次 rm。在 rm 走回收站包装器、
+#      审计钩子或网络文件系统的机器上，一次 rm 要 1–9 秒 —— 光「装一次 trap」就
+#      白扔几秒，而这是每个脚本启动都要付的钱（实测本机 10 秒）。
+#
+# 现在：trap -p 一次读完所有信号，临时文件只建一个、只删一次，读文件用 read 内建
+# （不 fork cat）。信号名的写法在 bash 3.2 与 5.x 一致：EXIT 写 EXIT，其余写
+# SIGINT / SIGTERM / SIGHUP。
 _SK_TRAP_CUR=""
-_sk_trap_read() {
-  local __sig=$1 __f
-  _SK_TRAP_CUR=""
-  __f=$(mktemp "${TMPDIR:-/tmp}/.shellkit-trap.XXXXXX") || return 1
-  if ! trap -p "$__sig" >"$__f" 2>/dev/null; then
-    rm -f "$__f"
+_SK_TRAP_FILE=""
+_SK_TRAP_LINES=()
+
+# _sk_trap_read_all —— 把当前 shell 里所有 trap 定义读进 _SK_TRAP_LINES
+_sk_trap_read_all() {
+  local __f __line
+  _SK_TRAP_LINES=()
+  if [ -z "$_SK_TRAP_FILE" ]; then
+    __f=$(mktemp "${TMPDIR:-/tmp}/.shellkit-trap.XXXXXX") || return 1
+    _SK_TRAP_FILE=$__f
+  fi
+  __f=$_SK_TRAP_FILE
+  if ! trap -p >"$__f" 2>/dev/null; then
     return 1
   fi
-  _SK_TRAP_CUR=$(cat "$__f" 2>/dev/null || true)
-  rm -f "$__f"
+  while IFS= read -r __line || [ -n "$__line" ]; do
+    [ -n "$__line" ] || continue
+    _SK_TRAP_LINES[${#_SK_TRAP_LINES[@]}]="$__line"
+  done <"$__f"
+  return 0
+}
+
+# _sk_trap_find SIG —— 找出该信号对应的 trap 行，放进 _SK_TRAP_CUR；没有就返回 1
+_sk_trap_find() {
+  local __sig=$1 __line
+  _SK_TRAP_CUR=""
+  for __line in ${_SK_TRAP_LINES[@]+"${_SK_TRAP_LINES[@]}"}; do
+    case "$__line" in
+      *" SIG$__sig" | *" $__sig")
+        _SK_TRAP_CUR=$__line
+        return 0
+        ;;
+    esac
+  done
+  return 1
+}
+
+# _sk_trap_read_done —— 读完了，把临时文件删掉（整个 trap_install 只删一次）
+_sk_trap_read_done() {
+  if [ -n "$_SK_TRAP_FILE" ]; then
+    rm -f "$_SK_TRAP_FILE"
+    _SK_TRAP_FILE=""
+  fi
   return 0
 }
 
@@ -133,7 +177,7 @@ _sk_trap_slot() {
 _sk_trap_capture() {
   local __sig=$1 __slot __line __cmd
   __slot=$(_sk_trap_slot "$__sig") || return 0
-  _sk_trap_read "$__sig" || return 0
+  _sk_trap_find "$__sig" || return 0
   __line=$_SK_TRAP_CUR
   case "$__line" in
     "trap -- "*) ;;
@@ -220,14 +264,17 @@ _sk_trap_on_hup() {
 # @exitcode 0 装好了（链式保留调用方已有的 EXIT trap，幂等）
 trap_install() {
   local __sig
+  # 一次读完所有信号：以前是每个信号读两遍，8 轮 mktemp + rm。
+  _sk_trap_read_all || return 0
   for __sig in EXIT INT TERM HUP; do
-    _sk_trap_read "$__sig" || continue
+    _sk_trap_find "$__sig" || continue
     case "${_SK_TRAP_CUR:-}" in
       # 自己的处理器（含子 shell 残影）不算调用方的 handler，否则清理会自噬
       *_sk_trap_on_*) ;;
       *) _sk_trap_capture "$__sig" ;;
     esac
   done
+  _sk_trap_read_done
   trap '_sk_trap_on_exit' EXIT
   trap '_sk_trap_on_int' INT
   trap '_sk_trap_on_term' TERM
