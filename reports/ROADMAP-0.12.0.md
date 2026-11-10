@@ -223,6 +223,9 @@
 - **麒麟的真实机器 CI 覆盖不了**：官方镜像在 `docker.kylinos.cn`（要鉴权），CI 拉不动。
   麒麟的**发行版识别**已有人造 os-release 用例覆盖（服务器版 RHEL 系 / 桌面版 Ubuntu 系 /
   没有 ID_LIKE 三种），其余靠手工验证 —— 这条边界写在 MIGRATING 与本记录里，别当成了全覆盖。
+  ⚠️ 别把 Docker Hub 上的 `openeuler/kylin` 当成银河麒麟：读它的镜像 config 就知道，
+  底包是 `openEuler-docker-rootfs`，装的是 **Apache Kylin 那个大数据 OLAP**（还带
+  Hadoop / Hive / Spark），与银河麒麟 OS 无关。拿它当麒麟覆盖是认错了东西。
 
 ---
 

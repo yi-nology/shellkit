@@ -132,14 +132,22 @@ jobs:
               gmp ncurses-libs
           fi
           # 下载器兜底：curl / wget / python3 任选其一，缺哪个都不该让 job 挂掉。
-          # 三个都没有时先按发行版补一个（极简镜像常常一个都不带）。
+          # 三个都没有时按发行版补一个 —— 包名不能想当然：Rocky 9 只有 curl-minimal
+          # （装 curl 会与它冲突，靠 --allowerasing 换掉），openEuler 有 curl、没有
+          # curl-minimal ⇒ 两个都试，谁有装谁。
+          # 失败不吞：装不上就把原因打出来，别让报错点离病根太远。
           if ! command -v curl >/dev/null 2>&1 &&
             ! command -v wget >/dev/null 2>&1 &&
             ! command -v python3 >/dev/null 2>&1; then
             if command -v dnf >/dev/null 2>&1; then
-              dnf install -y -qq --allowerasing curl-minimal || true
+              dnf install -y -qq --allowerasing curl ||
+                dnf install -y -qq --allowerasing curl-minimal ||
+                dnf install -y -qq --allowerasing wget ||
+                echo 'could not install a downloader (curl/curl-minimal/wget) on this image' >&2
             elif command -v apt-get >/dev/null 2>&1; then
-              apt-get install -y -qq curl || true
+              apt-get install -y -qq curl ||
+                apt-get install -y -qq wget ||
+                echo 'could not install a downloader (curl/wget) on this image' >&2
             fi
           fi
           if command -v curl >/dev/null 2>&1; then
