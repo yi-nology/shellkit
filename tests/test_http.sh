@@ -202,3 +202,54 @@ json.loads(sys.argv[1])' "$fb"
 fi
 
 unstub curl
+
+# ---------------------------------------------------------------------------
+# GitHub release 查询
+# ---------------------------------------------------------------------------
+export FAKE_BODY='{"tag_name":"v1.2.3","assets":[{"browser_download_url":"https://example.com/x86_64.tar.gz"},{"browser_download_url":"https://example.com/arm64.tar.gz"}]}'
+stub curl --stdout '200' --body "$FAKE_CURL_BODY"
+
+assert_eq "1.2.3" "$(http_github_latest_tag owner/repo)" "github latest tag strips the v prefix"
+assert_eq "https://example.com/x86_64.tar.gz" "$(http_github_release_asset owner/repo 'x86_64')" "github asset picks the matching one"
+assert_eq "https://example.com/arm64.tar.gz" "$(http_github_release_asset owner/repo 'arm64')" "github asset picks the matching one"
+
+# 大写 V 前缀也要去掉
+export FAKE_BODY='{"tag_name":"V2.0.0"}'
+assert_eq "2.0.0" "$(http_github_latest_tag owner/repo)" "github latest tag strips the V prefix"
+
+# 没有匹配时输出空串（不是报错）
+export FAKE_BODY='{"tag_name":"v1.2.3","assets":[{"browser_download_url":"https://example.com/x86_64.tar.gz"}]}'
+assert_eq "" "$(http_github_release_asset owner/repo 'nosuchpattern')" "a non-matching pattern yields an empty URL"
+
+# 认证头：有 token 就带上
+stub curl --stdout '200' --body "$FAKE_CURL_BODY"
+GH_TOKEN=tok-123
+export GH_TOKEN
+http_github_latest_tag owner/repo >/dev/null
+assert_stub_args curl "Authorization: Bearer tok-123"
+unset GH_TOKEN
+
+# HTTP 错误码：查不到就返回空串，仍然是 0
+export FAKE_BODY='{"message":"Not Found"}'
+stub curl --stdout '404' --body "$FAKE_CURL_BODY"
+out=$(http_github_latest_tag owner/repo)
+rc=$?
+assert_eq "" "$out" "a failed release query yields an empty tag"
+assert_eq "0" "$rc" "a failed release query still returns 0"
+
+# 网络层失败：同样是空串 + 0
+stub curl --exit 7 --body "$FAKE_CURL_BODY"
+out=$(http_github_latest_tag owner/repo 2>/dev/null)
+rc=$?
+assert_eq "" "$out" "a network failure yields an empty tag"
+assert_eq "0" "$rc" "a network failure still returns 0"
+
+# 缺参数是用法错
+rc=0
+http_github_latest_tag >/dev/null 2>&1 || rc=$?
+assert_eq "2" "$rc" "github latest tag requires a repo"
+rc=0
+http_github_release_asset owner/repo >/dev/null 2>&1 || rc=$?
+assert_eq "2" "$rc" "github release asset requires a pattern"
+
+unstub curl

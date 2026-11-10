@@ -70,6 +70,31 @@ else:
     sys.stdout.write(json.dumps(cur, indent=2, ensure_ascii=False))
 '
 
+# python3 侧的资产匹配脚本：按正则挑第一个匹配的 browser_download_url。
+# 退出码：0 找到并输出 URL；3 没有匹配（或正则非法）；4 响应不是合法 JSON。
+_SK_HTTP_PY_ASSETS='
+import json, re, sys
+
+pat = sys.argv[1] if len(sys.argv) > 1 else ""
+try:
+    doc = json.load(sys.stdin)
+except Exception:
+    sys.exit(4)
+try:
+    rx = re.compile(pat)
+except Exception:
+    sys.exit(3)
+if isinstance(doc, dict):
+    for a in (doc.get("assets") or []):
+        if not isinstance(a, dict):
+            continue
+        url = a.get("browser_download_url")
+        if isinstance(url, str) and rx.search(url):
+            sys.stdout.write(url)
+            sys.exit(0)
+sys.exit(3)
+'
+
 # python3 侧的 JSON 合法性校验脚本；非 0 表示不是合法 JSON。
 _SK_HTTP_PY_VALIDATE='
 import json, sys
@@ -519,5 +544,107 @@ _sk_http_escape_fallback() {
     __i=$((__i + 1))
   done
   printf '"%s"\n' "$__out"
+  return 0
+}
+
+# ---------------------------------------------------------------------------
+# GitHub release 查询
+#
+# 为什么不直接用 net_json：release 的资产列表要按正则挑（jq 的 test / grep -E），
+# 而 net_json 只能按点号路径取值 —— 在数组里挑元素它做不到。
+# 所以这里用 net_request 取原文，再在本地解析。
+# ---------------------------------------------------------------------------
+
+# _sk_http_github_body REPO —— 取最新 release 的 JSON 原文；失败返回非 0
+_sk_http_github_body() {
+  local __repo=${1:-} __token
+  local -a __hdrs=()
+  __token=${GH_TOKEN:-${GITHUB_TOKEN:-}}
+  if [ -n "$__token" ]; then
+    __hdrs[${#__hdrs[@]}]="--header"
+    __hdrs[${#__hdrs[@]}]="Authorization: Bearer $__token"
+  fi
+  net_request GET "https://api.github.com/repos/${__repo}/releases/latest" \
+    ${__hdrs[@]+"${__hdrs[@]}"} --timeout 30 --connect-timeout 10 || return $?
+  case "$SK_HTTP_CODE" in
+    200) ;;
+    *)
+      log_debug "GitHub release query failed: HTTP $SK_HTTP_CODE"
+      return "$SK_NET"
+      ;;
+  esac
+  printf '%s' "$SK_HTTP_BODY"
+  return 0
+}
+
+# _sk_http_github_tag BODY —— 从 release JSON 里取 tag_name；取不到返回 1
+_sk_http_github_tag() {
+  local __body=${1:-} __out=""
+  if command -v jq >/dev/null 2>&1; then
+    __out=$(printf '%s' "$__body" | jq -r '.tag_name // empty' 2>/dev/null) || __out=""
+  elif command -v python3 >/dev/null 2>&1; then
+    __out=$(printf '%s' "$__body" | python3 -c "$_SK_HTTP_PY_EXTRACT" tag_name 2>/dev/null) || __out=""
+  else
+    # 没有解析器时的降级路径：直接在文本里扫字段。
+    # 不能用 head —— 命中即退会把上游 SIGPIPE 打死（141）。
+    __out=$(printf '%s\n' "$__body" | grep '"tag_name"' | sed -n '1p' \
+      | sed -E 's/.*"tag_name"[[:space:]]*:[[:space:]]*"([^"]*)".*/\1/') || __out=""
+  fi
+  [ -n "$__out" ] || return 1
+  printf '%s' "$__out"
+  return 0
+}
+
+# _sk_http_github_asset BODY PATTERN —— 第一个匹配的资产下载地址；没有匹配返回 1
+_sk_http_github_asset() {
+  local __body=${1:-} __pat=${2:-} __out=""
+  if command -v jq >/dev/null 2>&1; then
+    __out=$(printf '%s' "$__body" | jq -r --arg p "$__pat" \
+      '.assets[]?.browser_download_url | select(test($p))' 2>/dev/null) || __out=""
+  elif command -v python3 >/dev/null 2>&1; then
+    __out=$(printf '%s' "$__body" | python3 -c "$_SK_HTTP_PY_ASSETS" "$__pat" 2>/dev/null) || __out=""
+  else
+    __out=$(printf '%s\n' "$__body" | grep '"browser_download_url"' | grep -E -- "$__pat" \
+      | sed -E 's/.*"browser_download_url"[[:space:]]*:[[:space:]]*"([^"]*)".*/\1/') || __out=""
+  fi
+  [ -n "$__out" ] || return 1
+  printf '%s' "$__out" | sed -n '1p'
+  return 0
+}
+
+# http_github_latest_tag REPO —— 最新 release 的 tag（去掉 v/V 前缀）
+# @brief 查询失败时输出空串并返回 0 —— 调用方把它当「没有新版本」处理。
+# @param REPO 形如 owner/repo
+# @exitcode 0 完成（stdout 输出 tag；查不到时为空串）
+# @exitcode 2 缺参数
+http_github_latest_tag() {
+  local __repo=${1:-} __body __tag
+  if [ -z "$__repo" ]; then
+    log_error "$(_t 'Usage'): http_github_latest_tag REPO"
+    return "$SK_USAGE"
+  fi
+  __body=$(_sk_http_github_body "$__repo") || return 0
+  __tag=$(_sk_http_github_tag "$__body") || return 0
+  __tag=${__tag#v}
+  __tag=${__tag#V}
+  printf '%s' "$__tag"
+  return 0
+}
+
+# http_github_release_asset REPO PATTERN —— 匹配资产的下载地址
+# @brief PATTERN 是正则（匹配 browser_download_url）；没有匹配时输出空串并返回 0。
+# @param REPO 形如 owner/repo
+# @param PATTERN 匹配 browser_download_url 的正则
+# @exitcode 0 完成（stdout 输出 URL；没有匹配时为空串）
+# @exitcode 2 缺参数
+http_github_release_asset() {
+  local __repo=${1:-} __pat=${2:-} __body __url
+  if [ -z "$__repo" ] || [ -z "$__pat" ]; then
+    log_error "$(_t 'Usage'): http_github_release_asset REPO PATTERN"
+    return "$SK_USAGE"
+  fi
+  __body=$(_sk_http_github_body "$__repo") || return 0
+  __url=$(_sk_http_github_asset "$__body" "$__pat") || return 0
+  printf '%s' "$__url"
   return 0
 }
