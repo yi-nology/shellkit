@@ -64,7 +64,8 @@ _emit_page() {
     -e 's#](REFERENCE\.md)#](../reference/index.md)#g' \
     -e 's#](MIGRATING\.md)#](migrating.md)#g' \
     -e 's#](COOKBOOK\.md)#](cookbook.md)#g' \
-    -e 's#](RELEASING\.md)#](releasing.md)#g' >"$__dest" || return 1
+    -e 's#](RELEASING\.md)#](releasing.md)#g' \
+    -e 's#](MAN\.md)#](man.md)#g' >"$__dest" || return 1
 }
 
 # _funcs_of MODULE —— 该模块公开函数名列表（反引号包裹，空格分隔）
@@ -125,6 +126,7 @@ _module_page_en() {
 _emit_page "$DOCS/COOKBOOK.md" "$SITE/guide/cookbook.md" || _die 'failed to write guide/cookbook.md'
 _emit_page "$DOCS/MIGRATING.md" "$SITE/guide/migrating.md" || _die 'failed to write guide/migrating.md'
 _emit_page "$DOCS/RELEASING.md" "$SITE/guide/releasing.md" || _die 'failed to write guide/releasing.md'
+_emit_page "$DOCS/MAN.md" "$SITE/guide/man.md" || _die 'failed to write guide/man.md'
 
 # ---------- 2. API 参考：总览 + 每模块一页 ----------
 
@@ -199,6 +201,8 @@ _en_notice "$SITE/en/guide/migrating.md" 'Migration guide' 'migrating' \
   'Five incremental steps for wiring shellkit into a script that already runs in production. Each step can ship on its own.'
 _en_notice "$SITE/en/guide/releasing.md" 'Releasing' 'releasing' \
   'How a release happens: one command bumps the version, regenerates artifacts, runs the gates, commits, tags and pushes.'
+_en_notice "$SITE/en/guide/man.md" 'Man pages' 'man' \
+  'How shellkit man builds man pages: section 1 from the CLI registry, one page per library module from the module list and the doc comments.'
 
 # ---------- 5. 截图 ----------
 
@@ -207,5 +211,5 @@ for __f in "$DOCS"/shots/*.svg; do
   cp "$__f" "$SITE/.vuepress/public/shots/" || _die "failed to copy $__f"
 done
 
-_say "pages: 3 synced, 1 reference index, $__nfunc functions across $(printf '%s\n' $MODULES | wc -l | tr -d ' ') modules"
+_say "pages: 4 synced, 1 reference index, $__nfunc functions across $(printf '%s\n' $MODULES | wc -l | tr -d ' ') modules"
 exit 0
