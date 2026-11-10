@@ -27,6 +27,9 @@ jobs:
           - macos-15
           - ubuntu-latest
           - ubuntu-22.04
+          # 原生 ARM64 Linux —— 国产系统与 ARM64 服务器的真实目标环境。
+          # 公共仓库免费提供（2025 年起），标签见 GitHub 官方文档。
+          - ubuntu-24.04-arm
     steps:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
 
@@ -86,15 +89,26 @@ jobs:
   # 发行版兼容矩阵：在容器里跑同一组门禁。
   # Ubuntu/macOS 之外再验 Debian 与 Rocky —— shellkit 的目标用户正是这类机器。
   compat:
-    name: compat on ${{ matrix.image }}
-    runs-on: ubuntu-latest
+    name: compat on ${{ matrix.image }} (${{ matrix.runner }})
+    runs-on: ${{ matrix.runner }}
     container: ${{ matrix.image }}
     strategy:
       fail-fast: false
       matrix:
         include:
           - image: debian:12
+            runner: ubuntu-latest
           - image: rockylinux:9
+            runner: ubuntu-latest
+          # 欧拉（openEuler）—— 国产系统里唯一有公开可拉取镜像的发行版。
+          # 麒麟的官方镜像在 docker.kylinos.cn（要鉴权），CI 拉不动，
+          # 所以「国产系统」这条线用欧拉代表，麒麟靠发行版识别用例 + 手工验证。
+          - image: openeuler/openeuler:24.03-lts
+            runner: ubuntu-latest
+          # 国产系统 × ARM64：跑在 ARM64 runner 上，容器也是原生 arm64
+          # （openEuler 的镜像同时有 amd64 与 arm64 变体）。
+          - image: openeuler/openeuler:24.03-lts
+            runner: ubuntu-24.04-arm
     steps:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
 
@@ -118,6 +132,16 @@ jobs:
               gmp ncurses-libs
           fi
           # 下载器兜底：curl / wget / python3 任选其一，缺哪个都不该让 job 挂掉。
+          # 三个都没有时先按发行版补一个（极简镜像常常一个都不带）。
+          if ! command -v curl >/dev/null 2>&1 &&
+            ! command -v wget >/dev/null 2>&1 &&
+            ! command -v python3 >/dev/null 2>&1; then
+            if command -v dnf >/dev/null 2>&1; then
+              dnf install -y -qq --allowerasing curl-minimal || true
+            elif command -v apt-get >/dev/null 2>&1; then
+              apt-get install -y -qq curl || true
+            fi
+          fi
           if command -v curl >/dev/null 2>&1; then
             sk_fetch() { curl -fsSL "$1" -o "$2"; }
           elif command -v wget >/dev/null 2>&1; then
