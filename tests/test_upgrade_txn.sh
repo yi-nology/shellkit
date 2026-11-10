@@ -34,6 +34,13 @@ tmpdir_count() {
   ls -d "${TMPDIR:-/tmp}"/shellkit-upgrade.* 2>/dev/null | wc -l | tr -d ' '
 }
 
+# 升级的临时目录建在 TMPDIR 下 —— 这里把 TMPDIR 指到本用例自己的目录。
+# 否则 tmpdir_count 数的是**整台机器**上的 shellkit-upgrade.*：别的进程
+# （比如另一个会话同时在跑升级）建了或删了目录，这个计数就会变 ⇒ 断言随机红。
+# 踩过：另一个会话在跑用例时，本文件的这条断言从 2 变成 1 而判红。
+mkdir -p "$work/tmp"
+export TMPDIR="$work/tmp"
+
 # assert_true 会把提示文案也当成被测命令的参数传下去（test 会报
 # "binary operator expected"）—— 要带说明就自己写这三个。
 assert_dir() {

@@ -69,6 +69,12 @@ tmpdir_count() {
   ls -d "${TMPDIR:-/tmp}"/shellkit-upgrade.* 2>/dev/null | wc -l | tr -d ' '
 }
 
+# 升级的临时目录建在 TMPDIR 下 —— 把 TMPDIR 指到本用例自己的目录，
+# 否则这里数的是**整台机器**上的 shellkit-upgrade.*：别的进程同时在跑升级
+# 就会改掉计数 ⇒ 断言随机红。
+mkdir -p "$work/tmp"
+export TMPDIR="$work/tmp"
+
 before_tmp=$(tmpdir_count)
 rc=0
 out=$(PATH="$shim:$PATH" "$TEST_ROOT/shellkit" upgrade "$proj" --template "$tpl" 2>&1) || rc=$?
