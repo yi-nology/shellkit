@@ -68,27 +68,26 @@ _man_module_file() {
 }
 
 # _man_module_desc MODULE —— 模块头一行说明（文件顶部注释块）
+#
+# 只取文件头第一行非空说明，就是模块的一句话摘要 —— 和 shdoc 的首行即摘要
+# 一个口径。文件头后面的段落是细则：全塞进 DESCRIPTION 会变成一堵文字墙，
+# 反而把模块讲了什么淹没掉。
 _man_module_desc() {
-  local __mod=${1:-} __file __line __desc="" __in=0
+  local __mod=${1:-} __file __line __desc=""
   __file=$(_man_module_file "$__mod") || return 1
   while IFS= read -r __line || [ -n "$__line" ]; do
     case "$__line" in
       '#!'*) continue ;;
-      '#'*)
-        __line="${__line#\#}"
-        __line="${__line# }"
-        if [ -n "$__desc" ]; then
-          __desc="$__desc $__line"
-        else
-          __desc=$__line
-        fi
-        __in=1
-        continue
-        ;;
+      '#'*) ;;
+      *) break ;;
     esac
+    __line="${__line#\#}"
+    __line="${__line# }"
+    [ -n "$__line" ] || continue
+    __desc=$__line
     break
   done <"$__file"
-  [ "$__in" = "1" ] || return 1
+  [ -n "$__desc" ] || return 1
   printf '%s' "$__desc"
   return 0
 }

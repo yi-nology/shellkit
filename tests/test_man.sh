@@ -18,6 +18,10 @@ assert_contains "$page" ".SH FUNCTIONS" "module page has a FUNCTIONS section"
 assert_contains "$page" "str_trim" "module page lists the module's functions"
 assert_contains "$page" "EXIT" "module page carries the exit codes"
 
+# 模块说明只取文件头首行摘要：多段式文件头不该被摊成一堵文字墙
+desc_lines=$(printf '%s\n' "$page" | awk '/^\.SH DESCRIPTION$/{f=1; next} /^\.SH /{f=0} f' | grep -c '.')
+assert_eq "1" "$desc_lines" "the module description is a single line"
+
 # 私有函数不进 man 页
 assert_not_contains "$page" "_sk_is_name" "private helpers stay out of the man page"
 
