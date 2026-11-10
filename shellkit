@@ -50,6 +50,12 @@ _sk_preflight_modules() {
   return 0
 }
 
+# SHELLKIT_MODULES 是「直接用库」的按需加载开关（lib/bootstrap.sh 据此裁模块集），
+# 只该影响用户自己的脚本。CLI 需要完整模块集：环境里带着它跑 doctor，os 模块
+# 没被加载，os_has_cmd 全部 command not found —— 「缺工具」的假诊断比没有诊断
+# 更糟（issue #32）。在 source bootstrap 之前清掉，CLI 恒定全量加载。
+unset SHELLKIT_MODULES
+
 # 加载库。模块缺失或损坏时 bootstrap 会当场中止整个脚本 ——
 # 但 doctor 的职责之一正是报出「少了哪个模块」，所以这里容错：
 # 失败就记下来，转入只做自检的降级路径。
