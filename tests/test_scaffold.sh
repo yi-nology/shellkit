@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 set -u
 . "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/test_helper.sh"
+. "$TEST_ROOT/lib/bootstrap.sh"
 
 work=$(tmpdir)
 proj="$work/demo-tool"
@@ -203,3 +204,43 @@ assert_contains "$out" "install-self" "upgrade must say how to get shellkit"
 out=$(PATH="$TEST_ROOT:$PATH" make -C "$p6" vendor 2>&1)
 assert_contains "$out" "vendored library" "vendor must sync the library into the project"
 assert_true test -r "$p6/vendor/shellkit/VERSION"
+
+# ---------------------------------------------------------------- 渲染与转义
+#
+# scaffold_render 之前没有直接用例：模板变量的值里带 sed 元字符时
+# （& 在替换侧是「匹配到的内容」、| 是分隔符），转义错了渲染结果就会变形。
+# 渲染路径刚换过实现（sed -e + 出参式转义，替掉了临时脚本文件），
+# 这里把它的行为钉住。
+rdir="$work/render"
+mkdir -p "$rdir"
+printf 'name={{NAME}}\ndesc={{DESC}}\nkeep={{UNKNOWN}}\n' >"$rdir/tpl.txt"
+
+scaffold_vars_set NAME "plain" >/dev/null
+scaffold_vars_set DESC 'a&b|c\d' >/dev/null
+rc=0
+scaffold_render "$rdir/tpl.txt" "$rdir/out.txt" >/dev/null 2>&1 || rc=$?
+assert_eq "0" "$rc" "scaffold_render must succeed"
+rendered=$(cat "$rdir/out.txt")
+assert_contains "$rendered" "name=plain" "a declared placeholder must be replaced"
+assert_contains "$rendered" 'desc=a&b|c\d' "sed metacharacters in a value must survive rendering"
+assert_contains "$rendered" "keep={{UNKNOWN}}" "an undeclared placeholder must be left alone"
+
+# 转义是出参形式：结果写进调用方的变量，不是 stdout
+esc=""
+_sk_sed_repl_escape esc 'a&b' >/dev/null
+assert_eq 'a\&b' "$esc" "the escape helper must write into the caller's variable"
+
+# 变量名非法、或撞上内部保留名，都要挡住 ——
+# 撞名会让结果静默写丢（printf -v 写的是最近一层声明了该名字的作用域）
+rc=0
+_sk_sed_repl_escape "not-a-name" 'x' >/dev/null 2>&1 || rc=$?
+assert_eq "2" "$rc" "an invalid variable name must be rejected"
+rc=0
+_sk_sed_repl_escape "__s" 'x' >/dev/null 2>&1 || rc=$?
+assert_eq "2" "$rc" "a reserved variable name must be rejected"
+
+# 端到端：new 的模板变量里带元字符，渲染结果必须逐字保留
+p7="$work/meta-chars"
+out=$("$TEST_ROOT/shellkit" new "$p7" --cmd run --set 'DESCRIPTION=a&b|c\d' --yes 2>&1)
+assert_contains "$out" "project created"
+assert_contains "$(cat "$p7/README.md")" 'a&b|c\d' "sed metacharacters must survive the whole new pipeline"

@@ -29,6 +29,21 @@ printf 'abc' >"$f"
 assert_eq "900150983cd24fb0d6963f7d28e17f72" "$(os_md5 "$f")" "os_md5"
 assert_eq "ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad" "$(os_sha256 "$f")" "os_sha256"
 
+# 摘要函数的输出要逐字节稳定：成功是「摘要 + 一个换行」，
+# 文件读不到时 stdout 全空、退出码仍是 0（历史上就是这样，
+# 调它的代码按「拿不到就是空串」处理）。这两条钉住的是契约，
+# 不是实现 —— 换实现（比如不接 awk 管道）时最容易在这里悄悄变了。
+os_raw=$(
+  os_sha256 "$f"
+  printf 'X'
+)
+assert_eq "ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad
+X" "$os_raw" "os_sha256 must print the digest followed by exactly one newline"
+rc=0
+os_raw=$(os_sha256 "$d/does-not-exist" 2>/dev/null) || rc=$?
+assert_eq "" "$os_raw" "a missing file must yield an empty digest"
+assert_eq "0" "$rc" "a missing file must not change the exit code"
+
 mgr=$(os_pkg_manager 2>/dev/null || true)
 if [ -n "$mgr" ]; then
   case "$mgr" in

@@ -34,7 +34,7 @@ ver          i18n log
 status       i18n log
 registry     error i18n log os
 profile      error fs i18n log
-scaffold     error fs i18n log os validate
+scaffold     error fs i18n log os str validate
 retry        i18n log str
 lock         i18n log str trap
 net          error fs i18n log os

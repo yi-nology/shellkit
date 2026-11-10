@@ -124,15 +124,27 @@ os_sed_i() {
 # @exitcode 2 没给参数
 # @exitcode 1 没有 md5sum 也没有 md5
 os_md5() {
-  local __f=${1:-}
+  local __f=${1:-} __out=""
   _sk_need_args "$#" 1 "os_md5 FILE" || return $?
   if command -v md5sum >/dev/null 2>&1; then
-    md5sum "$__f" | awk '{print $1}'
+    __out=$(md5sum "$__f") || __out=""
   elif command -v md5 >/dev/null 2>&1; then
-    md5 -q "$__f"
+    __out=$(md5 -q "$__f") || __out=""
   else
     return 1
   fi
+  # 摘要是输出的第一个字段，后面跟的是文件名。
+  # 不接管道是为了少一次 fork：这两个函数在升级热路径上每个文件要调两三次，
+  # 一次 fork 就是几十毫秒（本机实测），管道那一次纯属白扔。
+  #
+  # 输出与旧写法逐字节一致：成功是「摘要\n」，文件读不到时 stdout 全空、
+  # 退出码仍是 0（旧写法里是 awk 的退出码）。
+  __out=${__out%% *}
+  if [ -z "$__out" ]; then
+    return 0
+  fi
+  printf '%s\n' "$__out"
+  return 0
 }
 
 # os_sha256 FILE —— 文件的 sha256；两种工具都没有时返回 1
@@ -140,15 +152,23 @@ os_md5() {
 # @exitcode 2 没给参数
 # @exitcode 1 没有 sha256sum 也没有 shasum
 os_sha256() {
-  local __f=${1:-}
+  local __f=${1:-} __out=""
   _sk_need_args "$#" 1 "os_sha256 FILE" || return $?
   if command -v sha256sum >/dev/null 2>&1; then
-    sha256sum "$__f" | awk '{print $1}'
+    __out=$(sha256sum "$__f") || __out=""
   elif command -v shasum >/dev/null 2>&1; then
-    shasum -a 256 "$__f" | awk '{print $1}'
+    __out=$(shasum -a 256 "$__f") || __out=""
   else
     return 1
   fi
+  # 同 os_md5：摘要在第一个字段，后面跟文件名；不接管道，少一次 fork。
+  # 输出与旧写法逐字节一致（成功「摘要\n」，读不到时 stdout 全空、退出码 0）。
+  __out=${__out%% *}
+  if [ -z "$__out" ]; then
+    return 0
+  fi
+  printf '%s\n' "$__out"
+  return 0
 }
 
 # ---------------------------------------------------------------------------
