@@ -46,13 +46,33 @@ _write_runner() {
 }
 
 # 在 pty 里跑 RUNNER 并喂一行输入，返回去掉 \r 的输出。
+#
+# 同步点：输入**不能**无条件地提前喂进去。以前是「printf 完就关」，
+# 机器一忙，pty 还没走到 read 就先收到 EOF ⇒ read 拿到空串 ⇒ 函数回落到默认值
+# （表现就是同一棵树上「过、红、过」的真 flaky）。
+# 现在由 runner 在读之前打一个标记，这一侧看到标记才送输入 ——
+# 送的时候子进程已经停在 read 上，不再靠 sleep 猜时机。
+#
 # 末尾多睡一会儿：script 读到 stdin EOF 就可能收工，别让它抢在子进程前面。
 _pty_run() {
-  local __input=$1
+  local __input=$1 __marker=${2:-}
+  local __outf="$TEST_TMP_ROOT/pty.out"
+  local __waited=0
+  : >"$__outf"
   (
+    if [ -n "$__marker" ]; then
+      while [ "$__waited" -lt 400 ]; do
+        if grep -F -q -- "$__marker" "$__outf" 2>/dev/null; then
+          break
+        fi
+        sleep 0.05
+        __waited=$((__waited + 1))
+      done
+    fi
     printf '%s\n' "$__input"
-    sleep 0.5
-  ) | _script_run "$RUNNER" 2>&1 | tr -d '\r'
+    sleep 1
+  ) | _script_run "$RUNNER" >"$__outf" 2>&1
+  tr -d '\r' <"$__outf"
 }
 
 # 从输出里取 KEY=VALUE 的值。
@@ -76,31 +96,39 @@ case "$raw" in
     ;;
 esac
 
+# 同步点标记：runner 在真正去读输入之前先打这一行，
+# 喂输入的那一侧看到它才送输入（见 _pty_run）。
+READY=PTY-READY
+
 # CASE: ask_yn 采纳用户输入的 n，而不是默认值 y
-body_ask_yn='ask_yn ANS "Continue?" y
+body_ask_yn='printf "PTY-READY\n"
+ask_yn ANS "Continue?" y
 printf "\nANS=%s\n" "$ANS"'
 _write_runner "$body_ask_yn"
-raw=$(_pty_run "n")
+raw=$(_pty_run "n" "$READY")
 assert_eq "n" "$(_pty_value ANS "$raw")" "ask_yn must use the answer the user typed (n), not the default (y)"
 
 # CASE: ask 采纳用户输入的 IP，而不是默认值
-body_ask='ask V "IP" 1.2.3.4
+body_ask='printf "PTY-READY\n"
+ask V "IP" 1.2.3.4
 printf "\nV=%s\n" "$V"'
 _write_runner "$body_ask"
-raw=$(_pty_run "9.9.9.9")
+raw=$(_pty_run "9.9.9.9" "$READY")
 assert_eq "9.9.9.9" "$(_pty_value V "$raw")" "ask must use the answer the user typed, not the default"
 
 # CASE: ask_choice 采纳用户输入的选项，而不是默认值
-body_choice='ask_choice V "Engine" "mysql|postgresql" mysql
+body_choice='printf "PTY-READY\n"
+ask_choice V "Engine" "mysql|postgresql" mysql
 printf "V=%s\n" "$V"'
 _write_runner "$body_choice"
-raw=$(_pty_run "postgresql")
+raw=$(_pty_run "postgresql" "$READY")
 assert_eq "postgresql" "$(_pty_value V "$raw")" "ask_choice must use the answer the user typed, not the default"
 
 # CASE: confirm 收到 n 时退出码是 1
-body_confirm='confirm "Proceed?" y
+body_confirm='printf "PTY-READY\n"
+confirm "Proceed?" y
 __rc=$?
 printf "\nRC=%s\n" "$__rc"'
 _write_runner "$body_confirm"
-raw=$(_pty_run "n")
+raw=$(_pty_run "n" "$READY")
 assert_eq "1" "$(_pty_value RC "$raw")" "confirm must exit 1 when the user answers n"

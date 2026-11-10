@@ -30,7 +30,9 @@ export TEST_TMP_ROOT="$TMP"
 WORK="$TMP/work"
 mkdir -p "$WORK"
 
-TEST_TIMEOUT="${TEST_TIMEOUT:-120}"
+# 每文件上限：120 秒太贴着天花板了 —— test_ai_docs.sh 本机就要 ~60 秒，
+# 机器一忙就撞线，于是「负载高」被误读成「测试坏了」。抬到 300 秒。
+TEST_TIMEOUT="${TEST_TIMEOUT:-300}"
 if command -v timeout >/dev/null 2>&1; then
   TIMEOUT_BIN=timeout
 elif command -v gtimeout >/dev/null 2>&1; then
