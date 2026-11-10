@@ -16,14 +16,10 @@ _REGISTRY_ROOT=""
 _REGISTRY_ENTRIES=""
 _REGISTRY_FILES=""
 
-# registry_scan ROOT PATTERN —— 扫描清单文件并建立索引
-# 条目名 = 清单文件所在目录名。PATTERN 是文件名模式（如 .manifest）。
+# _registry_scan_one ROOT PATTERN —— 把一个根目录下的清单并进索引（**不重置**）
 # @exitcode 0 总是成功
-registry_scan() {
+_registry_scan_one() {
   local __root="${1:-}" __pat="${2:-}" __f __dir __name
-  _REGISTRY_ROOT="$__root"
-  _REGISTRY_ENTRIES=""
-  _REGISTRY_FILES=""
   [ -n "$__root" ] && [ -d "$__root" ] || return 0
   [ -n "$__pat" ] || return 0
   for __f in "$__root"/*/"$__pat"; do
@@ -43,6 +39,37 @@ registry_scan() {
     else
       printf -v _REGISTRY_FILES '%s\n%s' "$_REGISTRY_FILES" "$__name=$__f"
     fi
+  done
+  return 0
+}
+
+# registry_scan ROOT PATTERN —— 扫描清单文件并建立索引
+# 条目名 = 清单文件所在目录名。PATTERN 是文件名模式（如 .manifest）。
+# @exitcode 0 总是成功
+registry_scan() {
+  local __root="${1:-}" __pat="${2:-}"
+  _REGISTRY_ROOT="$__root"
+  _REGISTRY_ENTRIES=""
+  _REGISTRY_FILES=""
+  _registry_scan_one "$__root" "$__pat"
+  return 0
+}
+
+# registry_scan_multi PATTERN ROOT... —— 扫描**多个**根目录的清单文件，建立一个索引
+# @brief 与 registry_scan 的区别：registry_scan 每次调用都重建索引（一个工程一个根目录）；
+# @brief 本函数一次扫多个根目录 —— 给「清单分散在多个目录」的工程用
+# @brief （如 unix_script 的 <分类>/<模块>/.manifest 布局：每个分类目录各扫一次）。
+# @param PATTERN 清单文件名模式（如 .manifest）
+# @param ROOT 清单根目录，可给多个
+# @exitcode 0 总是成功
+registry_scan_multi() {
+  local __pat="${1:-}" __root
+  shift
+  _REGISTRY_ROOT=""
+  _REGISTRY_ENTRIES=""
+  _REGISTRY_FILES=""
+  for __root in "$@"; do
+    _registry_scan_one "$__root" "$__pat"
   done
   return 0
 }

@@ -921,6 +921,19 @@ registry_scan ROOT PATTERN —— 扫描清单文件并建立索引 条目名 = 
 
 - 0 总是成功
 
+### `registry_scan_multi`
+
+（如 unix_script 的 <分类>/<模块>/.manifest 布局：每个分类目录各扫一次）。
+
+**参数**
+
+- PATTERN 清单文件名模式（如 .manifest）
+- ROOT 清单根目录，可给多个
+
+**退出码**
+
+- 0 总是成功
+
 ### `registry_get`
 
 registry_get NAME KEY —— 取字段值（未声明时为空） KEY 以**字面量**参与匹配：它是调用方传进来的字段名，不该有正则语义。

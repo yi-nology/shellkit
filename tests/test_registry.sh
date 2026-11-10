@@ -57,3 +57,32 @@ assert_false registry_topo DEPS "a dependency cycle is refused for the whole reg
 # 扫描空目录 / 不存在的目录：什么都不该炸
 registry_scan "$d/nosuchdir" '.manifest'
 assert_eq "" "$(registry_list)" "scanning a missing directory yields nothing"
+
+# ---------------------------------------------------------------------------
+# registry_scan_multi：清单分散在多个根目录时，一次扫成一个索引
+# （unix_script 的布局是 <分类>/<模块>/.manifest，每个分类目录各扫一次）
+# ---------------------------------------------------------------------------
+m1="$d/cat-a"
+m2="$d/cat-b"
+mkdir -p "$m1/one" "$m2/two"
+printf 'LABEL=One\nDEPS=\n' >"$m1/one/.manifest"
+printf 'LABEL=Two\nDEPS=one\n' >"$m2/two/.manifest"
+
+registry_scan_multi '.manifest' "$m1" "$m2"
+assert_eq "One" "$(registry_get one LABEL)" "registry_scan_multi indexes the first root"
+assert_eq "Two" "$(registry_get two LABEL)" "registry_scan_multi indexes the second root"
+assert_eq "2" "$(registry_list | grep -c '')" "registry_scan_multi merges both roots"
+assert_eq "one" "$(registry_deps two DEPS)" "registry_scan_multi resolves deps across roots"
+assert_eq "one two" "$(registry_topo DEPS)" "registry_scan_multi sorts across roots"
+
+# 根目录的顺序决定索引的顺序
+registry_scan_multi '.manifest' "$m2" "$m1"
+assert_eq "two one" "$(printf '%s' "$_REGISTRY_ENTRIES")" "the index follows the root order"
+
+# 少给一个根目录：另一个照样进索引
+registry_scan_multi '.manifest' "$m1"
+assert_eq "1" "$(registry_list | grep -c '')" "registry_scan_multi works with a single root"
+
+# 不存在的根目录：不炸
+registry_scan_multi '.manifest' "$d/nosuchdir"
+assert_eq "" "$(registry_list)" "scanning a missing directory yields nothing"
