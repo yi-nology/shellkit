@@ -260,6 +260,27 @@ _sk_vendor_stage() {
   return 0
 }
 
+# _sk_proj_lock_name DIR —— 由工程绝对路径算出锁名：同一个工程一把锁。
+# 锁名只收 [A-Za-z0-9_.-]，路径过不了名字校验，用 cksum 收成数字；
+# 不同路径撞同一个和的概率极低，撞了也只是多一次串行，不影响正确性。
+_sk_proj_lock_name() {
+  local __p="" __crc=""
+  __p=$(cd "$1" 2>/dev/null && pwd -P) || __p=$1
+  __crc=$(printf '%s' "$__p" | cksum) || return 1
+  printf 'proj-%s' "${__crc%% *}"
+}
+
+# _sk_proj_lock_acquire NAME —— 拿工程锁；本进程已经持有就不再抢。
+# mkdir 锁不可重入：upgrade 全程持锁、末尾调 vendor 会再走到这里，
+# 抢自己就会死锁。锁的回收由 lock 模块的 trap 兜底（进程退出即释放）。
+_sk_proj_lock_acquire() {
+  local __name=$1 __held=""
+  if __held=$(lock_held "$__name" 2>/dev/null) && [ "$__held" = "$$" ]; then
+    return 0
+  fi
+  lock_acquire "$__name" 0
+}
+
 # _sk_vendor_install DIR —— 把库整目录同步进 DIR/vendor/shellkit。
 #
 # 用「整目录替换」而不是逐文件覆盖：模块被删掉时不会留残骸。
@@ -273,7 +294,7 @@ _sk_vendor_stage() {
 # 旧副本里用户自己加的文件要留着：候选目录先把旧内容原样搬进去，
 # 再在上面做同样的替换动作 —— 与旧行为一致，只是不再就地改。
 _sk_vendor_install() {
-  local __dir=$1 __dest __stage __old
+  local __dir=$1 __dest __stage __old __lock
   __dest="$__dir/vendor/shellkit"
   __stage="$__dir/vendor/.shellkit-new"
   __old="$__dir/vendor/.shellkit-old"
@@ -289,7 +310,21 @@ _sk_vendor_install() {
     log_error "$(_t 'the vendored library is a symlink, refusing to install'): $__dest"
     return 1
   fi
-  # 上一次换到一半留下的残骸：清掉，别让它越攒越多
+  # 并发互斥：vendor 的暂存目录名是固定的（.shellkit-new / .shellkit-old），
+  # 两个进程同时换会互相踩。upgrade 全程持着这把锁走到这里，自持就不再抢。
+  __lock=$(_sk_proj_lock_name "$__dir") || return 1
+  _sk_proj_lock_acquire "$__lock" || return $?
+  # 中断恢复：两次 rename 之间被杀（SIGKILL / 断电）时 vendor/shellkit 不见了，
+  # 而 .shellkit-old 里是唯一完整的旧副本 —— 先把它挪回去。
+  # 不先恢复的话，下面那句清理会把唯一的好副本删掉，工程从此没有库可用。
+  if [ -e "$__old" ] || [ -L "$__old" ]; then
+    if [ ! -f "$__dest/lib/bootstrap.sh" ]; then
+      log_warn "$(_t 'recovering the vendored library after an interrupted swap'): $__old"
+      rm -rf "$__dest" 2>/dev/null || true
+      mv "$__old" "$__dest" || return 1
+    fi
+  fi
+  # 残骸清理：恢复完成后 dest 是完整的（或本来就没有），这时候才安全
   rm -rf "$__stage" "$__old" 2>/dev/null || true
   fs_ensure_dir "$__stage" 755 || return 1
   # 旧副本里可能有用户自己加的文件：先原样搬进候选目录，别顺手删掉
@@ -795,7 +830,7 @@ cmd_upgrade() {
   local __name __rel __old __cur __new __tmp __cmds_csv __vdir __act
   local __dirabs="" __target=""
   local __updated=0 __skipped=0 __added=0 __vsync=0
-  local __baselines="" __legacy=0 __oldtpl="" __oldtpl_hash=""
+  local __baselines="" __legacy=0 __oldtpl="" __oldtpl_hash="" __lock=""
 
   while [ "$#" -gt 0 ]; do
     case "$1" in
@@ -878,6 +913,12 @@ cmd_upgrade() {
   if [ -z "$__dirabs" ]; then
     log_error "$(_t 'cannot resolve the target directory'): $__dir"
     return "$SK_PRECOND"
+  fi
+  # 并发互斥：同一工程同时只有一个升级能动手 —— 清单与文件的一致性依赖
+  # 「读-改-写」不被打断。--check 只读，不抢锁。
+  if [ "$__check" != "1" ]; then
+    __lock=$(_sk_proj_lock_name "$__dir") || return "$SK_ERR"
+    _sk_proj_lock_acquire "$__lock" || return $?
   fi
 
   log_section "$(_t 'upgrading'): $__dir"
@@ -1032,15 +1073,30 @@ EOF
       if [ -f "$__oldtpl/$__rel" ]; then
         __oldtpl_hash=$(os_sha256 "$__oldtpl/$__rel" 2>/dev/null) || __oldtpl_hash=""
       fi
-      if [ -n "$__oldtpl_hash" ] && [ "$__oldtpl_hash" != "$__cur" ]; then
+      if [ -z "$__oldtpl_hash" ] || [ "$__oldtpl_hash" != "$__cur" ]; then
+        # 对不上（或旧模板渲染不出对照）：说不准这个文件是不是用户改过 ——
+        # 一律不动，基线留空：宁可永远不覆盖，也不要覆盖掉用户改过的东西。
+        # 基线不清的话，清单会升成新版格式并带着旧指纹，下一次升级就把它
+        # 当成「没动过」而覆盖掉 —— 恰恰是最想避免的事。
         log_warn "$(_t 'cannot be verified against the old template, left alone'): $__rel"
         __skipped=$((__skipped + 1))
-        # 基线留空：宁可永远不覆盖，也不要覆盖掉用户改过的东西
         _SK_UPGRADE_BASES[$__i]=""
         _SK_UPGRADE_ACTS[${#_SK_UPGRADE_ACTS[@]}]="S"
         __i=$((__i + 1))
         continue
       fi
+      # 校验通过：文件就是旧模板原样，可以安全更新。
+      # 整条 elif 链已经命中本分支，落不到下面的 __new==__cur 与 else ——
+      # 「相同就跳、不同就 U」的判定要在自己这里做完。
+      # （历史缺陷：命中这里之后 act 一直是 S ⇒ 第一次升级不更新文件、
+      #   却把清单升成新版格式，第二次升级才真正更新。）
+      if [ "$__new" = "$__cur" ]; then
+        _SK_UPGRADE_BASES[$__i]=$__new
+        _SK_UPGRADE_ACTS[${#_SK_UPGRADE_ACTS[@]}]="S"
+        __i=$((__i + 1))
+        continue
+      fi
+      __act="U"
     elif [ "$__new" = "$__cur" ]; then
       _SK_UPGRADE_BASES[$__i]=$__new
       _SK_UPGRADE_ACTS[${#_SK_UPGRADE_ACTS[@]}]="S"
@@ -1954,7 +2010,15 @@ cmd_install_self() {
   # 失败时把旧的挪回去，安装保持可用。
   __stage="$__dest.new"
   __old="$__dest.old"
-  # 上一次换到一半留下的残骸：清掉，别让它越攒越多
+  # 中断恢复 + 残骸清理：与 _sk_vendor_install 同一族洞 —— 两次 rename
+  # 之间被杀时 $__old 是唯一完整的旧副本，先恢复再清理，别把好副本删掉。
+  if [ -e "$__old" ]; then
+    if [ ! -f "$__dest/lib/bootstrap.sh" ]; then
+      log_warn "$(_t 'recovering the installed copy after an interrupted swap'): $__old"
+      rm -rf "$__dest" 2>/dev/null || true
+      mv "$__old" "$__dest" || return "$SK_ERR"
+    fi
+  fi
   rm -rf "$__stage" "$__old" 2>/dev/null || true
   fs_ensure_dir "$__stage" 755 || return "$SK_PRECOND"
 
