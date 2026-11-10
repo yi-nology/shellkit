@@ -176,10 +176,18 @@ shellkit vendor . --check    # 只比对，不写盘
 | `shellkit upgrade` 撞上写不下去的目标时 | 边判边写：撞上问题时前面的文件已经改了 —— 工程停在**半升状态**，清单也对不上磁盘 | 先把所有目标判完、校验完（**一个文件都不动**）：目标是目录、父路径建不出来、目录不可写 ⇒ 报错退出（码 5），**一个文件都不改** | 工程里有目录占了模板文件的位置、目录权限不对 |
 | `shellkit upgrade` 同步 `vendor/shellkit` 时 | 先 `rm -rf` 再 `cp -R`：中途失败留下**半份库** —— 工程的脚本当场就找不到 `vendor/shellkit/lib/bootstrap.sh` | 先铺到 `vendor/.shellkit-new` 再整体换上去：中途失败**旧副本完好无损**，工程照常能跑 | vendor 同步失败（磁盘满、权限不足、被中断） |
 | `shellkit upgrade` 中途失败后的清单 | vendor 同步失败时清单不落盘 —— 已改的文件在下次升级里被判成「用户改过」，**永远冻结** | 清单按磁盘的实际状态落盘（vendor 同步失败也落盘） | 上一次升级失败过、想重试 |
+| `run` 的日志脱敏 | 只认三种形态：`KEY=VALUE`、`--password VALUE`、`Authorization:` 头 | 扩到：头名以 key/token/secret/password 结尾（`X-Api-Key:`…）、`Cookie:` / `Set-Cookie:` / `Proxy-Authorization:`、短选项 `-u` / `-uVALUE` / `--user` / `--token` | 日志里有 `-u user:pass`、`-H 'X-Api-Key: …'` 这类写法 |
+| `run` 声明「这个参数是敏感的」 | 没有这个接口 —— 启发式没认出来的就漏了 | 新增 `run --secret-arg N`（第 N 个参数必遮，命令名不算）、`run --redact-value V`（按值遮，令牌夹在参数中间也遮得到）、环境变量 `SHELLKIT_SECRET_ARGS="2,3"`（对所有 run 生效） | 令牌藏在参数中间、名字看不出敏感 |
+| `run` 的参数解析 | 没有 `--` 分隔符（`run -- foo` 会把 `--` 当成命令去执行） | 支持 `--` 分隔符 | 命令本身以 `-` 开头 |
 
 只加不改的部分（不用改代码就能升）：新增公开函数 `fs_atomic_copy SRC DST [MODE]`
 （写文件不写坏：同目录临时文件 + rename，逐字节一致），没有新增命令；
 `--check` 与 `--force` 的语义不变。
+
+> 脱敏是**宁枉勿纵**的：认不准的形态会遮掉，代价是日志里少几个字。
+> 但过度脱敏也是回归 —— 名字看不出敏感的东西照原样打印
+> （`monkey=banana`、`--username=john`、`--count 3` 都不会被遮），
+> 否则日志没了细节就没法排障。
 
 > 升级被打断（SIGTERM / 断电）时，**每个文件要么是完整的旧内容、要么是完整的新内容**
 >（不会再留半截文件），已经换新的保持新版、没换的保持旧版；

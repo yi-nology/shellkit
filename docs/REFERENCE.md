@@ -407,12 +407,12 @@ fs_tmp_init —— 在当前 shell 初始化临时目录，并把清理动作推
 
 ### `run`
 
-run [--always] [--no-die] CMD... —— 执行命令，失败即 die；--no-die 只返回码
+run [--always] [--no-die] [--secret-arg N] [--redact-value V] [--] CMD... —— 执行命令，失败即 die；--no-die 只返回码 命令行会进日志，敏感参数会被脱敏（键名像敏感字段、请求头、短选项 -u 等）。 启发式总会漏，所以还留了两个显式声明：   --secret-arg N     第 N 个参数（命令名不算）必脱敏，可以写多次   --redact-value V   值等于 V 的地方一律脱敏（令牌夹在参数中间也遮得到） 环境变量 SHELLKIT_SECRET_ARGS="2,3" 等价于 --secret-arg 2 --secret-arg 3， 对所有 run 生效 —— CI 里统一声明最省事。
 
 **退出码**
 
 - 0 命令成功
-- 2 用法错（没给命令）
+- 2 用法错（没给命令、--secret-arg 的序号不是正整数）
 - 其他 命令自身的退出码；默认模式下失败会 die，--no-die 只返回码
 
 ### `run_concurrent`

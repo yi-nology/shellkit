@@ -35,45 +35,155 @@ _sk_run_secret_key() {
       return 0
       ;;
   esac
+  # 以 key 结尾的（X-Api-Key、X-Custom-Key）：分隔符是词边界，
+  # 否则 monkey 这种普通词也会被当成敏感字段 —— 过度脱敏会让日志失去排障价值。
+  case "$__l" in
+    key | *[-_.]key) return 0 ;;
+  esac
   return 1
+}
+
+# _sk_run_secret_header NAME —— 这个请求头名要不要把值遮掉
+#
+# 头名比普通键名更值得遮：请求头里的凭据几乎总是敏感。
+# 规则：名字以 key / token / secret / password 结尾（词边界），
+# 外加 cookie / set-cookie / proxy-authorization / authorization。
+_sk_run_secret_header() {
+  local __h=${1:-} __l
+  __l=$(printf '%s' "$__h" | tr 'A-Z' 'a-z')
+  case "$__l" in
+    cookie | set-cookie | proxy-authorization | authorization) return 0 ;;
+  esac
+  case "$__l" in
+    key | *[-_.]key | token | *[-_.]token | secret | *[-_.]secret | \
+      password | *[-_.]password) return 0 ;;
+  esac
+  return 1
+}
+
+# _sk_run_secret_option NAME —— 这个选项名后面跟着的值要不要遮
+#
+# 除了通用敏感键名，还认两个「值里可能夹着凭据」的写法：
+#   -u / --user      curl 的 user:password
+_sk_run_secret_option() {
+  local __n=${1:-} __l
+  if _sk_run_secret_key "$__n"; then
+    return 0
+  fi
+  __l=$(printf '%s' "$__n" | tr 'A-Z' 'a-z')
+  case "$__l" in
+    u | user) return 0 ;;
+  esac
+  return 1
+}
+
+# 显式声明用的两个全局（由 run 解析命令行时填好，用完清掉）：
+#   _SK_RUN_SECRET_ARGS    必遮的参数序号（空格分隔；命令名不算，第 1 个参数是 1）
+#   _SK_RUN_REDACT_VALUES  必遮的字面值（数组）
+_SK_RUN_SECRET_ARGS=""
+_SK_RUN_REDACT_VALUES=()
+_SK_RUN_MASKED=""
+
+# _sk_run_is_secret_idx IDX —— 这个参数是不是被显式声明为敏感
+#
+# 两个来源取并集：run --secret-arg N 指定的序号，以及环境变量
+# SHELLKIT_SECRET_ARGS="2,3"（逗号分隔）。环境变量对所有 run 都生效 ——
+# CI 里用环境变量统一声明最省事。
+_sk_run_is_secret_idx() {
+  local __idx=$1 __x __env=${SHELLKIT_SECRET_ARGS:-}
+  __env="${__env//,/ }"
+  for __x in $_SK_RUN_SECRET_ARGS $__env; do
+    if [ "$__x" = "$__idx" ]; then
+      return 0
+    fi
+  done
+  return 1
+}
+
+# _sk_run_mask_values TEXT —— 把显式声明的字面值遮掉
+#
+# 按**值**脱敏：令牌夹在参数中间也遮得到（--header "Authorization: Bearer abc"）。
+# 替换是字面级的（不当 glob 解释），所以口令里带 * ? [ 也不会出事。
+#
+# 结果放在 _SK_RUN_MASKED 里，不用命令替换 —— 每个参数一次 fork，
+# 在这台机器上一次 fork 要几十毫秒，打印一行日志不值得。
+_sk_run_mask_values() {
+  local __s=${1:-} __v
+  _SK_RUN_MASKED="$__s"
+  if [ "${#_SK_RUN_REDACT_VALUES[@]}" -eq 0 ]; then
+    return 0
+  fi
+  for __v in "${_SK_RUN_REDACT_VALUES[@]}"; do
+    [ -n "$__v" ] || continue
+    _SK_RUN_MASKED=${_SK_RUN_MASKED//"$__v"/'***'}
+  done
+  return 0
 }
 
 # _sk_run_redact_args ARG... —— 打印一条脱敏后的命令行（只给日志用）
 #
 # 日志里出现完整的命令行，就等于把口令与令牌写进了日志文件 ——
-# 而日志常常比代码活得更久、传得更远。遮住三处：
+# 而日志常常比代码活得更久、传得更远。遮住这几处：
 #   KEY=VALUE         键名像敏感字段就把值遮掉（API_TOKEN=***）
 #   --password VALUE  选项名像敏感字段就把下一个参数一起遮掉
-#   Authorization:…   请求头按头名遮
+#   -u VALUE          短选项也要认（curl 的 -u 是 user:password）
+#   Header: …         头名像敏感字段就把值遮掉（Authorization / Cookie / X-Api-Key …）
+#   显式声明的        --secret-arg 指定的序号、--redact-value 指定的字面值
 # 真实执行的命令不受影响 —— 这里只改「打印出来的那一份」。
 _sk_run_redact_args() {
-  local __out="" __sep="" __a __k __mask_next=0
+  local __out="" __sep="" __a __k __h __mask_next=0 __pos=0 __idx=0
   for __a in "$@"; do
+    __pos=$((__pos + 1))
+    # 命令名本身是 0，第一个参数是 1 —— 「第 2 个参数」说的是命令的参数。
+    __idx=$((__pos - 1))
     if [ "$__mask_next" -eq 1 ]; then
       __mask_next=0
+      __a="***"
+    elif _sk_run_is_secret_idx "$__idx"; then
       __a="***"
     else
       __k=""
       case "$__a" in
         *=*) __k=${__a%%=*} ;;
       esac
-      if [ -n "$__k" ] && _sk_run_secret_key "$__k"; then
+      if [ -n "$__k" ] && _sk_run_secret_option "$__k"; then
         __a="$__k=***"
       else
+        __h=""
         case "$__a" in
-          *[Aa]uthorization:*)
-            __a="${__a%%:*}: ***"
-            ;;
-          --*)
-            __k=${__a#--}
-            __k=${__k%%=*}
-            if [ "$__k" != "$__a" ] && _sk_run_secret_key "$__k"; then
-              __mask_next=1
-            fi
-            ;;
+          *:*) __h=${__a%%:*} ;;
         esac
+        if [ -n "$__h" ] && _sk_run_secret_header "$__h"; then
+          __a="${__a%%:*}: ***"
+        else
+          case "$__a" in
+            --*=*)
+              __k=${__a#--}
+              __k=${__k%%=*}
+              if _sk_run_secret_option "$__k"; then
+                __a="${__a%%=*}=***"
+              fi
+              ;;
+            --*)
+              __k=${__a#--}
+              if _sk_run_secret_option "$__k"; then
+                __mask_next=1
+              fi
+              ;;
+            -u | -U)
+              # 短选项：curl 的 -u 是 user:password
+              __mask_next=1
+              ;;
+            -u* | -U*)
+              __a="-u***"
+              ;;
+          esac
+        fi
       fi
     fi
+    # 显式声明的字面值：出现在任何位置都遮
+    _sk_run_mask_values "$__a"
+    __a="$_SK_RUN_MASKED"
     __out="$__out$__sep$(_sk_shell_quote "$__a")"
     __sep=" "
   done
@@ -92,12 +202,20 @@ _sk_run_display() {
   _sk_run_redact_args "$@"
 }
 
-# run [--always] [--no-die] CMD... —— 执行命令，失败即 die；--no-die 只返回码
+# run [--always] [--no-die] [--secret-arg N] [--redact-value V] [--] CMD... —— 执行命令，失败即 die；--no-die 只返回码
+#
+# 命令行会进日志，敏感参数会被脱敏（键名像敏感字段、请求头、短选项 -u 等）。
+# 启发式总会漏，所以还留了两个显式声明：
+#   --secret-arg N     第 N 个参数（命令名不算）必脱敏，可以写多次
+#   --redact-value V   值等于 V 的地方一律脱敏（令牌夹在参数中间也遮得到）
+# 环境变量 SHELLKIT_SECRET_ARGS="2,3" 等价于 --secret-arg 2 --secret-arg 3，
+# 对所有 run 生效 —— CI 里统一声明最省事。
 # @exitcode 0 命令成功
-# @exitcode 2 用法错（没给命令）
+# @exitcode 2 用法错（没给命令、--secret-arg 的序号不是正整数）
 # @exitcode 其他 命令自身的退出码；默认模式下失败会 die，--no-die 只返回码
 run() {
   local __always=0 __die=1 __rc=0 __shown
+  local __secret_args="" __redact_values=() __x __env_args
   while :; do
     case "${1:-}" in
       --always)
@@ -108,6 +226,34 @@ run() {
         __die=0
         shift
         ;;
+      --secret-arg)
+        shift
+        if [ "$#" -eq 0 ]; then
+          log_error "$(_t 'option requires a value'): --secret-arg"
+          return "$SK_USAGE"
+        fi
+        __secret_args="$__secret_args $1"
+        shift
+        ;;
+      --secret-arg=*)
+        __secret_args="$__secret_args ${1#*=}"
+        ;;
+      --redact-value)
+        shift
+        if [ "$#" -eq 0 ]; then
+          log_error "$(_t 'option requires a value'): --redact-value"
+          return "$SK_USAGE"
+        fi
+        __redact_values[${#__redact_values[@]}]=$1
+        shift
+        ;;
+      --redact-value=*)
+        __redact_values[${#__redact_values[@]}]=${1#*=}
+        ;;
+      --)
+        shift
+        break
+        ;;
       *) break ;;
     esac
   done
@@ -115,7 +261,27 @@ run() {
     log_error "$(_t 'run requires a command')"
     return "$SK_USAGE"
   fi
+  # 显式声明的序号只能是正整数：写错了要报错，不能当成「没声明」悄悄放过
+  __env_args=${SHELLKIT_SECRET_ARGS:-}
+  __env_args="${__env_args//,/ }"
+  for __x in $__secret_args $__env_args; do
+    case "$__x" in
+      "" | *[!0-9]*)
+        log_error "$(_t 'invalid secret argument index'): $__x"
+        return "$SK_USAGE"
+        ;;
+    esac
+    if [ "$__x" -lt 1 ]; then
+      log_error "$(_t 'invalid secret argument index'): $__x"
+      return "$SK_USAGE"
+    fi
+  done
+  # 脱敏声明只对这一次调用有效：用完清掉，不能漏到后面的 run
+  _SK_RUN_SECRET_ARGS="$__secret_args"
+  _SK_RUN_REDACT_VALUES=(${__redact_values[@]+"${__redact_values[@]}"})
   __shown="$(_sk_run_display "$@")"
+  _SK_RUN_SECRET_ARGS=""
+  _SK_RUN_REDACT_VALUES=()
   if [ "$__always" -eq 0 ] && [ "${SHELLKIT_DRY_RUN:-0}" = "1" ]; then
     printf '[dry-run] %s\n' "$__shown" >&2
     return 0

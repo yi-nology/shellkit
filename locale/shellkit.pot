@@ -8,7 +8,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: shellkit 0.11.0\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-11-11 00:22+0800\n"
+"POT-Creation-Date: 2026-11-11 00:35+0800\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language-Team: LANGUAGE <LL@li.org>\n"
@@ -285,6 +285,9 @@ msgid "giving up after retries"
 msgstr ""
 
 msgid "run requires a command"
+msgstr ""
+
+msgid "invalid secret argument index"
 msgstr ""
 
 msgid "command failed"

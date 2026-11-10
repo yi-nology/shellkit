@@ -93,6 +93,7 @@ _sk_msg_lookup_shellkit() {
     'attempt failed, retrying') printf '%s' '本次尝试失败，正在重试' ;;
     'giving up after retries') printf '%s' '重试次数用尽' ;;
     'run requires a command') printf '%s' 'run 需要一条命令' ;;
+    'invalid secret argument index') printf '%s' '非法的敏感参数序号' ;;
     'command failed') printf '%s' '命令执行失败' ;;
     'usage: run_concurrent N '\['--timeout SEC'\]' -- COMMAND...') printf '%s' '用法：run_concurrent N [--timeout SEC] -- 命令...' ;;
     'invalid concurrency') printf '%s' '非法的并发数' ;;

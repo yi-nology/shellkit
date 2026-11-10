@@ -182,6 +182,7 @@ shellkit 是一个 Bash 库加脚手架：日志、配置、下载校验、重�
 | 下载并校验 | `net_download URL DEST [SHA256]`，镜像回退已内置 |
 | 等端口 / 等 HTTP | `net_wait_port` / `net_wait_http` |
 | 跑命令，失败即停 | `run systemctl restart nginx`；`SHELLKIT_DRY_RUN=1` 只打印 |
+| 命令行里有口令/令牌 | `run` 的日志自动脱敏；启发式认不出来的用 `run --secret-arg N` / `run --redact-value V` 显式声明 |
 | 跑命令但要自己判成败 | `run --no-die cmd`（默认的 `run` 失败即 `die`，`die` 的 `exit` 不受 `if`/`||` 约束） |
 | 失败重试几次 | `retry 5 curl -fsS "$url" -o x` |
 | 保证同时只跑一个实例 | `lock_acquire deploy 30`，拿到即入清理栈 |
