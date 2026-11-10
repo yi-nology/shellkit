@@ -15,12 +15,22 @@ cp "$GATE" "$FAKE/tools_gate.sh" 2>/dev/null || {
   mkdir -p "$FAKE"
   cp "$GATE" "$FAKE/tools_gate.sh"
 }
-for f in VERSION README.md CHANGELOG.md \
-  site/index.md site/en/index.md \
-  site/guide/installation.md site/en/guide/installation.md \
-  locale/shellkit.pot; do
+for f in VERSION README.md locale/shellkit.pot; do
   cp "$TEST_ROOT/$f" "$FAKE/$f" || _fail "cannot copy $f"
 done
+# CHANGELOG 是条件检查（门禁脚本只在它存在时才查最新小节）—— 发版 tarball
+# 里没有它，这里与门禁同款：有就拷，没有就跳过
+if [ -f "$TEST_ROOT/CHANGELOG.md" ]; then
+  cp "$TEST_ROOT/CHANGELOG.md" "$FAKE/CHANGELOG.md" || _fail "cannot copy CHANGELOG.md"
+fi
+# 站点页同样不依赖仓库布局（发版 tarball 里没有 site/）：自造一套钉版本引用
+# 齐全的页面 —— 门禁查的每条模式（VERSION= / 下载 / Download / tarball 名）
+# 都得有真引用，否则「模式写错了」和「全都一致」分不开
+_ver=$(tr -d '[:space:]' <"$FAKE/VERSION")
+printf 'VERSION=%s\n下载 %s\n' "$_ver" "$_ver" >"$FAKE/site/index.md"
+printf 'VERSION=%s\nDownload %s\n' "$_ver" "$_ver" >"$FAKE/site/en/index.md"
+printf 'VERSION=%s\nshellkit-%s.tar.gz\n' "$_ver" "$_ver" >"$FAKE/site/guide/installation.md"
+printf 'VERSION=%s\nshellkit-%s.tar.gz\n' "$_ver" "$_ver" >"$FAKE/site/en/guide/installation.md"
 
 run_gate() {
   SHELLKIT_CHECK_ROOT="$FAKE" bash "$FAKE/tools_gate.sh" 2>&1
