@@ -8,7 +8,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: shellkit 0.13.0\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-11-11 03:15+0800\n"
+"POT-Creation-Date: 2026-11-11 04:09+0800\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language-Team: LANGUAGE <LL@li.org>\n"
@@ -272,6 +272,9 @@ msgstr ""
 msgid "circular dependency detected"
 msgstr ""
 
+msgid "missing dependency"
+msgstr ""
+
 msgid "usage: retry ATTEMPTS COMMAND..."
 msgstr ""
 
@@ -365,6 +368,9 @@ msgstr ""
 msgid "This action requires systemd"
 msgstr ""
 
+msgid "invalid unit name"
+msgstr ""
+
 msgid "trap_push requires a command"
 msgstr ""
 
@@ -453,6 +459,9 @@ msgid "the vendor directory is a symlink, refusing to install"
 msgstr ""
 
 msgid "the vendored library is a symlink, refusing to install"
+msgstr ""
+
+msgid "recovering the vendored library after an interrupted swap"
 msgstr ""
 
 msgid "path exists and is not a directory"
@@ -743,6 +752,9 @@ msgid "wrote"
 msgstr ""
 
 msgid "try a writable prefix"
+msgstr ""
+
+msgid "recovering the installed copy after an interrupted swap"
 msgstr ""
 
 msgid "installing"

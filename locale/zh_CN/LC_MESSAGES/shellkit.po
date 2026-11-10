@@ -4,7 +4,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: shellkit\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-11-11 03:04+0800\n"
+"POT-Creation-Date: 2026-11-11 04:09+0800\n"
 "PO-Revision-Date: 2026-11-08 00:00+0800\n"
 "Last-Translator: shellkit contributors\n"
 "Language-Team: shellkit contributors\n"
@@ -269,6 +269,9 @@ msgstr "无效的选择"
 msgid "circular dependency detected"
 msgstr "检测到循环依赖"
 
+msgid "missing dependency"
+msgstr "缺失依赖"
+
 msgid "usage: retry ATTEMPTS COMMAND..."
 msgstr "用法: retry 次数 命令..."
 
@@ -362,6 +365,9 @@ msgstr "变量名用了库保留名（__ / _sk_ 前缀）"
 msgid "This action requires systemd"
 msgstr "此操作需要 systemd"
 
+msgid "invalid unit name"
+msgstr "无效的 unit 名称"
+
 msgid "trap_push requires a command"
 msgstr "trap_push 需要一条命令"
 
@@ -451,6 +457,9 @@ msgstr "vendor 目录是符号链接，拒绝安装"
 
 msgid "the vendored library is a symlink, refusing to install"
 msgstr "vendor 出来的库是符号链接，拒绝安装"
+
+msgid "recovering the vendored library after an interrupted swap"
+msgstr "正在从被打断的切换中恢复库副本"
 
 msgid "path exists and is not a directory"
 msgstr "路径已存在且不是目录"
@@ -741,6 +750,9 @@ msgstr "已写入"
 
 msgid "try a writable prefix"
 msgstr "换一个可写的前缀"
+
+msgid "recovering the installed copy after an interrupted swap"
+msgstr "正在从被打断的切换中恢复已安装的副本"
 
 msgid "installing"
 msgstr "正在安装"

@@ -831,13 +831,13 @@ svc_daemon_reload —— 让 systemd 重新读 unit 文件
 
 ### `svc_install_unit`
 
-svc_install_unit NAME —— 从 stdin 读 unit 内容写入系统目录并 daemon-reload
+svc_install_unit NAME —— 从 stdin 读 unit 内容写入系统目录并 daemon-reload NAME 必须是单个合法文件名（字母数字与 :_.@+-）：它会被拼进 /etc/systemd/system/ 后面，带路径组件就能写到那个目录之外。 root 下直接写、不套 sudo（极简容器里常有 root 但没有 sudo）。
 
 **退出码**
 
 - 0 成功
-- 2 缺 unit 名
-- 3 当前平台没有 systemd
+- 2 缺 unit 名或名字带路径组件
+- 3 当前平台没有 systemd、拿不到 sudo
 - 4 写入或 daemon-reload 失败
 
 ## ver
@@ -848,7 +848,8 @@ ver_cmp A B —— 比较两个版本号
 
 **退出码**
 
-- 0 总是成功（stdout 输出 -1 / 0 / 1：A<B / A=B / A>B）
+- 0 比较完成（stdout 输出 -1 / 0 / 1：A<B / A=B / A>B）
+- 2 有版本串非法或缺参数（stdout 空）
 
 ### `ver_gt`
 
@@ -858,6 +859,7 @@ ver_gt A B —— A 是否比 B 新
 
 - 0 A > B
 - 1 不是
+- 2 有版本串非法或缺参数（没法比较）
 
 ### `ver_lt`
 
@@ -867,6 +869,7 @@ ver_lt A B —— A 是否比 B 旧
 
 - 0 A < B
 - 1 不是
+- 2 有版本串非法或缺参数（没法比较）
 
 ### `ver_eq`
 
@@ -876,6 +879,7 @@ ver_eq A B —— 两个版本是否相等
 
 - 0 相等
 - 1 不等
+- 2 有版本串非法或缺参数（没法比较，不许当成相等）
 
 ## status
 

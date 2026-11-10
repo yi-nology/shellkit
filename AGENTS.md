@@ -65,7 +65,7 @@
 只有真正成功应用了模板的文件才能推进基线；跳过的文件保持原基线。
 回归用例：`tests/test_upgrade.sh` 与 `tests/bats/scaffold.bats`（都要连升两次以上）。
 
-## 十二个已经踩过的坑
+## 十三个已经踩过的坑
 
 1. **bash 3.2 与 5 的 trap 语义不同**：子 shell 里 `trap -p EXIT`，3.2 读到空，5.x 仍打印
    父 shell 的 trap 但子 shell 退出时不执行。所以幂等不能只查 `trap -p`，看到是自己的
@@ -122,6 +122,13 @@
       `tests/test_helper.sh` 统一 `export SHELLKIT_LANG=en`，要测本地化行为的
       用例自己写 `SHELLKIT_LANG=''` 放开。
     - 自检：把缺陷造回去，这条用例必须变红；不变红 ⇒ 它没有判据能力。
+
+13. **`--body` 里一个 `exit` 能把整个测试杀成假绿**：stub 的 body 是原样拼进
+    shell 函数的，body 里的 `exit` 退出的是**测试脚本自己** —— 退出码恰好 0 ⇒
+    runner 判「全过」，后面的断言根本没跑过（`test_svc.sh` 后半段真的消失过）。
+    现在 body 在「子 shell 里的函数」中执行：`exit` / `return N` 都只表示
+    「stub 的退出码」。自证用例在 `tests/test_stub.sh`。
+    写 stub body 设退出码用 `return N`，别用 `exit`。
 
 ## 本场景的验证
 

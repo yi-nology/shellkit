@@ -88,6 +88,7 @@ _sk_msg_lookup_shellkit() {
     'default') printf '%s' '默认' ;;
     'invalid choice') printf '%s' '无效的选择' ;;
     'circular dependency detected') printf '%s' '检测到循环依赖' ;;
+    'missing dependency') printf '%s' '缺失依赖' ;;
     'usage: retry ATTEMPTS COMMAND...') printf '%s' '用法: retry 次数 命令...' ;;
     'invalid retry count') printf '%s' '非法的重试次数' ;;
     'attempt failed, retrying') printf '%s' '本次尝试失败，正在重试' ;;
@@ -119,6 +120,7 @@ _sk_msg_lookup_shellkit() {
     'hook failed') printf '%s' '钩子执行失败' ;;
     'reserved variable name') printf '%s' '变量名用了库保留名（__ / _sk_ 前缀）' ;;
     'This action requires systemd') printf '%s' '此操作需要 systemd' ;;
+    'invalid unit name') printf '%s' '无效的 unit 名称' ;;
     'trap_push requires a command') printf '%s' 'trap_push 需要一条命令' ;;
     'cleanup step failed') printf '%s' '清理步骤失败' ;;
     'value must not be empty') printf '%s' '值不能为空' ;;
@@ -149,6 +151,7 @@ _sk_msg_lookup_shellkit() {
     'usage') printf '%s' '用法' ;;
     'the vendor directory is a symlink, refusing to install') printf '%s' 'vendor 目录是符号链接，拒绝安装' ;;
     'the vendored library is a symlink, refusing to install') printf '%s' 'vendor 出来的库是符号链接，拒绝安装' ;;
+    'recovering the vendored library after an interrupted swap') printf '%s' '正在从被打断的切换中恢复库副本' ;;
     'path exists and is not a directory') printf '%s' '路径已存在且不是目录' ;;
     'target directory is not empty') printf '%s' '目标目录非空' ;;
     'vendored library') printf '%s' '已内置库' ;;
@@ -245,6 +248,7 @@ _sk_msg_lookup_shellkit() {
     'documentation is up to date') printf '%s' '文档已是最新' ;;
     'wrote') printf '%s' '已写入' ;;
     'try a writable prefix') printf '%s' '换一个可写的前缀' ;;
+    'recovering the installed copy after an interrupted swap') printf '%s' '正在从被打断的切换中恢复已安装的副本' ;;
     'installing') printf '%s' '正在安装' ;;
     'failed to write the install manifest') printf '%s' '写入安装清单失败' ;;
     'failed to create symlink') printf '%s' '创建符号链接失败' ;;
