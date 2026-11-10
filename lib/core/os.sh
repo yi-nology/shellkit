@@ -151,6 +151,175 @@ os_sha256() {
   fi
 }
 
+# os_release_field KEY [FILE] —— 读 os-release 风格文件里的一个字段
+# 缺省依次试 /etc/os-release、/usr/lib/os-release。文件不可读或没有这个字段时
+# stdout 是空（不是报错）—— 调用方多半只想知道「有没有」。
+# KEY 只允许字母、数字、下划线：它会参与查找，放开就是注入面。
+# @param KEY 字段名（如 ID / VERSION_ID / PRETTY_NAME）
+# @param FILE 可选的 os-release 风格文件路径
+# @exitcode 0 读到字段，或文件不可读 / 字段不存在（stdout 为空）
+# @exitcode 2 KEY 为空或含非法字符
+os_release_field() {
+  local __key=${1:-} __file=${2:-} __line __val=''
+  _sk_need_args "$#" 1 "os_release_field KEY [FILE]" || return $?
+  case "$__key" in
+    '' | *[!A-Za-z0-9_]*)
+      log_error "$(_t 'Usage'): os_release_field KEY [FILE]"
+      return "$SK_USAGE"
+      ;;
+  esac
+  if [ -z "$__file" ]; then
+    for __file in /etc/os-release /usr/lib/os-release; do
+      [ -r "$__file" ] && break
+      __file=''
+    done
+  fi
+  [ -n "$__file" ] && [ -r "$__file" ] || return 0
+  # KEY 以字面量参与匹配（不是正则）—— 含元字符的 KEY 到不了这里。
+  while IFS= read -r __line || [ -n "$__line" ]; do
+    case "$__line" in
+      "$__key="*)
+        __val=${__line#"$__key"=}
+        break
+        ;;
+    esac
+  done <"$__file"
+  # os-release 的值可以带引号：VERSION_ID="22.04"
+  case "$__val" in
+    '"'*'"')
+      __val=${__val#\"}
+      __val=${__val%\"}
+      ;;
+    "'"*"'")
+      __val=${__val#\'}
+      __val=${__val%\'}
+      ;;
+  esac
+  printf '%s' "$__val"
+  return 0
+}
+
+# os_distro_id [FILE] —— 发行版 ID（小写）
+# @param FILE 可选的 os-release 风格文件路径；缺省读本机的
+# @exitcode 0 总是成功（stdout 输出小写 ID，读不到时为空）
+os_distro_id() {
+  local __id
+  __id=$(os_release_field ID "${1:-}") || __id=''
+  printf '%s' "$__id" | tr '[:upper:]' '[:lower:]'
+}
+
+# os_distro_name [FILE] —— 发行版的人类可读名（PRETTY_NAME，回退 NAME）
+# @param FILE 可选的 os-release 风格文件路径；缺省读本机的
+# @exitcode 0 总是成功（stdout 输出名称，读不到时为空）
+os_distro_name() {
+  local __n
+  __n=$(os_release_field PRETTY_NAME "${1:-}") || __n=''
+  if [ -z "$__n" ]; then
+    __n=$(os_release_field NAME "${1:-}") || __n=''
+  fi
+  printf '%s' "$__n"
+}
+
+# os_distro_family [FILE] —— 发行版族：debian|rhel|suse|arch|alpine|unknown
+# 主机模式（不传 FILE）先按包管理器实测；传了 FILE 就只看那个文件，不掺本机包管理器。
+# 麒麟（kylin）刻意不进 ID 硬表：服务器版基于 RHEL 系、桌面版基于 Ubuntu 系，
+# 硬编码任一族都会误判一半场景 ⇒ 靠 ID_LIKE 判定族。
+# @param FILE 可选的 os-release 风格文件路径
+# @exitcode 0 总是成功（stdout 输出族名，认不出时为 unknown）
+os_distro_family() {
+  local __file=${1:-} __id __like __tok
+  if [ -z "$__file" ]; then
+    if command -v apt-get >/dev/null 2>&1; then printf '%s' 'debian'; return 0; fi
+    if command -v dnf >/dev/null 2>&1 || command -v yum >/dev/null 2>&1; then printf '%s' 'rhel'; return 0; fi
+    if command -v zypper >/dev/null 2>&1; then printf '%s' 'suse'; return 0; fi
+    if command -v pacman >/dev/null 2>&1; then printf '%s' 'arch'; return 0; fi
+    if command -v apk >/dev/null 2>&1; then printf '%s' 'alpine'; return 0; fi
+    __file=''
+  fi
+  __id=$(os_distro_id "$__file") || __id=''
+  # ID_LIKE 是空格分隔的族列表，逐个词比 —— 子串相撞（arch 里没有，但 debian/ubuntu 会）不误判。
+  __like=$(os_release_field ID_LIKE "$__file" | tr '[:upper:]' '[:lower:]') || __like=''
+  for __tok in $__like; do
+    case "$__tok" in
+      debian | ubuntu | mint | linuxmint) printf '%s' 'debian'; return 0 ;;
+      rhel | fedora | centos | amzn | ol | openeuler | anolis | euler) printf '%s' 'rhel'; return 0 ;;
+      suse | opensuse | sles) printf '%s' 'suse'; return 0 ;;
+      arch | manjaro) printf '%s' 'arch'; return 0 ;;
+      alpine) printf '%s' 'alpine'; return 0 ;;
+    esac
+  done
+  case "$__id" in
+    debian | ubuntu | deepin | openkylin | uos | linuxmint | kali) printf '%s' 'debian'; return 0 ;;
+    centos | rhel | rocky | almalinux | fedora | amzn | ol | openeuler | anolis) printf '%s' 'rhel'; return 0 ;;
+    opensuse* | sles) printf '%s' 'suse'; return 0 ;;
+    arch | manjaro) printf '%s' 'arch'; return 0 ;;
+    alpine) printf '%s' 'alpine'; return 0 ;;
+  esac
+  printf '%s' 'unknown'
+  return 0
+}
+
+# _sk_desktop_env_of TEXT —— TEXT 里出现的桌面环境名；认不出就是空
+# 优先级：ukui > dde > kde > gnome > xfce > mate > cinnamon > lxqt > budgie
+_sk_desktop_env_of() {
+  case "$1" in
+    *ukui*) printf '%s' 'ukui' ;;
+    *dde* | *deepin*) printf '%s' 'dde' ;;
+    *plasma* | *kde*) printf '%s' 'kde' ;;
+    *gnome*) printf '%s' 'gnome' ;;
+    *xfce*) printf '%s' 'xfce' ;;
+    *mate*) printf '%s' 'mate' ;;
+    *cinnamon*) printf '%s' 'cinnamon' ;;
+    *lxqt* | *lxsession*) printf '%s' 'lxqt' ;;
+    *budgie*) printf '%s' 'budgie' ;;
+  esac
+}
+
+# os_desktop_env —— 当前桌面环境：ukui|dde|gnome|kde|xfce|mate|cinnamon|lxqt|budgie|none
+# 线索一：XDG_CURRENT_DESKTOP / XDG_SESSION_DESKTOP / DESKTOP_SESSION。
+# 这三个是冒号分隔的列表（如 ubuntu:GNOME），逐段看，按出现的先后取第一个命中的。
+# 线索二：会话程序是否装了（SSH/容器里也能探到已装未启动的桌面）。
+# @exitcode 0 总是成功（stdout 输出桌面环境名，没有就是 none）
+os_desktop_env() {
+  local __v __rest __seg __b __clues='' __hit
+  for __v in "${XDG_CURRENT_DESKTOP:-}" "${XDG_SESSION_DESKTOP:-}" "${DESKTOP_SESSION:-}"; do
+    [ -n "$__v" ] || continue
+    __rest=$__v
+    while [ -n "$__rest" ]; do
+      __seg=${__rest%%:*}
+      if [ "$__seg" = "$__rest" ]; then
+        __rest=''
+      else
+        __rest=${__rest#*:}
+      fi
+      [ -n "$__seg" ] || continue
+      __seg=$(printf '%s' "$__seg" | tr '[:upper:]' '[:lower:]')
+      __hit=$(_sk_desktop_env_of "$__seg")
+      if [ -n "$__hit" ]; then
+        printf '%s' "$__hit"
+        return 0
+      fi
+    done
+  done
+  for __b in ukui-session kwin_x11 startdde dde-desktop gnome-session gnome-shell \
+    plasmashell startplasma-x11 xfce4-session mate-session cinnamon-session lxsession; do
+    command -v "$__b" >/dev/null 2>&1 && __clues="$__clues $__b"
+  done
+  __hit=$(_sk_desktop_env_of "$__clues")
+  printf '%s' "${__hit:-none}"
+  return 0
+}
+
+# os_is_desktop —— 当前是否在桌面环境里
+# @exitcode 0 在桌面环境
+# @exitcode 1 不在桌面环境
+os_is_desktop() {
+  if [ "$(os_desktop_env)" = 'none' ]; then
+    return 1
+  fi
+  return 0
+}
+
 # ---------------------------------------------------------------------------
 # 发行版与桌面环境检测
 #

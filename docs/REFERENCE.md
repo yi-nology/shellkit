@@ -624,6 +624,147 @@ os_pkg_installed PKG —— 包是否已安装（不需要提权）
 - 2 没给包名
 - 3 没有受支持的包管理器
 
+## svc
+
+### `svc_platform`
+
+svc_platform —— 当前平台的服务管理器   可用 SK_SVC_PLATFORM 覆盖（测试与特殊环境用）。
+
+**退出码**
+
+- 0 总是成功（stdout 输出 systemd|launchd|none）
+
+### `svc_start`
+
+svc_start UNIT —— 启动服务
+
+**退出码**
+
+- 0 成功
+- 2 缺 unit
+- 3 当前平台没有 systemd
+- 4 systemd 自身失败
+
+### `svc_stop`
+
+svc_stop UNIT —— 停止服务
+
+**退出码**
+
+- 0 成功
+- 2 缺 unit
+- 3 当前平台没有 systemd
+- 4 systemd 自身失败
+
+### `svc_restart`
+
+svc_restart UNIT —— 重启服务
+
+**退出码**
+
+- 0 成功
+- 2 缺 unit
+- 3 当前平台没有 systemd
+- 4 systemd 自身失败
+
+### `svc_reload`
+
+svc_reload UNIT —— 重载服务配置
+
+**退出码**
+
+- 0 成功
+- 2 缺 unit
+- 3 当前平台没有 systemd
+- 4 systemd 自身失败
+
+### `svc_enable`
+
+svc_enable UNIT —— 开机自启
+
+**退出码**
+
+- 0 成功
+- 2 缺 unit
+- 3 当前平台没有 systemd
+- 4 systemd 自身失败
+
+### `svc_disable`
+
+svc_disable UNIT —— 取消开机自启
+
+**退出码**
+
+- 0 成功
+- 2 缺 unit
+- 3 当前平台没有 systemd
+- 4 systemd 自身失败
+
+### `svc_enable_now`
+
+svc_enable_now UNIT —— 开机自启并立即启动
+
+**退出码**
+
+- 0 成功
+- 2 缺 unit
+- 3 当前平台没有 systemd
+- 4 systemd 自身失败
+
+### `svc_disable_now`
+
+svc_disable_now UNIT —— 取消开机自启并立即停止
+
+**退出码**
+
+- 0 成功
+- 2 缺 unit
+- 3 当前平台没有 systemd
+- 4 systemd 自身失败
+
+### `svc_is_active`
+
+svc_is_active UNIT —— 服务是否在跑（只读，不套 dry-run）
+
+**退出码**
+
+- 0 在跑
+- 1 没在跑
+- 2 缺 unit
+- 3 当前平台没有 systemd
+
+### `svc_is_enabled`
+
+svc_is_enabled UNIT —— 服务是否开机自启（只读，不套 dry-run）
+
+**退出码**
+
+- 0 是
+- 1 不是
+- 2 缺 unit
+- 3 当前平台没有 systemd
+
+### `svc_daemon_reload`
+
+svc_daemon_reload —— 让 systemd 重新读 unit 文件
+
+**退出码**
+
+- 0 成功
+- 3 当前平台没有 systemd
+- 4 systemd 自身失败
+
+### `svc_install_unit`
+
+svc_install_unit NAME —— 从 stdin 读 unit 内容写入系统目录并 daemon-reload
+
+**退出码**
+
+- 0 成功
+- 2 缺 unit 名
+- 3 当前平台没有 systemd
+- 4 写入或 daemon-reload 失败
+
 ## scaffold
 
 ### `scaffold_vars_set`

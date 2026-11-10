@@ -109,6 +109,7 @@ _sk_msg_lookup_shellkit() {
     'hook is not executable, skipped') printf '%s' '钩子不可执行，已跳过' ;;
     'hook failed') printf '%s' '钩子执行失败' ;;
     'reserved variable name') printf '%s' '变量名用了库保留名（__ / _sk_ 前缀）' ;;
+    'This action requires systemd') printf '%s' '此操作需要 systemd' ;;
     'trap_push requires a command') printf '%s' 'trap_push 需要一条命令' ;;
     'cleanup step failed') printf '%s' '清理步骤失败' ;;
     'value must not be empty') printf '%s' '值不能为空' ;;

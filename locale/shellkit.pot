@@ -8,7 +8,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: shellkit 0.10.0\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-11-10 15:35+0800\n"
+"POT-Creation-Date: 2026-11-10 15:41+0800\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language-Team: LANGUAGE <LL@li.org>\n"
@@ -333,6 +333,9 @@ msgid "hook failed"
 msgstr ""
 
 msgid "reserved variable name"
+msgstr ""
+
+msgid "This action requires systemd"
 msgstr ""
 
 msgid "trap_push requires a command"

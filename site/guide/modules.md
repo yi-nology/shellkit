@@ -1,6 +1,6 @@
 # 模块地图
 
-`lib/bootstrap.sh` 是唯一入口，一次性按**拓扑序**加载全部 18 个模块。你不用挑着 source，
+`lib/bootstrap.sh` 是唯一入口，一次性按**拓扑序**加载全部 19 个模块。你不用挑着 source，
 也不该复制某个模块的实现进自己的脚本 —— 那是把「同一个坑踩两遍」的另一种写法。
 
 ## 一张表
@@ -49,7 +49,7 @@ str          error
 
 ## 只加载你要的模块
 
-默认全量加载（18 个模块）。真要瘦下来：
+默认全量加载（19 个模块）。真要瘦下来：
 
 ```bash
 SHELLKIT_MODULES="log fs" . ./vendor/shellkit/lib/bootstrap.sh

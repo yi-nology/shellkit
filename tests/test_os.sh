@@ -84,6 +84,11 @@ assert_eq "" "$(os_release_field ID "$d/inner-quote")" "os_release_field 中间�
 assert_eq "" "$(os_release_field NO_SUCH_KEY "$d/quoted")" "os_release_field 找不到的键"
 assert_exit_code 0 os_release_field NO_SUCH_KEY "$d/quoted"
 
+# os_release_field：KEY 是字面量，不参与正则（unix_script 的 _osr_field 把 KEY
+# 拼进 sed 正则，是个注入面）。带元字符的 KEY 匹配不到任何行，但不是用法错。
+assert_eq "" "$(os_release_field 'ID|VERSION_ID' "$d/quoted")" "os_release_field 的 KEY 不当正则"
+assert_exit_code 0 os_release_field 'ID|VERSION_ID' "$d/quoted"
+
 # os_release_field：文件不存在 -> stdout 空、退出码 0
 assert_eq "" "$(os_release_field ID "$d/no-such-file")" "os_release_field 文件不存在"
 assert_exit_code 0 os_release_field ID "$d/no-such-file"

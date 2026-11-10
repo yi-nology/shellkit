@@ -55,7 +55,7 @@ and the output is rendered as SVG, so versions, paths and exit codes are true at
 
 <ShotFigure src="/shots/gate.svg" caption="Rename a documented function and the gate goes red instead of rotting quietly" />
 
-## 18 modules, one topic each
+## 19 modules, one topic each
 
 Your job is assembly, not reimplementation. Full signatures and exit codes: [API reference](/en/reference/index.md).
 

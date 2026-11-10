@@ -20,7 +20,7 @@ Every page stands on its own; the cross-links tell you where to go next.
 
 - [Five hard rules](./conventions.md) -- why stdout carries data only, and why out-parameters use `printf -v`.
 - [Bash 3.2 compatibility](./bash32.md) -- the syntax that crashes on the bash macOS ships, and why.
-- [Module map](./modules.md) -- the 18 modules, what each one owns, and when to reach for it.
+- [Module map](./modules.md) -- the 19 modules, what each one owns, and when to reach for it.
 
 ## Common tasks
 
