@@ -70,7 +70,13 @@ mk_project "$p3" "tool"
 outside3="$work/created-outside"
 ln -s "$outside3" "$p3/README.md"
 out=$("$TEST_ROOT/shellkit" upgrade "$p3" --template "$tpl" 2>&1)
-assert_contains "$out" "symlink" "a symlinked target must be reported, not silently written"
+# 断**完整文案**，不只断 "symlink" 这个词 —— 输出里的路径也算输出：
+# 工程路径里带 "symlink" 时（比如 /home/x/symlink-demo/），单词断言会被路径
+# 白送，恒真 ⇒ 这条守卫就失去了判据能力，而且不会报错。
+assert_contains "$out" "the target is a symlink" "a symlinked target must be reported, not silently written"
+# 再断结构事实：链接没被换成普通文件、还指着原来那个地方
+assert_true [ -L "$p3/README.md" ]
+assert_eq "$outside3" "$(readlink "$p3/README.md")" "the symlink must still point where it did"
 assert_not_exists "$outside3" "the upgrade must not create a file outside the project directory"
 
 # ---------------------------------------------------------------- 目标指向工程外的既有文件
@@ -80,7 +86,9 @@ outside4="$work/keepme"
 printf 'ORIGINAL CONTENT\n' >"$outside4"
 ln -s "$outside4" "$p4/README.md"
 out=$("$TEST_ROOT/shellkit" upgrade --force "$p4" --template "$tpl" 2>&1)
-assert_contains "$out" "symlink" "even --force must not write through a symlink"
+assert_contains "$out" "the target is a symlink" "even --force must not write through a symlink"
+assert_true [ -L "$p4/README.md" ]
+assert_eq "$outside4" "$(readlink "$p4/README.md")" "even --force must not replace the symlink itself"
 assert_eq "ORIGINAL CONTENT" "$(cat "$outside4")" "the file outside the project must stay untouched"
 
 # ---------------------------------------------------------------- vendor 目录是符号链接
@@ -91,16 +99,24 @@ ln -s "$work/outside-vendor" "$p6/vendor"
 rc=0
 out=$("$TEST_ROOT/shellkit" vendor "$p6" 2>&1) || rc=$?
 assert_ne "0" "$rc" "a symlinked vendor directory must be refused"
+assert_contains "$out" "the vendor directory is a symlink" "the refusal must say what is wrong"
 assert_not_exists "$work/outside-vendor/shellkit" "the vendor install must not write outside the project directory"
 
 # ---------------------------------------------------------------- vendor/shellkit 是符号链接
 p7="$work/vendorsym2"
 mk_project "$p7" "tool"
 mkdir -p "$p7/vendor" "$work/outside-vendor2"
+# 软链必须指向一个「看起来像 vendor」的目录 —— 否则会被更早的一道通用守卫
+# （「这个目录不是 shellkit 的 vendor」）先拦掉，压根走不到符号链接那一支，
+# 这条用例就测不到它想测的那个保护了（它防的是 rm -rf 顺着链接删到工程外）。
+printf '0.12.0\n' >"$work/outside-vendor2/VERSION"
+printf 'MARKER\n' >"$work/outside-vendor2/marker.txt"
 ln -s "$work/outside-vendor2" "$p7/vendor/shellkit"
 rc=0
 out=$("$TEST_ROOT/shellkit" vendor "$p7" 2>&1) || rc=$?
 assert_ne "0" "$rc" "a symlinked vendored library must be refused"
+assert_contains "$out" "the vendored library is a symlink" "the refusal must say what is wrong"
+assert_eq "MARKER" "$(cat "$work/outside-vendor2/marker.txt")" "the directory the symlink points at must stay untouched"
 assert_not_exists "$work/outside-vendor2/lib" "the vendor install must not write outside the project directory"
 
 # ---------------------------------------------------------------- 正常工程不受影响
