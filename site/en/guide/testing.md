@@ -121,7 +121,7 @@ still assert on the retry delay window).
 | `fmt` | `shfmt -d -i 2 -ci` (checks, never rewrites) |
 
 `check-exitcode-docs` backs the promise "the return code is part of the interface". The README makes that promise,
-so a gate has to keep it. The sixteen modules written before the rule existed carried no `@exitcode` at all -- the
+so a gate has to keep it. The sixteen core files written before the rule existed carried no `@exitcode` at all -- the
 interface was half missing.
 
 `check-docs` is the easiest to overlook: it turns "documented but not implemented" into a build failure. Rename a
