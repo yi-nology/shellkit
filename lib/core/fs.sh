@@ -41,6 +41,78 @@ fs_atomic_write() {
   return 0
 }
 
+# _sk_fs_mode FILE —— 文件的权限位（八进制，如 644）；取不到就返回 1
+_sk_fs_mode() {
+  local __f=${1:-} __m=""
+  if [ -z "$__f" ]; then
+    return 1
+  fi
+  if ! __m=$(stat -f '%Lp' "$__f" 2>/dev/null); then
+    if ! __m=$(stat -c '%a' "$__f" 2>/dev/null); then
+      return 1
+    fi
+  fi
+  # stat 的输出不是八进制就当没取到（GNU 的 stat -f 认不出 BSD 的格式串时
+  # 会报错，但某些实现会吐别的东西出来 —— 别把垃圾当权限用）
+  case "$__m" in
+    '' | *[!0-7]*) return 1 ;;
+  esac
+  printf '%s' "$__m"
+  return 0
+}
+
+# fs_atomic_copy SRC DST [MODE] —— 按字节把 SRC 复制到 DST；写法是原子的
+#
+# 与 fs_atomic_write 的分工：那个吃的是「内容」，命令替换会吃掉文件末尾的换行，
+# 搬模板文件会变形；这个直接搬文件，逐字节一致。
+#
+# 为什么不用 cp：cp -f 先 truncate 目标再写 —— 写到一半被打断（断电、磁盘满、
+# 进程被杀）留下的是**半截文件**，既不是旧内容也不是新内容；而且 cp 会跟随
+# **目标**的符号链接写穿，把内容写到别处去（链接本身纹丝不动，退出码还是 0）。
+# 这里改成「写同目录的临时文件 → rename 过去」：rename 是原子的，失败要么
+# 什么都没发生、要么整体换成新内容；它替换的是符号链接**本身**，
+# 不会顺着链接写到别处。
+#
+# 权限：给了 MODE 就用它；不给时，目标是既有的普通文件就保留它的权限，
+# 否则用源的权限（目标是符号链接时按源走 —— 这里替换的是链接本身）。
+# 副作用：进程被中途杀掉时，目标目录里可能留下一个 `<DST>.tmp.XXXXXX` 的残留。
+# @exitcode 0 复制成功
+# @exitcode 2 参数错
+# @exitcode 1 源不存在、建目录、落临时文件或改名失败
+fs_atomic_copy() {
+  local __src=${1:-} __dst=${2:-} __mode=${3:-} __dir __tmp __perm=""
+  _sk_need_args "$#" 2 "fs_atomic_copy SRC DST [MODE]" || return $?
+  if [ ! -f "$__src" ]; then
+    log_error "$(_t 'source file does not exist'): $__src"
+    return 1
+  fi
+  __dir=$(dirname "$__dst")
+  fs_ensure_dir "$__dir" "" || return 1
+  if [ -n "$__mode" ]; then
+    __perm="$__mode"
+  elif [ -e "$__dst" ] && [ ! -L "$__dst" ]; then
+    # 目标是既有普通文件：保留它现在的权限（cp 的老行为就是这样）。
+    # 目标是符号链接时不看它的权限 —— 链接自己的权限位恒是 755，没意义；
+    # 而且这里替换的是链接本身，权限该跟源走。
+    __perm=$(_sk_fs_mode "$__dst") || __perm=""
+  else
+    __perm=$(_sk_fs_mode "$__src") || __perm=""
+  fi
+  __tmp=$(mktemp "$__dst.tmp.XXXXXX") || return 1
+  if ! cp -f "$__src" "$__tmp"; then
+    rm -f "$__tmp"
+    return 1
+  fi
+  if [ -n "$__perm" ]; then
+    chmod "$__perm" "$__tmp" 2>/dev/null || true
+  fi
+  if ! mv -f "$__tmp" "$__dst"; then
+    rm -f "$__tmp"
+    return 1
+  fi
+  return 0
+}
+
 # fs_backup FILE [KEEP] —— 产出 FILE.bak.YYYYmmddHHMMSS，按名升序保留最新 KEEP 份
 # @exitcode 0 备份成功（或文件本来就不存在）
 # @exitcode 2 参数错（保留份数不是正整数）

@@ -147,3 +147,41 @@ assert_eq "v2" "$(cat "$(ls -1 "$same".bak.* | tail -1)")" "the newest backup ke
 printf 'v3\n' >"$same"
 fs_backup "$same" 1
 assert_eq "1" "$(ls -1 "$same".bak.* | wc -l | tr -d ' ')" "rotation still trims to KEEP"
+# 原子搬文件（fs_atomic_copy）
+f="$d/copy-target.txt"
+src="$d/copy-source.txt"
+
+# 逐字节复制：末尾的换行不能丢（内容参数化的写法会丢）
+printf 'line1\nline2\n' >"$src"
+fs_atomic_copy "$src" "$f"
+assert_eq "$(cat "$src")" "$(cat "$f")" "fs_atomic_copy copies the content"
+# 注意：assert_true 会把后面的参数全交给被测命令 —— 不能带提示文案
+assert_true cmp -s "$src" "$f"
+
+# 目标已存在 ⇒ 保留目标的权限
+chmod 600 "$f"
+fs_atomic_copy "$src" "$f"
+assert_file_mode "$f" "600" "fs_atomic_copy keeps the mode of an existing target"
+
+# 给了 MODE 就用它
+fs_atomic_copy "$src" "$f" 644
+assert_file_mode "$f" "644" "fs_atomic_copy honours an explicit mode"
+
+# 目标是符号链接 ⇒ 替换的是链接本身，不顺着链接写穿
+outside="$d/outside-copy-target.txt"
+printf 'OUTSIDE\n' >"$outside"
+rm -f "$f"
+ln -s "$outside" "$f"
+assert_true test -L "$f"
+fs_atomic_copy "$src" "$f"
+assert_eq "OUTSIDE" "$(cat "$outside")" "fs_atomic_copy must not write through a symlink"
+assert_false test -L "$f"
+
+# 源不存在 ⇒ 返回 1
+rc=0
+fs_atomic_copy "$d/no-such-source" "$f" >/dev/null 2>&1 || rc=$?
+assert_eq "1" "$rc" "fs_atomic_copy fails when the source is missing"
+
+# 复制完不留临时文件
+assert_eq "0" "$(find "$d" -name '*.tmp.*' -type f 2>/dev/null | wc -l | tr -d ' ')" \
+  "fs_atomic_copy must not leave temporary files behind"

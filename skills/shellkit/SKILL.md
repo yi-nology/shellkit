@@ -96,7 +96,7 @@ shellkit 是一个 Bash 库加脚手架：日志、配置、下载校验、重�
 | 失败就退出并给退出码 | `die` / `fail` / `require_cmd` / `require_root` / `require_file` |
 | 读配置，环境变量优先 | `conf_init` 之后用 `conf_get_any KEY DEFAULT` |
 | 改配置且要幂等 | `conf_set`；改任意文件用 `fs_ensure_line` / `fs_ensure_block` |
-| 写文件不想写坏 | `fs_atomic_write`；备份用 `fs_backup` |
+| 写文件不想写坏 | `fs_atomic_write`（写内容）；搬文件用 `fs_atomic_copy`（逐字节一致）；备份用 `fs_backup` |
 | 下载并校验 | `net_download URL DEST [SHA256]`，镜像回退已内置 |
 | 等端口 / 等 HTTP | `net_wait_port` / `net_wait_http` |
 | 跑命令，失败即停 | `run systemctl restart nginx`；`SHELLKIT_DRY_RUN=1` 只打印 |

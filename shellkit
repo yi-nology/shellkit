@@ -861,7 +861,10 @@ EOF
         _sk_upgrade_cleanup "$__tmp" "$__oldtpl"
         return "$SK_ERR"
       }
-      cp -f "$__tmp/$__rel" "$__dir/$__rel" || {
+      # 原子写：临时文件 + rename。写盘被打断时目标仍是旧内容（完整），
+      # 不是半截文件；目标要是符号链接，替换的是链接本身，不会写穿到别处。
+      fs_atomic_copy "$__tmp/$__rel" "$__dir/$__rel" || {
+        log_error "$(_t 'failed to write the file'): $__rel"
         _sk_upgrade_cleanup "$__tmp" "$__oldtpl"
         return "$SK_ERR"
       }
@@ -918,12 +921,14 @@ EOF
       __i=$((__i + 1))
       continue
     fi
-    if ! cp -f "$__tmp/$__rel" "$__dir/$__rel"; then
+    # 原子写：临时文件 + rename。写盘被打断时目标仍是旧内容（完整），
+    # 不是半截文件；目标要是符号链接，替换的是链接本身，不会写穿到别处。
+    if ! fs_atomic_copy "$__tmp/$__rel" "$__dir/$__rel"; then
       # 写失败：先把已经推进的基线落盘，让清单与磁盘状态对得上，
       # 再报错退出。已经改过的文件不会再被当成「用户改过」而永远冻结。
       # （基线要在这里落盘，commands 就必须提前存好 —— 否则这条路径会
       #   因为 set -u 的 unbound variable 先崩掉，「落盘」一次都执行不到。）
-      log_error "$(_t 'failed to update the file'): $__rel"
+      log_error "$(_t 'failed to write the file'): $__rel"
       _sk_upgrade_save_manifest "$__dir" "$__name" "$__cmds_csv" "$(_sk_new_owned_list "$__name")" || true
       _sk_upgrade_cleanup "$__tmp" "$__oldtpl"
       return "$SK_ERR"

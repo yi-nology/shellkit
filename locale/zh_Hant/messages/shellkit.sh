@@ -36,6 +36,7 @@ _sk_msg_lookup_shellkit() {
     'Required command not found') printf '%s' '找不到必要的指令' ;;
     'This action must be run as root') printf '%s' '這個操作需要 root 權限' ;;
     'Bash version is too old') printf '%s' 'Bash 版本過舊' ;;
+    'source file does not exist') printf '%s' '來源檔案不存在' ;;
     'invalid keep count') printf '%s' '非法的保留份數' ;;
     'line must not be empty') printf '%s' '內容不能為空' ;;
     'line must not contain a newline') printf '%s' '內容不能包含換行' ;;
@@ -176,12 +177,12 @@ _sk_msg_lookup_shellkit() {
     'refusing to write outside the project directory') printf '%s' '拒絕寫到工程目錄之外' ;;
     'the target is a symlink, left alone') printf '%s' '目標是符號連結，保持原樣' ;;
     'would add') printf '%s' '將新增' ;;
+    'failed to write the file') printf '%s' '寫檔案失敗' ;;
     'added') printf '%s' '已新增' ;;
     'modified locally, left alone') printf '%s' '本地已修改，保持原樣' ;;
     'no recorded fingerprint, left alone') printf '%s' '沒有記錄的指紋，保持原樣' ;;
     'cannot be verified against the old template, left alone') printf '%s' '無法與舊範本核對，保持原樣' ;;
     'would update') printf '%s' '將更新' ;;
-    'failed to update the file') printf '%s' '更新檔案失敗' ;;
     'updated') printf '%s' '已更新：' ;;
     'already running from the vendored copy') printf '%s' '已經在用 vendor 副本本身執行' ;;
     'failed to sync the vendored library') printf '%s' '同步程式庫副本失敗' ;;

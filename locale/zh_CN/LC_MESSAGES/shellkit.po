@@ -4,7 +4,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: shellkit\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-11-10 22:40+0800\n"
+"POT-Creation-Date: 2026-11-10 23:59+0800\n"
 "PO-Revision-Date: 2026-11-08 00:00+0800\n"
 "Last-Translator: shellkit contributors\n"
 "Language-Team: shellkit contributors\n"
@@ -112,6 +112,9 @@ msgstr "这个操作需要 root 权限"
 
 msgid "Bash version is too old"
 msgstr "Bash 版本过低"
+
+msgid "source file does not exist"
+msgstr "源文件不存在"
 
 msgid "invalid keep count"
 msgstr "非法的保留份数"
@@ -535,6 +538,9 @@ msgstr "目标是符号链接，保持原样"
 msgid "would add"
 msgstr "将新增"
 
+msgid "failed to write the file"
+msgstr "写文件失败"
+
 msgid "added"
 msgstr "已新增"
 
@@ -549,9 +555,6 @@ msgstr "无法与旧模板核对，保持原样"
 
 msgid "would update"
 msgstr "将更新"
-
-msgid "failed to update the file"
-msgstr "更新文件失败"
 
 msgid "updated"
 msgstr "已更新："

@@ -39,10 +39,27 @@ shim="$work/shim"
 mkdir -p "$shim"
 cat >"$shim/cp" <<'EOS'
 #!/usr/bin/env bash
-dest=""
-for a in "$@"; do dest="$a"; done
-case "$dest" in
-*/AGENTS.md) echo "cp: injected failure" >&2; exit 1 ;;
+# cp 替身：源是 AGENTS.md 时只写前 20 字节就失败退出。
+# 触发条件按「源的路径」而不是「目标的路径」—— 目标在原子写的实现里是临时文件，
+# 名字会变；按源触发才与实现无关。
+dst=""
+src=""
+for a in "$@"; do
+  case "$a" in
+    -*) continue ;;
+  esac
+  if [ -z "$src" ]; then
+    src="$a"
+  else
+    dst="$a"
+  fi
+done
+case "$src" in
+*/AGENTS.md)
+  head -c 20 "$dst" >"$dst" 2>/dev/null
+  echo "cp: injected failure" >&2
+  exit 1
+  ;;
 esac
 exec /bin/cp "$@"
 EOS
@@ -59,7 +76,7 @@ after_tmp=$(tmpdir_count)
 
 assert_ne "0" "$rc" "an upgrade that cannot write must fail"
 assert_not_contains "$out" "unbound variable" "the failure must not crash with an unbound variable"
-assert_contains "$out" "failed to update the file" "the failure must say which file failed"
+assert_contains "$out" "failed to write the file" "the failure must say which file failed"
 assert_eq "$before_tmp" "$after_tmp" "the temporary directory must be cleaned up after a failure"
 
 # 写失败的那个文件不能被当成「用户改过」而永久冻结：

@@ -4,7 +4,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: shellkit\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-11-10 22:40+0800\n"
+"POT-Creation-Date: 2026-11-10 23:59+0800\n"
 "PO-Revision-Date: 2026-11-08 00:00+0800\n"
 "Last-Translator: shellkit contributors\n"
 "Language-Team: shellkit contributors\n"
@@ -111,6 +111,9 @@ msgid "This action must be run as root"
 msgstr ""
 
 msgid "Bash version is too old"
+msgstr ""
+
+msgid "source file does not exist"
 msgstr ""
 
 msgid "invalid keep count"
@@ -535,6 +538,9 @@ msgstr ""
 msgid "would add"
 msgstr ""
 
+msgid "failed to write the file"
+msgstr ""
+
 msgid "added"
 msgstr ""
 
@@ -548,9 +554,6 @@ msgid "cannot be verified against the old template, left alone"
 msgstr ""
 
 msgid "would update"
-msgstr ""
-
-msgid "failed to update the file"
 msgstr ""
 
 msgid "updated"

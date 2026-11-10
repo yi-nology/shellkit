@@ -65,7 +65,7 @@
 只有真正成功应用了模板的文件才能推进基线；跳过的文件保持原基线。
 回归用例：`tests/test_upgrade.sh` 与 `tests/bats/scaffold.bats`（都要连升两次以上）。
 
-## 八个已经踩过的坑
+## 九个已经踩过的坑
 
 1. **bash 3.2 与 5 的 trap 语义不同**：子 shell 里 `trap -p EXIT`，3.2 读到空，5.x 仍打印
    父 shell 的 trap 但子 shell 退出时不执行。所以幂等不能只查 `trap -p`，看到是自己的
@@ -92,6 +92,14 @@
    链接本身纹丝不动，退出码还是 0 —— 表现为「静默写到预期目录之外」。
    要写文件就用「临时文件 + rename」（库里是 `fs_atomic_write`）；或者像 `cmd_upgrade`
    那样先判「目标不是软链」，是就跳过并提示。
+9. **写文件要「临时文件 + rename」，不能 `cp -f`**：`cp -f` 先 truncate 目标再写 ——
+   写到一半被打断（断电、磁盘满、进程被杀）留下的是**半截文件**（实测 0 字节到 5MB 不等），
+   既不是旧内容也不是新内容；进程被杀掉还可能什么都不提示。
+   库里写文件一律走 `fs_atomic_write`（写内容）与 `fs_atomic_copy`（搬文件，逐字节一致）：
+   同目录落临时文件再 `rename` 过去 —— rename 是原子的，失败要么什么都没发生、
+   要么整体换新；而且它替换的是符号链接**本身**，不会顺着链接写到别处。
+   副作用：被杀可能留下 `<目标>.tmp.XXXXXX` 残留。
+   回归用例：`tests/test_upgrade_atomic.sh`。
 
 ## 本场景的验证
 
@@ -161,7 +169,7 @@ shellkit 是一个 Bash 库加脚手架：日志、配置、下载校验、重�
 | 失败就退出并给退出码 | `die` / `fail` / `require_cmd` / `require_root` / `require_file` |
 | 读配置，环境变量优先 | `conf_init` 之后用 `conf_get_any KEY DEFAULT` |
 | 改配置且要幂等 | `conf_set`；改任意文件用 `fs_ensure_line` / `fs_ensure_block` |
-| 写文件不想写坏 | `fs_atomic_write`；备份用 `fs_backup` |
+| 写文件不想写坏 | `fs_atomic_write`（写内容）；搬文件用 `fs_atomic_copy`（逐字节一致）；备份用 `fs_backup` |
 | 下载并校验 | `net_download URL DEST [SHA256]`，镜像回退已内置 |
 | 等端口 / 等 HTTP | `net_wait_port` / `net_wait_http` |
 | 跑命令，失败即停 | `run systemctl restart nginx`；`SHELLKIT_DRY_RUN=1` 只打印 |
