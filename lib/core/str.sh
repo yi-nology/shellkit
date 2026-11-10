@@ -171,3 +171,75 @@ _sk_uint() {
   esac
   printf '%s\n' "$__v"
 }
+
+# _str_edit_distance A B —— 编辑距离（Levenshtein），纯 bash
+# 用两个平行数组当滚动行 —— bash 3.2 没有关联数组，也不需要 eval。
+_str_edit_distance() {
+  local __a=${1:-} __b=${2:-}
+  local __alen=${#__a} __blen=${#__b}
+  local __i __j __cost __above __left __diag __best
+  local -a __prev=() __cur=()
+  if [ "$__a" = "$__b" ]; then
+    printf '0'
+    return 0
+  fi
+  if [ "$__alen" -eq 0 ]; then
+    printf '%s' "$__blen"
+    return 0
+  fi
+  if [ "$__blen" -eq 0 ]; then
+    printf '%s' "$__alen"
+    return 0
+  fi
+  for ((__j = 0; __j <= __blen; __j++)); do
+    __prev[__j]=$__j
+  done
+  for ((__i = 1; __i <= __alen; __i++)); do
+    __cur[0]=$__i
+    for ((__j = 1; __j <= __blen; __j++)); do
+      if [ "${__a:__i-1:1}" = "${__b:__j-1:1}" ]; then
+        __cost=0
+      else
+        __cost=1
+      fi
+      __above=$((__prev[__j] + 1))
+      __left=$((__cur[__j - 1] + 1))
+      __diag=$((__prev[__j - 1] + __cost))
+      __best=$__above
+      if [ "$__left" -lt "$__best" ]; then
+        __best=$__left
+      fi
+      if [ "$__diag" -lt "$__best" ]; then
+        __best=$__diag
+      fi
+      __cur[__j]=$__best
+    done
+    __prev=(${__cur[@]+"${__cur[@]}"})
+  done
+  printf '%s' "${__prev[__blen]}"
+  return 0
+}
+
+# str_suggest WORD [CANDIDATE...] —— 最接近的候选
+# @brief 距离相同时取先给的那个；没有候选时返回 1。
+# @param WORD 用户输入
+# @param CANDIDATE 候选词，可给多个
+# @exitcode 0 找到候选（stdout 输出候选）
+# @exitcode 1 没有候选
+str_suggest() {
+  local __word=${1:-} __cand __best="" __bestd="" __d
+  if [ "$#" -gt 0 ]; then
+    shift
+  fi
+  for __cand in "$@"; do
+    [ -n "$__cand" ] || continue
+    __d=$(_str_edit_distance "$__word" "$__cand")
+    if [ -z "$__bestd" ] || [ "$__d" -lt "$__bestd" ]; then
+      __best="$__cand"
+      __bestd="$__d"
+    fi
+  done
+  [ -n "$__best" ] || return 1
+  printf '%s' "$__best"
+  return 0
+}

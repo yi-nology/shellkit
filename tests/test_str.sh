@@ -48,3 +48,18 @@ assert_exit_code 2 str_repeat __out 2 "x" 2>/dev/null
 __custom="  trim me  "
 str_trim __custom
 assert_eq "trim me" "$__custom" "a __-prefixed name outside the reserved list still works"
+
+# ---- str_suggest ----
+assert_eq "docker" "$(str_suggest dockr docker nginx redis)" "str_suggest picks the closest candidate"
+assert_eq "nginx" "$(str_suggest ngx docker nginx redis)" "str_suggest picks the closest candidate"
+assert_exit_code 1 str_suggest zzzzz
+assert_eq "" "$(str_suggest zzzzz 2>/dev/null || true)" "str_suggest prints nothing when there is no candidate"
+# 距离相同时取先给的那个
+assert_eq "aa" "$(str_suggest ab aa)" "str_suggest keeps the first candidate on a tie"
+
+# 编辑距离本身
+assert_eq "0" "$(_str_edit_distance abc abc)" "edit distance of equal strings"
+assert_eq "3" "$(_str_edit_distance abc '')" "edit distance against an empty string"
+assert_eq "3" "$(_str_edit_distance '' abc)" "edit distance from an empty string"
+assert_eq "1" "$(_str_edit_distance abc abd)" "edit distance of one substitution"
+assert_eq "3" "$(_str_edit_distance kitten sitting)" "edit distance of a classic pair"
