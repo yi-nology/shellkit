@@ -504,3 +504,105 @@ parallel_map() {
     exit 0
   )
 }
+
+# ---------------------------------------------------------------------------
+# 超时包装
+#
+# 为什么不用 GNU timeout：macOS 自带的 BSD 环境里没有它，
+# 而同一份脚本要在这两种机器上都能跑。
+# ---------------------------------------------------------------------------
+
+# run_timeout SEC CMD... —— 带超时执行命令
+# @brief 没有 perl 时退化为不带超时（直接执行）；SEC 为 0 表示不设超时。
+# @param SEC 超时秒数
+# @param CMD 命令与参数
+# @exitcode 0 命令成功
+# @exitcode 2 参数错（秒数非法或没给命令）
+# @exitcode 124 超时
+# @exitcode 其他 命令自身的退出码
+run_timeout() {
+  local __secs=${1:-}
+  if [ "$#" -lt 2 ]; then
+    log_error "$(_t 'Usage'): run_timeout SEC CMD..."
+    return "$SK_USAGE"
+  fi
+  if ! [[ "$__secs" =~ ^[0-9]+([.][0-9]+)?$ ]]; then
+    log_error "$(_t 'invalid timeout value'): $__secs"
+    return "$SK_USAGE"
+  fi
+  shift
+  if [ "$__secs" = "0" ]; then
+    "$@"
+    return $?
+  fi
+  if ! command -v perl >/dev/null 2>&1; then
+    "$@"
+    return $?
+  fi
+  perl -e '
+    my $secs = shift @ARGV;
+    my @cmd  = @ARGV;
+    my $pid = fork();
+    if (!defined $pid) { exit 125; }
+    if ($pid == 0) { exec(@cmd) or exit 127; }
+    $SIG{ALRM} = sub {
+      kill "TERM", $pid;
+      sleep 1;
+      kill "KILL", $pid;
+      exit 124;
+    };
+    alarm $secs;
+    waitpid $pid, 0;
+    alarm 0;
+    my $st = $?;
+    if ($st & 127) { exit(128 + ($st & 127)); }
+    exit($st >> 8);
+  ' "$__secs" "$@"
+}
+
+# run_func_timeout SEC FN [ARG...] —— 带超时执行当前 shell 里的函数
+# @brief 函数在子 shell 里跑（所以改不到调用方的变量）；stdout 收集后输出，stderr 丢弃。
+# @param SEC 超时秒数
+# @param FN 函数名
+# @param ARG 传给函数的参数
+# @exitcode 0 函数正常结束
+# @exitcode 2 参数错（秒数非法或没给函数名）
+# @exitcode 143 超时（SIGTERM）
+# @exitcode 其他 函数自身的退出码
+run_func_timeout() {
+  local __secs=${1:-} __fn=${2:-} __outfile __rc=0 __pid __wd
+  if [ "$#" -lt 2 ]; then
+    log_error "$(_t 'Usage'): run_func_timeout SEC FN [ARG...]"
+    return "$SK_USAGE"
+  fi
+  if ! [[ "$__secs" =~ ^[0-9]+([.][0-9]+)?$ ]]; then
+    log_error "$(_t 'invalid timeout value'): $__secs"
+    return "$SK_USAGE"
+  fi
+  shift 2
+  __outfile=$(mktemp "${TMPDIR:-/tmp}/shellkit-func.XXXXXX") || return "$SK_ERR"
+  "$__fn" "$@" >"$__outfile" 2>/dev/null &
+  __pid=$!
+  # watchdog 必须全重定向：否则它与 sleep 子进程持有外层管道的写端，
+  # 函数结束后外层还要等 sleep 睡满才返回。
+  (sleep "$__secs"; kill "$__pid" 2>/dev/null) >/dev/null 2>&1 </dev/null &
+  __wd=$!
+  wait "$__pid" 2>/dev/null || __rc=$?
+  kill "$__wd" 2>/dev/null || true
+  wait "$__wd" 2>/dev/null || true
+  cat "$__outfile" 2>/dev/null || true
+  rm -f "$__outfile"
+  return "$__rc"
+}
+
+# run_install_sudo_shim —— 用同名 shell 函数遮蔽 sudo 二进制
+# @brief 脚本里常有直接书写的 sudo apt-get ...，只靠 run 的 dry-run 拦不住它们。
+# @brief 这是全局副作用（改了当前 shell 的命令解析），所以必须显式调用才生效。
+# @exitcode 0 总是成功
+run_install_sudo_shim() {
+  sudo() {
+    printf '[dry-run] %s\n' "$(_sk_run_display sudo "$@")" >&2
+    return 0
+  }
+  return 0
+}

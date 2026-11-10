@@ -161,3 +161,51 @@ assert_eq "2" "$rc" "parallel_map requires a command"
 rc=0
 printf '%s\n' x | parallel_map 2 -- true >/dev/null 2>&1 || rc=$?
 assert_eq "0" "$rc" "parallel_map succeeds when every item succeeds"
+
+# ---- run_timeout ----
+assert_exit_code 0 run_timeout 5 true
+rc=0
+run_timeout 5 sh -c 'exit 7' >/dev/null 2>&1 || rc=$?
+assert_eq "7" "$rc" "run_timeout passes the command exit code through"
+rc=0
+run_timeout abc true >/dev/null 2>&1 || rc=$?
+assert_eq "2" "$rc" "run_timeout rejects a non-numeric timeout"
+rc=0
+run_timeout 5 >/dev/null 2>&1 || rc=$?
+assert_eq "2" "$rc" "run_timeout requires a command"
+assert_exit_code 0 run_timeout 0 true
+if command -v perl >/dev/null 2>&1; then
+  rc=0
+  run_timeout 1 sleep 5 >/dev/null 2>&1 || rc=$?
+  assert_eq "124" "$rc" "run_timeout returns 124 on timeout"
+else
+  printf 'skip: no perl, run_timeout cannot enforce a timeout\n' >&2
+fi
+
+# ---- run_func_timeout ----
+_fn_out() { printf 'hello\n'; }
+assert_eq "hello" "$(run_func_timeout 5 _fn_out)" "run_func_timeout returns the function output"
+rc=0
+run_func_timeout 5 _fn_out >/dev/null 2>&1 || rc=$?
+assert_eq "0" "$rc" "run_func_timeout succeeds when the function succeeds"
+_fn_rc() { return 7; }
+rc=0
+run_func_timeout 5 _fn_rc >/dev/null 2>&1 || rc=$?
+assert_eq "7" "$rc" "run_func_timeout passes the function exit code through"
+rc=0
+run_func_timeout abc _fn_out >/dev/null 2>&1 || rc=$?
+assert_eq "2" "$rc" "run_func_timeout rejects a non-numeric timeout"
+rc=0
+run_func_timeout 5 >/dev/null 2>&1 || rc=$?
+assert_eq "2" "$rc" "run_func_timeout requires a function name"
+_fn_slow() { sleep 5; }
+rc=0
+run_func_timeout 1 _fn_slow >/dev/null 2>&1 || rc=$?
+assert_eq "143" "$rc" "run_func_timeout returns 143 on timeout"
+
+# ---- run_install_sudo_shim ----
+run_install_sudo_shim
+out=$(sudo touch "$d/should-not-exist" 2>&1)
+assert_contains "$out" "dry-run" "the sudo shim turns sudo into a dry-run"
+assert_false test -f "$d/should-not-exist"
+unset -f sudo
