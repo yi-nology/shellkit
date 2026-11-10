@@ -2,6 +2,11 @@
 本文件由 `tools/release.sh` 在发版时自动追加，已发布的小节不要手改。
 最新的在最前面。每一条对应一个提交 —— 要看「为什么」而不是「改了什么」，读 `docs/MIGRATING.md`。
 
+## 0.11.1 — 2026-11-10
+
+dd3d144 perf(trap): 装 trap 时的临时文件只删一次，不再 8 次 rm
+aa433d7 docs(migrating): 补 0.11.1 小节 —— trap_install 的 8 次 rm 降到 1 次
+
 ## 0.11.0 — 2026-11-10
 
 2cfb087 fix(test): 真下载的用例在「没有 curl 也没有 wget」的机器上判红

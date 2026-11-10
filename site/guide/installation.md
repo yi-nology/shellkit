@@ -30,7 +30,7 @@ curl -fsSL https://github.com/yi-nology/shellkit/releases/latest/download/instal
 curl -fsSL https://github.com/yi-nology/shellkit/releases/latest/download/install.sh | PREFIX="$HOME/.local" bash
 
 # 钉版本
-curl -fsSL https://github.com/yi-nology/shellkit/releases/latest/download/install.sh | VERSION=0.11.0 bash
+curl -fsSL https://github.com/yi-nology/shellkit/releases/latest/download/install.sh | VERSION=0.11.1 bash
 
 # 内网镜像：<base>/v<version>/<asset>
 curl -fsSL https://github.com/yi-nology/shellkit/releases/latest/download/install.sh | SHELLKIT_RELEASE_BASE=https://mirror.example/shellkit bash
@@ -69,7 +69,7 @@ fi
 `update` 会下载并校验 sha256，通过之后才替换。离线或内网环境给定本地包：
 
 ```bash
-shellkit update --from shellkit-0.11.0.tar.gz --sha256 "$SUM"
+shellkit update --from shellkit-0.11.1.tar.gz --sha256 "$SUM"
 ```
 
 ## 卸载
