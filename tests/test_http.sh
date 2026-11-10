@@ -213,6 +213,24 @@ assert_eq "1.2.3" "$(http_github_latest_tag owner/repo)" "github latest tag stri
 assert_eq "https://example.com/x86_64.tar.gz" "$(http_github_release_asset owner/repo 'x86_64')" "github asset picks the matching one"
 assert_eq "https://example.com/arm64.tar.gz" "$(http_github_release_asset owner/repo 'arm64')" "github asset picks the matching one"
 
+# 没有 jq 也没有 python3 时走 grep/sed 兜底：GitHub 的 JSON 是一行、装着好几个
+# 资产，兜底必须取**第一条**匹配的 —— 贪婪的 .* 会抓到最后一个（要 x86_64 却给
+# arm64）。这条只在强制藏掉解析器时才跑到，正是它在 CI 上暴露的原因。
+mkdir -p "$d/nojq"
+for t in mktemp cat mv rm tr sed grep; do
+  src=$(command -v "$t" 2>/dev/null) || continue
+  ln -sf "$src" "$d/nojq/$t"
+done
+saved_path=$PATH
+# shellcheck disable=SC2123
+PATH="$d/nojq"
+hash -r
+got=$(http_github_release_asset owner/repo 'x86_64')
+PATH=$saved_path
+hash -r
+assert_eq "https://example.com/x86_64.tar.gz" "$got" \
+  "the jq-less fallback picks the first matching asset, not the last one"
+
 # 大写 V 前缀也要去掉
 export FAKE_BODY='{"tag_name":"V2.0.0"}'
 assert_eq "2.0.0" "$(http_github_latest_tag owner/repo)" "github latest tag strips the V prefix"

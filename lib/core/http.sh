@@ -604,8 +604,14 @@ _sk_http_github_asset() {
   elif command -v python3 >/dev/null 2>&1; then
     __out=$(printf '%s' "$__body" | python3 -c "$_SK_HTTP_PY_ASSETS" "$__pat" 2>/dev/null) || __out=""
   else
-    __out=$(printf '%s\n' "$__body" | grep '"browser_download_url"' | grep -E -- "$__pat" |
-      sed -E 's/.*"browser_download_url"[[:space:]]*:[[:space:]]*"([^"]*)".*/\1/') || __out=""
+    # 没有 jq 也没有 python3 时的兜底。GitHub 返回的 JSON 是**一行**、装着好几个
+    # 资产，直接 grep|sed 会踩两个坑：贪婪的 .* 抓到的是**最后一个** URL
+    # （要 x86_64 却给 arm64），而且匹配到的可能是别的字段。
+    # 所以先按逗号拆成一条条资产，再逐条取 URL，最后只留第一条匹配的。
+    __out=$(printf '%s' "$__body" | tr ',' '\n' |
+      grep -E -- "$__pat" |
+      sed -n -E 's/.*"browser_download_url"[[:space:]]*:[[:space:]]*"([^"]*)".*/\1/p' |
+      sed -n '1p') || __out=""
   fi
   [ -n "$__out" ] || return 1
   printf '%s' "$__out" | sed -n '1p'
