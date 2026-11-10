@@ -2,6 +2,18 @@
 本文件由 `tools/release.sh` 在发版时自动追加，已发布的小节不要手改。
 最新的在最前面。每一条对应一个提交 —— 要看「为什么」而不是「改了什么」，读 `docs/MIGRATING.md`。
 
+## 0.13.0 — 2026-11-11
+
+c72d5bd fix(scaffold): 模板变量的值里有换行要直接拒绝 —— 以前是静默截断
+f97a389 ci: 批次 4.2 —— ARM64 与国产系统（欧拉）进流水线
+476f066 docs(plan): 批次 4 收口的计划 —— 覆盖率、变异测试、ARM64/国产流水线
+205ac57 ci: 下载器兜底别只认 curl-minimal —— openEuler 没有这个包名
+e748518 fix(install-self): 重装不再自删运行源 —— 整份副本先进 stage 再原子换名
+11af801 fix(new): 提问循环不能再挂在 heredoc 上 —— fd 0 被抢走，ask 永远判非交互
+dbf14c2 fix(cli): SHELLKIT_MODULES 不再泄漏进 CLI —— 按需加载是给直接用库的人的
+08baec8 fix(versions): 裸版本号门禁扩到 README —— 同一种漂移不该只在站点页被抓
+a311af6 docs(migrating): 补 0.13.0 的三行行为变化 —— new 提问、install-self 自装、CLI 全量加载
+
 ## 0.12.1 — 2026-11-11
 
 3215c7f fix(test): 守卫用例断完整文案与结构事实 —— 路径不能白送断言
