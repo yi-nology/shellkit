@@ -32,6 +32,7 @@ help:
 	  'make examples    跑 examples/ 下每个工程的测试' \
 	  'make check       依次跑 syntax / test / lint / module-order-check / check-exitcode-docs / local-names-check / module-count-check / pipe-safety-check / docs-check / versions-check / check-docs / cookbook-check / messages-check / examples / fmt' \
 	  'make bats-check  跑 bats 用例（tests/bats，每个 @test 一个独立进程）' \
+	  'make coverage    公开函数级覆盖率（带白名单棘轮，不进 check）' \
 	  'make release VERSION=x.y.z  发版：升版本→重生成产物→门禁→commit→tag→push' \
 	  'make release-dry VERSION=x.y.z  同 release，但跑完还原工作树、不提交' \
 	  'make site        构建文档站（先跑 tools/site_sync.sh 从 docs/ 同步）' \
@@ -103,6 +104,11 @@ bats-check:
 	  echo "bats is not installed: brew install bats-core / npm i -g bats" >&2; \
 	  exit 3; \
 	fi
+
+# 覆盖率：函数级（162 个公开函数谁没被测到），带白名单棘轮。
+# 不进 check —— 它要把整套测试跑两遍，太慢；想收紧覆盖率就调 --min。
+coverage:
+	@bash tools/coverage.sh --min 40
 
 # ---------- 文档站 ----------
 # 刻意不进 check：库的门禁不依赖 Node，没装 npm 的机器上也该能全绿。
