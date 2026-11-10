@@ -170,6 +170,15 @@ _registry_deps_visit() {
   _REGISTRY_PATH="$_REGISTRY_PATH $__name"
   while IFS= read -r __dep; do
     [ -n "$__dep" ] || continue
+    # 依赖必须在注册表里：缺失的依赖不是「一个普通节点」——
+    # 把它混进排序结果，照着结果执行的安装顺序/任务编排就是错的（评审 P2）。
+    case " $_REGISTRY_ENTRIES " in
+      *" $__dep "*) ;;
+      *)
+        log_error "$(_t 'missing dependency'): $__name -> $__dep"
+        return 1
+        ;;
+    esac
     if ! _registry_deps_visit "$__dep" "$__field"; then
       return 1
     fi

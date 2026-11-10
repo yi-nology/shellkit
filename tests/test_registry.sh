@@ -58,6 +58,22 @@ assert_false registry_topo DEPS "a dependency cycle is refused for the whole reg
 registry_scan "$d/nosuchdir" '.manifest'
 assert_eq "" "$(registry_list)" "scanning a missing directory yields nothing"
 
+# 缺失依赖：不能当成普通节点混进结果，要报 missing dependency（评审 P2）
+# 独立根目录：上面那组 x/y 是个环，混在一起会先撞环检测。
+d2=$(tmpdir)
+mkdir -p "$d2/orphan" "$d2/solo"
+printf 'LABEL=Orphan\nDEPS=ghost\n' >"$d2/orphan/.manifest"
+printf 'LABEL=Solo\nDEPS=\n' >"$d2/solo/.manifest"
+registry_scan "$d2" '.manifest'
+rc=0
+out=$(registry_deps orphan DEPS 2>&1) || rc=$?
+assert_ne "0" "$rc" "a dependency on an unregistered entry must be refused"
+assert_contains "$out" "missing dependency" "the refusal must name the cause"
+rc=0
+out=$(registry_topo DEPS 2>&1) || rc=$?
+assert_ne "0" "$rc" "topo must refuse a registry with a missing dependency"
+assert_contains "$out" "ghost" "the refusal must name the missing entry"
+
 # ---------------------------------------------------------------------------
 # registry_scan_multi：清单分散在多个根目录时，一次扫成一个索引
 # （unix_script 的布局是 <分类>/<模块>/.manifest，每个分类目录各扫一次）
