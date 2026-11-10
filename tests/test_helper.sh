@@ -42,6 +42,12 @@ assert_not_contains() {
   return 0
 }
 
+# assert_true / assert_false —— 断言一条命令的成败
+#
+# ⚠️ **只能传命令，不能带提示文案**：这两个断言把**全部**参数交给被测命令，
+# 多一个字符串就是多一个参数 —— assert_true test -d "$p" "说明" 会变成
+# `test -d "$p" "说明"`，test 报 "binary operator expected"。
+# 要带说明就自己写断言（_fail "expected ..."），或者用 assert_eq / assert_contains。
 assert_true() {
   if ! "$@"; then
     _fail "expected success: $*"
