@@ -2,6 +2,42 @@
 本文件由 `tools/release.sh` 在发版时自动追加，已发布的小节不要手改。
 最新的在最前面。每一条对应一个提交 —— 要看「为什么」而不是「改了什么」，读 `docs/MIGRATING.md`。
 
+## 0.12.0 — 2026-11-11
+
+9da38dc docs(site): 英文站的模块数从 seventeen 改成 18 —— 文档说 17、实际 18 的漂移
+3dc4af7 fix(module-count): 英文页的模块数漂移一直抓不到 —— 门禁只认数字形式
+1e775bb feat(i18n): 多域查找 + 纯 bash 兜底表 —— 没有 gettext 也出译文
+4a2f2a4 feat(os): 发行版与桌面环境检测 —— 麒麟靠 ID_LIKE 判定，不进 ID 硬表
+402e3d5 feat(os): 提权包管理与 sudo 就绪 —— 既有 os_pkg_* 语义一字不动
+c5fc1b7 feat(svc): systemd 服务动词 —— 写类动作支持 dry-run
+107d6b8 fix(os): 清掉外来重复实现 —— 阵亡代理的残留块曾被误提交
+17f4fda feat(ver): 版本比较 —— 纯 bash 分段比较，不依赖 GNU sort -V
+90192b1 feat(status,registry,profile): 三个新模块 —— 状态契约、KV 注册表、profile 格式原语
+2657fd5 feat(http): GitHub release 查询 —— net_request 取原文再本地解析
+09c67f6 feat(run): 超时包装与 sudo 遮蔽 —— 遮蔽需显式调用，不改默认行为
+06dee6d feat(str): str_suggest —— 纯 bash 编辑距离，bash 3.2 兼容
+433218d docs: 重生 API 参考 —— 补上 http / run / str 的新公开函数
+ad2cf7e style: 按 shfmt 归一 http/run 新增代码
+e930b1d feat(registry): registry_scan_multi —— 一次扫多个清单根目录
+b519390 feat(registry): registry_add —— 登记单份清单文件
+abf2b76 fix(upgrade): 升级不再写到工程之外 —— 清单名校验、路径边界、符号链接、写盘失败不再崩溃
+12b0e98 docs(reports): v0.11.0 复核报告与 v0.12.0 路线图
+152f503 docs(migrating): 修正升级被中断后的描述 —— 别把没实测的行为说成会补齐
+1b0ad7f docs(reports): 更正 —— test_http 的 jq-less 兜底是真 bug，不是 flaky（已被并行会话修掉）
+df27b22 perf(trap): 装 trap 时的临时文件只删一次，不再 8 次 rm
+6417dcd fix(docs): 新模块的文档注释里别留裸尖括号 —— 站点构建整个炸掉
+d21c10d fix(upgrade): 升级写盘改成原子写 —— 中断不再留下半截文件
+542f069 docs(ai): 补第 10 条坑 —— 文档注释里的裸尖括号会炸站点构建
+3a7b5fa fix(man): 模块页的 DESCRIPTION 只取文件头首行摘要 —— 不再摊成一堵文字墙
+913ab2d docs(site): 把 docs/MAN.md 接进站点与 README —— 别让它成为孤儿页
+25231a3 docs(migrating): 把 0.11.1 小节并回 main —— v0.11.1 已发布，main 上不能没有这条记录
+671ce81 fix(upgrade): 升级事务化 —— 致命问题在动文件之前就退出，vendor 目录整体换
+79cabb5 docs(migrating): 说明 0.11.1 与 0.12.0 的关系 —— 0.11.1 是维护版，升级行为没变
+e8242db feat(run): 命令行脱敏补齐形态 + 显式声明接口 —— 启发式永远漏，得给调用方一把钥匙
+d4f0a05 docs(tests): 标注 assert_true / assert_false 只能传命令 —— 多传一个文案就变成参数
+84dc518 test: 批次 2 —— runner 上限抬到 300s、TTY 假绿改成同步点、加元测试（门禁自己也要被测）
+7999447 docs(changelog): 把 0.11.1 小节并回 main —— 发过的版本不能从变更记录里消失
+
 ## 0.11.1 — 2026-11-10
 
 dd3d144 perf(trap): 装 trap 时的临时文件只删一次，不再 8 次 rm
