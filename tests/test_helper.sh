@@ -173,11 +173,26 @@ stub() {
   printf '%s' "$__err" >"$__errf"
   : >"$__log"
 
+  # body 必须在**子 shell 里的函数**中执行，两层都缺一不可：
+  #   - 子 shell：body 里的 exit 只退出子 shell —— 否则 exit 会把整个测试脚本
+  #     干掉，而退出码恰好是 0 ⇒ runner 判「全过」，后面所有断言都没跑过
+  #     （这个假绿真的发生过：test_svc.sh 后半段从来没执行过）；
+  #   - 函数：body 里的 return N 是「让 stub 返回 N」的既有写法，
+  #     直接放进子 shell 会变成「不是函数里不能 return」的报错。
+  # 末尾补一句 return 0：body 自然走完时落回 --exit 指定的退出码，
+  # 显式 return / exit 的短路行为不变。
   __fn="$__name() {
   printf '%s\n' \"\$*\" >>'$__log'
   if [ -s '$__outf' ]; then cat '$__outf'; fi
   if [ -s '$__errf' ]; then cat '$__errf' >&2; fi
+  _sk_stub_body__() {
   $__body
+  return 0
+  }
+  ( _sk_stub_body__ \"\$@\" )
+  __brc=\$?
+  unset -f _sk_stub_body__
+  if [ \"\$__brc\" -ne 0 ]; then return \"\$__brc\"; fi
   return $__exit
 }"
   eval "$__fn"
