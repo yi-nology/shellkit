@@ -4,7 +4,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: shellkit\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-11-10 19:59+0800\n"
+"POT-Creation-Date: 2026-11-10 22:40+0800\n"
 "PO-Revision-Date: 2026-11-08 00:00+0800\n"
 "Last-Translator: shellkit contributors\n"
 "Language-Team: shellkit contributors\n"
@@ -437,6 +437,12 @@ msgstr ""
 msgid "usage"
 msgstr ""
 
+msgid "the vendor directory is a symlink, refusing to install"
+msgstr ""
+
+msgid "the vendored library is a symlink, refusing to install"
+msgstr ""
+
 msgid "path exists and is not a directory"
 msgstr ""
 
@@ -503,6 +509,12 @@ msgstr ""
 msgid "the manifest does not record a project name"
 msgstr ""
 
+msgid "the project name in the manifest is not a valid name"
+msgstr ""
+
+msgid "cannot resolve the target directory"
+msgstr ""
+
 msgid "upgrading"
 msgstr ""
 
@@ -512,6 +524,12 @@ msgstr ""
 msgid ""
 "the manifest predates the fingerprint baseline; files that cannot be "
 "verified are left alone"
+msgstr ""
+
+msgid "refusing to write outside the project directory"
+msgstr ""
+
+msgid "the target is a symlink, left alone"
 msgstr ""
 
 msgid "would add"
@@ -530,6 +548,9 @@ msgid "cannot be verified against the old template, left alone"
 msgstr ""
 
 msgid "would update"
+msgstr ""
+
+msgid "failed to update the file"
 msgstr ""
 
 msgid "updated"

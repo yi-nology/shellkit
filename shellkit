@@ -229,6 +229,18 @@ _sk_copy_legal() {
 _sk_vendor_install() {
   local __dir=$1 __dest
   __dest="$__dir/vendor/shellkit"
+  # vendor/ 必须是工程里的真目录：
+  # 它要是指向别处的符号链接，后面的 rm -rf + cp -R 就写到工程之外去了。
+  if [ -L "$__dir/vendor" ]; then
+    log_error "$(_t 'the vendor directory is a symlink, refusing to install'): $__dir/vendor"
+    return 1
+  fi
+  # vendor/shellkit 本身也不能是符号链接：
+  # rm -rf "$__dest/lib" 会顺着它删到工程外面去。
+  if [ -L "$__dest" ]; then
+    log_error "$(_t 'the vendored library is a symlink, refusing to install'): $__dest"
+    return 1
+  fi
   fs_ensure_dir "$__dest" 755 || return 1
   # ${__dest:?} 是安全阀：万一变量异常为空，绝不让 rm 落到 /lib 上
   # tools/ 与 docs/ 是 shellkit 仓库自己的门禁输入，**不进副本**：
@@ -599,9 +611,67 @@ _sk_upgrade_save_manifest() {
     "$__filelist" "$__baselines"
 }
 
+# _sk_upgrade_cleanup TMP OLDTMP —— 清掉升级过程留下的临时目录
+#
+# 失败路径也要清：崩在 rm 之前就会在临时目录里留下一整份工程副本
+# （一次升级渲染出来的模板全量拷一份）。所以清理收在一个函数里，
+# 免得哪条 return 路径忘了写。
+_sk_upgrade_cleanup() {
+  local __t=${1:-} __o=${2:-}
+  if [ -n "$__t" ]; then
+    rm -rf "${__t:?}" 2>/dev/null || true
+  fi
+  if [ -n "$__o" ]; then
+    rm -rf "${__o:?}" 2>/dev/null || true
+  fi
+  return 0
+}
+
+# _sk_upgrade_rel_safe REL —— 这个相对路径能不能安全地写进工程目录
+#
+# 两个不变量：不是绝对路径，且不含 .. 组件。
+# 清单里的项目名会被拼进 bin/<name> —— 名字里带 ../ 就能把文件写到工程之外。
+_sk_upgrade_rel_safe() {
+  local __rel=${1:-}
+  case "$__rel" in
+    '' | /*) return 1 ;;
+  esac
+  case "/$__rel/" in
+    */../*) return 1 ;;
+  esac
+  return 0
+}
+
+# _sk_upgrade_in_dir BASE TARGET —— TARGET 是否落在 BASE 之内
+#
+# BASE 必须是解析过的绝对路径（pwd -P），中间目录的符号链接也要解析：
+# 工程里有个 tests/ 指向工程外，那不是「工程内的路径」。
+# 目标所在的目录还不存在时，向上找到第一个存在的祖先再判。
+_sk_upgrade_in_dir() {
+  local __base=${1:-} __tgt=${2:-} __dir __parent
+  if [ -z "$__base" ] || [ -z "$__tgt" ]; then
+    return 1
+  fi
+  __dir=$(dirname "$__tgt")
+  while [ ! -d "$__dir" ]; do
+    __parent=$(dirname "$__dir")
+    if [ "$__parent" = "$__dir" ]; then
+      return 1
+    fi
+    __dir=$__parent
+  done
+  __parent=$(cd "$__dir" 2>/dev/null && pwd -P) || return 1
+  case "$__parent" in
+    "$__base") return 0 ;;
+    "$__base"/*) return 0 ;;
+  esac
+  return 1
+}
+
 cmd_upgrade() {
   local __dir="" __tpl="$SK_TPL_DIR" __check=0 __force=0
   local __name __rel __old __cur __new __tmp __cmds_csv __vdir
+  local __dirabs="" __target=""
   local __updated=0 __skipped=0 __added=0
   local __baselines="" __legacy=0 __oldtpl="" __oldtpl_hash=""
 
@@ -671,6 +741,22 @@ cmd_upgrade() {
     log_error "$(_t 'the manifest does not record a project name'): $__dir"
     return "$SK_VERIFY"
   fi
+  # 清单里的项目名会被拼进 bin/<name> 这样的相对路径。名字不合法
+  # （带 ../ 、带路径分隔符）就能让升级把文件写到工程目录之外 —— 必须在这里挡住。
+  if ! _sk_valid_name "$__name"; then
+    log_error "$(_t 'the project name in the manifest is not a valid name'): $__name"
+    return "$SK_VERIFY"
+  fi
+  # commands 先存下来：写盘失败的分支也要拿它落盘基线，不能等到正常收尾
+  # 才赋值 —— 否则那条路径会撞上 set -u 的 unbound variable，
+  # 于是「失败时把清单写成与磁盘一致」这个修复一次都没执行过。
+  __cmds_csv="$SK_MANIFEST_COMMANDS"
+  # 工程目录解析成真实绝对路径，后面每个目标路径都要跟它比。
+  __dirabs=$(cd "$__dir" 2>/dev/null && pwd -P) || __dirabs=""
+  if [ -z "$__dirabs" ]; then
+    log_error "$(_t 'cannot resolve the target directory'): $__dir"
+    return "$SK_PRECOND"
+  fi
 
   log_section "$(_t 'upgrading'): $__dir"
   log_info "$(_t 'template version'): ${SK_MANIFEST_TEMPLATE_VERSION:-unknown} -> $SK_VERSION"
@@ -681,7 +767,7 @@ cmd_upgrade() {
 
   __tmp=$(mktemp -d "${TMPDIR:-/tmp}/shellkit-upgrade.XXXXXX") || return "$SK_ERR"
   if ! _sk_new_render_owned "$__tpl" "$__tmp" "$__name"; then
-    rm -rf "${__tmp:?}"
+    _sk_upgrade_cleanup "$__tmp" ""
     return "$SK_ERR"
   fi
 
@@ -696,7 +782,7 @@ cmd_upgrade() {
   esac
   if [ "$__legacy" = "1" ]; then
     __oldtpl=$(mktemp -d "${TMPDIR:-/tmp}/shellkit-upgrade-old.XXXXXX") || {
-      rm -rf "${__tmp:?}"
+      _sk_upgrade_cleanup "$__tmp" ""
       return "$SK_ERR"
     }
     if [ -n "${SK_MANIFEST_TEMPLATE_VERSION:-}" ]; then
@@ -704,7 +790,7 @@ cmd_upgrade() {
     fi
     if ! _sk_new_render_owned "$__tpl" "$__oldtpl" "$__name"; then
       scaffold_vars_set SHELLKIT_VERSION "$SK_VERSION" || true
-      rm -rf "${__tmp:?}" "${__oldtpl:?}"
+      _sk_upgrade_cleanup "$__tmp" "$__oldtpl"
       return "$SK_ERR"
     fi
     scaffold_vars_set SHELLKIT_VERSION "$SK_VERSION" || true
@@ -733,6 +819,26 @@ EOF
   while [ "$__i" -lt "${#_SK_UPGRADE_RELS[@]}" ]; do
     __rel=${_SK_UPGRADE_RELS[$__i]}
     __old=${_SK_UPGRADE_BASES[$__i]}
+
+    # 目标路径的三个不变量：
+    #   1) 相对路径里没有 .. 组件，也不是绝对路径
+    #   2) 解析之后落在工程目录之内（中间目录是符号链接也不行）
+    #   3) 目标本身不是符号链接 —— cp 会跟随它写穿，把内容写到工程之外
+    # 前两条不满足是清单有问题（不可信输入），直接报错退出；
+    # 第三条不满足是工程里本来就这么摆着的，跳过并提示，用户的东西不动。
+    __target="$__dirabs/$__rel"
+    if ! _sk_upgrade_rel_safe "$__rel" || ! _sk_upgrade_in_dir "$__dirabs" "$__target"; then
+      log_error "$(_t 'refusing to write outside the project directory'): $__rel"
+      _sk_upgrade_cleanup "$__tmp" "$__oldtpl"
+      return "$SK_VERIFY"
+    fi
+    if [ -L "$__target" ]; then
+      log_warn "$(_t 'the target is a symlink, left alone'): $__rel"
+      __skipped=$((__skipped + 1))
+      __i=$((__i + 1))
+      continue
+    fi
+
     __cur=""
     if [ -f "$__dir/$__rel" ]; then
       __cur=$(os_sha256 "$__dir/$__rel" 2>/dev/null) || __cur=""
@@ -752,11 +858,11 @@ EOF
         continue
       fi
       fs_ensure_dir "$(dirname "$__dir/$__rel")" 755 || {
-        rm -rf "${__tmp:?}" ${__oldtpl:+"$__oldtpl"}
+        _sk_upgrade_cleanup "$__tmp" "$__oldtpl"
         return "$SK_ERR"
       }
       cp -f "$__tmp/$__rel" "$__dir/$__rel" || {
-        rm -rf "${__tmp:?}" ${__oldtpl:+"$__oldtpl"}
+        _sk_upgrade_cleanup "$__tmp" "$__oldtpl"
         return "$SK_ERR"
       }
       log_ok "$(_t 'added'): $__rel"
@@ -815,8 +921,11 @@ EOF
     if ! cp -f "$__tmp/$__rel" "$__dir/$__rel"; then
       # 写失败：先把已经推进的基线落盘，让清单与磁盘状态对得上，
       # 再报错退出。已经改过的文件不会再被当成「用户改过」而永远冻结。
+      # （基线要在这里落盘，commands 就必须提前存好 —— 否则这条路径会
+      #   因为 set -u 的 unbound variable 先崩掉，「落盘」一次都执行不到。）
+      log_error "$(_t 'failed to update the file'): $__rel"
       _sk_upgrade_save_manifest "$__dir" "$__name" "$__cmds_csv" "$(_sk_new_owned_list "$__name")" || true
-      rm -rf "${__tmp:?}" ${__oldtpl:+"$__oldtpl"}
+      _sk_upgrade_cleanup "$__tmp" "$__oldtpl"
       return "$SK_ERR"
     fi
     log_ok "$(_t 'updated'): $__rel"
@@ -825,7 +934,7 @@ EOF
     __i=$((__i + 1))
   done
 
-  rm -rf "${__tmp:?}" ${__oldtpl:+"$__oldtpl"}
+  _sk_upgrade_cleanup "$__tmp" "$__oldtpl"
 
   if [ "$__check" != "1" ]; then
     # 正在用副本自己的 CLI 升级它自己时不能再去同步：同步会先删掉副本里的

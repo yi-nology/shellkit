@@ -4,7 +4,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: shellkit\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-11-10 19:59+0800\n"
+"POT-Creation-Date: 2026-11-10 22:40+0800\n"
 "PO-Revision-Date: 2026-11-08 00:00+0800\n"
 "Last-Translator: shellkit contributors\n"
 "Language-Team: shellkit contributors\n"
@@ -437,6 +437,12 @@ msgstr "更新已安裝的 shellkit"
 msgid "usage"
 msgstr "用法"
 
+msgid "the vendor directory is a symlink, refusing to install"
+msgstr "vendor 目錄是符號連結，拒絕安裝"
+
+msgid "the vendored library is a symlink, refusing to install"
+msgstr "vendor 出來的庫是符號連結，拒絕安裝"
+
 msgid "path exists and is not a directory"
 msgstr "路徑已存在且不是目錄"
 
@@ -503,6 +509,12 @@ msgstr "看起來不是 shellkit 產生的工程"
 msgid "the manifest does not record a project name"
 msgstr "manifest 裡沒有記錄工程名"
 
+msgid "the project name in the manifest is not a valid name"
+msgstr "manifest 裡的工程名不是合法名字"
+
+msgid "cannot resolve the target directory"
+msgstr "解析目標目錄失敗"
+
 msgid "upgrading"
 msgstr "正在升級"
 
@@ -513,6 +525,12 @@ msgid ""
 "the manifest predates the fingerprint baseline; files that cannot be "
 "verified are left alone"
 msgstr "清單早於指紋基線；無法核對的檔案保持原樣"
+
+msgid "refusing to write outside the project directory"
+msgstr "拒絕寫到工程目錄之外"
+
+msgid "the target is a symlink, left alone"
+msgstr "目標是符號連結，保持原樣"
 
 msgid "would add"
 msgstr "將新增"
@@ -531,6 +549,9 @@ msgstr "無法與舊範本核對，保持原樣"
 
 msgid "would update"
 msgstr "將更新"
+
+msgid "failed to update the file"
+msgstr "更新檔案失敗"
 
 msgid "updated"
 msgstr "已更新："
@@ -801,6 +822,3 @@ msgstr "已開啟強制模式"
 
 msgid "finished"
 msgstr "完成"
-
-#~ msgid "{{CMD}} command"
-#~ msgstr "{{CMD}} 子指令"
