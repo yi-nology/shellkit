@@ -4,7 +4,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: shellkit\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-11-10 15:41+0800\n"
+"POT-Creation-Date: 2026-11-10 19:47+0800\n"
 "PO-Revision-Date: 2026-11-08 00:00+0800\n"
 "Last-Translator: shellkit contributors\n"
 "Language-Team: shellkit contributors\n"
@@ -299,7 +299,22 @@ msgstr ""
 msgid "timeout command not found, running without a timeout"
 msgstr ""
 
+msgid "an instance produced no exit status"
+msgstr ""
+
 msgid "concurrent instances failed"
+msgstr ""
+
+msgid "usage: parallel_map N [--timeout SEC] -- COMMAND..."
+msgstr ""
+
+msgid "parallel_map requires a command"
+msgstr ""
+
+msgid "no items to process"
+msgstr ""
+
+msgid "some items failed"
 msgstr ""
 
 msgid "invalid template variable name"
@@ -491,6 +506,11 @@ msgstr ""
 msgid "template version"
 msgstr ""
 
+msgid ""
+"the manifest predates the fingerprint baseline; files that cannot be "
+"verified are left alone"
+msgstr ""
+
 msgid "would add"
 msgstr ""
 
@@ -501,6 +521,9 @@ msgid "modified locally, left alone"
 msgstr ""
 
 msgid "no recorded fingerprint, left alone"
+msgstr ""
+
+msgid "cannot be verified against the old template, left alone"
 msgstr ""
 
 msgid "would update"

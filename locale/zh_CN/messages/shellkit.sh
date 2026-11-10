@@ -98,7 +98,12 @@ _sk_msg_lookup_shellkit() {
     'run_concurrent requires a command') printf '%s' 'run_concurrent 需要一条命令' ;;
     'cannot create a temporary directory') printf '%s' '无法创建临时目录' ;;
     'timeout command not found, running without a timeout') printf '%s' '找不到 timeout 命令，将不设超时运行' ;;
+    'an instance produced no exit status') printf '%s' '实例没有留下退出状态' ;;
     'concurrent instances failed') printf '%s' '并发实例中有失败' ;;
+    'usage: parallel_map N '\['--timeout SEC'\]' -- COMMAND...') printf '%s' '用法：parallel_map N [--timeout SEC] -- 命令...' ;;
+    'parallel_map requires a command') printf '%s' 'parallel_map 需要一条命令' ;;
+    'no items to process') printf '%s' '没有要处理的条目' ;;
+    'some items failed') printf '%s' '有条目失败' ;;
     'invalid template variable name') printf '%s' '非法的模板变量名' ;;
     'template config not found') printf '%s' '找不到模板配置' ;;
     'skipped a malformed template variable') printf '%s' '跳过格式错误的模板变量' ;;
@@ -162,10 +167,12 @@ _sk_msg_lookup_shellkit() {
     'the manifest does not record a project name') printf '%s' 'manifest 里没有记录工程名' ;;
     'upgrading') printf '%s' '正在升级' ;;
     'template version') printf '%s' '模板版本' ;;
+    'the manifest predates the fingerprint baseline; files that cannot be verified are left alone') printf '%s' '清单早于指纹基线；无法核对的文件保持原样' ;;
     'would add') printf '%s' '将新增' ;;
     'added') printf '%s' '已新增' ;;
     'modified locally, left alone') printf '%s' '本地已修改，保持原样' ;;
     'no recorded fingerprint, left alone') printf '%s' '没有记录的指纹，保持原样' ;;
+    'cannot be verified against the old template, left alone') printf '%s' '无法与旧模板核对，保持原样' ;;
     'would update') printf '%s' '将更新' ;;
     'updated') printf '%s' '已更新：' ;;
     'already running from the vendored copy') printf '%s' '已经在用 vendor 副本本身运行' ;;

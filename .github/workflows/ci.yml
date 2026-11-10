@@ -6,6 +6,14 @@ on:
       - main
   pull_request:
 
+# 工具版本全部钉死。
+# 发行版仓库里的 shellcheck / gettext 会随时间变 —— 那不是「同一份门禁」，
+# 而是「每次跑都可能不一样的门禁」。这里统一从官方 release 取钉死的版本。
+env:
+  SHELLCHECK_VERSION: v0.11.0
+  SHFMT_VERSION: v3.14.1
+  BATS_VERSION: v1.14.0
+
 jobs:
   test:
     name: test on ${{ matrix.os }}
@@ -16,57 +24,151 @@ jobs:
         os:
           # macOS 的 /bin/bash 就是 3.2，基线只有这里能真正验证
           - macos-latest
+          - macos-15
           - ubuntu-latest
+          - ubuntu-22.04
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
 
       - name: bash version
         run: bash --version | head -1
+
+      - name: install pinned tools
+        run: |
+          set -euo pipefail
+          sudo=""
+          if command -v sudo >/dev/null 2>&1; then sudo="sudo"; fi
+          mkdir -p "$HOME/.local/bin"
+          case "$(uname -m)" in
+            arm64 | aarch64) arch=aarch64 ;;
+            *) arch=x86_64 ;;
+          esac
+          if [ "$(uname -s)" = "Darwin" ]; then
+            sc="shellcheck-${SHELLCHECK_VERSION}.darwin.${arch}.tar.xz"
+          else
+            sc="shellcheck-${SHELLCHECK_VERSION}.linux.${arch}.tar.xz"
+          fi
+          curl -fsSL "https://github.com/koalaman/shellcheck/releases/download/${SHELLCHECK_VERSION}/${sc}" -o /tmp/sc.tar.xz
+          tar -xJf /tmp/sc.tar.xz -C /tmp
+          install -m 0755 "/tmp/shellcheck-${SHELLCHECK_VERSION}/shellcheck" "$HOME/.local/bin/shellcheck"
+          case "$(uname -s)-$(uname -m)" in
+            Darwin-arm64) sf="shfmt_${SHFMT_VERSION}_darwin_arm64" ;;
+            Darwin-*) sf="shfmt_${SHFMT_VERSION}_darwin_amd64" ;;
+            Linux-aarch64) sf="shfmt_${SHFMT_VERSION}_linux_arm64" ;;
+            *) sf="shfmt_${SHFMT_VERSION}_linux_amd64" ;;
+          esac
+          curl -fsSL "https://github.com/mvdan/sh/releases/download/${SHFMT_VERSION}/${sf}" -o "$HOME/.local/bin/shfmt"
+          chmod 0755 "$HOME/.local/bin/shfmt"
+          echo "$HOME/.local/bin" >> "$GITHUB_PATH"
 
       # Linux 上补 gettext 与 zh_CN locale，让 i18n 的「真实查表」路径也被跑到
       - name: extra tooling
         if: runner.os == 'Linux'
         run: |
+          set -euo pipefail
           sudo apt-get update -qq
-          sudo apt-get install -y -qq shellcheck gettext locales
+          sudo apt-get install -y -qq gettext locales
           sudo sed -i 's/^# *zh_CN.UTF-8 UTF-8/zh_CN.UTF-8 UTF-8/' /etc/locale.gen
           sudo locale-gen zh_CN.UTF-8
           locale -a | grep -i zh_CN
 
-      # macOS runner 没有 go，装了也白装；Linux 上装真 shfmt，别让格式检查静默跳过
-      - name: shfmt
-        if: runner.os == 'Linux'
+      # 门禁只维护一份：本地 make check 与 CI 跑的是同一组检查。
+      # macOS 显式指定 /bin/bash —— PATH 上可能有别的 bash，那样就验不到 3.2 基线了。
+      - name: gate
         run: |
-          go install mvdan.cc/sh/v3/cmd/shfmt@latest
-          echo "$(go env GOPATH)/bin" >> "$GITHUB_PATH"
+          set -euo pipefail
+          if [ "$(uname -s)" = "Darwin" ]; then
+            make check BASH=/bin/bash
+          else
+            make check
+          fi
 
-      - name: syntax
-        run: make syntax
+  # 发行版兼容矩阵：在容器里跑同一组门禁。
+  # Ubuntu/macOS 之外再验 Debian 与 Rocky —— shellkit 的目标用户正是这类机器。
+  compat:
+    name: compat on ${{ matrix.image }}
+    runs-on: ubuntu-latest
+    container: ${{ matrix.image }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - image: debian:12
+          - image: rockylinux:9
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
 
-      - name: test
-        run: make test
+      - name: install tooling
+        # 容器 job 的默认 shell 是 sh -e {0}：set -o pipefail 在 dash 里是非法选项，
+        # 所以这里显式用 bash。
+        shell: bash
+        run: |
+          set -euo pipefail
+          if command -v apt-get >/dev/null 2>&1; then
+            apt-get update -qq
+            apt-get install -y -qq gettext ca-certificates curl tar xz-utils make
+          else
+            # Rocky 9 基础镜像自带 curl-minimal，它和同名 curl 包互斥：
+            # 硬装 curl 会报 "curl-minimal ... conflicts with curl"。
+            # curl-minimal 已经能下载文件（-fsSL 都支持），所以这里不装 curl，
+            # 只补真正缺的包；下载器在下面统一兜底。
+            dnf install -y -qq --allowerasing \
+              gettext ca-certificates tar xz make \
+              grep sed gawk findutils diffutils coreutils \
+              gmp ncurses-libs
+          fi
+          # 下载器兜底：curl / wget / python3 任选其一，缺哪个都不该让 job 挂掉。
+          if command -v curl >/dev/null 2>&1; then
+            sk_fetch() { curl -fsSL "$1" -o "$2"; }
+          elif command -v wget >/dev/null 2>&1; then
+            sk_fetch() { wget -qO "$2" "$1"; }
+          elif command -v python3 >/dev/null 2>&1; then
+            sk_fetch() { python3 -c 'import sys,urllib.request; urllib.request.urlretrieve(sys.argv[1],sys.argv[2])' "$1" "$2"; }
+          else
+            echo "no downloader available (curl/wget/python3)" >&2
+            exit 1
+          fi
+          mkdir -p "$HOME/.local/bin"
+          case "$(uname -m)" in
+            arm64 | aarch64) arch=aarch64 ;;
+            *) arch=x86_64 ;;
+          esac
+          sk_fetch "https://github.com/koalaman/shellcheck/releases/download/${SHELLCHECK_VERSION}/shellcheck-${SHELLCHECK_VERSION}.linux.${arch}.tar.xz" /tmp/sc.tar.xz
+          tar -xJf /tmp/sc.tar.xz -C /tmp
+          install -m 0755 "/tmp/shellcheck-${SHELLCHECK_VERSION}/shellcheck" "$HOME/.local/bin/shellcheck"
+          case "$arch" in
+            aarch64) sf="shfmt_${SHFMT_VERSION}_linux_arm64" ;;
+            *) sf="shfmt_${SHFMT_VERSION}_linux_amd64" ;;
+          esac
+          sk_fetch "https://github.com/mvdan/sh/releases/download/${SHFMT_VERSION}/${sf}" "$HOME/.local/bin/shfmt"
+          chmod 0755 "$HOME/.local/bin/shfmt"
+          echo "$HOME/.local/bin" >> "$GITHUB_PATH"
+          bash --version | head -1
 
-      - name: shellcheck
-        if: runner.os == 'Linux'
-        run: make lint
+      - name: gate
+        shell: bash
+        run: make check
 
-      # 生成物（REFERENCE / AGENTS / 模板 AGENTS / SKILL）必须与源码一致
-      - name: docs check
-        run: make docs-check
+  # bats 用例：真正独立的测试用例（每个 @test 一个进程）。
+  # 不进 make check —— bats 是外部依赖；这里单独一个 job 装好再跑。
+  bats:
+    name: bats suite
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
 
-      # 文档里的代码块要真能跑、函数名要真实存在
-      - name: docs snippets
-        run: make check-docs
+      - name: install bats
+        shell: bash
+        run: |
+          set -euo pipefail
+          curl -fsSL "https://github.com/bats-core/bats-core/archive/refs/tags/${BATS_VERSION}.tar.gz" -o /tmp/bats.tar.gz
+          tar -xzf /tmp/bats.tar.gz -C /tmp
+          sudo "/tmp/bats-core-${BATS_VERSION#v}/install.sh" /usr/local
+          bats --version
 
-      # pot 与源码漂移过（头里还写着 0.3.0 而 VERSION 早就是 0.4.x）
-      - name: message catalogue
-        run: make messages-check
-
-      - name: examples
-        run: make examples
-
-      - name: format
-        run: make fmt
+      - name: bats suite
+        shell: bash
+        run: make bats-check
 
   # 站点是 docs/ 的视图，构建一次就能证明同步脚本没把页面写坏、内部链接没有 404。
   # 放在独立 job 里：库的门禁不依赖 Node，本地 make check 也不该因为没装 npm 而红。
@@ -74,9 +176,9 @@ jobs:
     name: docs site
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@39370e3970a6d050c480ffad4ff0ed4d3fdee5af # v4.1.0
         with:
           node-version: '22'
           cache: npm

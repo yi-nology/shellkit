@@ -17,6 +17,8 @@
     lib/core/<module>.sh      20 个模块，一个模块一个主题
     templates/                shellkit new 的模板（含 __NAME__ / __CMD__ 占位符）
     tests/                    自研断言 + 逐文件执行器 + 每个模块一个测试
+    tests/bats/               bats-core 用例（每个 @test 一个独立进程）；不进 make check，
+                              单独 `make bats-check` 跑，CI 里有专门的 job
     tools/                    shdoc.awk / comment_coverage.awk / ai_doc.sh / check_docs.sh / term_shot.py
                               check_module_order.sh（模块依赖顺序门禁）
                               release.sh（一条命令发版）/ check_versions.sh（版本引用一致性）
@@ -44,6 +46,7 @@
                   # dup-functions-check +
                   # docs-check + versions-check + check-docs +
                   # cookbook-check + messages-check + examples + fmt，CI 也是这组
+    make bats-check  # tests/bats 下的 bats 用例（bats 是外部依赖，不进 check）
 
 `docs-check` 会拦两种事：公开函数缺注释、`docs/` 里的生成物与源码不一致。
 `lint` 是 `shellcheck -S warning -x`，模板会先渲染再检查（占位符不是合法语法）。
@@ -54,7 +57,15 @@
 `dup-functions-check` 拦的是「同名函数定义了两遍」：bash 后定义覆盖先定义，
 先写的那份悄悄失效 —— 不报错、不崩，只是你以为在跑 A、其实在跑 B。
 
-## 五个已经踩过的坑
+## 清单里的指纹是「模板基线」，不是「文件当前内容」
+
+`.shellkit-manifest` 里每个文件记的是**上次成功应用的模板内容的 sha256**。
+用户改过的文件，基线**不许**推进 —— 推进了就等于把用户改过的内容记成模板基线，
+下一次升级会把这份修改当成「没动过」而覆盖掉（0.10.x 的 P0 缺陷）。
+只有真正成功应用了模板的文件才能推进基线；跳过的文件保持原基线。
+回归用例：`tests/test_upgrade.sh` 与 `tests/bats/scaffold.bats`（都要连升两次以上）。
+
+## 六个已经踩过的坑
 
 1. **bash 3.2 与 5 的 trap 语义不同**：子 shell 里 `trap -p EXIT`，3.2 读到空，5.x 仍打印
    父 shell 的 trap 但子 shell 退出时不执行。所以幂等不能只查 `trap -p`，看到是自己的
@@ -69,6 +80,9 @@
 5. **`grep -q` / `head` 会把管道上游 SIGPIPE 打死**：命中即退，上游还在写就被杀（141）。
    调用方一开 `set -o pipefail`，整条管道按 141 判失败 —— 「查到了」变成「没查到」，
    而且是竞态（本机常绿、CI 必炸）。库里不写这种管道；`tools/check_pipe_safety.sh` 盯着。
+6. **赋值右边别留没引号的 `*`**：`__a=${x%%:*}: ***` 会被拆成两个词 —— 前半截是赋值，
+   后半截的 `***` 展开成**当前目录里的文件名**并当成命令执行（报 `AGENTS.md: command not found`）。
+   右边可能出现通配符的赋值，一律整体加引号：`__a="${x%%:*}: ***"`。
 
 ## 本场景的验证
 

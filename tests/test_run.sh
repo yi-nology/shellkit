@@ -106,3 +106,58 @@ assert_eq "2" "$rc" "run_concurrent requires a command"
 out=$(SHELLKIT_DRY_RUN=1 run_concurrent 2 -- touch "$d/concurrent" 2>&1)
 assert_contains "$out" "[dry-run]"
 assert_false test -f "$d/concurrent"
+
+# ---- 敏感参数不能进日志 ----
+# 命令失败时会把命令行写进日志；命令行里带着口令，就是把口令写进了日志文件。
+out=$(run --no-die sh -c 'exit 3' --password hunter2 2>&1) || true
+assert_not_contains "$out" "hunter2" "a password must never reach the log"
+assert_contains "$out" "command failed" "the failure must still be reported"
+
+out=$(run --no-die sh -c 'exit 3' API_TOKEN=abc123 2>&1) || true
+assert_not_contains "$out" "abc123" "a token must never reach the log"
+
+out=$(run --no-die sh -c 'exit 3' -H 'Authorization: Bearer s3cr3t' 2>&1) || true
+assert_not_contains "$out" "s3cr3t" "an authorization header must never reach the log"
+
+# 不是敏感字段的参数照原样打印（脱敏不能把日志变成一锅粥）
+out=$(run --no-die sh -c 'exit 3' --verbose /tmp/plain 2>&1) || true
+assert_contains "$out" "/tmp/plain" "ordinary arguments must stay readable"
+
+# ---- run_concurrent：被信号杀掉的实例不能算成功 ----
+rc=0
+ok=$(run_concurrent 1 -- sh -c 'kill -9 $PPID' 2>/dev/null) || rc=$?
+assert_ne "0" "$rc" "an instance killed by a signal must fail the run"
+assert_ne "1" "$ok" "an instance without an exit status must not be counted as a success"
+
+rc=0
+run_concurrent 1 -- sh -c 'kill -9 $$' >/dev/null 2>&1 || rc=$?
+assert_ne "0" "$rc" "an instance that dies from a signal must fail the run"
+
+# 正常路径不受影响
+ok=$(run_concurrent 2 -- sh -c 'exit 0' 2>/dev/null)
+assert_eq "2" "$ok" "run_concurrent still counts successes"
+
+# ---- parallel_map：每个实例跑一条不同的条目 ----
+out=$(printf '%s\n' alpha beta gamma | parallel_map 2 -- sh -c 'echo "$1"; exit 0' _ 2>/dev/null)
+assert_contains "$out" "alpha" "parallel_map must report every item"
+assert_contains "$out" "beta" "parallel_map must report every item"
+assert_contains "$out" "gamma" "parallel_map must report every item"
+
+out=$(printf '%s\n' a b | parallel_map 2 -- sh -c 'exit 0' _ 2>/dev/null | wc -l | tr -d ' ')
+assert_eq "2" "$out" "parallel_map prints one result line per item"
+
+rc=0
+printf '%s\n' ok bad | parallel_map 2 -- sh -c '[ "$1" = bad ] && exit 9; exit 0' _ >/dev/null 2>&1 || rc=$?
+assert_eq "9" "$rc" "parallel_map returns the first failing item's exit code"
+
+rc=0
+printf '%s\n' x | parallel_map 0 -- true >/dev/null 2>&1 || rc=$?
+assert_eq "2" "$rc" "parallel_map rejects a count below one"
+
+rc=0
+parallel_map 2 -- >/dev/null 2>&1 <<<'x' || rc=$?
+assert_eq "2" "$rc" "parallel_map requires a command"
+
+rc=0
+printf '%s\n' x | parallel_map 2 -- true >/dev/null 2>&1 || rc=$?
+assert_eq "0" "$rc" "parallel_map succeeds when every item succeeds"

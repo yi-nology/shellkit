@@ -4,7 +4,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: shellkit\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-11-10 15:41+0800\n"
+"POT-Creation-Date: 2026-11-10 19:47+0800\n"
 "PO-Revision-Date: 2026-11-08 00:00+0800\n"
 "Last-Translator: shellkit contributors\n"
 "Language-Team: shellkit contributors\n"
@@ -299,8 +299,23 @@ msgstr "无法创建临时目录"
 msgid "timeout command not found, running without a timeout"
 msgstr "找不到 timeout 命令，将不设超时运行"
 
+msgid "an instance produced no exit status"
+msgstr "实例没有留下退出状态"
+
 msgid "concurrent instances failed"
 msgstr "并发实例中有失败"
+
+msgid "usage: parallel_map N [--timeout SEC] -- COMMAND..."
+msgstr "用法：parallel_map N [--timeout SEC] -- 命令..."
+
+msgid "parallel_map requires a command"
+msgstr "parallel_map 需要一条命令"
+
+msgid "no items to process"
+msgstr "没有要处理的条目"
+
+msgid "some items failed"
+msgstr "有条目失败"
 
 msgid "invalid template variable name"
 msgstr "非法的模板变量名"
@@ -491,6 +506,11 @@ msgstr "正在升级"
 msgid "template version"
 msgstr "模板版本"
 
+msgid ""
+"the manifest predates the fingerprint baseline; files that cannot be "
+"verified are left alone"
+msgstr "清单早于指纹基线；无法核对的文件保持原样"
+
 msgid "would add"
 msgstr "将新增"
 
@@ -502,6 +522,9 @@ msgstr "本地已修改，保持原样"
 
 msgid "no recorded fingerprint, left alone"
 msgstr "没有记录的指纹，保持原样"
+
+msgid "cannot be verified against the old template, left alone"
+msgstr "无法与旧模板核对，保持原样"
 
 msgid "would update"
 msgstr "将更新"

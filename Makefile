@@ -1,6 +1,9 @@
 # shellkit 开发入口。CI 与本地跑的是同一组门。
 
 SHELL := /bin/bash
+# 测试与静态检查用哪个 bash。macOS 的基线是 3.2（/bin/bash），但 PATH 上可能有
+# 别的版本 —— CI 里显式写 BASH=/bin/bash 才是真的在验 3.2。
+BASH ?= bash
 SOURCES := shellkit install.sh lib/bootstrap.sh $(wildcard lib/core/*.sh) \
   $(wildcard tools/*.sh) tests/*.sh po/messages.sh
 TEMPLATES := $(shell find templates -type f)
@@ -28,6 +31,7 @@ help:
 	  'make shots       按 docs/shots/*.shot 真跑命令并渲染 SVG 截图' \
 	  'make examples    跑 examples/ 下每个工程的测试' \
 	  'make check       依次跑 syntax / test / lint / module-order-check / check-exitcode-docs / local-names-check / module-count-check / pipe-safety-check / docs-check / versions-check / check-docs / cookbook-check / messages-check / examples / fmt' \
+	  'make bats-check  跑 bats 用例（tests/bats，每个 @test 一个独立进程）' \
 	  'make release VERSION=x.y.z  发版：升版本→重生成产物→门禁→commit→tag→push' \
 	  'make release-dry VERSION=x.y.z  同 release，但跑完还原工作树、不提交' \
 	  'make site        构建文档站（先跑 tools/site_sync.sh 从 docs/ 同步）' \
@@ -36,11 +40,11 @@ help:
 
 
 test:
-	@bash tests/run.sh
+	@$(BASH) tests/run.sh
 
 syntax:
 	@fail=0; for f in $(SOURCES) $(TEMPLATES); do \
-	  case "$$f" in *.sh|shellkit|*/__NAME__|*/__CMD__) bash -n "$$f" || fail=1 ;; esac; \
+	  case "$$f" in *.sh|shellkit|*/__NAME__|*/__CMD__) $(BASH) -n "$$f" || fail=1 ;; esac; \
 	  done; exit $$fail
 
 lint:
@@ -51,7 +55,7 @@ lint:
 
 # 模板里有 {{NAME}} 这类占位符，直接检查会被当成语法错误；先渲染再检查。
 lint-templates:
-	@bash tests/lint_templates.sh
+	@$(BASH) tests/lint_templates.sh
 
 fmt:
 	@if command -v shfmt >/dev/null 2>&1; then \
@@ -59,11 +63,11 @@ fmt:
 	  else echo "shfmt not installed, skipping"; fi
 
 messages:
-	@bash po/messages.sh
+	@$(BASH) po/messages.sh
 
 # 缺 xgettext 的机器上 po/messages.sh --check 自己会跳过，不会误伤 macOS
 messages-check:
-	@bash po/messages.sh --check
+	@$(BASH) po/messages.sh --check
 
 docs:
 	@./shellkit docs
@@ -73,21 +77,32 @@ docs-check:
 
 # VERSION 是唯一真相源，pot 头与两处钉版本引用都是它的投影
 versions-check:
-	@bash tools/check_versions.sh
+	@$(BASH) tools/check_versions.sh
 
 # 文档里的代码块必须能过 bash -n，函数名必须真实存在
 check-docs:
-	@bash tools/check_docs.sh
+	@$(BASH) tools/check_docs.sh
 
 # 文档里手写的「N 个场景」必须与 Cookbook 里的实际场景数一致
 cookbook-check:
-	@bash tools/check_cookbook_count.sh
+	@$(BASH) tools/check_cookbook_count.sh
 
 # 截图是真实输出渲染的，需要用 python3；没有就跳过而不是失败
 shots:
 	@if command -v python3 >/dev/null 2>&1; then \
 	  python3 tools/term_shot.py $(SHOTS); \
 	  else echo "python3 not installed, skipping screenshots"; fi
+
+# bats 用例：真正独立的测试用例（每个 @test 一个进程、互不干扰）。
+# 不进 check —— bats 是外部依赖，没装的机器不该被卡住；
+# CI 里有专门的 job 装好 bats 再跑它。
+bats-check:
+	@if command -v bats >/dev/null 2>&1; then \
+	  bats tests/bats; \
+	else \
+	  echo "bats is not installed: brew install bats-core / npm i -g bats" >&2; \
+	  exit 3; \
+	fi
 
 # ---------- 文档站 ----------
 # 刻意不进 check：库的门禁不依赖 Node，没装 npm 的机器上也该能全绿。
@@ -98,7 +113,7 @@ site-deps:
 
 # docs/ 是唯一真相源；site/ 里的 cookbook / 迁移 / 发版 / 参考页都是它的生成物
 site-sync:
-	@bash tools/site_sync.sh
+	@$(BASH) tools/site_sync.sh
 
 # prebuild 已经会先跑 site-sync，所以这一条就够；做完再查产物上的内部链接
 site:
@@ -117,19 +132,19 @@ examples:
 
 # 模块加载顺序：某个模块调用了还没加载的模块的函数，门禁要红
 module-order-check:
-	@bash tools/check_module_order.sh
+	@$(BASH) tools/check_module_order.sh
 
 # 公开函数必须写明返回码 —— 返回码是接口的一部分
 check-exitcode-docs:
-	@bash tools/check_exitcode_docs.sh
+	@$(BASH) tools/check_exitcode_docs.sh
 
 # 库内部局部变量必须 __ 前缀；公开出参函数必须拒绝保留名
 local-names-check:
-	@bash tools/check_local_names.sh
+	@$(BASH) tools/check_local_names.sh
 
 # 文档里手抄的模块数必须与 lib/modules.txt 一致
 module-count-check:
-	@bash tools/check_module_count.sh
+	@$(BASH) tools/check_module_count.sh
 
 # 同一个文件里不能有重复的函数定义（bash 后定义覆盖先定义，前面的悄悄失效）
 dup-functions-check:
@@ -138,7 +153,7 @@ dup-functions-check:
 # 管道里不能有会提前退出的消费者：grep -q / head 会把上游 SIGPIPE 打死（141），
 # 调用方开了 pipefail 时整条管道判失败 —— 而且是竞态，本机常绿、CI 必炸
 pipe-safety-check:
-	@bash tools/check_pipe_safety.sh
+	@$(BASH) tools/check_pipe_safety.sh
 
 check: syntax test lint module-order-check check-exitcode-docs local-names-check module-count-check pipe-safety-check dup-functions-check docs-check versions-check check-docs cookbook-check messages-check examples fmt
 

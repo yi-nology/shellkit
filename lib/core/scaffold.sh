@@ -18,6 +18,9 @@ SK_MANIFEST_VERSION=""
 SK_MANIFEST_TEMPLATE_VERSION=""
 SK_MANIFEST_NAME=""
 SK_MANIFEST_COMMANDS=""
+# 清单格式版本。2 = 基线可信（记的是模板基线）；1 或空 = 旧清单，
+# 基线可能是「用户改过之后的内容」，升级时必须另作判断。
+SK_MANIFEST_FORMAT=""
 
 # _sk_scaffold_store_set KEY VALUE —— 在变量表里写一个键
 _sk_scaffold_store_set() {
@@ -194,22 +197,57 @@ EOF
   return 0
 }
 
-# scaffold_manifest_write DIR NAME COMDS TEMPLATE_VERSION FILELIST
+# scaffold_manifest_write DIR NAME COMDS TEMPLATE_VERSION [FILELIST]
 #
 # 写 DIR/.shellkit-manifest。FILELIST 是换行分隔的相对路径（模板自有的文件），
 # 每个文件记一个 sha256 —— 升级时靠它判断「这个文件用户动过没有」。
+#
+# 记的是**基线**：上次成功应用的模板内容的指纹。生成工程时文件刚由模板渲染出来，
+# 当前内容 == 模板内容，两者一样，所以这里直接取当前文件的 sha256。
+# 升级时的基线由 scaffold_manifest_write_baselines 推进 ——
+# 跳过的文件基线不动，否则下一次升级就会把用户的修改当成「没动过」而覆盖掉。
 # @exitcode 0 清单写好
 # @exitcode 2 参数错
 # @exitcode 1 写文件失败
 scaffold_manifest_write() {
   local __dir=${1:-} __name=${2:-} __cmds=${3:-} __tver=${4:-} __files=${5:-}
-  local __out="$__dir/.shellkit-manifest" __tmp __line __rel __sum
   _sk_need_args "$#" 4 "scaffold_manifest_write DIR NAME COMDS TEMPLATE_VERSION [FILELIST]" || return $?
+  _sk_scaffold_manifest_emit "$__dir" "$__name" "$__cmds" "$__tver" "$__files" "" "current"
+}
+
+# scaffold_manifest_write_baselines DIR NAME COMDS TEMPLATE_VERSION FILELIST BASELINES
+#
+# 与 scaffold_manifest_write 写同一个格式的清单，但基线由调用方给：
+# BASELINES 是换行分隔的「相对路径=指纹」，指纹可以为空（表示没有指纹）。
+# BASELINES 里没提到的文件，基线记为空。
+#
+# 为什么要有这个入口：升级时「用户改过、被跳过的文件」不能把基线推进到用户
+# 的内容上 —— 推进了下一次升级就会覆盖掉用户的修改。只有真正成功应用了
+# 模板的文件才能推进基线。
+# @exitcode 0 清单写好
+# @exitcode 2 参数错
+# @exitcode 1 写文件失败
+scaffold_manifest_write_baselines() {
+  local __dir=${1:-} __name=${2:-} __cmds=${3:-} __tver=${4:-} __files=${5:-} __baselines=${6:-}
+  _sk_need_args "$#" 6 "scaffold_manifest_write_baselines DIR NAME COMDS TEMPLATE_VERSION FILELIST BASELINES" || return $?
+  _sk_scaffold_manifest_emit "$__dir" "$__name" "$__cmds" "$__tver" "$__files" "$__baselines" "given"
+}
+
+# _sk_scaffold_manifest_emit DIR NAME CMDS TVER FILES BASELINES MODE
+#
+# 清单落盘的实际实现。MODE = current 时基线取文件当前内容的 sha256；
+# MODE = given 时基线从 BASELINES（换行分隔的「路径=指纹」）里取。
+# @exitcode 0 清单写好
+# @exitcode 1 写文件失败
+_sk_scaffold_manifest_emit() {
+  local __dir=$1 __name=$2 __cmds=$3 __tver=$4 __files=$5 __baselines=$6 __mode=$7
+  local __out="$__dir/.shellkit-manifest" __tmp __line __rel __sum __bl __blrel __blsum
   fs_ensure_dir "$__dir" 755 || return 1
   __tmp=$(mktemp "$__out.tmp.XXXXXX") || return 1
   {
     printf '# shellkit manifest v1\n'
     printf '# 生成时的模板版本与文件指纹。shellkit upgrade 用它判断哪些文件能安全覆盖。\n'
+    printf 'manifest_version=2\n'
     printf 'version=%s\n' "${SK_VERSION:-dev}"
     printf 'template_version=%s\n' "$__tver"
     printf 'name=%s\n' "$__name"
@@ -222,15 +260,27 @@ $SK_SCAFFOLD_VARS
 EOF
     while IFS= read -r __rel || [ -n "$__rel" ]; do
       [ -n "$__rel" ] || continue
-      if [ -f "$__dir/$__rel" ]; then
+      __sum=""
+      if [ "$__mode" = "given" ]; then
+        while IFS= read -r __bl || [ -n "$__bl" ]; do
+          [ -n "$__bl" ] || continue
+          case "$__bl" in
+            *=*)
+              __blrel=${__bl%%=*}
+              __blsum=${__bl#*=}
+              ;;
+            *) continue ;;
+          esac
+          if [ "$__blrel" = "$__rel" ]; then
+            __sum=$__blsum
+            break
+          fi
+        done <<<"$__baselines"
+      elif [ -f "$__dir/$__rel" ]; then
         __sum=$(os_sha256 "$__dir/$__rel" 2>/dev/null) || __sum=""
-      else
-        __sum=""
       fi
       printf '@file %s %s\n' "$__rel" "$__sum"
-    done <<EOF
-$__files
-EOF
+    done <<<"$__files"
   } >"$__tmp" || {
     rm -f "$__tmp"
     return 1
@@ -259,6 +309,7 @@ scaffold_manifest_read() {
   SK_MANIFEST_TEMPLATE_VERSION=""
   SK_MANIFEST_NAME=""
   SK_MANIFEST_COMMANDS=""
+  SK_MANIFEST_FORMAT=""
   while IFS= read -r __line || [ -n "$__line" ]; do
     case "$__line" in
       '') continue ;;
@@ -278,6 +329,7 @@ scaffold_manifest_read() {
           template_version=*) SK_MANIFEST_TEMPLATE_VERSION="$__rest" ;;
           name=*) SK_MANIFEST_NAME="$__rest" ;;
           commands=*) SK_MANIFEST_COMMANDS="$__rest" ;;
+          manifest_version=*) SK_MANIFEST_FORMAT="$__rest" ;;
         esac
         continue
         ;;
@@ -296,6 +348,7 @@ scaffold_manifest_get() {
     template_version) printf '%s\n' "$SK_MANIFEST_TEMPLATE_VERSION" ;;
     name) printf '%s\n' "$SK_MANIFEST_NAME" ;;
     commands) printf '%s\n' "$SK_MANIFEST_COMMANDS" ;;
+    manifest_version) printf '%s\n' "$SK_MANIFEST_FORMAT" ;;
     *)
       log_error "$(_t 'unknown manifest key'): $__key"
       return "$SK_USAGE"
