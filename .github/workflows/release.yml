@@ -33,18 +33,40 @@ jobs:
           # 只放跑起来需要的东西：生成器、库、模板、语言包、文档、测试
           # 少拷一个目录，smoke test 要到几百行之后才会以 127 的形式炸掉 ——
           # 0.13.0 漏了 CHANGELOG、v0.15.0 漏了 tests/，两次都是这么红的。
-          cp -R shellkit install.sh repair.sh lib templates locale po tools tests docs skills examples "dist/$name/"
+          cp -R shellkit install.sh repair.sh demo.sh lib templates locale po tools tests docs skills examples "dist/$name/"
           cp README.md AGENTS.md VERSION LICENSE NOTICE Makefile CHANGELOG.md "dist/$name/"
           rm -rf "dist/$name/docs/superpowers"
-          chmod +x "dist/$name/shellkit" "dist/$name/install.sh" "dist/$name/repair.sh"
+          chmod +x "dist/$name/shellkit" "dist/$name/install.sh" "dist/$name/repair.sh" "dist/$name/demo.sh"
           tar -C dist -czf "dist/$name.tar.gz" "$name"
-          ( cd dist && sha256sum "$name.tar.gz" > SHA256SUMS )
+          # skill 包单独打一个 tarball：装进 AI 客户端的就是这个目录
+          # （SKILL.md + references/）。混在主包里的话，用户得自己拆目录，
+          # 还得知道 references/ 是什么 —— 「装一下」的门槛不该这么高。
+          rm -rf "dist/skill"
+          mkdir -p "dist/skill"
+          cp -R skills/shellkit "dist/skill/shellkit"
+          tar -C dist/skill -czf "dist/shellkit-skill-$version.tar.gz" shellkit
+          ( cd dist && sha256sum "$name.tar.gz" "shellkit-skill-$version.tar.gz" > SHA256SUMS )
           cat dist/SHA256SUMS
 
       - name: smoke test the artifact
         run: |
           set -euo pipefail
           version=$(cat VERSION)
+          # skill 包必须能独立解开：装进 AI 客户端的就是它。
+          # 缺 references/ 的残包 AI 会照着残缺的内容写代码 —— 用户看不出区别。
+          skillpkg="dist/shellkit-skill-$version.tar.gz"
+          if [ ! -f "$skillpkg" ]; then
+            echo "the release is missing $skillpkg" >&2
+            exit 1
+          fi
+          skillwork=$(mktemp -d)
+          tar -C "$skillwork" -xzf "$skillpkg"
+          for f in shellkit/SKILL.md shellkit/references/reference.md shellkit/references/cli.md; do
+            if [ ! -s "$skillwork/$f" ]; then
+              echo "the skill package is missing $f" >&2
+              exit 1
+            fi
+          done
           work=$(mktemp -d)
           tar -C "$work" -xzf "dist/shellkit-$version.tar.gz"
           cd "$work/shellkit-$version"
@@ -62,6 +84,7 @@ jobs:
           for f in shellkit \
                     install.sh \
                     repair.sh \
+                    demo.sh \
                     lib/bootstrap.sh \
                     templates \
                     locale/shellkit.pot \
@@ -69,6 +92,8 @@ jobs:
                     tests/run.sh \
                     tests/test_helper.sh \
                     docs/MIGRATING.md \
+                    skills/shellkit/SKILL.md \
+                    skills/shellkit/references/reference.md \
                     README.md \
                     AGENTS.md \
                     VERSION
@@ -88,6 +113,9 @@ jobs:
           ./shellkit doctor || true
           ./shellkit new "$work/demo" --cmd start
           ( cd "$work/demo" && make test )
+          # demo 命令必须能用：它生成工程并跑工程自己的测试，跑的是真二进制。
+          # demo.sh 走的是 release 资产（发布前拿不到），所以这里验的是包里的 CLI。
+          ./shellkit demo "$work/demo2"
 
       - name: publish
         env:
@@ -96,7 +124,7 @@ jobs:
           # install.sh 也作为资产发布：releases/latest/download/install.sh 是稳定地址，
           # raw.githubusercontent.com 在部分地区不可达，网页上那条一行命令要能走 release。
           tag="$GITHUB_REF_NAME"
-          assets=("dist/shellkit-$(cat VERSION).tar.gz" "dist/SHA256SUMS" "install.sh" "repair.sh")
+          assets=("dist/shellkit-$(cat VERSION).tar.gz" "dist/SHA256SUMS" "install.sh" "repair.sh" "demo.sh" "dist/shellkit-skill-$(cat VERSION).tar.gz")
           if gh release view "$tag" >/dev/null 2>&1; then
             # 同一个 tag 被推了两次（比如先推轻量 tag、后来补推 annotated tag）时，
             # 直接发布会以「release 已存在」失败，把整条流水线染红 —— 而产物其实
