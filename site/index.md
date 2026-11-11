@@ -26,6 +26,12 @@ features:
     details: shellkit new 生成的工程自带库副本、测试、Makefile 和给 AI 的约束，当场 make test 通过。
   - title: 给 AI 的约束与代码同源
     details: 禁用语法表、任务落点表、交付自检都由 docs/ai/contract.md 拼出，改一处三处同时更新。
+  - title: 一条命令先试一遍
+    details: demo.sh 下载即用：生成工程、跑工程自己的测试、把导览打出来。不往你的机器上装任何东西。
+# footer 与 footerHtml 要同时给：主题的页脚组件是 v-if="footer"，
+# 只给 footerHtml 不会渲染（看起来像「配了没生效」）。
+footer: '给 AI 直读：llms.txt —— 一个文件读完整个站点的地图'
+footerHtml: '<a href="https://yi-nology.github.io/shellkit/llms.txt" target="_blank" rel="noopener noreferrer">给 AI 直读：llms.txt</a> —— 一个文件读完整个站点的地图'
 ---
 
 ## 一条命令装上

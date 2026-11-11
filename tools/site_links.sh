@@ -107,6 +107,24 @@ for __pair in 'index.html:下载 ' 'en/index.html:Download '; do
   fi
 done
 
+# llms.txt 必须真的在产物里：它是给 AI 直读的入口，少了它整条链路断在最后一步。
+# 顺带数条目：空文件或只剩一两行的 llms.txt 同样是坏的（页面清单没生成出来）。
+for __llms in llms.txt en/llms.txt; do
+  if [ ! -s "$DIST/$__llms" ]; then
+    printf '[site-links] missing: %s\n' "$__llms" >&2
+    __bad=$((__bad + 1))
+    continue
+  fi
+  __n=$(grep -c '^- \[' "$DIST/$__llms" 2>/dev/null || true)
+  case "$__n" in
+    '' | *[!0-9]*) __n=0 ;;
+  esac
+  if [ "$__n" -lt 10 ]; then
+    printf '[site-links] %s lists only %s entries\n' "$__llms" "$__n" >&2
+    __bad=$((__bad + 1))
+  fi
+done
+
 if [ "$__bad" -ne 0 ]; then
   printf 'site-links: %s problem(s) across %s pages\n' "$__bad" "$__npages" >&2
   exit 5

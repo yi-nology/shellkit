@@ -121,8 +121,11 @@ _module_page_en() {
   } >"$SITE/en/reference/$__m.md" || return 1
 }
 
-# ---------- 1. 三篇从 docs/ 同步的中文页 ----------
+# ---------- 1. 从 docs/ 同步的中文页 ----------
 
+# Bash 3.2 指南的真相源是 docs/BASH32.md —— 站点页与 AI skill 的 references/
+# 都是它的投影。手写两份必然漂移，而漂移的兼容说明会让人写出在 3.2 上崩的代码。
+_emit_page "$DOCS/BASH32.md" "$SITE/guide/bash32.md" || _die 'failed to write guide/bash32.md'
 _emit_page "$DOCS/COOKBOOK.md" "$SITE/guide/cookbook.md" || _die 'failed to write guide/cookbook.md'
 _emit_page "$DOCS/MIGRATING.md" "$SITE/guide/migrating.md" || _die 'failed to write guide/migrating.md'
 _emit_page "$DOCS/RELEASING.md" "$SITE/guide/releasing.md" || _die 'failed to write guide/releasing.md'
@@ -211,5 +214,10 @@ for __f in "$DOCS"/shots/*.svg; do
   cp "$__f" "$SITE/.vuepress/public/shots/" || _die "failed to copy $__f"
 done
 
-_say "pages: 4 synced, 1 reference index, $__nfunc functions across $(printf '%s\n' $MODULES | wc -l | tr -d ' ') modules"
+# ---------- 6. llms.txt（给 AI 直读的站点索引）----------
+
+# 清单是扫出来的：新增页面自动进清单，不会出现「加了页面但 llms.txt 里没有」。
+bash "$ROOT/tools/llms_txt.sh" || _die 'failed to generate llms.txt' 1
+
+_say "pages: 5 synced, 1 reference index, $__nfunc functions across $(printf '%s\n' $MODULES | wc -l | tr -d ' ') modules"
 exit 0

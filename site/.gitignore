@@ -4,6 +4,7 @@ node_modules/
 .vuepress/.temp/
 
 # 由 tools/site_sync.sh 从 docs/ 生成，不入库
+guide/bash32.md
 guide/cookbook.md
 guide/man.md
 guide/migrating.md
@@ -15,3 +16,5 @@ en/guide/migrating.md
 en/guide/releasing.md
 en/reference/
 .vuepress/public/shots/
+.vuepress/public/llms.txt
+.vuepress/public/en/

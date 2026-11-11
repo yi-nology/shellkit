@@ -5,6 +5,10 @@ import { defineUserConfig } from 'vuepress'
 
 const REPO = 'https://github.com/yi-nology/shellkit'
 
+// 站点对外地址：llms.txt 这类「给 AI 直读」的入口要用绝对地址，
+// 相对地址在站点外（比如被别的工具 fetch）时是坏的。
+const SITE_BASE = 'https://yi-nology.github.io/shellkit'
+
 // 与 tools/shdoc.sh 的 MODULES 同序：读者按「先有什么、后有什么」看
 const MODULES = [
   'error', 'i18n', 'log', 'str', 'validate', 'fs', 'os', 'trap', 'run',
@@ -73,6 +77,16 @@ export default defineUserConfig({
     docsBranch: 'main',
     docsDir: 'site',
 
+    // 页脚挂一处 llms.txt 入口：给 AI 直读的人不用先知道站点的结构，
+    // 一个文件就是整张地图（导航栏里也有一处）。
+    footer: {
+      message: {
+        text: '给 AI 直读：llms.txt',
+        link: SITE_BASE + '/llms.txt',
+      },
+      copyright: 'MIT Licensed. Copyright © 2026 shellkit contributors.',
+    },
+
     // Prism 默认只有一套 nord 深色配色，浅色模式下代码正文会变成近白色、
     // 压在浅底上等于隐形。这里浅色用 coldark-cold、深色用 nord。
     themePlugins: {
@@ -97,6 +111,7 @@ export default defineUserConfig({
           { text: 'API 参考', link: '/reference/index.md' },
           { text: '示例', link: '/guide/examples.md' },
           { text: '发布产物', link: REPO + '/releases' },
+          { text: 'llms.txt', link: SITE_BASE + '/llms.txt' },
           { text: 'GitHub', link: REPO },
         ],
         sidebar: {
@@ -116,6 +131,7 @@ export default defineUserConfig({
           { text: 'API reference', link: '/en/reference/index.md' },
           { text: 'Examples', link: '/en/guide/examples.md' },
           { text: 'Releases', link: REPO + '/releases' },
+          { text: 'llms.txt', link: SITE_BASE + '/llms.txt' },
           { text: 'GitHub', link: REPO },
         ],
         sidebar: {
