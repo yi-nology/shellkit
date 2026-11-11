@@ -2,6 +2,13 @@
 本文件由 `tools/release.sh` 在发版时自动追加，已发布的小节不要手改。
 最新的在最前面。每一条对应一个提交 —— 要看「为什么」而不是「改了什么」，读 `docs/MIGRATING.md`。
 
+## 0.15.0 — 2026-11-11
+
+bf6c2b3 feat(i18n): 加 _tf（译文当 printf 格式串）+ msgmerge 禁用模糊匹配
+9cd4bfc feat(upgrade,coverage,mutation,repair): 第四轮评审的四项收口
+6ae6e03 docs: 0.15.0 行为变化表 + 坑 14-16 + 修复入口
+f177959 fix(test): install 用例声明自己的时间上限 —— 七八轮真实安装拷贝，本机 ~8 分钟
+
 ## 0.14.0 — 2026-11-11
 
 e629497 docs(plan): 批次 4.4 补上变异位点清单与「收编已有原语」的要求
