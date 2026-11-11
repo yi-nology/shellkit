@@ -4,7 +4,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: shellkit\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-11-11 12:19+0800\n"
+"POT-Creation-Date: 2026-11-11 18:42+0800\n"
 "PO-Revision-Date: 2026-11-08 00:00+0800\n"
 "Last-Translator: shellkit contributors\n"
 "Language-Team: shellkit contributors\n"
@@ -407,6 +407,9 @@ msgstr "產生專案"
 msgid "create a new project skeleton"
 msgstr "產生新專案骨架"
 
+msgid "generate a demo project and walk through it"
+msgstr "生成一個示範工程並帶你走一遍"
+
 msgid "update a generated project to the current template"
 msgstr "把產生的工程升級到當前模板"
 
@@ -448,6 +451,12 @@ msgstr "卸載已安裝的 shellkit"
 
 msgid "update an installed shellkit"
 msgstr "更新已安裝的 shellkit"
+
+msgid "AI clients"
+msgstr "AI 客戶端"
+
+msgid "install the AI skill into an AI client"
+msgstr "把 AI skill 裝進 AI 客戶端"
 
 msgid "usage"
 msgstr "用法"
@@ -773,12 +782,6 @@ msgstr "註解覆蓋檢查失敗"
 msgid "public function has no doc comment"
 msgstr "公開函式缺少文件註解"
 
-msgid "this copy has no documentation sources"
-msgstr "這份副本裡沒有說明文件來源"
-
-msgid "run it from a shellkit source tree"
-msgstr "請在 shellkit 原始碼樹裡執行"
-
 msgid "failed to render"
 msgstr "產生文件失敗"
 
@@ -791,11 +794,84 @@ msgstr "文件已過期"
 msgid "run to regenerate"
 msgstr "執行以重新產生"
 
+msgid "this copy has no documentation sources"
+msgstr "這份副本裡沒有說明文件來源"
+
+msgid "run it from a shellkit source tree"
+msgstr "請在 shellkit 原始碼樹裡執行"
+
 msgid "documentation is up to date"
 msgstr "文件已是最新"
 
 msgid "wrote"
 msgstr "已寫入"
+
+msgid "the demo project tests failed"
+msgstr "示範工程的測試沒過"
+
+msgid "what just happened"
+msgstr "剛才這一步做了什麼"
+
+msgid "a project skeleton was generated"
+msgstr "生成了一個工程骨架"
+
+msgid "the library travels with the project"
+msgstr "庫隨工程一起走，不依賴本機裝沒裝 shellkit"
+
+msgid "the project tests ran on the real binary"
+msgstr "工程自己的測試跑的是真二進位"
+
+msgid "what is in the project"
+msgstr "工程裡有什麼"
+
+msgid "what to try next"
+msgstr "接下來試試"
+
+msgid "where to read more"
+msgstr "再往下讀"
+
+msgid "the target exists and is not a directory"
+msgstr "目標已存在且不是目錄"
+
+msgid "the skill package is incomplete"
+msgstr "skill 包不完整"
+
+msgid "known AI clients"
+msgstr "已知 AI 客戶端"
+
+msgid "installed"
+msgstr "已安裝"
+
+msgid "older version"
+msgstr "舊版本"
+
+msgid "not installed"
+msgstr "未安裝"
+
+msgid ""
+"the client directory is a convention of each client; use --dir if it is wrong"
+msgstr "客戶端目錄是各家自己的約定；不對就用 --dir 指定"
+
+msgid "installed the skill into"
+msgstr "已把 skill 裝進"
+
+msgid "unknown AI client"
+msgstr "未知的 AI 客戶端"
+
+msgid "no AI client directory found; use --dir"
+msgstr "沒找到 AI 客戶端目錄；用 --dir 指定"
+
+msgid "removed the skill from"
+msgstr "已從下列目錄移除 skill"
+
+msgid "this copy has no skill package"
+msgstr "這份副本裡沒有 skill 包"
+
+msgid "only one action is allowed"
+msgstr "只允許一個動作"
+
+msgid "only one client is allowed"
+msgstr "只允許一個客戶端"
 
 msgid "try a writable prefix"
 msgstr "換一個可寫的前綴"
@@ -811,9 +887,6 @@ msgstr "寫入安裝清單失敗"
 
 msgid "failed to create symlink"
 msgstr "建立符號連結失敗"
-
-msgid "installed"
-msgstr "已安裝"
 
 msgid "no install manifest under"
 msgstr "這裡沒有安裝清單："
@@ -859,9 +932,6 @@ msgstr "已是最新版本："
 
 msgid "current version"
 msgstr "目前版本："
-
-msgid "not installed"
-msgstr "未安裝"
 
 msgid "latest version"
 msgstr "最新版本："

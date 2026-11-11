@@ -8,7 +8,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: shellkit 0.15.0\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-11-11 14:10+0800\n"
+"POT-Creation-Date: 2026-11-11 18:42+0800\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language-Team: LANGUAGE <LL@li.org>\n"
@@ -410,6 +410,9 @@ msgstr ""
 msgid "create a new project skeleton"
 msgstr ""
 
+msgid "generate a demo project and walk through it"
+msgstr ""
+
 msgid "update a generated project to the current template"
 msgstr ""
 
@@ -450,6 +453,12 @@ msgid "remove an installed shellkit"
 msgstr ""
 
 msgid "update an installed shellkit"
+msgstr ""
+
+msgid "AI clients"
+msgstr ""
+
+msgid "install the AI skill into an AI client"
 msgstr ""
 
 msgid "usage"
@@ -774,12 +783,6 @@ msgstr ""
 msgid "public function has no doc comment"
 msgstr ""
 
-msgid "this copy has no documentation sources"
-msgstr ""
-
-msgid "run it from a shellkit source tree"
-msgstr ""
-
 msgid "failed to render"
 msgstr ""
 
@@ -792,10 +795,83 @@ msgstr ""
 msgid "run to regenerate"
 msgstr ""
 
+msgid "this copy has no documentation sources"
+msgstr ""
+
+msgid "run it from a shellkit source tree"
+msgstr ""
+
 msgid "documentation is up to date"
 msgstr ""
 
 msgid "wrote"
+msgstr ""
+
+msgid "the demo project tests failed"
+msgstr ""
+
+msgid "what just happened"
+msgstr ""
+
+msgid "a project skeleton was generated"
+msgstr ""
+
+msgid "the library travels with the project"
+msgstr ""
+
+msgid "the project tests ran on the real binary"
+msgstr ""
+
+msgid "what is in the project"
+msgstr ""
+
+msgid "what to try next"
+msgstr ""
+
+msgid "where to read more"
+msgstr ""
+
+msgid "the target exists and is not a directory"
+msgstr ""
+
+msgid "the skill package is incomplete"
+msgstr ""
+
+msgid "known AI clients"
+msgstr ""
+
+msgid "installed"
+msgstr ""
+
+msgid "older version"
+msgstr ""
+
+msgid "not installed"
+msgstr ""
+
+msgid ""
+"the client directory is a convention of each client; use --dir if it is wrong"
+msgstr ""
+
+msgid "installed the skill into"
+msgstr ""
+
+msgid "unknown AI client"
+msgstr ""
+
+msgid "no AI client directory found; use --dir"
+msgstr ""
+
+msgid "removed the skill from"
+msgstr ""
+
+msgid "this copy has no skill package"
+msgstr ""
+
+msgid "only one action is allowed"
+msgstr ""
+
+msgid "only one client is allowed"
 msgstr ""
 
 msgid "try a writable prefix"
@@ -811,9 +887,6 @@ msgid "failed to write the install manifest"
 msgstr ""
 
 msgid "failed to create symlink"
-msgstr ""
-
-msgid "installed"
 msgstr ""
 
 msgid "no install manifest under"
@@ -859,9 +932,6 @@ msgid "already up to date"
 msgstr ""
 
 msgid "current version"
-msgstr ""
-
-msgid "not installed"
 msgstr ""
 
 msgid "latest version"
