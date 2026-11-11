@@ -893,8 +893,10 @@ _sk_upgrade_journal_file() {
 #
 # 读不出来（文件不在 / 行格式不对）就当没有日志：日志只是恢复的辅助信息，
 # 它坏了不该把升级卡死 —— 最坏的结果退回升级前的样子。
+# 但**不能静默退化**：坏掉的行逐条计数，明确告警 —— 用户该知道
+# 「上次升级异常，日志剩了半截」，而不是以为自己改过这些文件（issue #44）。
 _sk_upgrade_journal_read() {
-  local __dir=${1:-} __file __rel __old __new
+  local __dir=${1:-} __file __rel __old __new __bad=0
   _SK_UPGRADE_JRELS=()
   _SK_UPGRADE_JOLDS=()
   _SK_UPGRADE_JNEWS=()
@@ -902,12 +904,17 @@ _sk_upgrade_journal_read() {
   [ -f "$__file" ] || return 0
   while IFS=$'\t' read -r __rel __old __new || [ -n "$__rel" ]; do
     [ -n "$__rel" ] || continue
-    [ -n "$__old" ] || continue
-    [ -n "$__new" ] || continue
+    if [ -z "$__old" ] || [ -z "$__new" ]; then
+      __bad=$((__bad + 1))
+      continue
+    fi
     _SK_UPGRADE_JRELS[${#_SK_UPGRADE_JRELS[@]}]=$__rel
     _SK_UPGRADE_JOLDS[${#_SK_UPGRADE_JOLDS[@]}]=$__old
     _SK_UPGRADE_JNEWS[${#_SK_UPGRADE_JNEWS[@]}]=$__new
   done <"$__file"
+  if [ "$__bad" -gt 0 ]; then
+    log_warn "$(_t 'the upgrade journal is damaged; entries were ignored'): $__file ($__bad)"
+  fi
   return 0
 }
 
@@ -934,13 +941,27 @@ _sk_upgrade_journal_match() {
 # 必须在动第一个文件之前落盘。崩了也要知道「哪些文件本来该换成什么」，
 # 否则已经换新的文件会被当成用户改过的，永远冻结在旧模板上。
 #
-# 上一轮的记录原样带上：这一轮同样可能在提交清单之前崩掉，
-# 那时上一轮换过的文件还得靠这些记录来恢复。
+# 上一轮的记录不再原样全带（那是只增不减的无限累积，issue #44）：
+# 只带「目标指纹与磁盘当前内容还对得上」的记录 —— 它们才可能在本轮
+# 再次崩掉时用于恢复基线。对不上指纹的旧记录是死记录（磁盘上已经没有
+# 那个内容了，永远匹配不上），丢掉。这样反复升级失败也不会把日志
+# 积成一条长尾巴：每个文件最多留一条旧记录加本轮的新记录。
 _sk_upgrade_journal_write() {
-  local __dir=${1:-} __tpl=${2:-} __i=0 __rel __act __old __new __txt="" __file
+  local __dir=${1:-} __tpl=${2:-} __i=0 __rel __act __old __new __cur __txt="" __file
   __file=$(_sk_upgrade_journal_file "$__dir")
   while [ "$__i" -lt "${#_SK_UPGRADE_JRELS[@]}" ]; do
-    __txt="${__txt}${_SK_UPGRADE_JRELS[$__i]}"$'\t'"${_SK_UPGRADE_JOLDS[$__i]}"$'\t'"${_SK_UPGRADE_JNEWS[$__i]}"$'\n'
+    __rel=${_SK_UPGRADE_JRELS[$__i]}
+    __new=${_SK_UPGRADE_JNEWS[$__i]}
+    __keep=""
+    if [ -f "$__dir/$__rel" ]; then
+      __cur=$(os_sha256 "$__dir/$__rel" 2>/dev/null) || __cur=""
+      if [ -n "$__cur" ] && [ "$__cur" = "$__new" ]; then
+        __keep=1
+      fi
+    fi
+    if [ -n "$__keep" ]; then
+      __txt="${__txt}${__rel}"$'\t'"${_SK_UPGRADE_JOLDS[$__i]}"$'\t'"$__new"$'\n'
+    fi
     __i=$((__i + 1))
   done
   __i=0
@@ -964,6 +985,11 @@ _sk_upgrade_journal_write() {
     return 0
   fi
   fs_atomic_write "$__file" "$__txt" 600 || return 1
+  # 持久化边界尽量闭合（issue #44）：rename 之后把日志文件与所在目录刷一遍。
+  # `sync 操作数` 在 util-linux（Linux）上按操作数刷（目录一起刷才把 rename
+  # 一起落盘）；macOS 的 sync 忽略操作数、刷全盘 —— 都比不刷强。
+  # sync 不是 fsync 的硬保证，残余边界见 AGENTS.md 坑 14。
+  sync "$__file" "$__dir" 2>/dev/null || sync 2>/dev/null || true
   return 0
 }
 
