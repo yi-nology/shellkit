@@ -43,7 +43,7 @@
 
 | 命令 | 用法 | 说明 |
 | --- | --- | --- |
-| `shellkit skill` | `skill <list|install|uninstall|print> [--client NAME] [--dir DIR]` | install the AI skill into an AI client |
+| `shellkit skill` | `skill <list|install|uninstall|print> [--client NAME] [--dir DIR] [--force]` | install the AI skill into an AI client |
 
 ## 退出码
 
