@@ -1,12 +1,23 @@
 ---
 name: shellkit
-description: 用 shellkit 写运维 Bash 脚本（Bash 3.2 基线）。需要写/改 shell 脚本、加子命令、配置读写、下载校验、重试、单实例锁、清理收尾时使用；也用于把库引入既有工程。
+description: 用 shellkit 写运维 Bash 脚本（Bash 3.2 基线）。需要写/改 shell 脚本、加子命令、配置读写、下载校验、重试、单实例锁、清理收尾时使用；也用于把库引入既有工程、生成或升级工程。
 ---
-<!-- 生成物：由 tools/ai_doc.sh 拼装，请勿手改。改 docs/ai/skill.head.md 再跑 shellkit docs。 -->
+<!-- 生成物：由 tools/skill_pack.sh 拼装，请勿手改。改 docs/ai/skill.head.md 再跑 shellkit docs。 -->
 
 # 在任意项目里用 shellkit
 
 shellkit 是 Bash 库 + 脚手架。用它，你不用再手写日志、配置、下载校验、重试、单实例锁。
+
+## 先看哪份资料
+
+这个 skill 是渐进披露的：先读这一页，需要细节再去 `references/`。
+
+| 你要什么 | 去哪 |
+| --- | --- |
+| 某个函数的签名与退出码 | `references/reference.md` |
+| 一段能直接抄的场景代码 | `references/cookbook.md` |
+| 这个写法在 bash 3.2 上会不会崩 | `references/bash32.md` |
+| CLI 有哪些命令、怎么用 | `references/cli.md` |
 
 ## 引入：三选一
 
@@ -28,6 +39,9 @@ shellkit 是 Bash 库 + 脚手架。用它，你不用再手写日志、配置�
     curl -fsSL https://github.com/yi-nology/shellkit/releases/latest/download/repair.sh | bash
     # 或者用装好的副本里那一份（它也在 .old 副本里）
     ~/.local/share/shellkit.old/repair.sh --prefix ~/.local
+
+这个 skill 目录里只有说明，没有可执行的库 —— 要写脚本就用上面 A 或 B 把
+`vendor/shellkit/` 放进工程，脚本里 source 它的 bootstrap。
 
 脚本里加载库就一行：
 
