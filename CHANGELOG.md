@@ -2,6 +2,25 @@
 本文件由 `tools/release.sh` 在发版时自动追加，已发布的小节不要手改。
 最新的在最前面。每一条对应一个提交 —— 要看「为什么」而不是「改了什么」，读 `docs/MIGRATING.md`。
 
+## 0.14.0 — 2026-11-11
+
+e629497 docs(plan): 批次 4.4 补上变异位点清单与「收编已有原语」的要求
+79bc61d feat(coverage): 公开函数级覆盖率 —— 哪块没被测到，一眼可见
+7868924 fix(test): 发版包里没有 CHANGELOG.md 与 site/ —— 门禁自测的夹具要自给自足
+5fdb236 fix(release): 发包后的 smoke test 不许再脆断 —— 0.13.0 就是这么红的
+ed09a69 fix(test): stub 的 --body 里 exit 不许杀掉测试脚本 —— 假绿真的发生过
+5ba29dc fix(svc): unit 名拒绝路径穿越、root 不套 sudo —— 测试全程不碰真实 /etc
+9714076 fix(upgrade,vendor,install): 可靠性闭环 —— 中断恢复、并发互斥、旧清单一次升到位
+c6bff8a fix(registry): 缺失依赖要报 missing dependency —— 不能当普通节点混进排序
+703645d fix(ver): 非法输入返回 2 —— 「没法比较」不许伪装成「相等」
+2b15dcd docs: 0.14.0 行为变化表 + 坑13（stub exit 假绿）+ 「事务」命名纠正
+4ca1fba feat(mutation): 变异测试工具 —— 验证回归网的判据能力
+a60d1ea ci: 覆盖率棘轮与变异 campaign 各开一个 job
+87169e5 test(upgrade): 补 rel_safe 的 .. 分支判据 —— 变异测试发现这里一打就活
+5b7eb05 ci: release/pages 的 actions 引用钉到 commit SHA —— 供应链纪律收口最后一个浮动面
+1da838d feat(i18n): 生成工程的 Makefile 文案跟着生成器的语言走
+d56c446 fix(test): 字面 case.N 临时目录撞车 —— 三个测试文件共用 serial runner 的 TEST_TMP_ROOT
+
 ## 0.13.0 — 2026-11-11
 
 051ec98 fix(test): 发版包里没有 CHANGELOG.md 与 site/ —— 门禁自测的夹具要自给自足
