@@ -99,6 +99,30 @@ curl -fsSL https://github.com/yi-nology/shellkit/releases/latest/download/instal
 最后一步是 0.6.0 才装得上的：`install-self` 以前不装 `tests/`，装好的副本 `new` 出来的工程
 `make test` 必然 127。**这条别跳。**
 
+## 发布之后：Homebrew tap 要跟上
+
+tap 仓是 [yi-nology/homebrew-shellkit](https://github.com/yi-nology/homebrew-shellkit)，
+里面只有一个 `Formula/shellkit.rb`。它钉死了版本号与 sha256，而**发布完不会自动更新** ——
+得手工回填一次（Homebrew 要求逐字节一致，早填必错）：
+
+```bash
+version=0.16.0
+gh release download "v$version" --repo yi-nology/shellkit \
+  --pattern SHA256SUMS --dir "/tmp/sk-$version" --clobber
+sha=$(awk -v n="shellkit-$version.tar.gz" '$2==n{print $1}' "/tmp/sk-$version/SHA256SUMS")
+[ -n "$sha" ] || { echo "no checksum for the tarball in SHA256SUMS"; exit 1; }
+
+bash tools/brew_formula.sh --out /tmp/shellkit-tap/Formula/shellkit.rb \
+  --version "$version" --sha256 "$sha"
+
+cd /tmp/shellkit-tap && git add -A \
+  && git commit -m "feat: shellkit $version formula" \
+  && git push origin HEAD
+```
+
+回填完验一下：`brew install yi-nology/shellkit/shellkit` 能装上，
+且 `shellkit --version` 报的就是这个版本号。
+
 ## CI 那一半：release.yml
 
 `v*` tag 推上去就触发，别再手工 `gh release create`：

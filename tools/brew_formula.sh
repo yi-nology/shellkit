@@ -12,7 +12,12 @@
 #   --sha256 SUM      已经知道校验和（比如从 release 的 SHA256SUMS 里读的）
 #   --tarball FILE    本地就有那个 tarball，直接算
 #
-# 产物：packaging/homebrew/shellkit.rb（这个仓库存一份）与 tap 仓的 Formula/。
+# 发版后的回填流程见 docs/RELEASING.md。
+#
+# 产物只落在 tap 仓的 Formula/（yi-nology/homebrew-shellkit）——
+#
+# 本仓**不存**一份：formula 里钉死的 sha256 每个版本都变，仓里留一份就是
+# 一份必然过期的副本（下次发版就会红）。真相源永远是 release 的 SHA256SUMS。
 set -u
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
