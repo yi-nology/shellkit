@@ -209,17 +209,50 @@ fi
 #
 # 数「真的没译文的条目」不能靠 grep 'msgstr ""'：折行的译文第一行也是
 # msgstr ""（折行是 msgmerge 按行宽做的，跟有没有译文无关）。
-# msgattrib 是**按条目**判的 —— 有它就用它；没有就退回 grep（老口径，
-# 宁可误报也不漏报）。
+#
+# 也不能靠 msgattrib --untranslated：**gettext 的版本之间对折行译文的判定
+# 不一致** —— 0.21（Ubuntu/CI）把折行译文当成没译文，1.0（macOS/Homebrew）
+# 不当。同一份 po 在 CI 上数出 2 个「没译文」、本机数 0 ⇒ 假红。
+# 折行由 po/po_untranslated.awk 自己解开，结论不随外部工具的版本变。
 po="$TEST_ROOT/locale/zh_CN/LC_MESSAGES/shellkit.po"
-if [ -f "$po" ]; then
-  if command -v msgattrib >/dev/null 2>&1; then
-    # 文件头的 msgid 是空的（""），不算「没译文的条目」⇒ 只数非空 msgid
-    empty=$(msgattrib --untranslated --no-obsolete "$po" | grep -c 'msgid "[^"]' || true)
-  else
-    empty=$(grep -c '^msgstr ""$' "$po")
+if [ -f "$po" ] && command -v awk >/dev/null 2>&1 &&
+  [ -f "$TEST_ROOT/po/po_untranslated.awk" ]; then
+  missing=$(awk -f "$TEST_ROOT/po/po_untranslated.awk" "$po")
+  empty=$(printf '%s\n' "$missing" | grep -c . || true)
+  if [ "$empty" != "0" ]; then
+    printf 'missing translations:\n%s\n' "$missing" >&2
   fi
   assert_eq "0" "$empty" "every msgid in zh_CN has a translation (only the header may be empty)"
+fi
+
+# 计数本身必须自证：把「折行译文」和「真的没译文」两种 po 各造一份 ——
+# 折行的必须数出 0（这正是 CI 假红的那个坑），没译文的必须数出 1。
+# 两个数一样 ⇒ 这个计数没有判据能力。
+if command -v awk >/dev/null 2>&1 && [ -f "$TEST_ROOT/po/po_untranslated.awk" ]; then
+  _cnt=$(tmpdir)
+  cat >"$_cnt/folded.po" <<'EOF'
+msgid ""
+msgstr ""
+"Content-Type: text/plain; charset=UTF-8\n"
+
+msgid ""
+"a long english message that gets folded "
+"across two lines"
+msgstr ""
+"a folded chinese translation"
+EOF
+  assert_eq "0" "$(awk -f "$TEST_ROOT/po/po_untranslated.awk" "$_cnt/folded.po" | grep -c . || true)" \
+    "the untranslated counter does not mistake a folded translation for a missing one"
+  cat >"$_cnt/missing.po" <<'EOF'
+msgid ""
+msgstr ""
+"Content-Type: text/plain; charset=UTF-8\n"
+
+msgid "untranslated message"
+msgstr ""
+EOF
+  assert_eq "1" "$(awk -f "$TEST_ROOT/po/po_untranslated.awk" "$_cnt/missing.po" | grep -c . || true)" \
+    "the untranslated counter reports a genuinely missing translation"
 fi
 
 # fuzzy 译文必须为 0。
