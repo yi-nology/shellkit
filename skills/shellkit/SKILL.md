@@ -24,6 +24,11 @@ shellkit 是 Bash 库 + 脚手架。用它，你不用再手写日志、配置�
     # 已经 clone 下来时也可以直接装，或用 --prefix 换目录
     shellkit install-self --prefix ~/.local
 
+    # 装到一半被打断、CLI 起不来时：用不依赖任何库的独立脚本救回来
+    curl -fsSL https://github.com/yi-nology/shellkit/releases/latest/download/repair.sh | bash
+    # 或者用装好的副本里那一份（它也在 .old 副本里）
+    ~/.local/share/shellkit.old/repair.sh --prefix ~/.local
+
 脚本里加载库就一行：
 
     . "$(cd "$(dirname "$0")/.." && pwd)/vendor/shellkit/lib/bootstrap.sh"

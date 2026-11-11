@@ -10,6 +10,7 @@
     shellkit                  生成器 CLI（new / upgrade / doctor / list / vendor / docs / completion /
                               install-self / uninstall-self / update）
     install.sh                一键安装脚本：取版本 → 下载 release → 校验 sha256 → 交给 install-self
+    repair.sh                 独立修复脚本：不依赖已安装的库，检查 .old/.new 残骸并恢复启动能力
     lib/bootstrap.sh          唯一入口：按 lib/modules.txt 的顺序 source lib/core/*.sh
                               SHELLKIT_MODULES="log fs" 只加载这两个模块和它们的传递依赖
     lib/modules.txt           模块清单的唯一真相源：两列 —— 模块名 + 它依赖的模块
@@ -65,7 +66,7 @@
 只有真正成功应用了模板的文件才能推进基线；跳过的文件保持原基线。
 回归用例：`tests/test_upgrade.sh` 与 `tests/bats/scaffold.bats`（都要连升两次以上）。
 
-## 十三个已经踩过的坑
+## 十六个已经踩过的坑
 
 1. **bash 3.2 与 5 的 trap 语义不同**：子 shell 里 `trap -p EXIT`，3.2 读到空，5.x 仍打印
    父 shell 的 trap 但子 shell 退出时不执行。所以幂等不能只查 `trap -p`，看到是自己的
@@ -130,6 +131,31 @@
     「stub 的退出码」。自证用例在 `tests/test_stub.sh`。
     写 stub body 设退出码用 `return N`，别用 `exit`。
 
+14. **升级崩在「文件换了、清单没提交」⇒ 那些文件被永久冻结**：
+    升级是「换文件」和「改清单」两件事。清单记的是模板基线，判据是
+    「磁盘指纹 == 基线」。崩在中间就留下「文件已是新版、清单还记着旧指纹」，
+    下次升级看到「磁盘 != 基线」，一律当成「用户改过」——
+    那些文件从此再也拿不到模板更新（冻结）。
+    解法是 write-ahead journal（升级日志）：动第一个文件之前把
+    「这些文件该换成什么指纹」落盘（原子写），清单提交成功后删掉；
+    重跑时按磁盘实际指纹比对日志，命中就说明「这是上一轮换上去的」，
+    基线推进到它。回归在 `tests/test_upgrade_crash.sh`：每次文件提交后强制
+    杀进程，重跑后清单基线必须与磁盘一致，再跑一次必须是「0 left alone」。
+    ★ 边界：日志是原子写的但**没有 fsync** ⇒ 掉电（不是 SIGKILL）可能连日志
+    一起丢，那种情况下仍会冻结；要彻底闭环需要 fsync 级别的持久化边界。
+
+15. **白名单写成「曾经没覆盖」就会永远掩盖覆盖回退**：覆盖率棘轮原来只做两条
+    规则（未覆盖的必须在名单里、名单里的必须还是公开函数），没管第三种情况：
+    名单里的函数**已经被覆盖**了却还留着 ⇒ 将来测试被误删、覆盖消失，
+    棘轮一声不吭，CI 照样绿。
+    现在白名单的正确定义是「当前确实未覆盖的集合」，棘轮要**双向**：
+    已覆盖的必须移出（`bash tools/coverage.sh --write-baseline` 一键重生成）。
+
+16. **变异测试的 100% 只对「计分位点」负责**：跳过的位点不进分母 ——
+    「12 个位点里 5 个计分、7 个跳过」的 100% 不是「全都验过了」。
+    报告与 stdout 必须写清四层口径：枚举到多少、campaign 窗口多大、
+    计分多少、白名单跳过多少（逐条列出）。否则 100% 会被读成「全都验过了」。
+
 ## 本场景的验证
 
     make check
@@ -142,6 +168,10 @@
     bash tools/check_exitcode_docs.sh # 只看公开函数有没有写明返回码
     bash tools/check_cookbook_count.sh # 只看文档里说的场景数对不对
     bash tools/check_pipe_safety.sh  # 只看管道里有没有会提前退出的消费者
+    bash tools/coverage.sh --write-baseline  # 按真实覆盖率重生成白名单（只记当前未覆盖的）
+    bash tools/mutation.sh --target shellkit --test "bash tests/test_upgrade_guard.sh" \
+      --from-line $(grep -n '^_sk_upgrade_rel_safe()' shellkit | cut -d: -f1) \
+      --to-line $(grep -n '^_sk_upgrade_writable()' shellkit | cut -d: -f1)  # 变异位点
     make site                         # 构建文档站（先从 docs/ 同步，再查产物内部链接）
 
 ## 发版

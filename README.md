@@ -97,6 +97,25 @@ curl -fsSL .../install.sh | VERSION=0.14.0 bash           # 钉版本
 ./shellkit install-self --prefix ~/.local  # 没有 root 就装到自己的目录
 ```
 
+## 修复入口（CLI 起不来时）
+
+安装或 vendor 同步如果在「旧目录已经移走、新目录还没就位」的瞬间被中断，
+装好的 shellkit 就此起不来 —— 恢复逻辑写在 CLI 里，而 CLI 自己就是那个起不来的东西。
+`repair.sh` 是**不依赖已安装的库**的独立脚本：它检查 `.old` / `.new` 残骸，
+把完整的那份副本挪回去，让 shellkit 重新可用。
+
+```bash
+curl -fsSL https://github.com/yi-nology/shellkit/releases/latest/download/repair.sh | bash
+~/.local/share/shellkit.old/repair.sh --prefix ~/.local   # 副本里也有一份
+repair.sh --project ./my-app --check                       # 只报告，不动手
+```
+
+装好的副本里自带一份 `repair.sh`，`PREFIX/bin/` 下也挂了个 `shellkit-repair` 软链；
+卸载会按 MANIFEST 一并删掉。
+
+上面那个地址同样是 release 资产（`releases/latest/download/repair.sh`）——
+不是 raw.githubusercontent.com，理由与 `install.sh` 一样。
+
 ## 更新与卸载
 
 ```bash
