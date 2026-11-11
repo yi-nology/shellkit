@@ -8,6 +8,8 @@ bf6c2b3 feat(i18n): 加 _tf（译文当 printf 格式串）+ msgmerge 禁用模�
 9cd4bfc feat(upgrade,coverage,mutation,repair): 第四轮评审的四项收口
 6ae6e03 docs: 0.15.0 行为变化表 + 坑 14-16 + 修复入口
 f177959 fix(test): install 用例声明自己的时间上限 —— 七八轮真实安装拷贝，本机 ~8 分钟
+88a853f fix(ci): release 打包清单补回 tests/，并逐项点名自检
+f7d8473 fix(test): 「缺译文的条目」不再用 msgattrib 数 —— gettext 版本之间判据不同
 
 ## 0.14.0 — 2026-11-11
 
