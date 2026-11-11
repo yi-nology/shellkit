@@ -2,6 +2,19 @@
 本文件由 `tools/release.sh` 在发版时自动追加，已发布的小节不要手改。
 最新的在最前面。每一条对应一个提交 —— 要看「为什么」而不是「改了什么」，读 `docs/MIGRATING.md`。
 
+## 0.16.0 — 2026-11-11
+
+d1bac81 docs(bash32): Bash 3.2 指南的真相源挪进 docs/BASH32.md
+c374feb feat(skill): skill 完整包 —— SKILL.md 与 references/ 投影
+fa6e248 feat(cli): shellkit 新增 skill 与 demo 两个子命令
+c9394c9 feat(demo): demo.sh —— 下载 release、校验 sha256、解包即跑
+1db64c5 feat(release): release 资产多两个 —— demo.sh 与 skill 包 tarball
+e7a3230 feat(site): llms.txt —— 中英两份，站点导航与页脚各挂一个入口
+9c24380 feat(packaging): Homebrew formula 生成器 tools/brew_formula.sh
+35e0fea feat(i18n): skill 与 demo 的新文案入 locale
+9ad2a86 docs: 0.16.0 行为变化表 + README 与站点指南（skill / demo / llms.txt / brew）
+4514164 fix(docs): check_docs.sh 排除 skill 包投影 —— 源已扫过，判据能力不增
+
 ## 0.15.0 — 2026-11-11
 
 bf6c2b3 feat(i18n): 加 _tf（译文当 printf 格式串）+ msgmerge 禁用模糊匹配
