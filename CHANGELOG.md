@@ -2,6 +2,12 @@
 本文件由 `tools/release.sh` 在发版时自动追加，已发布的小节不要手改。
 最新的在最前面。每一条对应一个提交 —— 要看「为什么」而不是「改了什么」，读 `docs/MIGRATING.md`。
 
+## 0.17.0 — 2026-11-12
+
+6da1e34 docs(release): 补上 Homebrew tap 的回填流程，并修掉生成器里过期的注释
+d4473a3 feat(i18n): 加 _tf（译文当 printf 格式串）+ msgmerge 禁用模糊匹配 (#38)
+f12a95d fix: #39-#45 收口 —— skill 所有权与边界、repair 状态机、release 质量准入、升级日志可靠性 (#68)
+
 ## 0.16.0 — 2026-11-11
 
 d1bac81 docs(bash32): Bash 3.2 指南的真相源挪进 docs/BASH32.md
