@@ -1,6 +1,10 @@
 #!/usr/bin/env bash
 # 安装 / 卸载 / 更新：全部走真实二进制，不用替身。
 # 网络一律不碰 —— 远端路径用 file:// 假 release 喂给 curl，跑的是同一条代码路径。
+#
+# TEST_TIMEOUT: 900 —— 这个文件要跑七八轮真实的 install-self / uninstall-self，
+# 每一轮都把整棵树拷进 prefix（本机实测 ~8 分钟）。默认的 300 秒上限会把它
+# 掐在半路，于是「机器慢」被误读成「测试坏了」。
 set -u
 . "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/test_helper.sh"
 
