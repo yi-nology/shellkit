@@ -31,9 +31,9 @@ jobs:
           name="shellkit-$version"
           mkdir -p "dist/$name"
           # 只放跑起来需要的东西：生成器、库、模板、语言包、文档、测试
-          cp -R shellkit install.sh repair.sh lib templates locale po tools docs skills examples "dist/$name/"
-          # CHANGELOG 必须随包走：tests/ 里有会读它的用例（test_versions_gate.sh），
-          # 漏了它打包后的 smoke test 会红 —— 0.13.0 的 release 就是这么失败的。
+          # 少拷一个目录，smoke test 要到几百行之后才会以 127 的形式炸掉 ——
+          # 0.13.0 漏了 CHANGELOG、v0.15.0 漏了 tests/，两次都是这么红的。
+          cp -R shellkit install.sh repair.sh lib templates locale po tools tests docs skills examples "dist/$name/"
           cp README.md AGENTS.md VERSION LICENSE NOTICE Makefile CHANGELOG.md "dist/$name/"
           rm -rf "dist/$name/docs/superpowers"
           chmod +x "dist/$name/shellkit" "dist/$name/install.sh" "dist/$name/repair.sh"
@@ -56,7 +56,29 @@ jobs:
               exit 1
             fi
           done
-          # repair.sh 必须随包走：CLI 起不来时，它是唯一的恢复入口。
+          # 打包清单必须逐项点名：少拷一个目录，smoke test 要到几百行之后
+          # 才会以「command not found / 127」的形式炸掉，看不出是打包漏了东西。
+          # （v0.15.0 就是在这一步现原形：tests/ 漏了，报出来的是 127。）
+          for f in shellkit \
+                    install.sh \
+                    repair.sh \
+                    lib/bootstrap.sh \
+                    templates \
+                    locale/shellkit.pot \
+                    po/messages.sh \
+                    tests/run.sh \
+                    tests/test_helper.sh \
+                    docs/MIGRATING.md \
+                    README.md \
+                    AGENTS.md \
+                    VERSION
+          do
+            if [ ! -e "$f" ]; then
+              echo "the release tarball is missing $f" >&2
+              exit 1
+            fi
+          done
+          # repair.sh 必须可执行：CLI 起不来时，它是唯一的恢复入口。
           # 漏打包 ⇒ 那台机器连自救的路都没有。
           if [ ! -x repair.sh ]; then
             echo "the release tarball is missing an executable repair.sh" >&2
