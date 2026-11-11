@@ -4,7 +4,7 @@ SHELL := /bin/bash
 # 测试与静态检查用哪个 bash。macOS 的基线是 3.2（/bin/bash），但 PATH 上可能有
 # 别的版本 —— CI 里显式写 BASH=/bin/bash 才是真的在验 3.2。
 BASH ?= bash
-SOURCES := shellkit install.sh repair.sh lib/bootstrap.sh $(wildcard lib/core/*.sh) \
+SOURCES := shellkit install.sh repair.sh demo.sh lib/bootstrap.sh $(wildcard lib/core/*.sh) \
   $(wildcard tools/*.sh) tests/*.sh po/messages.sh
 TEMPLATES := $(shell find templates -type f)
 SHOTS := $(wildcard docs/shots/*.shot)
