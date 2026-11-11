@@ -233,3 +233,18 @@ if [ -f "$TEST_ROOT/locale/shellkit.pot" ]; then
   abs=$(grep -cF "$TEST_ROOT" "$TEST_ROOT/locale/shellkit.pot" || true)
   assert_eq "0" "$abs" "the pot file does not mention the checkout path"
 fi
+
+# _tf：译文当 printf 格式串用（占位符按参数填上）
+assert_eq "hello world" "$(_tf 'hello %s' "world")" "_tf fills the %s placeholder"
+assert_eq "a b" "$(_tf '%s %s' "a" "b")" "_tf fills two placeholders"
+assert_eq "no placeholder" "$(_tf 'no placeholder')" "_tf works without arguments"
+
+# 少给参数时不崩：printf 的标准语义是「占位符填空」，不是报错也不是
+# 把参数原样吐出来。译文侧的占位符个数由 msgfmt --check 保证与原文一致。
+assert_eq "x " "$(_tf 'x %s')" "_tf does not crash when a placeholder has no argument"
+
+# 译文必须真的经过 gettext —— 否则 .po 里写的译文永远用不上。
+# 假 gettext 回的是「T[msgid]」，所以这里能看出译文确实被当成了格式串：
+# msgid 里的 %s 被参数填掉，输出 T[one x]（不是 T[one %s] x）。
+_tf_out=$(PATH="$_fakebin:$PATH" bash -c '. "$1/lib/bootstrap.sh"; _tf "one %s" "x"' _ "$TEST_ROOT")
+assert_eq "T[one x]" "$_tf_out" "_tf sends the format string through gettext"

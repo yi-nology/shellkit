@@ -75,7 +75,12 @@ if [ "$HAVE_XGETTEXT" = "1" ]; then
         continue
       fi
       if command -v msgmerge >/dev/null 2>&1; then
-        msgmerge --quiet --update --backup=none "$po" "$POT"
+        # -N（--no-fuzzy-matching）：新增 msgid 一律留空，绝不猜译文。
+        # 默认的模糊匹配会把新 msgid 猜匹配到别的条目的旧译文上（如
+        # 「检测到 Certbot 已安装（」被猜成「检测到 1Panel 已安装（」），
+        # 标 fuzzy 后 msgfmt 会排除它 —— 结果是运行时静默回落英文 msgid，
+        # 译文表里还留着一条看着像对的错译文。
+        msgmerge --quiet --update --backup=none -N "$po" "$POT"
       fi
       need_msgfmt=1
     done
