@@ -124,7 +124,7 @@ if [ "$SK_BOOTSTRAP_OK" -eq 1 ]; then
   cli_cmd uninstall-self "$(_t 'remove an installed shellkit')" "uninstall-self [--prefix DIR]"
   cli_cmd update "$(_t 'update an installed shellkit')" "update [--check] [--from FILE] [--sha256 SUM] [--prefix DIR]"
   cli_group "$(_t 'AI clients')"
-  cli_cmd skill "$(_t 'install the AI skill into an AI client')" "skill <list|install|uninstall|print> [--client NAME] [--dir DIR]"
+  cli_cmd skill "$(_t 'install the AI skill into an AI client')" "skill <list|install|uninstall|print> [--client NAME] [--dir DIR] [--force]"
 fi
 
 # _sk_render SRC DST —— 用当前模板变量渲染文件（薄封装，逻辑在 scaffold 模块）
@@ -2331,11 +2331,24 @@ _sk_skill_version() {
   return 1
 }
 
-# _sk_skill_install_into DIR —— 把 skill 包装进 DIR/shellkit
+# _sk_skill_install_into DIR FORCE —— 把 skill 包装进 DIR/shellkit
+#   FORCE=1 时连用户改过的文件也覆盖（默认跳过并告警 —— 不静默覆盖）。
 #   0 = 装好了；1 = 没装成
+#
+# 所有权：装下去的每个文件都记进 DIR/shellkit/.shellkit-skill-manifest
+# （相对路径 TAB 内容指纹）。下次安装靠它判断「这个文件我们装过吗、
+# 用户改过吗」：基线对得上就更新，对不上就保留 —— 用户的编辑不静默丢。
+# 边界：目标根之下每一级已存在的目录都必须是真目录 —— references 预置一个
+# 指向别处的软链，跟着它写就会把文件写到目标根之外（软链无论指向哪里都拒绝）。
 _sk_skill_install_into() {
-  local __dir=$1 __src __dst __f
+  local __dir=$1 __force=${2:-0} __src __dst __dirabs __dstabs __f __rel __i=0 __sfile
+  local __new __base __cur __act __n_upd=0 __n_same=0 __n_keep=0
+  local __txt __manifest
   __src=$(_sk_skill_src) || return 1
+  if [ ! -f "$__src/SKILL.md" ]; then
+    log_warn "$(_t 'the skill package is incomplete'): $__src"
+    return 1
+  fi
   __dst="$__dir/shellkit"
 
   # 目标已经是软链：既不跟着写穿，也不替换它（cp 会顺着软链写穿 —— 坑 8）
@@ -2347,29 +2360,150 @@ _sk_skill_install_into() {
     log_warn "$(_t 'the target exists and is not a directory'): $__dst"
     return 1
   fi
-  if [ ! -f "$__src/SKILL.md" ]; then
-    log_warn "$(_t 'the skill package is incomplete'): $__src"
+  # 根要真实存在才能解析：后面所有边界判据都锚在解析后的绝对路径上
+  fs_ensure_dir "$__dir" "" || return 1
+  __dirabs=$(cd "$__dir" 2>/dev/null && pwd -P) || return 1
+  __dstabs="$__dirabs/shellkit"
+  # 边界校验：shellkit 与 shellkit/references 每一级已存在的都必须是真目录。
+  # 这里挡住的就是「预置软链写到目标根之外」的洞 —— 无论链接指向根内还是根外。
+  if ! _sk_fs_no_symlink_below "$__dirabs" "shellkit/references"; then
+    log_error "$(_t 'refusing to write through a symlink'): $__dstabs/references"
     return 1
   fi
 
-  fs_ensure_dir "$__dst/references" 755 || return 1
-  # 逐字节搬，且是原子替换：rename 换掉的是软链本身，不会顺着链接写到别处
-  fs_atomic_copy "$__src/SKILL.md" "$__dst/SKILL.md" 644 || return 1
-  for __f in "$__src"/references/*; do
-    [ -f "$__f" ] || continue
-    fs_atomic_copy "$__f" "$__dst/references/$(basename "$__f")" 644 || return 1
+  # 已装清单：装过才有；没有的条目按「不是我们装的」处理
+  __manifest="$__dstabs/.shellkit-skill-manifest"
+  _sk_fs_own_read "$__manifest"
+
+  # ---------- 阶段一：决策（一个文件都不动）----------
+  _SK_SKILL_ACT=()
+  _SK_SKILL_REL=()
+  _SK_SKILL_SUM=()
+  _SK_SKILL_BASE=()
+  while IFS= read -r __rel; do
+    [ -n "$__rel" ] || continue
+    # VERSION 不在 skill 包里，在副本自己的根上（装的是哪个版本的 skill）
+    case "$__rel" in
+      VERSION)
+        if [ -f "$__src/VERSION" ]; then
+          __sfile="$__src/VERSION"
+        else
+          __sfile="$SELF_DIR/VERSION"
+        fi
+        ;;
+      *) __sfile="$__src/$__rel" ;;
+    esac
+    __new=$(os_sha256 "$__sfile" 2>/dev/null) || __new=""
+    [ -n "$__new" ] || continue
+    __base=$(_sk_fs_own_sum "$__rel")
+    __act="W"
+    if [ -L "$__dstabs/$__rel" ]; then
+      # 位置上是个软链：不跟随也不替换 —— 那可能是用户自己的东西
+      log_warn "$(_t 'the target is a symlink, left alone'): $__rel"
+      __act="K"
+    elif [ ! -e "$__dstabs/$__rel" ]; then
+      __act="W"
+    else
+      __cur=$(os_sha256 "$__dstabs/$__rel" 2>/dev/null) || __cur=""
+      if [ -n "$__cur" ] && [ "$__cur" = "$__new" ]; then
+        # 内容已经是目标内容：幂等，不再写一遍
+        __act="S"
+      elif [ -n "$__base" ] && [ "$__cur" = "$__base" ]; then
+        # 还是我们上次装的原文：可以更新（这就是 skill 的升级通道）
+        __act="W"
+      elif [ "$__force" = "1" ]; then
+        __act="W"
+      else
+        log_warn "$(_t 'modified locally, left alone'): $__rel"
+        __act="K"
+      fi
+    fi
+    _SK_SKILL_ACT[${#_SK_SKILL_ACT[@]}]=$__act
+    _SK_SKILL_REL[${#_SK_SKILL_REL[@]}]=$__rel
+    _SK_SKILL_SUM[${#_SK_SKILL_SUM[@]}]=$__new
+    _SK_SKILL_BASE[${#_SK_SKILL_BASE[@]}]=$__base
+  done <<EOF
+SKILL.md
+VERSION
+$(cd "$__src/references" 2>/dev/null && for __f in *; do printf 'references/%s\n' "$__f"; done || true)
+EOF
+
+  # ---------- 阶段二：落盘（原子替换）与清单重写 ----------
+  _SK_OWN_RELS=()
+  _SK_OWN_SUMS=()
+  __i=0
+  while [ "$__i" -lt "${#_SK_SKILL_REL[@]}" ]; do
+    __rel=${_SK_SKILL_REL[$__i]}
+    __act=${_SK_SKILL_ACT[$__i]}
+    case "$__act" in
+      W)
+        if [ "$__rel" = "SKILL.md" ] || [ "$__rel" = "VERSION" ]; then
+          fs_ensure_dir "$__dstabs" 755 || return 1
+        else
+          fs_ensure_dir "$__dstabs/references" 755 || return 1
+        fi
+        # 逐字节搬，且是原子替换：rename 换掉的是软链本身，不会顺着链接写到别处
+        case "$__rel" in
+          VERSION)
+            if [ -f "$__src/VERSION" ]; then
+              __sfile="$__src/VERSION"
+            else
+              __sfile="$SELF_DIR/VERSION"
+            fi
+            ;;
+          *) __sfile="$__src/$__rel" ;;
+        esac
+        if ! fs_atomic_copy "$__sfile" "$__dstabs/$__rel" 644; then
+          return 1
+        fi
+        _SK_OWN_RELS[${#_SK_OWN_RELS[@]}]=$__rel
+        _SK_OWN_SUMS[${#_SK_OWN_SUMS[@]}]=${_SK_SKILL_SUM[$__i]}
+        __n_upd=$((__n_upd + 1))
+        ;;
+      S)
+        _SK_OWN_RELS[${#_SK_OWN_RELS[@]}]=$__rel
+        _SK_OWN_SUMS[${#_SK_OWN_SUMS[@]}]=${_SK_SKILL_SUM[$__i]}
+        __n_same=$((__n_same + 1))
+        ;;
+      K)
+        # 用户改过的：保留原文，基线也不推进 —— 推进了就等于把用户的编辑
+        # 记成「我们装的原文」，下次安装就会静默覆盖掉。
+        if [ -n "${_SK_SKILL_BASE[$__i]}" ]; then
+          _SK_OWN_RELS[${#_SK_OWN_RELS[@]}]=$__rel
+          _SK_OWN_SUMS[${#_SK_OWN_SUMS[@]}]=${_SK_SKILL_BASE[$__i]}
+        fi
+        __n_keep=$((__n_keep + 1))
+        ;;
+    esac
+    __i=$((__i + 1))
   done
-  # 版本号跟着走：list 才知道装的是哪一版
-  if [ -f "$SELF_DIR/VERSION" ]; then
-    fs_atomic_copy "$SELF_DIR/VERSION" "$__dst/VERSION" 644 || return 1
+
+  # 清单落盘：所有权与基线以这一轮结束时的状态为准
+  __txt=$(_sk_fs_own_render)
+  if [ -n "$__txt" ]; then
+    fs_atomic_write "$__manifest" "$__txt" 644 || return 1
+  else
+    rm -f "$__manifest" 2>/dev/null || true
+  fi
+
+  if [ "$__n_upd" -eq 0 ] && [ "$__n_keep" -eq 0 ]; then
+    log_info "$(_t 'the skill is up to date'): $__dstabs ($__n_same unchanged)"
   fi
   return 0
 }
 
 # _sk_skill_uninstall_from DIR —— 卸掉 DIR/shellkit 里我们装的那些文件
-#   0 = 卸干净了（或本来就没装）；1 = 没卸成
+#
+# 所有权判据：只删「清单里有、且当前内容与清单指纹一致」的文件。
+#   清单里有、内容变了 ⇒ 不删，告警保留（用户的编辑不静默丢）
+#   清单里没有 ⇒ 不碰（用户自己加的文件）
+#   目录非空 ⇒ 不 rmdir，明说（以前 rmdir 失败被 2>/dev/null 吞掉，恰好无害）
+# 清单缺失（老版本装的、或用户删了）⇒ 退化判据：与当前 skill 包逐文件比内容，
+# 对得上才删 —— 宁可留下，不可误删。
+#   0 = 卸完了（可能有保留项，输出里列出）；1 = 没卸成
 _sk_skill_uninstall_from() {
-  local __dir=$1 __dst __f
+  local __dir=$1 __dst __dstabs __dirabs __src __rel __cur __sum __f __i=0 __sfile
+  local __n_rm=0 __n_keep=0 __empty=1 __txt __manifest
   __dst="$__dir/shellkit"
   [ -e "$__dst" ] || return 0
   if [ -L "$__dst" ]; then
@@ -2377,24 +2511,141 @@ _sk_skill_uninstall_from() {
     return 1
   fi
   [ -d "$__dst" ] || return 1
-  # 只删我们装过的那些文件：目录里可能是用户自己加的东西
-  rm -f "$__dst/SKILL.md" "$__dst/VERSION" || return 1
-  if [ -L "$__dst/references" ]; then
-    log_warn "$(_t 'the target is a symlink, left alone'): $__dst/references"
-  else
-    for __f in "$__dst"/references/*; do
-      [ -f "$__f" ] || continue
-      rm -f "$__f" || return 1
+  __dirabs=$(cd "$__dir" 2>/dev/null && pwd -P) || return 1
+  __dstabs="$__dirabs/shellkit"
+  __src=$(_sk_skill_src 2>/dev/null) || __src=""
+
+  __manifest="$__dstabs/.shellkit-skill-manifest"
+  _sk_fs_own_read "$__manifest"
+  if [ "${#_SK_OWN_RELS[@]}" -gt 0 ]; then
+    __i=0
+    while [ "$__i" -lt "${#_SK_OWN_RELS[@]}" ]; do
+      __rel=${_SK_OWN_RELS[$__i]}
+      __sum=${_SK_OWN_SUMS[$__i]}
+      if [ -L "$__dstabs/$__rel" ]; then
+        log_warn "$(_t 'the target is a symlink, left alone'): $__rel"
+        __n_keep=$((__n_keep + 1))
+      elif [ -f "$__dstabs/$__rel" ]; then
+        __cur=$(os_sha256 "$__dstabs/$__rel" 2>/dev/null) || __cur=""
+        if [ -n "$__cur" ] && [ "$__cur" = "$__sum" ]; then
+          rm -f "$__dstabs/$__rel" || return 1
+          __n_rm=$((__n_rm + 1))
+        else
+          log_warn "$(_t 'modified locally, left alone'): $__rel"
+          __n_keep=$((__n_keep + 1))
+        fi
+      fi
+      __i=$((__i + 1))
     done
-    rmdir "$__dst/references" 2>/dev/null || true
+  elif [ -n "$__src" ] && [ -f "$__src/SKILL.md" ]; then
+    # 退化判据（没有清单）：只删与当前 skill 包内容逐字节一致的已知文件
+    while IFS= read -r __rel; do
+      [ -n "$__rel" ] || continue
+      case "$__rel" in
+        VERSION)
+          if [ -f "$__src/VERSION" ]; then
+            __sfile="$__src/VERSION"
+          else
+            __sfile="$SELF_DIR/VERSION"
+          fi
+          ;;
+        *) __sfile="$__src/$__rel" ;;
+      esac
+      [ -f "$__sfile" ] || continue
+      if [ -L "$__dstabs/$__rel" ]; then
+        log_warn "$(_t 'the target is a symlink, left alone'): $__rel"
+        __n_keep=$((__n_keep + 1))
+        continue
+      fi
+      [ -f "$__dstabs/$__rel" ] || continue
+      __cur=$(os_sha256 "$__dstabs/$__rel" 2>/dev/null) || __cur=""
+      __sum=$(os_sha256 "$__sfile" 2>/dev/null) || __sum=""
+      if [ -n "$__cur" ] && [ -n "$__sum" ] && [ "$__cur" = "$__sum" ]; then
+        rm -f "$__dstabs/$__rel" || return 1
+        __n_rm=$((__n_rm + 1))
+      else
+        log_warn "$(_t 'modified locally, left alone'): $__rel"
+        __n_keep=$((__n_keep + 1))
+      fi
+    done <<EOF
+SKILL.md
+VERSION
+$(cd "$__src/references" 2>/dev/null && for __f in *; do printf 'references/%s\n' "$__f"; done || true)
+EOF
+  else
+    # 连对照的包都没有：分辨不出哪些是我们装的 —— 一概不删
+    log_warn "$(_t 'cannot verify which files were installed by shellkit; nothing was removed'): $__dstabs"
+    return 0
   fi
-  rmdir "$__dst" 2>/dev/null || true
+
+  # 清单重写：还有保留项就留下它们的基线（下次安装仍按「用户改过」处理）
+  _SK_KEEP_RELS=()
+  _SK_KEEP_SUMS=()
+  __i=0
+  while [ "$__i" -lt "${#_SK_OWN_RELS[@]}" ]; do
+    __rel=${_SK_OWN_RELS[$__i]}
+    if [ -e "$__dstabs/$__rel" ] || [ -L "$__dstabs/$__rel" ]; then
+      _SK_KEEP_RELS[${#_SK_KEEP_RELS[@]}]=$__rel
+      _SK_KEEP_SUMS[${#_SK_KEEP_SUMS[@]}]=${_SK_OWN_SUMS[$__i]}
+    fi
+    __i=$((__i + 1))
+  done
+  if [ "${#_SK_KEEP_RELS[@]}" -gt 0 ]; then
+    _SK_OWN_RELS=()
+    _SK_OWN_SUMS=()
+    __i=0
+    while [ "$__i" -lt "${#_SK_KEEP_RELS[@]}" ]; do
+      _SK_OWN_RELS[${#_SK_OWN_RELS[@]}]=${_SK_KEEP_RELS[$__i]}
+      _SK_OWN_SUMS[${#_SK_OWN_SUMS[@]}]=${_SK_KEEP_SUMS[$__i]}
+      __i=$((__i + 1))
+    done
+    __txt=$(_sk_fs_own_render)
+    fs_atomic_write "$__manifest" "$__txt" 644 || return 1
+  else
+    rm -f "$__manifest" 2>/dev/null || true
+  fi
+
+  # 目录收尾：非空就明说，不再静默吞掉 rmdir 的失败
+  if [ -d "$__dstabs/references" ] && [ ! -L "$__dstabs/references" ]; then
+    __empty=1
+    for __f in "$__dstabs"/references/*; do
+      [ -e "$__f" ] || continue
+      __empty=0
+      break
+    done
+    if [ "$__empty" = "1" ]; then
+      rmdir "$__dstabs/references" 2>/dev/null || true
+    else
+      log_info "$(_t 'the directory is not empty, left in place'): $__dstabs/references"
+    fi
+  fi
+  __empty=1
+  for __f in "$__dstabs"/* "$__dstabs"/.*; do
+    case "${__f##*/}" in
+      . | ..) continue ;;
+    esac
+    [ -e "$__f" ] || [ -L "$__f" ] || continue
+    __empty=0
+    break
+  done
+  if [ "$__empty" = "1" ]; then
+    rmdir "$__dstabs" 2>/dev/null || true
+  else
+    log_info "$(_t 'the directory is not empty, left in place'): $__dstabs"
+  fi
   return 0
 }
 
 # _sk_skill_list —— 列出已知客户端与当前状态
+#
+# 状态口径（有所有权清单时能说得更准）：
+#   installed <v>            已装且与清单一致
+#   installed <v> (older)    已装但版本落后（重跑 install 即更新）
+#   installed <v> (modified) 清单里的文件对不上指纹 —— 被改过或装残了
+#   installed                没有清单的老安装（照旧按目录在就算装了）
+#   not installed            目录都没有
 _sk_skill_list() {
-  local __name __c __v __cur
+  local __name __c __v __cur __manifest __note __i=0
   __cur=$(_sk_skill_version 2>/dev/null || true)
   printf '%s:\n' "$(_t 'known AI clients')"
   while read -r __name __c || [ -n "$__name" ]; do
@@ -2403,14 +2654,30 @@ _sk_skill_list() {
     if [ -f "$__c/shellkit/VERSION" ]; then
       __v=$(tr -d '[:space:]' <"$__c/shellkit/VERSION" 2>/dev/null || true)
     fi
+    __note=""
+    __manifest="$__c/shellkit/.shellkit-skill-manifest"
+    if [ -f "$__manifest" ]; then
+      # 有清单：逐条对指纹，对不上就是「被改过 / 装残了」
+      _sk_fs_own_read "$__manifest"
+      __i=0
+      while [ "$__i" -lt "${#_SK_OWN_RELS[@]}" ]; do
+        if [ -L "$__c/shellkit/${_SK_OWN_RELS[$__i]}" ] ||
+          [ ! -f "$__c/shellkit/${_SK_OWN_RELS[$__i]}" ] ||
+          [ "$(os_sha256 "$__c/shellkit/${_SK_OWN_RELS[$__i]}" 2>/dev/null)" != "${_SK_OWN_SUMS[$__i]}" ]; then
+          __note=" ($(_t 'modified'))"
+          break
+        fi
+        __i=$((__i + 1))
+      done
+    fi
     if [ -n "$__v" ]; then
       if [ -n "$__cur" ] && [ "$__v" != "$__cur" ]; then
-        printf '  %-10s %-44s %s\n' "$__name" "$__c" "$(_t 'installed') $__v ($(_t 'older version'))"
+        printf '  %-10s %-44s %s\n' "$__name" "$__c" "$(_t 'installed') $__v ($(_t 'older version'))$__note"
       else
-        printf '  %-10s %-44s %s\n' "$__name" "$__c" "$(_t 'installed') $__v"
+        printf '  %-10s %-44s %s\n' "$__name" "$__c" "$(_t 'installed') $__v$__note"
       fi
     elif [ -d "$__c/shellkit" ]; then
-      printf '  %-10s %-44s %s\n' "$__name" "$__c" "$(_t 'installed')"
+      printf '  %-10s %-44s %s\n' "$__name" "$__c" "$(_t 'installed')$__note"
     else
       printf '  %-10s %-44s %s\n' "$__name" "$__c" "$(_t 'not installed')"
     fi
@@ -2418,13 +2685,13 @@ _sk_skill_list() {
   printf '\n%s\n' "$(_t 'the client directory is a convention of each client; use --dir if it is wrong')"
 }
 
-# _sk_skill_install CLIENT DIR —— 装到目标目录
+# _sk_skill_install CLIENT DIR FORCE —— 装到目标目录
 _sk_skill_install() {
-  local __client=$1 __dir=$2
+  local __client=$1 __dir=$2 __force=${3:-0}
   local __name __c __n=0 __ok=0
 
   if [ -n "$__dir" ]; then
-    if ! _sk_skill_install_into "$__dir"; then
+    if ! _sk_skill_install_into "$__dir" "$__force"; then
       return "$SK_PRECOND"
     fi
     log_ok "$(_t 'installed the skill into'): $__dir/shellkit"
@@ -2446,7 +2713,7 @@ _sk_skill_install() {
       continue
     fi
     __n=$((__n + 1))
-    if _sk_skill_install_into "$__c"; then
+    if _sk_skill_install_into "$__c" "$__force"; then
       __ok=$((__ok + 1))
       log_ok "$(_t 'installed the skill into'): $__c/shellkit"
     fi
@@ -2519,13 +2786,16 @@ _sk_skill_print() {
 
 # cmd_skill —— skill list|install|uninstall|print
 cmd_skill() {
-  local __action="" __dir="" __client=""
+  local __action="" __dir="" __client="" __force=0
 
   while [ "$#" -gt 0 ]; do
     case "$1" in
       -h | --help)
         cli_usage_cmd skill
         return "$SK_OK"
+        ;;
+      --force)
+        __force=1
         ;;
       --dir)
         shift
@@ -2579,7 +2849,7 @@ cmd_skill() {
       return "$SK_OK"
       ;;
     install)
-      _sk_skill_install "$__client" "$__dir"
+      _sk_skill_install "$__client" "$__dir" "$__force"
       return $?
       ;;
     uninstall)

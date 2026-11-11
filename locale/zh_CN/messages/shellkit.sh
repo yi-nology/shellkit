@@ -38,6 +38,7 @@ _sk_msg_lookup_shellkit() {
     'Bash version is too old') printf '%s' 'Bash 版本过低' ;;
     'source file does not exist') printf '%s' '源文件不存在' ;;
     'invalid keep count') printf '%s' '非法的保留份数' ;;
+    'the ownership manifest is damaged; entries were ignored') printf '%s' '所有权清单已损坏；部分条目被忽略' ;;
     'line must not be empty') printf '%s' '内容不能为空' ;;
     'line must not contain a newline') printf '%s' '内容不能包含换行' ;;
     'block markers must not be empty') printf '%s' '块标记不能为空' ;;
@@ -187,6 +188,7 @@ _sk_msg_lookup_shellkit() {
     'the generated project is incomplete') printf '%s' '生成的工程不完整' ;;
     'project created') printf '%s' '工程已生成' ;;
     'next steps') printf '%s' '下一步' ;;
+    'the upgrade journal is damaged; entries were ignored') printf '%s' '升级日志已损坏；部分条目被忽略' ;;
     'target directory does not exist') printf '%s' '目标目录不存在' ;;
     'it does not look like a shellkit-generated project') printf '%s' '看起来不是 shellkit 生成的工程' ;;
     'the manifest does not record a project name') printf '%s' 'manifest 里没有记录工程名' ;;
@@ -272,9 +274,14 @@ _sk_msg_lookup_shellkit() {
     'what is in the project') printf '%s' '工程里有什么' ;;
     'what to try next') printf '%s' '接下来试试' ;;
     'where to read more') printf '%s' '再往下读' ;;
-    'the target exists and is not a directory') printf '%s' '目标已存在且不是目录' ;;
     'the skill package is incomplete') printf '%s' 'skill 包不完整' ;;
+    'the target exists and is not a directory') printf '%s' '目标已存在且不是目录' ;;
+    'refusing to write through a symlink') printf '%s' '拒绝顺着符号链接写入' ;;
+    'the skill is up to date') printf '%s' 'skill 已是最新' ;;
+    'cannot verify which files were installed by shellkit; nothing was removed') printf '%s' '无法分辨哪些文件是 shellkit 装的；什么都没有删除' ;;
+    'the directory is not empty, left in place') printf '%s' '目录非空，原样保留' ;;
     'known AI clients') printf '%s' '已知 AI 客户端' ;;
+    'modified') printf '%s' '已被改动' ;;
     'installed') printf '%s' '已安装' ;;
     'older version') printf '%s' '旧版本' ;;
     'not installed') printf '%s' '未安装' ;;

@@ -4,7 +4,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: shellkit\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-11-11 18:42+0800\n"
+"POT-Creation-Date: 2026-11-12 02:08+0800\n"
 "PO-Revision-Date: 2026-11-08 00:00+0800\n"
 "Last-Translator: shellkit contributors\n"
 "Language-Team: shellkit contributors\n"
@@ -118,6 +118,9 @@ msgstr "源文件不存在"
 
 msgid "invalid keep count"
 msgstr "非法的保留份数"
+
+msgid "the ownership manifest is damaged; entries were ignored"
+msgstr "所有权清单已损坏；部分条目被忽略"
 
 msgid "line must not be empty"
 msgstr "内容不能为空"
@@ -573,6 +576,9 @@ msgstr "工程已生成"
 msgid "next steps"
 msgstr "下一步"
 
+msgid "the upgrade journal is damaged; entries were ignored"
+msgstr "升级日志已损坏；部分条目被忽略"
+
 msgid "target directory does not exist"
 msgstr "目标目录不存在"
 
@@ -830,14 +836,30 @@ msgstr "接下来试试"
 msgid "where to read more"
 msgstr "再往下读"
 
-msgid "the target exists and is not a directory"
-msgstr "目标已存在且不是目录"
-
 msgid "the skill package is incomplete"
 msgstr "skill 包不完整"
 
+msgid "the target exists and is not a directory"
+msgstr "目标已存在且不是目录"
+
+msgid "refusing to write through a symlink"
+msgstr "拒绝顺着符号链接写入"
+
+msgid "the skill is up to date"
+msgstr "skill 已是最新"
+
+msgid ""
+"cannot verify which files were installed by shellkit; nothing was removed"
+msgstr "无法分辨哪些文件是 shellkit 装的；什么都没有删除"
+
+msgid "the directory is not empty, left in place"
+msgstr "目录非空，原样保留"
+
 msgid "known AI clients"
 msgstr "已知 AI 客户端"
+
+msgid "modified"
+msgstr "已被改动"
 
 msgid "installed"
 msgstr "已安装"
