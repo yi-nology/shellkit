@@ -92,7 +92,7 @@ _cov_baseline() {
 }
 
 # CASE: 机制自测 —— 只调一个公开函数时，报告必须显示 1/2 并逐字点名另一个
-d="$TEST_TMP_ROOT/case.1"
+d=$(tmpdir) || _fail "cannot create tmpdir"
 _cov_tree "$d" || _fail "cannot build the mini tree"
 mkdir -p "$d/tools"
 # 基线放行 mini_beta：这样工具的退出码只受「未覆盖函数是否在基线里」影响
@@ -114,7 +114,7 @@ mini_pub_count=$(grep -cE '^[a-z][a-z0-9_]*\(\) *\{' "$d/lib/core/mini.sh")
 assert_eq "2" "$mini_pub_count" "the mini library has exactly two public functions"
 
 # CASE: 棘轮负对照 —— 白名单里少一条，工具必须退出码非 0
-d="$TEST_TMP_ROOT/case.2"
+d=$(tmpdir) || _fail "cannot create tmpdir"
 _cov_tree "$d" || _fail "cannot build the mini tree"
 mkdir -p "$d/tools"
 # 基线是空的：mini_beta 未覆盖且不在基线里 ⇒ 违规
@@ -133,7 +133,7 @@ _cov_run rc --root "$d" --suite 'bash tests/run.sh' --baseline "$d/tools/coverag
 assert_eq "0" "$rc" "the same scenario must pass once the baseline lists the function"
 
 # CASE: 白名单不腐烂 —— 基线里塞一个不存在的公开函数名，必须判红
-d="$TEST_TMP_ROOT/case.3"
+d=$(tmpdir) || _fail "cannot create tmpdir"
 _cov_tree "$d" || _fail "cannot build the mini tree"
 mkdir -p "$d/tools"
 _cov_baseline "$d/tools/coverage_baseline.txt" "mini_beta"
@@ -151,7 +151,7 @@ assert_contains "$err" "the baseline lists a function that is not a public funct
 # 罩不住这个套件的未覆盖集合。所以这里先用空基线跑一遍拿到本套件的未覆盖名单，
 # 把它写成临时基线再跑一遍 —— 棘轮逻辑本身已由 case.1~3 覆盖，这里验的是
 # 工具对真库能出格式正确的报告。
-d="$TEST_TMP_ROOT/case.4"
+d=$(tmpdir) || _fail "cannot create tmpdir"
 mkdir -p "$d"
 suite_baseline="$d/suite.baseline"
 rc=0

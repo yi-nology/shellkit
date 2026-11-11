@@ -56,7 +56,7 @@ EOF
 # --------------------------------------------------------------------------
 
 # CASE: 引擎自测 —— 会断言的测试必须把 return 0 -> return 1 杀灭
-d="$TEST_TMP_ROOT/case.1"
+d=$(tmpdir) || _fail "cannot create tmpdir"
 mkdir -p "$d"
 mut_synth_root "$d/root" || _fail "case.1: cannot build the synthetic tree"
 rc=0
@@ -70,7 +70,7 @@ assert_contains "$out" "score: 100% (1/1 killed)" \
   "case.1: the stdout table must show the perfect score"
 
 # CASE: SURVIVED 负对照 —— 恒 0 的空测试杀不掉任何变异，必须如实报 SURVIVED
-d="$TEST_TMP_ROOT/case.2"
+d=$(tmpdir) || _fail "cannot create tmpdir"
 mkdir -p "$d"
 mut_synth_root "$d/root" || _fail "case.2: cannot build the synthetic tree"
 rc=0
@@ -116,7 +116,7 @@ esac
 #   +29:return   $(cd … && pwd -P) 失败分支 —— 需要父目录不存在/不可执行；
 #                守卫场景的悬空符号链接在更外层被拦，走不到这里
 #   +32 return   in_dir 的「目标在工程子目录」分支 —— 守卫覆盖的正常升级只写顶层文件
-d="$TEST_TMP_ROOT/case.4"
+d=$(tmpdir) || _fail "cannot create tmpdir"
 mkdir -p "$d"
 rc=0
 bash "$MUT" --root "$TEST_ROOT" --target shellkit \
