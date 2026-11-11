@@ -97,10 +97,21 @@ while IFS= read -r f; do
   done <"$f"
   # docs/superpowers/ 是设计档案，不是给人照抄的示例，不纳入校验
   # node_modules 与站点构建产物里也有大量 markdown，扫进来只会制造噪音
+  #
+  # skills/shellkit/ 是**生成物**，不纳入校验：
+  #   SKILL.md     由 tools/ai_doc.sh 从 docs/ai/skill.head.md 渲染
+  #   references/  docs/REFERENCE.md、docs/COOKBOOK.md、docs/BASH32.md 的逐字节投影
+  #                （cli.md 由 CLI 注册表渲染）
+  # 源文件（docs/ 下那几份）本来就在扫描范围里，把投影再扫一遍**判据能力不增**，
+  # 只是把门禁时间翻倍：同一台机器实测 282 个 bash 块 -> 246 个，耗时约减半。
+  # 一致性另有门禁兜底 —— `shellkit docs --check` 会整目录 diff -r 投影与渲染结果，
+  # 投影和源不同步就红（退出码 5）。
 done < <(find "$ROOT" -name '*.md' -not -path '*/.git/*' -not -path '*/.upstream/*' \
+  -not -path '*/.superpowers/*' \
   -not -path '*/docs/superpowers/*' -not -path '*/node_modules/*' \
   -not -path '*/site/.vuepress/dist/*' -not -path '*/site/.vuepress/.cache/*' \
-  -not -path '*/site/.vuepress/.temp/*' | sort)
+  -not -path '*/site/.vuepress/.temp/*' \
+  -not -path '*/skills/shellkit/*' | sort)
 
 # --------------------------------------------------------------------------
 # 乱码检查：文本文件里不许出现 U+FFFD 替换字符。
