@@ -8,7 +8,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: shellkit 0.13.0\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-11-11 04:09+0800\n"
+"POT-Creation-Date: 2026-11-11 04:30+0800\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language-Team: LANGUAGE <LL@li.org>\n"
@@ -480,6 +480,47 @@ msgid "generated file is missing"
 msgstr ""
 
 msgid "generated file is not executable"
+msgstr ""
+
+msgid "run all tests"
+msgstr ""
+
+msgid "shellcheck static analysis"
+msgstr ""
+
+msgid "shfmt format check (check only)"
+msgstr ""
+
+msgid "upgrade the project to the current template"
+msgstr ""
+
+msgid "print the bash completion script"
+msgstr ""
+
+msgid "print the library version used by the project"
+msgstr ""
+
+msgid "mirror the library into vendor/shellkit"
+msgstr ""
+
+msgid ""
+"shellkit not found: install one first (shellkit install-self), or keep "
+"vendor/shellkit/shellkit in this project"
+msgstr ""
+
+msgid ""
+"cannot generate the completion script: bin/@NAME@ is missing and no shellkit "
+"is available"
+msgstr ""
+
+msgid "install to /etc/bash_completion.d/@NAME@ (system-wide)"
+msgstr ""
+
+msgid ""
+"or ~/.local/share/bash-completion/completions/@NAME@ (current user only)"
+msgstr ""
+
+msgid "no library copy in this project: run make vendor first"
 msgstr ""
 
 msgid "only one target directory is allowed"

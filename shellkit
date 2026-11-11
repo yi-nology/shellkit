@@ -488,6 +488,34 @@ _sk_new_verify() {
   return 0
 }
 
+_sk_new_msg_vars() {
+  local __name=${1:-} __msg
+  # 帮助行：模板里保留列对齐，变量值只是描述文字
+  scaffold_vars_set MSG_HELP_TEST "$(_t 'run all tests')" || return "$SK_USAGE"
+  scaffold_vars_set MSG_HELP_LINT "$(_t 'shellcheck static analysis')" || return "$SK_USAGE"
+  scaffold_vars_set MSG_HELP_FMT "$(_t 'shfmt format check (check only)')" || return "$SK_USAGE"
+  scaffold_vars_set MSG_HELP_UPGRADE "$(_t 'upgrade the project to the current template')" || return "$SK_USAGE"
+  scaffold_vars_set MSG_HELP_COMPLETION "$(_t 'print the bash completion script')" || return "$SK_USAGE"
+  scaffold_vars_set MSG_HELP_VERSION "$(_t 'print the library version used by the project')" || return "$SK_USAGE"
+  scaffold_vars_set MSG_HELP_VENDOR "$(_t 'mirror the library into vendor/shellkit')" || return "$SK_USAGE"
+  # 报错行：整条消息一个变量；带工程名的用 @NAME@ 占位，译完再替换
+  # （工程名校验过字符集，替换值里不可能有 / 之类的模式字符）。
+  # 注意这些 Makefile 报错恰恰可能在库不可用时打印 —— 运行期没有 _t 可用，
+  # 文案只能在生成工程这一刻由生成器的语言定下来。
+  scaffold_vars_set MSG_NO_SHELLKIT "$(_t 'shellkit not found: install one first (shellkit install-self), or keep vendor/shellkit/shellkit in this project')" || return "$SK_USAGE"
+  __msg=$(_t 'cannot generate the completion script: bin/@NAME@ is missing and no shellkit is available')
+  __msg=${__msg//@NAME@/$__name}
+  scaffold_vars_set MSG_NO_COMPLETION "$__msg" || return "$SK_USAGE"
+  __msg=$(_t 'install to /etc/bash_completion.d/@NAME@ (system-wide)')
+  __msg=${__msg//@NAME@/$__name}
+  scaffold_vars_set MSG_COMPLETION_SYSTEM "$__msg" || return "$SK_USAGE"
+  __msg=$(_t 'or ~/.local/share/bash-completion/completions/@NAME@ (current user only)')
+  __msg=${__msg//@NAME@/$__name}
+  scaffold_vars_set MSG_COMPLETION_USER "$__msg" || return "$SK_USAGE"
+  scaffold_vars_set MSG_NO_VENDOR "$(_t 'no library copy in this project: run make vendor first')" || return "$SK_USAGE"
+  return 0
+}
+
 cmd_new() {
   local __dir="" __name="" __tpl="" __opt="" __val="" __yes=0
   local __line __key __val2 __ans __setv __cmds_csv __ask_result
@@ -589,6 +617,8 @@ cmd_new() {
   if [ -f "$__tpl/template.config" ]; then
     scaffold_config_load "$__tpl/template.config" || return "$SK_PRECOND"
   fi
+  # 内置文案变量在 --set 之前注入，用户 --set MSG_*=... 仍然可以覆盖
+  _sk_new_msg_vars "$__name" || return "$SK_USAGE"
   for __setv in ${__sets[@]+"${__sets[@]}"}; do
     case "$__setv" in
       *=*) ;;
@@ -927,6 +957,8 @@ cmd_upgrade() {
   # 变量从清单里读回来，再用当前的工程名与模板版本覆盖
   scaffold_vars_set NAME "$__name" || return "$SK_USAGE"
   scaffold_vars_set SHELLKIT_VERSION "$SK_VERSION" || return "$SK_USAGE"
+  # 模板文案按当前语言重新注入（老工程升级后 Makefile 文案跟上当前语言）
+  _sk_new_msg_vars "$__name" || return "$SK_USAGE"
 
   __tmp=$(mktemp -d "${TMPDIR:-/tmp}/shellkit-upgrade.XXXXXX") || return "$SK_ERR"
   if ! _sk_new_render_owned "$__tpl" "$__tmp" "$__name"; then

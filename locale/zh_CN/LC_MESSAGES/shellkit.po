@@ -4,7 +4,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: shellkit\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-11-11 04:09+0800\n"
+"POT-Creation-Date: 2026-11-11 04:30+0800\n"
 "PO-Revision-Date: 2026-11-08 00:00+0800\n"
 "Last-Translator: shellkit contributors\n"
 "Language-Team: shellkit contributors\n"
@@ -479,6 +479,47 @@ msgstr "缺少生成的文件"
 msgid "generated file is not executable"
 msgstr "生成的文件没有可执行权限"
 
+msgid "run all tests"
+msgstr "跑全部测试"
+
+msgid "shellcheck static analysis"
+msgstr "shellcheck 静态检查"
+
+msgid "shfmt format check (check only)"
+msgstr "shfmt 格式检查（只检查不改）"
+
+msgid "upgrade the project to the current template"
+msgstr "把工程升级到当前模板"
+
+msgid "print the bash completion script"
+msgstr "输出 bash 补全脚本"
+
+msgid "print the library version used by the project"
+msgstr "打印工程用的库版本"
+
+msgid "mirror the library into vendor/shellkit"
+msgstr "把库镜像进 vendor/shellkit"
+
+msgid ""
+"shellkit not found: install one first (shellkit install-self), or keep "
+"vendor/shellkit/shellkit in this project"
+msgstr "找不到 shellkit：先装一个（shellkit install-self），或在工程里保留 vendor/shellkit/shellkit"
+
+msgid ""
+"cannot generate the completion script: bin/@NAME@ is missing and no shellkit "
+"is available"
+msgstr "生成不了补全脚本：bin/@NAME@ 不在，也没有可用的 shellkit"
+
+msgid "install to /etc/bash_completion.d/@NAME@ (system-wide)"
+msgstr "装到 /etc/bash_completion.d/@NAME@（全机器）"
+
+msgid ""
+"or ~/.local/share/bash-completion/completions/@NAME@ (current user only)"
+msgstr "或 ~/.local/share/bash-completion/completions/@NAME@（只给自己）"
+
+msgid "no library copy in this project: run make vendor first"
+msgstr "工程里没有库副本：先跑 make vendor"
+
 msgid "only one target directory is allowed"
 msgstr "只能指定一个目标目录"
 
@@ -855,3 +896,4 @@ msgstr "已开启强制模式"
 
 msgid "finished"
 msgstr "完成"
+

@@ -10,13 +10,13 @@ VENDOR_CLI := vendor/shellkit/shellkit
 
 help:
 	@printf '%s\n' \
-	  'make test        跑全部测试' \
-	  'make lint        shellcheck 静态检查' \
-	  'make fmt         shfmt 格式检查（只检查不改）' \
-	  'make upgrade     把工程升级到当前模板' \
-	  'make completion  输出 bash 补全脚本' \
-	  'make version     打印工程用的库版本' \
-	  'make vendor      把库镜像进 vendor/shellkit'
+	  'make test        {{MSG_HELP_TEST}}' \
+	  'make lint        {{MSG_HELP_LINT}}' \
+	  'make fmt         {{MSG_HELP_FMT}}' \
+	  'make upgrade     {{MSG_HELP_UPGRADE}}' \
+	  'make completion  {{MSG_HELP_COMPLETION}}' \
+	  'make version     {{MSG_HELP_VERSION}}' \
+	  'make vendor      {{MSG_HELP_VENDOR}}'
 
 test:
 	@bash tests/run.sh
@@ -33,13 +33,15 @@ fmt:
 
 # 升级与镜像的逻辑在 shellkit 这个命令里，不在库里，所以要一个能跑的 shellkit：
 # 先用工程自带的副本，没有就退回 PATH 上的 shellkit，都没有就报前置条件错。
+# 找不到 shellkit 时库恰恰不可用 —— 这条文案没法在运行期翻译，
+# 是生成工程时按生成器的语言塞进 MSG_* 变量的（--set 可覆盖）。
 upgrade:
 	@if [ -f "$(VENDOR_CLI)" ]; then \
 	  bash "$(VENDOR_CLI)" upgrade "$(CURDIR)"; \
 	elif command -v shellkit >/dev/null 2>&1; then \
 	  shellkit upgrade "$(CURDIR)"; \
 	else \
-	  printf '%s\n' "找不到 shellkit：先装一个（shellkit install-self），或在工程里保留 vendor/shellkit/shellkit" >&2; \
+	  printf '%s\n' "{{MSG_NO_SHELLKIT}}" >&2; \
 	  exit 3; \
 	fi
 
@@ -50,7 +52,7 @@ vendor:
 	elif command -v shellkit >/dev/null 2>&1; then \
 	  shellkit vendor "$(CURDIR)"; \
 	else \
-	  printf '%s\n' "找不到 shellkit：先装一个（shellkit install-self），或在工程里保留 vendor/shellkit/shellkit" >&2; \
+	  printf '%s\n' "{{MSG_NO_SHELLKIT}}" >&2; \
 	  exit 3; \
 	fi
 
@@ -64,17 +66,17 @@ completion:
 	elif command -v shellkit >/dev/null 2>&1; then \
 	  shellkit completion bash; \
 	else \
-	  printf '%s\n' "生成不了补全脚本：bin/{{NAME}} 不在，也没有可用的 shellkit" >&2; \
+	  printf '%s\n' "{{MSG_NO_COMPLETION}}" >&2; \
 	  exit 3; \
 	fi
 	@printf '%s\n' \
-	  "装到 /etc/bash_completion.d/{{NAME}}（全机器）" \
-	  "或 ~/.local/share/bash-completion/completions/{{NAME}}（只给自己）" >&2
+	  "{{MSG_COMPLETION_SYSTEM}}" \
+	  "{{MSG_COMPLETION_USER}}" >&2
 
 # 工程用的库版本：库副本在 vendor/shellkit/ 里，版本号写在 VERSION 文件里。
 version:
 	@if [ ! -r vendor/shellkit/VERSION ]; then \
-	  printf '%s\n' "工程里没有库副本：先跑 make vendor" >&2; \
+	  printf '%s\n' "{{MSG_NO_VENDOR}}" >&2; \
 	  exit 3; \
 	fi; \
 	printf 'library %s\n' "$$(tr -d '[:space:]' <vendor/shellkit/VERSION)"; \

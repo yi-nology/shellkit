@@ -158,6 +158,18 @@ _sk_msg_lookup_shellkit() {
     'added command') printf '%s' '已加入指令' ;;
     'generated file is missing') printf '%s' '缺少產生的檔案' ;;
     'generated file is not executable') printf '%s' '產生的檔案沒有可執行權限' ;;
+    'run all tests') printf '%s' '跑全部測試' ;;
+    'shellcheck static analysis') printf '%s' 'shellcheck 靜態檢查' ;;
+    'shfmt format check (check only)') printf '%s' 'shfmt 格式檢查（只檢查不改）' ;;
+    'upgrade the project to the current template') printf '%s' '把工程升級到當前模板' ;;
+    'print the bash completion script') printf '%s' '輸出 bash 補全腳本' ;;
+    'print the library version used by the project') printf '%s' '打印工程用的庫版本' ;;
+    'mirror the library into vendor/shellkit') printf '%s' '把庫鏡像進 vendor/shellkit' ;;
+    'shellkit not found: install one first (shellkit install-self), or keep vendor/shellkit/shellkit in this project') printf '%s' '找不到 shellkit：先裝一個（shellkit install-self），或在工程裡保留 vendor/shellkit/shellkit' ;;
+    'cannot generate the completion script: bin/@NAME@ is missing and no shellkit is available') printf '%s' '生成不了補全腳本：bin/@NAME@ 不在，也沒有可用的 shellkit' ;;
+    'install to /etc/bash_completion.d/@NAME@ (system-wide)') printf '%s' '裝到 /etc/bash_completion.d/@NAME@（全機器）' ;;
+    'or ~/.local/share/bash-completion/completions/@NAME@ (current user only)') printf '%s' '或 ~/.local/share/bash-completion/completions/@NAME@（只給自己）' ;;
+    'no library copy in this project: run make vendor first') printf '%s' '工程裡沒有庫副本：先跑 make vendor' ;;
     'only one target directory is allowed') printf '%s' '只能指定一個目標目錄' ;;
     'target directory is required') printf '%s' '必須提供目標目錄' ;;
     'invalid project name') printf '%s' '非法的專案名稱' ;;
