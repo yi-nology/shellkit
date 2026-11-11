@@ -290,6 +290,52 @@ _sk_proj_lock_acquire() {
   lock_acquire "$__name" 0
 }
 
+# _sk_dir_swap_recover DEST OLD WARNMSG —— 恢复一次被打断的整体换名
+#
+# 两次 rename 之间被杀（SIGKILL / 断电）时 DEST 不见了，而 OLD 是唯一
+# 完整的旧副本 —— 先把它挪回去，不先恢复的话，随后的残骸清理会把唯一的
+# 好副本删掉。判据：OLD 在而 DEST 起不来（缺 lib/bootstrap.sh）。
+# WARNMSG 由调用方拼好传入：vendor 与 install-self 的措辞各自不同，
+# 恢复动作只有这一个实现（issue #43）。
+# @exitcode 0 无需恢复或恢复完成；1 恢复失败
+_sk_dir_swap_recover() {
+  local __dest=$1 __old=$2 __warn=${3:-}
+  if [ -e "$__old" ] || [ -L "$__old" ]; then
+    if [ ! -f "$__dest/lib/bootstrap.sh" ]; then
+      if [ -n "$__warn" ]; then
+        log_warn "$__warn"
+      fi
+      rm -rf "$__dest" 2>/dev/null || true
+      mv "$__old" "$__dest" || return 1
+    fi
+  fi
+  return 0
+}
+
+# _sk_dir_swap_apply STAGE DEST OLD —— 两次 rename 把 STAGE 整体换到 DEST
+#
+# 旧的挪开、新的挪进来，两次 rename 都在同一个文件系统里。
+# 换不上去就把旧的挪回去，别让机器变成「没有 shellkit / 工程没有库」的状态。
+# vendor 与 install-self 共用这一个实现（issue #43）—— 以前是各写一遍。
+# @exitcode 0 换名完成；1 失败（STAGE 已清，DEST 尽力回滚到旧副本）
+_sk_dir_swap_apply() {
+  local __stage=$1 __dest=$2 __old=$3
+  if [ -e "$__dest" ] || [ -L "$__dest" ]; then
+    if ! mv "$__dest" "$__old"; then
+      rm -rf "$__stage" 2>/dev/null || true
+      return 1
+    fi
+  fi
+  if ! mv "$__stage" "$__dest"; then
+    if [ -e "$__old" ]; then
+      mv "$__old" "$__dest" 2>/dev/null || true
+    fi
+    rm -rf "$__stage" 2>/dev/null || true
+    return 1
+  fi
+  return 0
+}
+
 # _sk_vendor_install DIR —— 把库整目录同步进 DIR/vendor/shellkit。
 #
 # 用「整目录替换」而不是逐文件覆盖：模块被删掉时不会留残骸。
@@ -326,13 +372,8 @@ _sk_vendor_install() {
   # 中断恢复：两次 rename 之间被杀（SIGKILL / 断电）时 vendor/shellkit 不见了，
   # 而 .shellkit-old 里是唯一完整的旧副本 —— 先把它挪回去。
   # 不先恢复的话，下面那句清理会把唯一的好副本删掉，工程从此没有库可用。
-  if [ -e "$__old" ] || [ -L "$__old" ]; then
-    if [ ! -f "$__dest/lib/bootstrap.sh" ]; then
-      log_warn "$(_t 'recovering the vendored library after an interrupted swap'): $__old"
-      rm -rf "$__dest" 2>/dev/null || true
-      mv "$__old" "$__dest" || return 1
-    fi
-  fi
+  _sk_dir_swap_recover "$__dest" "$__old" \
+    "$(_t 'recovering the vendored library after an interrupted swap'): $__old" || return 1
   # 残骸清理：恢复完成后 dest 是完整的（或本来就没有），这时候才安全
   rm -rf "$__stage" "$__old" 2>/dev/null || true
   fs_ensure_dir "$__stage" 755 || return 1
@@ -348,18 +389,7 @@ _sk_vendor_install() {
     return 1
   }
   # 换上去：旧的挪开、新的挪进来。两次 rename 都在同一个文件系统里。
-  if [ -e "$__dest" ] || [ -L "$__dest" ]; then
-    if ! mv "$__dest" "$__old"; then
-      rm -rf "$__stage" 2>/dev/null || true
-      return 1
-    fi
-  fi
-  if ! mv "$__stage" "$__dest"; then
-    # 换不上去就把旧的挪回去，别让工程变成「没有库」的状态
-    if [ -e "$__old" ]; then
-      mv "$__old" "$__dest" 2>/dev/null || true
-    fi
-    rm -rf "$__stage" 2>/dev/null || true
+  if ! _sk_dir_swap_apply "$__stage" "$__dest" "$__old"; then
     return 1
   fi
   rm -rf "$__old" 2>/dev/null || true
@@ -3024,15 +3054,10 @@ cmd_install_self() {
   # 失败时把旧的挪回去，安装保持可用。
   __stage="$__dest.new"
   __old="$__dest.old"
-  # 中断恢复 + 残骸清理：与 _sk_vendor_install 同一族洞 —— 两次 rename
-  # 之间被杀时 $__old 是唯一完整的旧副本，先恢复再清理，别把好副本删掉。
-  if [ -e "$__old" ]; then
-    if [ ! -f "$__dest/lib/bootstrap.sh" ]; then
-      log_warn "$(_t 'recovering the installed copy after an interrupted swap'): $__old"
-      rm -rf "$__dest" 2>/dev/null || true
-      mv "$__old" "$__dest" || return "$SK_ERR"
-    fi
-  fi
+  # 中断恢复 + 残骸清理：与 _sk_vendor_install 共用同一个实现（issue #43）——
+  # 两次 rename 之间被杀时 $__old 是唯一完整的旧副本，先恢复再清理。
+  _sk_dir_swap_recover "$__dest" "$__old" \
+    "$(_t 'recovering the installed copy after an interrupted swap'): $__old" || return "$SK_ERR"
   rm -rf "$__stage" "$__old" 2>/dev/null || true
   fs_ensure_dir "$__stage" 755 || return "$SK_PRECOND"
 
@@ -3123,18 +3148,7 @@ cmd_install_self() {
   # 换上去：旧的挪开、新的挪进来。两次 rename 都在同一个文件系统里。
   # 正跑在装好的副本上时（SELF_DIR == __dest），被挪开的正是运行中的目录 ——
   # 脚本靠已打开的 fd 继续执行，rename 不影响它；这正是 vendor 自同步已验证过的路径。
-  if [ -e "$__dest" ] || [ -L "$__dest" ]; then
-    if ! mv "$__dest" "$__old"; then
-      rm -rf "$__stage" 2>/dev/null || true
-      return "$SK_ERR"
-    fi
-  fi
-  if ! mv "$__stage" "$__dest"; then
-    # 换不上去就把旧的挪回去，别让机器变成「没有 shellkit」的状态
-    if [ -e "$__old" ]; then
-      mv "$__old" "$__dest" 2>/dev/null || true
-    fi
-    rm -rf "$__stage" 2>/dev/null || true
+  if ! _sk_dir_swap_apply "$__stage" "$__dest" "$__old"; then
     return "$SK_ERR"
   fi
   rm -rf "$__old" 2>/dev/null || true
