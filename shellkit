@@ -108,6 +108,7 @@ if [ "$SK_BOOTSTRAP_OK" -eq 1 ]; then
 
   cli_group "$(_t 'project generation')"
   cli_cmd new "$(_t 'create a new project skeleton')" "new <dir> [--name NAME] [--cmd NAME]... [--template DIR] [--set K=V] [--yes]"
+  cli_cmd demo "$(_t 'generate a demo project and walk through it')" "demo [DIR] [--no-test]"
   cli_cmd upgrade "$(_t 'update a generated project to the current template')" "upgrade <dir> [--check] [--force]"
   cli_group "$(_t 'environment')"
   cli_cmd doctor "$(_t 'check the runtime environment')" "doctor [--dir DIR]"
@@ -122,6 +123,8 @@ if [ "$SK_BOOTSTRAP_OK" -eq 1 ]; then
   cli_cmd install-self "$(_t 'install shellkit into PATH')" "install-self [--prefix DIR]"
   cli_cmd uninstall-self "$(_t 'remove an installed shellkit')" "uninstall-self [--prefix DIR]"
   cli_cmd update "$(_t 'update an installed shellkit')" "update [--check] [--from FILE] [--sha256 SUM] [--prefix DIR]"
+  cli_group "$(_t 'AI clients')"
+  cli_cmd skill "$(_t 'install the AI skill into an AI client')" "skill <list|install|uninstall|print> [--client NAME] [--dir DIR]"
 fi
 
 # _sk_render SRC DST —— 用当前模板变量渲染文件（薄封装，逻辑在 scaffold 模块）
@@ -1976,7 +1979,16 @@ _sk_docs_coverage() {
 
 # _sk_docs_artifacts —— 需要生成与校验的文档产物，一行一个
 _sk_docs_artifacts() {
-  printf '%s\n' REFERENCE AGENTS TEMPLATES_AGENTS SKILL
+  printf '%s\n' REFERENCE AGENTS TEMPLATES_AGENTS SKILL_PACK
+}
+
+# _sk_docs_kind NAME —— 产物是单文件还是整目录
+# skill 是整目录：它带 references/（渐进披露的细节），不是单个文件。
+_sk_docs_kind() {
+  case "$1" in
+    SKILL_PACK) printf 'dir' ;;
+    *) printf 'file' ;;
+  esac
 }
 
 # _sk_docs_path NAME —— 产物相对仓库根的路径
@@ -1985,7 +1997,7 @@ _sk_docs_path() {
     REFERENCE) printf 'docs/REFERENCE.md' ;;
     AGENTS) printf 'AGENTS.md' ;;
     TEMPLATES_AGENTS) printf 'templates/AGENTS.md' ;;
-    SKILL) printf 'skills/shellkit/SKILL.md' ;;
+    SKILL_PACK) printf 'skills/shellkit' ;;
   esac
 }
 
@@ -1995,12 +2007,89 @@ _sk_docs_render() {
     REFERENCE) bash "$SELF_DIR/tools/shdoc.sh" ;;
     AGENTS) bash "$SELF_DIR/tools/ai_doc.sh" repo ;;
     TEMPLATES_AGENTS) bash "$SELF_DIR/tools/ai_doc.sh" project ;;
-    SKILL) bash "$SELF_DIR/tools/ai_doc.sh" skill ;;
   esac
 }
 
+# _sk_docs_render_dir REL —— 把目录型产物渲染到临时目录，输出临时目录路径
+#
+# 目录产物没法渲染到 stdout（那是一坨文本），得整目录生成再比对。
+# 临时目录放在仓库根：这样最后那步 rename 是同文件系统内的改名，是原子的。
+_sk_docs_render_dir() {
+  local __rel=$1 __tmp
+  __tmp=$(mktemp -d "$SELF_DIR/.DOCS.XXXXXX") || return 1
+  case "$__rel" in
+    skills/shellkit)
+      if ! bash "$SELF_DIR/tools/skill_pack.sh" "$__tmp"; then
+        rm -rf "$__tmp"
+        return 1
+      fi
+      ;;
+    *)
+      rm -rf "$__tmp"
+      return 1
+      ;;
+  esac
+  printf '%s' "$__tmp"
+  return 0
+}
+
+# _sk_docs_check_dir REL —— 校验目录型产物与渲染结果是否一致
+_sk_docs_check_dir() {
+  local __rel=$1 __tmp __rc=0
+  __tmp=$(_sk_docs_render_dir "$__rel") || {
+    log_error "$(_t 'failed to render'): $__rel"
+    return 1
+  }
+  if [ ! -d "$SELF_DIR/$__rel" ]; then
+    log_error "$(_t 'document is missing'): $__rel"
+    __rc=1
+  elif ! diff -r "$__tmp" "$SELF_DIR/$__rel" >/dev/null 2>&1; then
+    log_error "$(_t 'document is out of date'): $__rel"
+    # 截取前 20 行用 sed 而不是 head：head 读够就退，diff 会被 SIGPIPE 打死（141），
+    # 调用方一开 pipefail，整条管道就被误判成失败（坑 5）。
+    diff -r "$__tmp" "$SELF_DIR/$__rel" 2>&1 | sed -n '1,20p' >&2
+    log_info "$(_t 'run to regenerate'): shellkit docs"
+    __rc=1
+  fi
+  rm -rf "$__tmp"
+  return "$__rc"
+}
+
+# _sk_docs_write_dir REL —— 把目录型产物整目录换上去
+#
+# 换的动作是两次 rename，中间不留半份产物：就地改（先删后拷）中途失败会留下
+# 半份 skill 包 —— 装进 AI 客户端的就是一个缺 references/ 的残包。
+_sk_docs_write_dir() {
+  local __rel=$1 __tmp __old
+  __tmp=$(_sk_docs_render_dir "$__rel") || {
+    log_error "$(_t 'failed to render'): $__rel"
+    return 1
+  }
+  fs_ensure_dir "$SELF_DIR/$(dirname "$__rel")" 755 || {
+    rm -rf "$__tmp"
+    return 1
+  }
+  __old="$SELF_DIR/$(dirname "$__rel")/.$(basename "$__rel").old"
+  rm -rf "$__old" 2>/dev/null || true
+  if [ -e "$SELF_DIR/$__rel" ]; then
+    if ! mv "$SELF_DIR/$__rel" "$__old"; then
+      rm -rf "$__tmp"
+      return 1
+    fi
+  fi
+  if ! mv "$__tmp" "$SELF_DIR/$__rel"; then
+    if [ -d "$__old" ]; then
+      mv "$__old" "$SELF_DIR/$__rel" 2>/dev/null || true
+    fi
+    rm -rf "$__tmp"
+    return 1
+  fi
+  rm -rf "$__old" 2>/dev/null || true
+  return 0
+}
+
 cmd_docs() {
-  local __check=0 __name __rel __tmp __rc=0
+  local __check=0 __name __rel __tmp __rc=0 __kind
 
   # 文档生成是仓库维护者的事：它要 docs/ 里的源与 tools/ 里的生成器。
   # vendor 出来的副本不带这两样（副本的职责是「库跟着走 + 工程能自己升级」），
@@ -2032,6 +2121,11 @@ cmd_docs() {
     _sk_docs_coverage || __rc=$SK_VERIFY
     for __name in $(_sk_docs_artifacts); do
       __rel=$(_sk_docs_path "$__name")
+      __kind=$(_sk_docs_kind "$__name")
+      if [ "$__kind" = "dir" ]; then
+        _sk_docs_check_dir "$__rel" || __rc=$SK_VERIFY
+        continue
+      fi
       __tmp=$(mktemp "$SELF_DIR/.DOCS.XXXXXX") || return "$SK_ERR"
       if ! _sk_docs_render "$__name" >"$__tmp"; then
         rm -f "$__tmp"
@@ -2056,6 +2150,14 @@ cmd_docs() {
 
   for __name in $(_sk_docs_artifacts); do
     __rel=$(_sk_docs_path "$__name")
+    __kind=$(_sk_docs_kind "$__name")
+    if [ "$__kind" = "dir" ]; then
+      if ! _sk_docs_write_dir "$__rel"; then
+        return "$SK_ERR"
+      fi
+      log_ok "$(_t 'wrote'): $__rel"
+      continue
+    fi
     __tmp=$(mktemp "$SELF_DIR/.DOCS.XXXXXX") || return "$SK_ERR"
     if ! _sk_docs_render "$__name" >"$__tmp"; then
       rm -f "$__tmp"
@@ -2073,6 +2175,423 @@ cmd_docs() {
     log_ok "$(_t 'wrote'): $__rel"
   done
   return "$SK_OK"
+}
+
+# ---------- demo ----------
+#
+# 五分钟上手：生成一个工程、跑它自己的测试、把导览打出来。
+#
+# 目标不是再讲一遍文档，而是让人在两分钟内看到一条完整的链路：
+# 生成 → 库随工程一起 vendor 进去 → 真跑一次命令 → 真跑一次测试。
+# 所以这里跑的是真二进制，不做「示意输出」。
+
+# cmd_demo —— demo [DIR]
+cmd_demo() {
+  local __dir="" __name="" __run=1 __tmp
+
+  while [ "$#" -gt 0 ]; do
+    case "$1" in
+      -h | --help)
+        cli_usage_cmd demo
+        return "$SK_OK"
+        ;;
+      --no-test)
+        __run=0
+        ;;
+      -*)
+        log_error "$(_t 'unknown option'): $1"
+        return "$SK_USAGE"
+        ;;
+      *)
+        if [ -n "$__dir" ]; then
+          log_error "$(_t 'only one target directory is allowed'): $1"
+          return "$SK_USAGE"
+        fi
+        __dir=$1
+        ;;
+    esac
+    shift
+  done
+
+  if [ -z "$__dir" ]; then
+    __dir="shellkit-demo"
+  fi
+  if [ -e "$__dir" ]; then
+    if [ ! -d "$__dir" ]; then
+      log_error "$(_t 'path exists and is not a directory'): $__dir"
+      return "$SK_PRECOND"
+    fi
+    log_error "$(_t 'target directory is not empty'): $__dir"
+    return "$SK_PRECOND"
+  fi
+  __name=$(basename "$__dir")
+  if ! _sk_valid_name "$__name"; then
+    log_error "$(_t 'invalid project name'): $__name"
+    return "$SK_USAGE"
+  fi
+
+  # 两个命令：让「加一个子命令 = 复制一个文件」这件事看得见
+  cmd_new "$__dir" --name "$__name" --cmd run --cmd status --yes || return $?
+
+  if [ "$__run" = "1" ]; then
+    __tmp=$(mktemp -d "${TMPDIR:-/tmp}/shellkit-demo.XXXXXX") || return "$SK_ERR"
+    if (cd "$__dir" && bash tests/run.sh) >"$__tmp/out" 2>&1; then
+      :
+    else
+      log_error "$(_t 'the demo project tests failed'): $__dir"
+      sed 's/^/    /' "$__tmp/out" >&2
+      rm -rf "$__tmp"
+      return "$SK_ERR"
+    fi
+    rm -rf "$__tmp"
+  fi
+
+  printf '\n'
+  printf '%s\n' "$(_t 'what just happened')"
+  printf '  %s\n' "$(_t 'a project skeleton was generated')"
+  printf '  %s\n' "$(_t 'the library travels with the project')"
+  if [ "$__run" = "1" ]; then
+    printf '  %s\n' "$(_t 'the project tests ran on the real binary')"
+  fi
+
+  printf '\n%s\n' "$(_t 'what is in the project')"
+  printf '  bin/%s\n' "$__name"
+  printf '  commands/run.sh\n'
+  printf '  commands/status.sh\n'
+  printf '  lib/app.sh\n'
+  printf '  vendor/shellkit/\n'
+  printf '  tests/run.sh\n'
+  printf '  Makefile\n'
+  printf '  AGENTS.md\n'
+
+  printf '\n%s\n' "$(_t 'what to try next')"
+  printf '  cd %s\n' "$__dir"
+  printf '  ./bin/%s --help\n' "$__name"
+  printf '  ./bin/%s run\n' "$__name"
+  printf '  make test\n'
+  printf '  shellkit upgrade %s\n' "$__dir"
+
+  printf '\n%s\n' "$(_t 'where to read more')"
+  printf '  https://yi-nology.github.io/shellkit/\n'
+  printf '  docs/REFERENCE.md\n'
+  printf '  skills/shellkit/SKILL.md\n'
+  return "$SK_OK"
+}
+
+# ---------- skill ----------
+#
+# 把 shellkit 的 AI skill 装进客户端的 skills 目录。
+#
+# 客户端的目录约定不是 shellkit 能定的，所以：
+#   - 已知的那几家走一张表（表随版本加，不影响别人）
+#   - 表里没有的用 --dir 指定
+#   - 位置仍然不确定就用 print 打印出来手动贴
+#
+# 只往**已经存在**的客户端根目录里装：不替用户凭空造一个 ~/.cursor。
+# 目标已经是软链就放过它 —— 跟着软链写会写到别处去（坑 8）。
+
+# _sk_skill_clients —— 已知客户端：名字 空格 目录
+# 解析时用 read -r 名字 目录：最后一个变量拿到整行剩余部分，路径里带空格也不会散。
+_sk_skill_clients() {
+  printf '%s %s\n' claude "$HOME/.claude/skills"
+  printf '%s %s\n' codex "$HOME/.codex/skills"
+  printf '%s %s\n' mcode "$HOME/.minimax/skills"
+  printf '%s %s\n' opencode "$HOME/.config/opencode/skill"
+  printf '%s %s\n' cursor "$HOME/.cursor/skills"
+  printf '%s %s\n' gemini "$HOME/.gemini/skills"
+  printf '%s %s\n' windsurf "$HOME/.codeium/windsurf/skills"
+}
+
+# _sk_skill_client_known NAME —— 这个客户端在表里吗
+_sk_skill_client_known() {
+  local __want=$1 __name __c
+  while read -r __name __c || [ -n "$__name" ]; do
+    if [ "$__name" = "$__want" ]; then
+      return 0
+    fi
+  done < <(_sk_skill_clients)
+  return 1
+}
+
+# _sk_skill_src —— skill 包所在目录；没有就返回 1
+_sk_skill_src() {
+  if [ -d "$SELF_DIR/skills/shellkit" ]; then
+    printf '%s' "$SELF_DIR/skills/shellkit"
+    return 0
+  fi
+  return 1
+}
+
+# _sk_skill_version —— 当前 shellkit 的版本号（装好的副本里也有 VERSION）
+_sk_skill_version() {
+  if [ -r "$SELF_DIR/VERSION" ]; then
+    tr -d '[:space:]' <"$SELF_DIR/VERSION"
+    return 0
+  fi
+  return 1
+}
+
+# _sk_skill_install_into DIR —— 把 skill 包装进 DIR/shellkit
+#   0 = 装好了；1 = 没装成
+_sk_skill_install_into() {
+  local __dir=$1 __src __dst __f
+  __src=$(_sk_skill_src) || return 1
+  __dst="$__dir/shellkit"
+
+  # 目标已经是软链：既不跟着写穿，也不替换它（cp 会顺着软链写穿 —— 坑 8）
+  if [ -L "$__dst" ]; then
+    log_warn "$(_t 'the target is a symlink, left alone'): $__dst"
+    return 1
+  fi
+  if [ -e "$__dst" ] && [ ! -d "$__dst" ]; then
+    log_warn "$(_t 'the target exists and is not a directory'): $__dst"
+    return 1
+  fi
+  if [ ! -f "$__src/SKILL.md" ]; then
+    log_warn "$(_t 'the skill package is incomplete'): $__src"
+    return 1
+  fi
+
+  fs_ensure_dir "$__dst/references" 755 || return 1
+  # 逐字节搬，且是原子替换：rename 换掉的是软链本身，不会顺着链接写到别处
+  fs_atomic_copy "$__src/SKILL.md" "$__dst/SKILL.md" 644 || return 1
+  for __f in "$__src"/references/*; do
+    [ -f "$__f" ] || continue
+    fs_atomic_copy "$__f" "$__dst/references/$(basename "$__f")" 644 || return 1
+  done
+  # 版本号跟着走：list 才知道装的是哪一版
+  if [ -f "$SELF_DIR/VERSION" ]; then
+    fs_atomic_copy "$SELF_DIR/VERSION" "$__dst/VERSION" 644 || return 1
+  fi
+  return 0
+}
+
+# _sk_skill_uninstall_from DIR —— 卸掉 DIR/shellkit 里我们装的那些文件
+#   0 = 卸干净了（或本来就没装）；1 = 没卸成
+_sk_skill_uninstall_from() {
+  local __dir=$1 __dst __f
+  __dst="$__dir/shellkit"
+  [ -e "$__dst" ] || return 0
+  if [ -L "$__dst" ]; then
+    log_warn "$(_t 'the target is a symlink, left alone'): $__dst"
+    return 1
+  fi
+  [ -d "$__dst" ] || return 1
+  # 只删我们装过的那些文件：目录里可能是用户自己加的东西
+  rm -f "$__dst/SKILL.md" "$__dst/VERSION" || return 1
+  if [ -L "$__dst/references" ]; then
+    log_warn "$(_t 'the target is a symlink, left alone'): $__dst/references"
+  else
+    for __f in "$__dst"/references/*; do
+      [ -f "$__f" ] || continue
+      rm -f "$__f" || return 1
+    done
+    rmdir "$__dst/references" 2>/dev/null || true
+  fi
+  rmdir "$__dst" 2>/dev/null || true
+  return 0
+}
+
+# _sk_skill_list —— 列出已知客户端与当前状态
+_sk_skill_list() {
+  local __name __c __v __cur
+  __cur=$(_sk_skill_version 2>/dev/null || true)
+  printf '%s:\n' "$(_t 'known AI clients')"
+  while read -r __name __c || [ -n "$__name" ]; do
+    [ -n "$__name" ] || continue
+    __v=""
+    if [ -f "$__c/shellkit/VERSION" ]; then
+      __v=$(tr -d '[:space:]' <"$__c/shellkit/VERSION" 2>/dev/null || true)
+    fi
+    if [ -n "$__v" ]; then
+      if [ -n "$__cur" ] && [ "$__v" != "$__cur" ]; then
+        printf '  %-10s %-44s %s\n' "$__name" "$__c" "$(_t 'installed') $__v ($(_t 'older version'))"
+      else
+        printf '  %-10s %-44s %s\n' "$__name" "$__c" "$(_t 'installed') $__v"
+      fi
+    elif [ -d "$__c/shellkit" ]; then
+      printf '  %-10s %-44s %s\n' "$__name" "$__c" "$(_t 'installed')"
+    else
+      printf '  %-10s %-44s %s\n' "$__name" "$__c" "$(_t 'not installed')"
+    fi
+  done < <(_sk_skill_clients)
+  printf '\n%s\n' "$(_t 'the client directory is a convention of each client; use --dir if it is wrong')"
+}
+
+# _sk_skill_install CLIENT DIR —— 装到目标目录
+_sk_skill_install() {
+  local __client=$1 __dir=$2
+  local __name __c __n=0 __ok=0
+
+  if [ -n "$__dir" ]; then
+    if ! _sk_skill_install_into "$__dir"; then
+      return "$SK_PRECOND"
+    fi
+    log_ok "$(_t 'installed the skill into'): $__dir/shellkit"
+    return "$SK_OK"
+  fi
+
+  if [ -n "$__client" ] && ! _sk_skill_client_known "$__client"; then
+    log_error "$(_t 'unknown AI client'): $__client"
+    return "$SK_USAGE"
+  fi
+
+  while read -r __name __c || [ -n "$__name" ]; do
+    [ -n "$__name" ] || continue
+    if [ -n "$__client" ] && [ "$__name" != "$__client" ]; then
+      continue
+    fi
+    # 客户端根目录都不在，就不替用户凭空造一个
+    if [ ! -d "$(dirname "$__c")" ]; then
+      continue
+    fi
+    __n=$((__n + 1))
+    if _sk_skill_install_into "$__c"; then
+      __ok=$((__ok + 1))
+      log_ok "$(_t 'installed the skill into'): $__c/shellkit"
+    fi
+  done < <(_sk_skill_clients)
+
+  if [ "$__n" -eq 0 ]; then
+    log_error "$(_t 'no AI client directory found; use --dir')"
+    return "$SK_PRECOND"
+  fi
+  if [ "$__ok" -eq 0 ]; then
+    return "$SK_PRECOND"
+  fi
+  return "$SK_OK"
+}
+
+# _sk_skill_uninstall CLIENT DIR —— 从目标目录卸掉
+_sk_skill_uninstall() {
+  local __client=$1 __dir=$2
+  local __name __c __n=0 __ok=0
+
+  if [ -n "$__dir" ]; then
+    if ! _sk_skill_uninstall_from "$__dir"; then
+      return "$SK_PRECOND"
+    fi
+    log_ok "$(_t 'removed the skill from'): $__dir/shellkit"
+    return "$SK_OK"
+  fi
+
+  if [ -n "$__client" ] && ! _sk_skill_client_known "$__client"; then
+    log_error "$(_t 'unknown AI client'): $__client"
+    return "$SK_USAGE"
+  fi
+
+  while read -r __name __c || [ -n "$__name" ]; do
+    [ -n "$__name" ] || continue
+    if [ -n "$__client" ] && [ "$__name" != "$__client" ]; then
+      continue
+    fi
+    [ -d "$__c" ] || continue
+    __n=$((__n + 1))
+    if _sk_skill_uninstall_from "$__c"; then
+      __ok=$((__ok + 1))
+      log_ok "$(_t 'removed the skill from'): $__c/shellkit"
+    fi
+  done < <(_sk_skill_clients)
+
+  if [ "$__n" -eq 0 ]; then
+    log_error "$(_t 'no AI client directory found; use --dir')"
+    return "$SK_PRECOND"
+  fi
+  if [ "$__ok" -eq 0 ]; then
+    return "$SK_PRECOND"
+  fi
+  return "$SK_OK"
+}
+
+# _sk_skill_print —— 把 SKILL.md 打到 stdout（stdout 只给数据）
+_sk_skill_print() {
+  local __src
+  __src=$(_sk_skill_src) || {
+    log_error "$(_t 'this copy has no skill package'): $SELF_DIR"
+    return "$SK_PRECOND"
+  }
+  if [ ! -f "$__src/SKILL.md" ]; then
+    log_error "$(_t 'the skill package is incomplete'): $__src"
+    return "$SK_PRECOND"
+  fi
+  cat "$__src/SKILL.md"
+}
+
+# cmd_skill —— skill list|install|uninstall|print
+cmd_skill() {
+  local __action="" __dir="" __client=""
+
+  while [ "$#" -gt 0 ]; do
+    case "$1" in
+      -h | --help)
+        cli_usage_cmd skill
+        return "$SK_OK"
+        ;;
+      --dir)
+        shift
+        if [ "$#" -eq 0 ]; then
+          log_error "$(_t 'option requires a value'): --dir"
+          return "$SK_USAGE"
+        fi
+        __dir=$1
+        ;;
+      --dir=*)
+        __dir="${1#*=}"
+        ;;
+      --client)
+        shift
+        if [ "$#" -eq 0 ]; then
+          log_error "$(_t 'option requires a value'): --client"
+          return "$SK_USAGE"
+        fi
+        __client=$1
+        ;;
+      --client=*)
+        __client="${1#*=}"
+        ;;
+      list | install | uninstall | print)
+        if [ -n "$__action" ]; then
+          log_error "$(_t 'only one action is allowed'): $1"
+          return "$SK_USAGE"
+        fi
+        __action=$1
+        ;;
+      -*)
+        log_error "$(_t 'unknown option'): $1"
+        return "$SK_USAGE"
+        ;;
+      *)
+        if [ -n "$__client" ]; then
+          log_error "$(_t 'only one client is allowed'): $1"
+          return "$SK_USAGE"
+        fi
+        __client=$1
+        ;;
+    esac
+    shift
+  done
+
+  [ -n "$__action" ] || __action=list
+
+  case "$__action" in
+    list)
+      _sk_skill_list
+      return "$SK_OK"
+      ;;
+    install)
+      _sk_skill_install "$__client" "$__dir"
+      return $?
+      ;;
+    uninstall)
+      _sk_skill_uninstall "$__client" "$__dir"
+      return $?
+      ;;
+    print)
+      _sk_skill_print
+      return $?
+      ;;
+  esac
+  return "$SK_USAGE"
 }
 
 # ---------- 安装 / 卸载 / 更新 ----------
