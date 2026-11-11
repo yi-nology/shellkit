@@ -8,7 +8,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: shellkit 0.16.0\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-11-11 20:14+0800\n"
+"POT-Creation-Date: 2026-11-12 02:08+0800\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language-Team: LANGUAGE <LL@li.org>\n"
@@ -120,6 +120,9 @@ msgid "source file does not exist"
 msgstr ""
 
 msgid "invalid keep count"
+msgstr ""
+
+msgid "the ownership manifest is damaged; entries were ignored"
 msgstr ""
 
 msgid "line must not be empty"
@@ -574,6 +577,9 @@ msgstr ""
 msgid "next steps"
 msgstr ""
 
+msgid "the upgrade journal is damaged; entries were ignored"
+msgstr ""
+
 msgid "target directory does not exist"
 msgstr ""
 
@@ -831,13 +837,29 @@ msgstr ""
 msgid "where to read more"
 msgstr ""
 
-msgid "the target exists and is not a directory"
-msgstr ""
-
 msgid "the skill package is incomplete"
 msgstr ""
 
+msgid "the target exists and is not a directory"
+msgstr ""
+
+msgid "refusing to write through a symlink"
+msgstr ""
+
+msgid "the skill is up to date"
+msgstr ""
+
+msgid ""
+"cannot verify which files were installed by shellkit; nothing was removed"
+msgstr ""
+
+msgid "the directory is not empty, left in place"
+msgstr ""
+
 msgid "known AI clients"
+msgstr ""
+
+msgid "modified"
 msgstr ""
 
 msgid "installed"

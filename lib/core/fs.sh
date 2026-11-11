@@ -154,6 +154,139 @@ fs_backup() {
   return 0
 }
 
+# _sk_fs_rel_safe REL —— 这个相对路径能不能安全地写进声明根之内
+#
+# 两个不变量：不是绝对路径，且不含 .. 路径组件。
+# 清单 / 配置里读出来的名字会被拼进根路径 —— 名字里带 ../ 就能把文件写到根之外。
+# 与 CLI 里的 _sk_upgrade_rel_safe 同判据（那是升级路径的私有版本）；
+# 这里是库里的公共内部实现，skill 安装 / 卸载与库用户都用它。
+_sk_fs_rel_safe() {
+  local __rel=${1:-}
+  case "$__rel" in
+    '' | /*) return 1 ;;
+  esac
+  case "/$__rel/" in
+    */../*) return 1 ;;
+  esac
+  return 0
+}
+
+# _sk_fs_in_dir BASE TARGET —— TARGET 是否落在 BASE 之内
+#
+# BASE 必须是解析过的绝对路径（pwd -P）：中间目录的符号链接也要解析，
+# 工程里有个 tests/ 指向工程外，那不是「工程内的路径」。目标所在的目录
+# 还不存在时，向上找到第一个存在的祖先再判。
+# 与 CLI 里的 _sk_upgrade_in_dir 同判据；这里是库里的公共内部实现。
+_sk_fs_in_dir() {
+  local __base=${1:-} __tgt=${2:-} __dir __parent
+  if [ -z "$__base" ] || [ -z "$__tgt" ]; then
+    return 1
+  fi
+  __dir=$(dirname "$__tgt")
+  while [ ! -d "$__dir" ]; do
+    __parent=$(dirname "$__dir")
+    if [ "$__parent" = "$__dir" ]; then
+      return 1
+    fi
+    __dir=$__parent
+  done
+  __parent=$(cd "$__dir" 2>/dev/null && pwd -P) || return 1
+  case "$__parent" in
+    "$__base") return 0 ;;
+    "$__base"/*) return 0 ;;
+  esac
+  return 1
+}
+
+# _sk_fs_no_symlink_below BASE REL —— REL 相对 BASE 的每一级已存在目录都不许是符号链接
+#
+# BASE 必须是解析过的真实目录（pwd -P）。REL 逐级向下走：哪一级已经存在，
+# 它就必须是个真目录 —— 是符号链接或普通文件都不行。
+# 哪一级还不存在就停：剩下的层级由调用方创建，落在真实目录之内，越不了界。
+#
+# 为什么「指向根之内」的符号链接也拒绝：我们分不清它是不是用户故意放的
+# （有人用软链共享配置、软链到 dotfiles 仓）。不可信一律拒绝 —— 与
+# 「目标是软链就放过它」的既有策略一致，不做「看起来安全就放行」的判断。
+# @exitcode 0 每一级都已存在的都是真目录（或还没建，安全）
+# @exitcode 1 BASE 不是目录，或途中有符号链接 / 普通文件挡路
+_sk_fs_no_symlink_below() {
+  local __base=${1:-} __rel=${2:-} __rest __part __dir
+  if [ -z "$__base" ] || [ -z "$__rel" ] || [ ! -d "$__base" ]; then
+    return 1
+  fi
+  __dir=$__base
+  __rest=$__rel
+  while [ -n "$__rest" ]; do
+    __part=${__rest%%/*}
+    if [ "$__rest" = "$__part" ]; then
+      __rest=""
+    else
+      __rest=${__rest#*/}
+    fi
+    __dir="$__dir/$__part"
+    if [ -L "$__dir" ]; then
+      return 1
+    fi
+    if [ -e "$__dir" ]; then
+      [ -d "$__dir" ] || return 1
+    else
+      break
+    fi
+  done
+  return 0
+}
+
+# _sk_fs_own_read FILE —— 读一份所有权清单（「相对路径 TAB 内容指纹」每行一条）
+#
+# 读进 _SK_OWN_RELS[] 与 _SK_OWN_SUMS[] 两个平行数组。文件不存在是正常态
+# （还没装过），返回 0、数组为空；格式不对的行跳过并告警 —— 清单损坏不该
+# 把卸载卡死，但也不能静默：用户得知道「清单不完整，可能有东西删不掉」。
+_sk_fs_own_read() {
+  local __file=${1:-} __line __rel __sum __bad=0
+  _SK_OWN_RELS=()
+  _SK_OWN_SUMS=()
+  [ -n "$__file" ] || return 1
+  [ -f "$__file" ] || return 0
+  while IFS=$'\t' read -r __rel __sum || [ -n "$__rel" ]; do
+    [ -n "$__rel" ] || continue
+    if [ -z "$__sum" ]; then
+      __bad=$((__bad + 1))
+      continue
+    fi
+    _SK_OWN_RELS[${#_SK_OWN_RELS[@]}]=$__rel
+    _SK_OWN_SUMS[${#_SK_OWN_SUMS[@]}]=$__sum
+  done <"$__file"
+  if [ "$__bad" -gt 0 ]; then
+    log_warn "$(_t 'the ownership manifest is damaged; entries were ignored'): $__file ($__bad)"
+  fi
+  return 0
+}
+
+# _sk_fs_own_sum REL —— 在已读入的所有权清单里查 REL 的基线指纹；没有就输出空
+_sk_fs_own_sum() {
+  local __rel=${1:-} __i=0
+  [ -n "$__rel" ] || return 0
+  while [ "$__i" -lt "${#_SK_OWN_RELS[@]}" ]; do
+    if [ "${_SK_OWN_RELS[$__i]}" = "$__rel" ]; then
+      printf '%s' "${_SK_OWN_SUMS[$__i]}"
+      return 0
+    fi
+    __i=$((__i + 1))
+  done
+  return 0
+}
+
+# _sk_fs_own_render RELS... —— 把两个平行数组渲染成清单文本（rel TAB sum 每行一条）
+# 数组来自 _SK_OWN_RELS / _SK_OWN_SUMS，调用方改完数组后调它拿文本，自己落盘。
+_sk_fs_own_render() {
+  local __i=0
+  while [ "$__i" -lt "${#_SK_OWN_RELS[@]}" ]; do
+    printf '%s\t%s\n' "${_SK_OWN_RELS[$__i]}" "${_SK_OWN_SUMS[$__i]}"
+    __i=$((__i + 1))
+  done
+  return 0
+}
+
 # _sk_fs_new_tmp FILE —— 在同目录建临时文件；FILE 存在时连权限一起复制过来
 _sk_fs_new_tmp() {
   local __file=$1 __tmp

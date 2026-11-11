@@ -10,6 +10,11 @@
 #   6. tools/check_versions.sh + make check
 #   7. commit "chore(release): x.y.z" → 打 tag → push main 与 tag
 #
+# 第 6 步与 CI 发版路径是同一口径：tag 推上去之后，release.yml 先等
+# 「被 tag 的那个 SHA」上 ci.yml 的全部必需检查都 success（tools/release_gate.sh，
+# issue #42），才构建产物并发布。本地 make check 不过，tag 根本出不了这台机器；
+# CI 必需检查不过，release 也发不出去 —— 两条路拦的是同一件事。
+#
 # 为什么不是「手写五个 sed」：版本号出现在五个文件、七条引用（VERSION、pot 头、
 # README、site/index.md 与 site/en/index.md 的下载按钮与钉版本示例）且全是手抄的。
 # 漏一处的后果不是报错，而是网页挂着上一版的下载按钮、README 教人装旧版 —— 而门禁

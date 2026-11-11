@@ -1,7 +1,18 @@
 name: release
 
-# 打 tag 即发版：构建 tarball、生成校验和、先自检再发布。
-# 产物是这个库唯一的「安装包」形态 —— 解包即用，不需要 git。
+# 发版四段：Build → Quality Gate → Artifact Verification → Publish。
+#
+# 旧实现是「tag 一推就发布」：release.yml 与 ci.yml 之间没有任何依赖，
+# CI 没跑、跑了但失败、或者还在跑，release 照发（issue #42）。而且 GitHub
+# 的一个事实是：**从 tag 触发的工作流不会自动等另一个工作流** —— 所以
+# 第一段在发布动作之前主动查询「被 tag 的那个 SHA」的 check-runs：
+# 全部必需检查（ci.yml 的六个 job）都 success 才进下一段；缺席、未完成、
+# 失败，一律不产生 Release。
+#
+# quality-gate 的判据在 tools/release_gate.sh（有 stub 回归
+# tests/test_release_gate.sh）；必需检查的清单也声明在那里 —— ci.yml
+# 加删 job 要同步改它。这与本地 `make release`（tools/release.sh 的
+# make check）是同一口径：本地门禁与 CI 门禁都绿，才发布。
 on:
   push:
     tags:
@@ -11,7 +22,21 @@ permissions:
   contents: write
 
 jobs:
+  quality-gate:
+    name: quality gate
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+
+      - name: wait for the required checks of the tagged SHA
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          bash tools/release_gate.sh "$GITHUB_SHA" --timeout 2400 --interval 30
+
   release:
+    name: build, verify and publish
+    needs: [quality-gate]
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
