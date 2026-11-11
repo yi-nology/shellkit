@@ -23,6 +23,26 @@ curl -fsSL https://github.com/yi-nology/shellkit/releases/latest/download/instal
 地址用的是 release 资产，不是 `raw.githubusercontent.com`。后者在部分网络会被重置，
 而仓库地址又是固定的，所以网页和 README 都不用 raw。
 
+## Homebrew
+
+```bash
+brew install yi-nology/shellkit/shellkit
+```
+
+tap 在 [yi-nology/homebrew-shellkit](https://github.com/yi-nology/homebrew-shellkit)。
+formula 是生成物：本仓的 `tools/brew_formula.sh` 生成它，sha256 取自对应 release 的
+`SHA256SUMS` —— Homebrew 要求逐字节一致，手抄必错。
+
+## 不装也能试（一条命令）
+
+```bash
+curl -fsSL https://github.com/yi-nology/shellkit/releases/latest/download/demo.sh | bash
+```
+
+下载 release、校验 sha256、解包到临时目录，生成一个工程、跑一遍工程**自己的**测试
+（跑的是真二进制），再把导览打出来。不往你的机器上装任何东西，临时目录随进程退出清掉，
+留下的只有那个演示工程。
+
 ## 钉版本、换目录、走镜像
 
 ```bash

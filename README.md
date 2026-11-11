@@ -34,6 +34,7 @@ https://yi-nology.github.io/shellkit/ —— 中文在 `/`，英文在 `/en/`。
 | 已经有脚本在跑，想接库但不想重写 | [docs/MIGRATING.md](docs/MIGRATING.md)：五步渐进，每一步都能单独上线 |
 | 手上有具体活：改配置、下载校验、重试、单实例、交互确认 | [docs/COOKBOOK.md](docs/COOKBOOK.md)：25 个场景，每节都是「场景 / 代码 / 为什么」 |
 | 想让 AI 替你写 | 根目录的 [AGENTS.md](AGENTS.md)；`shellkit new` 生成的工程也自带一份，写清了这行的坑 |
+| 想让 AI 直接读整个站点 | [llms.txt](https://yi-nology.github.io/shellkit/llms.txt)：一个文件读完整个站点 |
 | 要查某个函数的确切签名和退出码 | [docs/REFERENCE.md](docs/REFERENCE.md)：从源码注释生成，不会和代码漂移 |
 | 要给 shellkit 自己出 man 页 | [docs/MAN.md](docs/MAN.md)：`shellkit man` 的用法、生成什么、怎么接进 CI |
 | 想先看完整工程长什么样 | [examples/deploy-service](examples/deploy-service)、[examples/fetch-release](examples/fetch-release) |
@@ -70,6 +71,25 @@ shellkit-demo/
 分发器不用动：`cli_run` 用 `declare -F` 动态找 `cmd_<name>`，命令名带短横也对得上
 （`install-self` → `cmd_install_self`）。
 
+## 五分钟上手（一条命令）
+
+还没决定要不要用？一条命令跑一个真工程给你看：
+
+```bash
+curl -fsSL https://github.com/yi-nology/shellkit/releases/latest/download/demo.sh | bash
+```
+
+它不往你的机器上装任何东西：下载 release、校验 sha256、解包到临时目录，生成一个工程、
+跑一遍工程**自己的**测试（跑的是真二进制），然后把导览打出来。临时目录随进程退出清掉，
+留下的只有那个演示工程。
+
+已经装好了就直接：
+
+```bash
+shellkit demo            # 在 ./shellkit-demo 生成
+shellkit demo ./my-demo  # 指定目录
+```
+
 ## 一键安装
 
 ```bash
@@ -96,6 +116,16 @@ curl -fsSL .../install.sh | VERSION=0.15.0 bash           # 钉版本
 ./shellkit install-self                    # 默认 /usr/local
 ./shellkit install-self --prefix ~/.local  # 没有 root 就装到自己的目录
 ```
+
+有 Homebrew 的话：
+
+```bash
+brew install yi-nology/shellkit/shellkit
+```
+
+tap 在 [yi-nology/homebrew-shellkit](https://github.com/yi-nology/homebrew-shellkit)，
+formula 由本仓的 `tools/brew_formula.sh` 生成，sha256 取自对应 release 的 `SHA256SUMS`
+（Homebrew 要求逐字节一致，手抄必错）。
 
 ## 修复入口（CLI 起不来时）
 
@@ -137,6 +167,27 @@ cd shellkit && ./shellkit new /tmp/demo --cmd start
 
 `./shellkit` 本身就是完整 CLI；`shellkit new` 默认把库拷进工程（`vendor/shellkit`），
 所以生成的工程不依赖本机装没装过 shellkit。
+
+## 给 AI 客户端装 skill
+
+shellkit 那套约束（禁用语法、任务落点、交付自检）本来就是写给机器看的，
+装进 AI 客户端就是一个 skill：
+
+```bash
+shellkit skill list                      # 有哪些客户端、装没装
+shellkit skill install                   # 装进检测到的客户端（Claude Code / Codex / MCode / OpenCode ...）
+shellkit skill install --client claude   # 只装一个
+shellkit skill install --dir ~/.my/skills # 表里没有的客户端：自己指定目录
+shellkit skill uninstall --client claude
+```
+
+skill 包是**渐进披露**的：`SKILL.md` 是入口（何时用、怎么引入、三条硬事实、任务落点表），
+细节在 `references/`（完整 API、场景手册、Bash 3.2 兼容写法、CLI 速查）——
+AI 先读入口，要细节再翻，主上下文里始终只有一页。
+
+不想装 CLI 也有：release 里单独发了 skill 包
+（`releases/latest/download/shellkit-skill-<版本>.tar.gz`），
+解开就是 `<客户端 skills 目录>/shellkit/`。
 
 ## 接进已有项目
 

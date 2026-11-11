@@ -199,6 +199,29 @@ shellkit vendor . --check    # 只比对，不写盘
 - `tests/run.sh` 支持在文件头写 `# TEST_TIMEOUT: 900` 单独放宽某个文件的时间上限
   （变异测试的 campaign 天然就慢），全局上限不变。
 
+### 0.15.0 → 0.16.0：会改变结果的行为变化
+
+这一版做的是**让别人更容易用起来**：AI skill 装进客户端、一条命令试一遍、
+Homebrew 分发、站点给 AI 直读的 llms.txt。
+
+| 变化 | 以前 | 现在 | 你会在哪里撞到 |
+|---|---|---|---|
+| AI skill 包 | 只有 `skills/shellkit/SKILL.md` 一个文件 | 整目录：`SKILL.md` 是入口，细节在 `references/`（完整 API / 场景手册 / Bash 3.2 写法 / CLI 速查） | 拷过或 vendor 过 `skills/` 的人：内容与目录结构都变了，重新拷一次 |
+| `shellkit docs` 的产物 | 四个**文件**（REFERENCE / AGENTS / templates AGENTS / skill） | 多一种产物类型：**整目录**。skill 包整目录生成、整目录校验（`diff -r`），不再逐文件比对 | 自己改过 `skills/shellkit/` 里文件的人：`shellkit docs --check` 会报 out of date |
+| Bash 3.2 指南的真相源 | `site/guide/bash32.md`（手写） | `docs/BASH32.md`；站点页与 skill 的 `references/bash32.md` 都是它的投影 | 直接改站点页的人：那次改动会被下次 `site_sync` 覆盖，要改 `docs/BASH32.md` |
+| release 资产 | tarball、SHA256SUMS、install.sh、repair.sh | 多两个：`demo.sh`（一条命令试一遍）、`shellkit-skill-<版本>.tar.gz`（skill 包，解开即装） | 按固定资产列表取文件的脚本 |
+| 站点 | —— | 多一份 `/llms.txt`（中英各一份），导航栏与每页页脚各挂一个入口 | —— |
+
+只加不改的部分：库函数的行为、退出码、`new` / `vendor` / `upgrade` 的语义都没变；
+已有的 `install.sh` 与 `repair.sh` 照旧。
+
+新命令（纯加法，不影响既有路径）：
+
+- `shellkit skill <list|install|uninstall|print>`：把 skill 装进 AI 客户端
+  （只往已存在的客户端目录装；目标已是软链就跳过并报错，退出码 3）。
+- `shellkit demo [DIR]`：生成一个工程、跑它自己的测试、打印导览。
+  目标目录已存在时退出码 3（不搅乱用户已有的东西）。
+
 ### 0.12.1 → 0.13.0：会改变结果的行为变化
 
 这一版修一批**静默失效/自毁**：模板变量的值里带了换行时，值会被悄悄丢掉一半，

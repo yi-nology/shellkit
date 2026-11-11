@@ -9,10 +9,38 @@
 | --- | --- |
 | `AGENTS.md`（仓库根） | 在本仓库里写代码的 AI |
 | `templates/AGENTS.md` | `shellkit new` 生成的工程自带一份 |
-| `skills/shellkit/SKILL.md` | 作为 skill 安装到 AI 客户端 |
+| `skills/shellkit/` | 作为 skill 安装到 AI 客户端（入口 + `references/` 细节） |
 
 三份都由 `docs/ai/contract.md` 拼出来，**改一处三处同时更新**。三份手写必然漂移，
 而漂移的后果是 AI 按过期规则生成代码。
+
+## 装进 AI 客户端
+
+skill 是一个**渐进披露**的包：`SKILL.md` 是入口（何时用、怎么引入、三条硬事实、任务落点表），
+细节在 `references/`（完整 API、场景手册、Bash 3.2 兼容写法、CLI 速查）——
+AI 先读入口，需要细节再翻，主上下文里始终只有一页。
+
+```bash
+shellkit skill list                       # 有哪些客户端、装没装
+shellkit skill install                    # 装进检测到的客户端
+shellkit skill install --client claude    # 只装一个
+shellkit skill install --dir ~/.my/skills # 表里没有的客户端：自己指定目录
+shellkit skill uninstall --client claude
+```
+
+客户端目录是各家自己的约定（Claude Code 是 `~/.claude/skills/`，MCode 是 `~/.minimax/skills/`，
+Codex 是 `~/.codex/skills/`……），所以：
+
+- 只往**已经存在**的客户端根目录里装，不替用户凭空造一个目录；
+- 目录不对就用 `--dir` 指定；
+- 位置仍然不确定就 `shellkit skill print`，打印出来手动贴。
+
+目标已经是软链时会**跳过并报错**（退出码 3）：跟着软链写会写到别处去，
+而退出码还是 0 的话，装的人根本不会知道。
+
+不想装 CLI 也有：release 里单独发了 skill 包
+（`releases/latest/download/shellkit-skill-<版本>.tar.gz`），
+解开就是 `<客户端 skills 目录>/shellkit/`。
 
 ## 为什么有效
 

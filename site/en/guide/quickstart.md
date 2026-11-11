@@ -2,6 +2,18 @@
 
 Generate a project, look at what it contains, add one subcommand of your own.
 
+## Try one command first
+
+Not installed yet, and not sure you want it? One command runs a real project:
+
+```bash
+curl -fsSL https://github.com/yi-nology/shellkit/releases/latest/download/demo.sh | bash
+```
+
+It installs nothing on your machine: it downloads the release, verifies the sha256, unpacks into a temporary
+directory, generates a project, runs that project's own tests and prints a short tour. The temporary directory
+is removed when the process exits.
+
 ## Run it
 
 ```bash

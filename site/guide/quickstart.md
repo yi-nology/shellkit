@@ -2,6 +2,17 @@
 
 生成一个工程，看它长什么样，加一个自己的子命令。
 
+## 一条命令先试一下
+
+还没装、也不确定要不要装？一条命令跑一个真工程：
+
+```bash
+curl -fsSL https://github.com/yi-nology/shellkit/releases/latest/download/demo.sh | bash
+```
+
+它不装任何东西到你的机器上：下载 release、校验 sha256、解包到临时目录，生成工程、跑工程自己的测试、
+打印导览。临时目录随进程退出清掉。
+
 ## 跑一遍
 
 ```bash

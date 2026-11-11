@@ -23,6 +23,27 @@ otherwise "one-click install" and "manual install" would eventually produce two 
 The URL is a release asset, never `raw.githubusercontent.com`. The latter gets reset on some networks,
 and the repository path is fixed anyway, so neither the website nor the README uses raw.
 
+## Homebrew
+
+```bash
+brew install yi-nology/shellkit/shellkit
+```
+
+The tap lives in [yi-nology/homebrew-shellkit](https://github.com/yi-nology/homebrew-shellkit).
+The formula is a generated artefact: `tools/brew_formula.sh` in the upstream repository produces it, and its
+sha256 comes from the release `SHA256SUMS` -- Homebrew requires a byte-exact match, so a hand-copied
+checksum is always wrong.
+
+## Try it without installing (one command)
+
+```bash
+curl -fsSL https://github.com/yi-nology/shellkit/releases/latest/download/demo.sh | bash
+```
+
+It downloads the release, verifies the sha256, unpacks into a temporary directory, generates a project,
+runs that project's **own** tests (on the real binary) and prints a short tour. Nothing is installed on
+your machine; the temporary directory is removed when the process exits, and only the demo project remains.
+
 ## Pin a version, change the prefix, use a mirror
 
 ```bash
