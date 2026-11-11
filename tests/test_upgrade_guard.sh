@@ -127,6 +127,21 @@ out=$("$TEST_ROOT/shellkit" upgrade "$p5" --template "$tpl" 2>&1)
 assert_contains "$out" "upgrade finished" "a normal project must still upgrade"
 assert_exists "$p5/README.md" "a normal project must still get its files"
 
+# ---------------------------------------------------------------- 工程里已经有子目录
+# _sk_upgrade_in_dir 的「目标在工程子目录」分支（"$base"/*）平时走不到：
+# 守卫工程是「只有清单」的空壳，目标文件的父目录都不存在，判定停在上一层的
+# 「父目录正好等于工程目录」分支上。给工程放一个已存在的子目录，判定才会落到
+# 子目录这一支 —— 这一支一旦被变异（return 0 变 return 1），升级会误判成
+# 「要写到工程外」而整个失败。
+p8="$work/withsub"
+mk_project "$p8" "tool"
+mkdir -p "$p8/tests"
+printf 'MINE\n' >"$p8/tests/keep.txt"
+out=$("$TEST_ROOT/shellkit" upgrade "$p8" --template "$tpl" 2>&1)
+assert_contains "$out" "upgrade finished" "a project that already has a subdirectory must still upgrade"
+assert_true test -f "$p8/tests/keep.txt"
+assert_exists "$p8/tests/run.sh" "the files under the existing subdirectory must still be written"
+
 # ---------------------------------------------------------------- 相对路径里的 .. 组件
 # _sk_upgrade_rel_safe 的 */../* 分支是防御纵深：名字校验先拦掉了 name 带 .. / 的
 # 情况，文件列表又只来自模板自有清单 —— CLI 路径当前到不了这一支。但它是
@@ -140,5 +155,19 @@ assert_false _sk_upgrade_rel_safe "/etc/passwd"
 assert_false _sk_upgrade_rel_safe ""
 assert_true _sk_upgrade_rel_safe "bin/tool"
 assert_true _sk_upgrade_rel_safe "x..y/file"
+
+# ---------------------------------------------------------------- _sk_upgrade_in_dir 的空参数防御
+# 同一个手法抽函数出来直接钉住：两个参数任一为空都必须判「不在目录内」。
+# 这一支的判定是 [ -z "$__base" ] || [ -z "$__tgt" ] —— 把 || 变异成 && 之后，
+# 「base 为空、target 非空」就会漏过空参数检查，一路走到 case 分支，
+# 最终把空 base 拼成的模式当通配符放行。
+eval "$(sed -n '/^_sk_upgrade_in_dir()/,/^}/p' "$TEST_ROOT/shellkit")"
+# 基准目录要用物理路径：函数内部比的是 `pwd -P` 的结果，
+# macOS 上 /var 是 /private/var 的软链，拿逻辑路径去比会永远判「不在目录内」。
+phys=$(cd "$work" && pwd -P)
+assert_false _sk_upgrade_in_dir "" "$phys/x"
+assert_false _sk_upgrade_in_dir "$phys" ""
+assert_true _sk_upgrade_in_dir "$phys" "$phys/x"
+assert_true _sk_upgrade_in_dir "$phys" "$phys/x/y"
 
 exit 0

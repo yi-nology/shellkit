@@ -37,6 +37,13 @@
 # 位点枚举是确定性的：按行号升序、每行内按 cond → logic → return 的固定
 # 顺序 —— 同一份树跑两次，位点集合与顺序完全一样。
 #
+# 得分只对「计分位点」负责。报告与 stdout 都会写清四层口径：
+#   enumerated  区间里一共枚举到多少个位点
+#   window      --max-sites 裁出的 campaign 窗口有多大
+#   scored      窗口里去掉白名单之后，真正计分的位点数
+#   skipped     被白名单跳过的位点数（逐条列在报告里）
+# 不把这层口径摆出来，100% 会被读成「全都验过了」—— 实际可能只验了五分之一。
+#
 # 本文件也可以被 source：tests/test_meta_gates.sh 复用下面的变异原语
 # （mut_copy_tree / mut_replace_func / mut_replace_line / mut_replace_block /
 # mut_run_testfile），被 source 时不执行 main。
@@ -59,7 +66,7 @@ mut_copy_tree() {
   # reports 对变异没有影响，拷了只会慢）。缺任何一个（合成用例的小树）
   # 就全量拷（跳过 .git）。
   if [ -e "$src/shellkit" ] && [ -d "$src/lib" ]; then
-    for item in shellkit lib templates tests locale; do
+    for item in shellkit repair.sh lib templates tests locale; do
       [ -e "$src/$item" ] || continue
       cp -Rp "$src/$item" "$dest/" || return 1
     done
@@ -271,6 +278,9 @@ usage: bash tools/mutation.sh --target FILE --test "CMD" [options]
   --to-line N       只枚举 <= N 行的位点（默认到文件尾）
   --skip N          跳过某行号的位点（可重复；"N:op" 只跳过某算子）
   --max-sites N     只跑枚举顺序里的前 N 个位点（有界 campaign 用）
+
+报告里会写清四层口径：枚举到的位点、campaign 窗口、计分位点、白名单跳过的位点 ——
+得分只对计分位点负责，不把「跳过了几个」藏起来。
   -h, --help        显示这段帮助
 EOF
 }
@@ -288,6 +298,7 @@ mut_main() {
   local from_line=1 to_line=2147483647 skips="" opt max_sites=0
   local script_dir rel work tree nsites rc
   local line op from to killed survived score
+  local n_all n_window n_skipped
 
   script_dir=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 
@@ -393,21 +404,44 @@ mut_main() {
   case $max_sites in
     '' | *[!0-9]*) mut_die_usage "--max-sites must be a positive integer" ;;
   esac
-  : >"$work/sites"
-  nsites=0
+  : >"$work/all_sites"
+  n_all=0
   while IFS=$mut_tab read -r line op from to; do
     [ -n "$line" ] || continue
-    if [ "$max_sites" -gt 0 ]; then
-      [ "$nsites" -ge "$max_sites" ] && break
-    fi
-    nsites=$((nsites + 1))
-    case " $skips " in
-      *" $line "* | *" $line:$op "*) continue ;;
-    esac
-    printf '%s\t%s\t%s\t%s\n' "$line" "$op" "$from" "$to" >>"$work/sites"
+    n_all=$((n_all + 1))
+    printf '%s\t%s\t%s\t%s\n' "$line" "$op" "$from" "$to" >>"$work/all_sites"
   done <<MUT_SITES_EOF
 $(mut_enum_sites "$root/$rel" "$from_line" "$to_line")
 MUT_SITES_EOF
+
+  # --max-sites 先裁：只取枚举顺序里的前 N 个位点；--skip 再从中过滤 ——
+  # 这样「前 12 个位点、白名单除外」的 campaign 口径是稳定的，与位点
+  # 内容无关。--skip 的匹配口径："N" 跳过第 N 行的全部位点，"N:op" 只跳过某算子。
+  n_window=0
+  : >"$work/window"
+  while IFS=$mut_tab read -r line op from to; do
+    [ -n "$line" ] || continue
+    if [ "$max_sites" -gt 0 ]; then
+      [ "$n_window" -ge "$max_sites" ] && break
+    fi
+    n_window=$((n_window + 1))
+    printf '%s\t%s\t%s\t%s\n' "$line" "$op" "$from" "$to" >>"$work/window"
+  done <"$work/all_sites"
+
+  : >"$work/sites"
+  : >"$work/skipped_sites"
+  n_skipped=0
+  while IFS=$mut_tab read -r line op from to; do
+    [ -n "$line" ] || continue
+    case " $skips " in
+      *" $line "* | *" $line:$op "*)
+        n_skipped=$((n_skipped + 1))
+        printf '%s\t%s\t%s\t%s\n' "$line" "$op" "$from" "$to" >>"$work/skipped_sites"
+        continue
+        ;;
+    esac
+    printf '%s\t%s\t%s\t%s\n' "$line" "$op" "$from" "$to" >>"$work/sites"
+  done <"$work/window"
 
   nsites=$(grep -c '' "$work/sites" 2>/dev/null || true)
   case $nsites in
@@ -418,8 +452,8 @@ MUT_SITES_EOF
       "$from_line" "$to_line" "${skips# }" >&2
     exit 2
   fi
-  printf 'mutation: %d site(s) to test (max-sites %s, skips:%s)\n' \
-    "$nsites" "$max_sites" "${skips# }" >&2
+  printf 'mutation: %d site(s) to test (enumerated %d, window %d, skipped %d, max-sites %s, skips:%s)\n' \
+    "$nsites" "$n_all" "$n_window" "$n_skipped" "$max_sites" "${skips# }" >&2
 
   # ---- 逐个变异 ----
   : >"$work/results"
@@ -476,6 +510,10 @@ MUT_SITES_EOF
   killed=$(awk -F '\t' '$5 == "KILLED" { n += 1 } END { printf "%d", n + 0 }' "$work/results")
   survived=$(awk -F '\t' '$5 == "SURVIVED" { n += 1 } END { printf "%d", n + 0 }' "$work/results")
   printf 'score: %d%% (%d/%d killed)\n' "$score" "$killed" "$((killed + survived))"
+  # 得分只对「计分位点」负责：枚举了多少、窗口多大、白名单跳过了几个，
+  # 一起写出来 —— 否则 100% 会被读成「全都验过了」。
+  printf 'scope: %d enumerated, %d in the campaign window, %d scored, %d skipped by the whitelist\n' \
+    "$n_all" "$n_window" "$nsites" "$n_skipped"
 
   if [ -n "$report" ]; then
     {
@@ -483,6 +521,10 @@ MUT_SITES_EOF
       printf 'target: %s\n' "$rel"
       printf 'test: %s\n' "$test_cmd"
       printf 'range: %s-%s\n' "$from_line" "$to_line"
+      printf 'sites enumerated: %d\n' "$n_all"
+      printf 'campaign window: %d\n' "$n_window"
+      printf 'scored: %d\n' "$nsites"
+      printf 'skipped: %d\n' "$n_skipped"
       if [ -n "${skips# }" ]; then
         printf 'skipped lines: %s\n' "${skips# }"
       fi
@@ -492,6 +534,12 @@ MUT_SITES_EOF
       printf '\n'
       printf 'LINE\tOP\tFROM\tTO\tRESULT\n'
       cat "$work/results"
+      if [ "$n_skipped" -gt 0 ]; then
+        printf '\n'
+        printf '# skipped by the whitelist (not scored)\n'
+        printf 'LINE\tOP\tFROM\tTO\n'
+        cat "$work/skipped_sites"
+      fi
     } >"$work/report"
     mv -f "$work/report" "$report" || {
       printf 'mutation: cannot write report: %s\n' "$report" >&2

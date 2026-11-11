@@ -255,6 +255,12 @@ _sk_vendor_stage() {
   # 没有 CLI，副本就永远升不了级 —— 而升级正是 vendor 这套机制存在的理由。
   cp -f "$SELF_DIR/shellkit" "$__stage/shellkit" || return 1
   chmod 755 "$__stage/shellkit" || return 1
+  # 修复脚本也要跟着走：副本自己被中断时 CLI 起不来，
+  # 唯一还能救它的就是同目录下那份不依赖任何库的 repair.sh。
+  if [ -f "$SELF_DIR/repair.sh" ]; then
+    cp -f "$SELF_DIR/repair.sh" "$__stage/repair.sh" || return 1
+    chmod 755 "$__stage/repair.sh" || return 1
+  fi
   # MIT 许可证要求「副本里带上版权声明」，所以 vendor 出来的副本必须带 LICENSE 与 NOTICE
   _sk_copy_legal "$__stage" || return 1
   return 0
@@ -855,12 +861,125 @@ _sk_upgrade_writable() {
   [ -w "$__dir" ] || return 1
   return 0
 }
+
+# ---------- 升级日志（崩溃一致性）----------
+#
+# 升级是「换文件」和「改清单」两件事。清单记的是每个文件的基线指纹，
+# 下次升级靠它判断「这个文件还是模板原样吗」。
+#
+# 崩溃窗口就夹在这两件事中间：文件已经换成新版、清单还没提交时进程被 SIGKILL，
+# 下次升级看到「磁盘上的指纹 != 清单里的基线」，就把它当成「用户改过」——
+# 于是这个文件从此再也拿不到模板更新（冻结）。
+#
+# 升级日志就是为这个窗口写的：动第一个文件之前，把「这个文件该换成什么指纹」
+# 落盘；清单提交成功后再把日志删掉。
+# 下次升级读到日志就知道「磁盘上这个指纹是上一轮升级换上去的」，
+# 于是把基线推进到它 —— 文件解冻，升级继续。
+#
+# 日志格式：每行一条记录，三个字段用 TAB 分隔 —— 相对路径、旧基线、目标指纹。
+# 空的旧基线写成 -：TAB 分隔时空字段会被 read 当成连续的定界符吞掉，位置会串。
+# 同一个相对路径可以出现多次：上一轮的记录要留着 ——
+# 这一轮同样可能在提交清单之前崩掉，那时上一轮换过的文件还得靠它恢复。
+
+# _sk_upgrade_journal_file DIR —— 升级日志的位置
+_sk_upgrade_journal_file() {
+  printf '%s/.shellkit-upgrade-journal\n' "${1:-}"
+}
+
+# _sk_upgrade_journal_read DIR —— 读出上一次没跑完的升级留下的日志
+#
+# 读不出来（文件不在 / 行格式不对）就当没有日志：日志只是恢复的辅助信息，
+# 它坏了不该把升级卡死 —— 最坏的结果退回升级前的样子。
+_sk_upgrade_journal_read() {
+  local __dir=${1:-} __file __rel __old __new
+  _SK_UPGRADE_JRELS=()
+  _SK_UPGRADE_JOLDS=()
+  _SK_UPGRADE_JNEWS=()
+  __file=$(_sk_upgrade_journal_file "$__dir")
+  [ -f "$__file" ] || return 0
+  while IFS=$'\t' read -r __rel __old __new || [ -n "$__rel" ]; do
+    [ -n "$__rel" ] || continue
+    [ -n "$__old" ] || continue
+    [ -n "$__new" ] || continue
+    _SK_UPGRADE_JRELS[${#_SK_UPGRADE_JRELS[@]}]=$__rel
+    _SK_UPGRADE_JOLDS[${#_SK_UPGRADE_JOLDS[@]}]=$__old
+    _SK_UPGRADE_JNEWS[${#_SK_UPGRADE_JNEWS[@]}]=$__new
+  done <"$__file"
+  return 0
+}
+
+# _sk_upgrade_journal_match REL CUR —— 这个指纹是不是上一轮升级换上去的
+#
+# 返回匹配到的目标指纹（空 = 没匹配上）。
+# 同一个文件可能有多条记录（上一轮的 + 这一轮的），取最后一条匹配的 ——
+# 越靠后的记录越新。
+_sk_upgrade_journal_match() {
+  local __rel=${1:-} __cur=${2:-} __i=0 __hit=""
+  [ -n "$__rel" ] || return 0
+  [ -n "$__cur" ] || return 0
+  while [ "$__i" -lt "${#_SK_UPGRADE_JRELS[@]}" ]; do
+    if [ "${_SK_UPGRADE_JRELS[$__i]}" = "$__rel" ] && [ "${_SK_UPGRADE_JNEWS[$__i]}" = "$__cur" ]; then
+      __hit=$__cur
+    fi
+    __i=$((__i + 1))
+  done
+  printf '%s' "$__hit"
+}
+
+# _sk_upgrade_journal_write DIR —— 把这一轮要替换的文件写进升级日志
+#
+# 必须在动第一个文件之前落盘。崩了也要知道「哪些文件本来该换成什么」，
+# 否则已经换新的文件会被当成用户改过的，永远冻结在旧模板上。
+#
+# 上一轮的记录原样带上：这一轮同样可能在提交清单之前崩掉，
+# 那时上一轮换过的文件还得靠这些记录来恢复。
+_sk_upgrade_journal_write() {
+  local __dir=${1:-} __tpl=${2:-} __i=0 __rel __act __old __new __txt="" __file
+  __file=$(_sk_upgrade_journal_file "$__dir")
+  while [ "$__i" -lt "${#_SK_UPGRADE_JRELS[@]}" ]; do
+    __txt="${__txt}${_SK_UPGRADE_JRELS[$__i]}"$'\t'"${_SK_UPGRADE_JOLDS[$__i]}"$'\t'"${_SK_UPGRADE_JNEWS[$__i]}"$'\n'
+    __i=$((__i + 1))
+  done
+  __i=0
+  while [ "$__i" -lt "${#_SK_UPGRADE_RELS[@]}" ]; do
+    __act=${_SK_UPGRADE_ACTS[$__i]}
+    if [ "$__act" = "A" ] || [ "$__act" = "U" ]; then
+      __rel=${_SK_UPGRADE_RELS[$__i]}
+      # 目标指纹就是模板渲染出来的那个文件的指纹
+      __new=$(os_sha256 "$__tpl/$__rel" 2>/dev/null) || __new=""
+      if [ -n "$__new" ]; then
+        __old=${_SK_UPGRADE_BASES[$__i]}
+        [ -n "$__old" ] || __old="-"
+        __txt="${__txt}${__rel}"$'\t'"${__old}"$'\t'"${__new}"$'\n'
+      fi
+    fi
+    __i=$((__i + 1))
+  done
+  if [ -z "$__txt" ]; then
+    # 这一轮没有任何文件要换、也没有上一轮的记录 —— 不留空日志
+    rm -f "$__file" 2>/dev/null || true
+    return 0
+  fi
+  fs_atomic_write "$__file" "$__txt" 600 || return 1
+  return 0
+}
+
+# _sk_upgrade_journal_clear DIR —— 清单提交成功，日志没有用了
+_sk_upgrade_journal_clear() {
+  local __dir=${1:-} __file
+  __file=$(_sk_upgrade_journal_file "$__dir")
+  [ -e "$__file" ] || return 0
+  rm -f "$__file" || return 1
+  return 0
+}
+
 cmd_upgrade() {
   local __dir="" __tpl="$SK_TPL_DIR" __check=0 __force=0
   local __name __rel __old __cur __new __tmp __cmds_csv __vdir __act
   local __dirabs="" __target=""
   local __updated=0 __skipped=0 __added=0 __vsync=0
   local __baselines="" __legacy=0 __oldtpl="" __oldtpl_hash="" __lock=""
+  local __jrec="" __recovered=0 __legacy_ok=0
 
   while [ "$#" -gt 0 ]; do
     case "$1" in
@@ -1010,6 +1129,10 @@ cmd_upgrade() {
 $(_sk_new_owned_list "$__name")
 EOF
 
+  # 上一轮升级可能崩在「文件已换新、清单还没提交」的窗口里 ——
+  # 升级日志记着那些文件当时该换成什么指纹，据此能把基线推进到正确值。
+  _sk_upgrade_journal_read "$__dir"
+
   # ---------- 阶段一：决策与校验（一个文件都不动）----------
   #
   # 升级是事务：先把新模板渲染到候选目录，再对每个目标决定「新增 / 更新 /
@@ -1028,6 +1151,7 @@ EOF
     __rel=${_SK_UPGRADE_RELS[$__i]}
     __old=${_SK_UPGRADE_BASES[$__i]}
     __act="S"
+    __jrec=""
 
     # 目标路径的三个不变量：
     #   1) 相对路径里没有 .. 组件，也不是绝对路径
@@ -1072,6 +1196,18 @@ EOF
       __new=$(os_sha256 "$__tmp/$__rel" 2>/dev/null) || __new=""
     fi
 
+    # 崩溃恢复：上一轮升级崩在「文件已换新、清单还没提交」的窗口里。
+    # 升级日志记着那个文件当时该换成什么指纹 —— 磁盘上正好是那个指纹，
+    # 就说明它确实是上一轮换上去的、不是用户改的：基线推进到它。
+    # 不推进的话，它会被当成「用户改过」，从此再也拿不到模板更新（冻结）。
+    __jrec=$(_sk_upgrade_journal_match "$__rel" "$__cur")
+    if [ -n "$__jrec" ]; then
+      __old=$__jrec
+      _SK_UPGRADE_BASES[$__i]=$__jrec
+      __recovered=$((__recovered + 1))
+      log_warn "$(_t 'recovered from an interrupted upgrade'): $__rel"
+    fi
+
     if [ ! -f "$__dir/$__rel" ]; then
       # 工程里没有这个文件：模板里有就补回去
       if [ -z "$__new" ]; then
@@ -1105,7 +1241,14 @@ EOF
       if [ -f "$__oldtpl/$__rel" ]; then
         __oldtpl_hash=$(os_sha256 "$__oldtpl/$__rel" 2>/dev/null) || __oldtpl_hash=""
       fi
-      if [ -z "$__oldtpl_hash" ] || [ "$__oldtpl_hash" != "$__cur" ]; then
+      # 升级日志能证明这个文件是上一轮升级换上去的 —— 不用再跟旧模板对照。
+      __legacy_ok=0
+      if [ -n "$__jrec" ]; then
+        __legacy_ok=1
+      elif [ -n "$__oldtpl_hash" ] && [ "$__oldtpl_hash" = "$__cur" ]; then
+        __legacy_ok=1
+      fi
+      if [ "$__legacy_ok" != "1" ]; then
         # 对不上（或旧模板渲染不出对照）：说不准这个文件是不是用户改过 ——
         # 一律不动，基线留空：宁可永远不覆盖，也不要覆盖掉用户改过的东西。
         # 基线不清的话，清单会升成新版格式并带着旧指纹，下一次升级就把它
@@ -1152,6 +1295,16 @@ EOF
     __i=$((__i + 1))
   done
 
+  # 动第一个文件之前先把升级日志落盘：崩了也要知道「哪些文件本来该换成什么」。
+  # 否则已经换新的文件会被当成用户改过的，从此冻结在旧模板上。
+  if [ "$__check" != "1" ]; then
+    if ! _sk_upgrade_journal_write "$__dir" "$__tmp"; then
+      log_error "$(_t 'failed to write the upgrade journal'): $__dir"
+      _sk_upgrade_cleanup "$__tmp" "$__oldtpl"
+      return "$SK_ERR"
+    fi
+  fi
+
   # ---------- 阶段二：切换（逐个原子替换）----------
   #
   # 每个文件都是「临时文件 + rename」：失败要么什么都没发生、要么整体换新，
@@ -1177,7 +1330,11 @@ EOF
     fi
     if [ "$__act" = "A" ]; then
       fs_ensure_dir "$(dirname "$__dir/$__rel")" 755 || {
-        _sk_upgrade_save_manifest "$__dir" "$__name" "$__cmds_csv" "$(_sk_new_owned_list "$__name")" || true
+        # 清单落盘 = 这一轮的账结了：磁盘与基线对上了，日志可以删。
+        # 清单写失败时日志必须留着 —— 那是下次恢复的唯一依据。
+        if _sk_upgrade_save_manifest "$__dir" "$__name" "$__cmds_csv" "$(_sk_new_owned_list "$__name")"; then
+          _sk_upgrade_journal_clear "$__dir" || true
+        fi
         _sk_upgrade_cleanup "$__tmp" "$__oldtpl"
         return "$SK_ERR"
       }
@@ -1190,7 +1347,11 @@ EOF
       # （基线要在这里落盘，commands 就必须提前存好 —— 否则这条路径会
       #   因为 set -u 的 unbound variable 先崩掉，「落盘」一次都执行不到。）
       log_error "$(_t 'failed to write the file'): $__rel"
-      _sk_upgrade_save_manifest "$__dir" "$__name" "$__cmds_csv" "$(_sk_new_owned_list "$__name")" || true
+      # 清单落盘 = 这一轮的账结了：磁盘与基线对上了，日志可以删。
+      # 清单写失败时日志必须留着 —— 那是下次恢复的唯一依据。
+      if _sk_upgrade_save_manifest "$__dir" "$__name" "$__cmds_csv" "$(_sk_new_owned_list "$__name")"; then
+        _sk_upgrade_journal_clear "$__dir" || true
+      fi
       _sk_upgrade_cleanup "$__tmp" "$__oldtpl"
       return "$SK_ERR"
     fi
@@ -1225,14 +1386,20 @@ EOF
     # vendor 同步失败不回滚已经写好的文件，那清单就不能停在旧基线上：
     # 停在旧基线上，这些文件在下次升级里会被判成「用户改过」，永远冻结。
     if ! _sk_upgrade_save_manifest "$__dir" "$__name" "$__cmds_csv" "$(_sk_new_owned_list "$__name")"; then
+      # 清单没落盘 = 这一轮的账没结清：升级日志必须留着 ——
+      # 它记着哪些文件已经换成新版，下次升级靠它把基线推进到正确值。
       log_error "$(_t 'failed to write the project manifest'): $__dir"
       return "$SK_ERR"
     fi
+    _sk_upgrade_journal_clear "$__dir" || true
     if [ "$__vsync" = "1" ]; then
       return "$SK_ERR"
     fi
   fi
 
+  if [ "$__recovered" -gt 0 ]; then
+    log_info "$(_t 'recovered from an interrupted upgrade'): $__recovered"
+  fi
   printf '\n'
   log_ok "$(_t 'upgrade finished'): $__updated updated, $__added added, $__skipped left alone"
   return "$SK_OK"
@@ -1995,7 +2162,7 @@ _sk_tree_version() {
 }
 
 cmd_install_self() {
-  local __prefix="/usr/local" __dest __bin __stage __old
+  local __prefix="/usr/local" __dest __bin __stage __old __rbin
   while [ "$#" -gt 0 ]; do
     case "$1" in
       --prefix)
@@ -2118,6 +2285,19 @@ cmd_install_self() {
     rm -rf "$__stage" 2>/dev/null || true
     return "$SK_ERR"
   }
+  # 修复脚本随安装一起落地：装到一半被打断时 CLI 起不来，
+  # 唯一还能救它的就是这份不依赖任何库的 repair.sh ——
+  # 它也在 .old 副本里（那次 rename 之前它已经就位了）。
+  if [ -f "$SELF_DIR/repair.sh" ]; then
+    cp -f "$SELF_DIR/repair.sh" "$__stage/repair.sh" || {
+      rm -rf "$__stage" 2>/dev/null || true
+      return "$SK_ERR"
+    }
+    chmod 755 "$__stage/repair.sh" || {
+      rm -rf "$__stage" 2>/dev/null || true
+      return "$SK_ERR"
+    }
+  fi
 
   if ! _sk_manifest_write "$__stage"; then
     log_error "$(_t 'failed to write the install manifest'): $__dest/MANIFEST"
@@ -2157,11 +2337,22 @@ cmd_install_self() {
     return "$SK_ERR"
   }
   log_ok "$(_t 'installed'): $__bin"
+  # 修复入口也挂一个：CLI 坏掉时它指向的那份副本可能已经没了，
+  # 但 $PREFIX/share/shellkit.old/repair.sh 一定还在（见 repair.sh 自己的说明）。
+  if [ -f "$__dest/repair.sh" ]; then
+    __rbin="$__prefix/bin/shellkit-repair"
+    rm -f "$__rbin.tmp.$$" 2>/dev/null || true
+    if ln -s "$__dest/repair.sh" "$__rbin.tmp.$$"; then
+      mv -f "$__rbin.tmp.$$" "$__rbin" 2>/dev/null || rm -f "$__rbin.tmp.$$" 2>/dev/null || true
+    else
+      rm -f "$__rbin.tmp.$$" 2>/dev/null || true
+    fi
+  fi
   return "$SK_OK"
 }
 
 cmd_uninstall_self() {
-  local __prefix __run __dest __bin __line __path __n=0 __fail=0 __link
+  local __prefix __run __dest __bin __line __path __n=0 __fail=0 __link __rbin
   __run=$(_sk_running_prefix)
   __prefix=${__run:-/usr/local}
   while [ "$#" -gt 0 ]; do
@@ -2237,6 +2428,16 @@ cmd_uninstall_self() {
     esac
   elif [ -e "$__bin" ]; then
     log_warn "$(_t 'left the file alone, it is not a symlink'): $__bin"
+  fi
+
+  # 修复入口的软链同样要收掉
+  __rbin="$__prefix/bin/shellkit-repair"
+  if [ -L "$__rbin" ]; then
+    __link=$(readlink "$__rbin")
+    case "$__link" in
+      "$__dest" | "$__dest"/*) rm -f "$__rbin" ;;
+      *) log_warn "$(_t 'left the symlink alone, it points elsewhere'): $__rbin" ;;
+    esac
   fi
 
   log_ok "$(_t 'removed'): $__n $(_t 'files')"

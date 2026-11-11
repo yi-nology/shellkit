@@ -196,10 +196,12 @@ _sk_msg_lookup_shellkit() {
     'the target is a symlink, left alone') printf '%s' '目标是符号链接，保持原样' ;;
     'the target path is blocked by a file') printf '%s' '目标的父路径是个文件，建不出来' ;;
     'the target is a directory, refusing to overwrite') printf '%s' '目标位置是个目录，拒绝覆盖' ;;
+    'recovered from an interrupted upgrade') printf '%s' '从被中断的升级中恢复' ;;
     'modified locally, left alone') printf '%s' '本地已修改，保持原样' ;;
     'no recorded fingerprint, left alone') printf '%s' '没有记录的指纹，保持原样' ;;
     'cannot be verified against the old template, left alone') printf '%s' '无法与旧模板核对，保持原样' ;;
     'the target directory is not writable') printf '%s' '目标目录不可写' ;;
+    'failed to write the upgrade journal') printf '%s' '写入升级日志失败' ;;
     'would add') printf '%s' '将新增' ;;
     'would update') printf '%s' '将更新' ;;
     'failed to write the file') printf '%s' '写文件失败' ;;

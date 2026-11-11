@@ -10,6 +10,8 @@
 #   2) 给 lib/core 的公开函数插桩：函数体第一句调一次 __cov_hit
 #   3) 在副本里跑测试套件，统计哪些公开函数一次都没被调到
 #   4) 与 tools/coverage_baseline.txt 比对：白名单外的未覆盖函数 ⇒ 违规
+#      白名单只允许记「当前确实未覆盖」的函数：已经覆盖的还留在里面，
+#      棘轮就看不见覆盖回退 —— 将来测试被误删，它照样在白名单里，CI 照样绿。
 #
 # 三条纪律：
 #   1) **绝不在红的套件上算覆盖率**：跑套件前先在未插桩的副本上跑一遍确认是绿的，
@@ -32,6 +34,7 @@ SUITE_CMD="bash tests/run.sh"
 MIN_PCT=""
 TREE_ROOT=""
 BASELINE_FILE=""
+WRITE_BASELINE=0
 
 usage() {
   cat <<'EOF'
@@ -42,6 +45,7 @@ usage: bash tools/coverage.sh [--out FILE] [--suite CMD] [--min PCT]
   --min PCT      覆盖率低于 PCT 就判失败
   --root DIR     被测的仓库根目录（默认：脚本所在目录的上一级）
   --baseline FILE  基线白名单文件（默认：<root>/tools/coverage_baseline.txt）
+  --write-baseline  按本次结果重写基线白名单（只记当前确实未覆盖的函数）
 EOF
 }
 
@@ -96,6 +100,10 @@ while [ $# -gt 0 ]; do
       ;;
     --baseline=*)
       BASELINE_FILE=${1#*=}
+      shift
+      ;;
+    --write-baseline)
+      WRITE_BASELINE=1
       shift
       ;;
     -h | --help)
@@ -181,7 +189,7 @@ for __d in lib tests tools templates locale po docs examples skills; do
   fi
 done
 
-for __f in shellkit install.sh Makefile VERSION README.md AGENTS.md LICENSE NOTICE; do
+for __f in shellkit install.sh repair.sh Makefile VERSION README.md AGENTS.md LICENSE NOTICE; do
   if [ -f "$ROOT/$__f" ]; then
     cp -p "$ROOT/$__f" "$TREE/" || {
       log "cannot copy $__f"
@@ -397,11 +405,24 @@ if [ "$TOTAL" -gt 0 ]; then
 fi
 
 # ---------------------------------------------------------------------------
+# 6.5) 「重写基线」模式
+#
+# 白名单的正确定义是「当前确实未覆盖的公开函数」。手改容易漏、也容易留，
+# 所以给它一条命令：跑完把未覆盖集合写进去。
+# 这一趟是「修基线」，不是「查基线」：棘轮判定跳过（它正是要修的东西），
+# 报告照常出，基线在报告之后写。
+# ---------------------------------------------------------------------------
+if [ "$WRITE_BASELINE" = "1" ]; then
+  log "rewriting the baseline: $BASELINE"
+fi
+
+# ---------------------------------------------------------------------------
 # 7) 白名单（棘轮）
 #
-# 基线是「已知没被覆盖的公开函数」名单。规则：
+# 基线是「当前确实没被覆盖的公开函数」名单。规则（三条都要成立）：
 #   - 实际未覆盖、且不在基线里 => 违规（新加了一个谁都没测的公开函数）
 #   - 基线里有、但已经不是公开函数了 => 违规（白名单腐烂）
+#   - 基线里有、而且已经被覆盖了 => 违规（白名单该瘦身：留着就看不见覆盖回退）
 # ---------------------------------------------------------------------------
 
 BASELINE_NAMES=""
@@ -419,23 +440,35 @@ fi
 
 VIOLATIONS=0
 
-while IFS= read -r __fn || [ -n "$__fn" ]; do
-  [ -n "$__fn" ] || continue
-  case " $BASELINE_NAMES " in
-    *" $__fn "*) ;;
-    *)
-      printf 'coverage: uncovered function not in the baseline: %s\n' "$__fn" >&2
-      VIOLATIONS=1
-      ;;
-  esac
-done <"$WORK/uncovered.txt"
+if [ "$WRITE_BASELINE" != "1" ]; then
+  # 重写模式：基线本身就是这一趟要修的东西，不拿它判自己
 
-for __fn in $BASELINE_NAMES; do
-  if ! grep -qxF -- "$__fn" "$WORK/universe.sorted"; then
-    printf 'coverage: the baseline lists a function that is not a public function: %s\n' "$__fn" >&2
-    VIOLATIONS=1
-  fi
-done
+  while IFS= read -r __fn || [ -n "$__fn" ]; do
+    [ -n "$__fn" ] || continue
+    case " $BASELINE_NAMES " in
+      *" $__fn "*) ;;
+      *)
+        printf 'coverage: uncovered function not in the baseline: %s\n' "$__fn" >&2
+        VIOLATIONS=1
+        ;;
+    esac
+  done <"$WORK/uncovered.txt"
+
+  for __fn in $BASELINE_NAMES; do
+    if ! grep -qxF -- "$__fn" "$WORK/universe.sorted"; then
+      printf 'coverage: the baseline lists a function that is not a public function: %s\n' "$__fn" >&2
+      VIOLATIONS=1
+      continue
+    fi
+    # 白名单只允许记「当前确实未覆盖」的函数。已经覆盖的还留在里面，
+    # 棘轮就看不见覆盖回退：将来测试被误删，那个函数照样在白名单里，永远绿。
+    if grep -qxF -- "$__fn" "$WORK/covered.txt"; then
+      printf 'coverage: the baseline lists a covered function: %s (remove it: bash tools/coverage.sh --write-baseline)\n' "$__fn" >&2
+      VIOLATIONS=1
+    fi
+  done
+
+fi
 
 if [ -n "$MIN_PCT" ] && [ "$PCT" -lt "$MIN_PCT" ]; then
   printf 'coverage: coverage %s%% is below the required %s%%\n' "$PCT" "$MIN_PCT" >&2
@@ -479,6 +512,29 @@ if [ -n "$OUT_FILE" ]; then
     exit 3
   }
   log "report written to $OUT_FILE"
+fi
+
+# ---------------------------------------------------------------------------
+# 9) 重写基线（--write-baseline）
+#
+# 报告出完之后再写：这一趟既给出「哪块没测到」，又给出「白名单该长什么样」。
+# ---------------------------------------------------------------------------
+if [ "$WRITE_BASELINE" = "1" ]; then
+  {
+    printf '# 覆盖率白名单：当前确实没被测试覆盖的公开函数。\n'
+    printf '# 由 bash tools/coverage.sh --write-baseline 生成，不要手工维护。\n'
+    printf '# 棘轮规则：这里面的函数一旦被覆盖，CI 就要求把它移出（防覆盖回退）。\n'
+    cat "$WORK/uncovered.txt"
+  } >"$BASELINE.tmp" || {
+    log "cannot write the baseline"
+    exit 3
+  }
+  mv -f "$BASELINE.tmp" "$BASELINE" || {
+    log "cannot replace the baseline: $BASELINE"
+    exit 3
+  }
+  log "wrote $BASELINE ($UNCOVERED uncovered function(s))"
+  exit 0
 fi
 
 if [ "$VIOLATIONS" -ne 0 ]; then

@@ -4,7 +4,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: shellkit\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-11-11 04:30+0800\n"
+"POT-Creation-Date: 2026-11-11 12:19+0800\n"
 "PO-Revision-Date: 2026-11-08 00:00+0800\n"
 "Last-Translator: shellkit contributors\n"
 "Language-Team: shellkit contributors\n"
@@ -503,7 +503,9 @@ msgstr "把庫鏡像進 vendor/shellkit"
 msgid ""
 "shellkit not found: install one first (shellkit install-self), or keep "
 "vendor/shellkit/shellkit in this project"
-msgstr "找不到 shellkit：先裝一個（shellkit install-self），或在工程裡保留 vendor/shellkit/shellkit"
+msgstr ""
+"找不到 shellkit：先裝一個（shellkit install-self），或在工程裡保留 vendor/"
+"shellkit/shellkit"
 
 msgid ""
 "cannot generate the completion script: bin/@NAME@ is missing and no shellkit "
@@ -600,6 +602,9 @@ msgstr "目標的父路徑是個檔案，建不出來"
 msgid "the target is a directory, refusing to overwrite"
 msgstr "目標位置是個目錄，拒絕覆蓋"
 
+msgid "recovered from an interrupted upgrade"
+msgstr "從被中斷的升級中恢復"
+
 msgid "modified locally, left alone"
 msgstr "本地已修改，保持原樣"
 
@@ -611,6 +616,9 @@ msgstr "無法與舊範本核對，保持原樣"
 
 msgid "the target directory is not writable"
 msgstr "目標目錄不可寫"
+
+msgid "failed to write the upgrade journal"
+msgstr "寫入升級日誌失敗"
 
 msgid "would add"
 msgstr "將新增"
@@ -896,4 +904,3 @@ msgstr "已開啟強制模式"
 
 msgid "finished"
 msgstr "完成"
-

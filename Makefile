@@ -4,7 +4,7 @@ SHELL := /bin/bash
 # 测试与静态检查用哪个 bash。macOS 的基线是 3.2（/bin/bash），但 PATH 上可能有
 # 别的版本 —— CI 里显式写 BASH=/bin/bash 才是真的在验 3.2。
 BASH ?= bash
-SOURCES := shellkit install.sh lib/bootstrap.sh $(wildcard lib/core/*.sh) \
+SOURCES := shellkit install.sh repair.sh lib/bootstrap.sh $(wildcard lib/core/*.sh) \
   $(wildcard tools/*.sh) tests/*.sh po/messages.sh
 TEMPLATES := $(shell find templates -type f)
 SHOTS := $(wildcard docs/shots/*.shot)
@@ -113,16 +113,15 @@ coverage:
 
 # 变异测试：把语义变异种进升级路径的守卫区，验证守卫用例必须 100% 杀灭
 # （位点区间锚在 _sk_upgrade_* 函数上，封顶 12 个保证跑得完）。
+# 白名单只剩两条「当前真的没有判据」的位点；其余位点都必须被杀灭。
+# 报告与 stdout 会写清四层口径（枚举/窗口/计分/跳过），不把跳过藏起来。
 # 不进 check —— 它要把守卫用例跑十几遍；回归在 tests/test_mutation.sh。
 mutation:
 	@first=$$(grep -n '^_sk_upgrade_rel_safe()' shellkit | cut -d: -f1); \
 	last=$$(grep -n '^_sk_upgrade_writable()' shellkit | cut -d: -f1); \
 	bash tools/mutation.sh --target shellkit \
 	  --from-line "$$first" --to-line "$$last" --max-sites 12 \
-	  --skip "$$((first + 3))" --skip "$$((first + 6))" \
-	  --skip "$$((first + 18))" --skip "$$((first + 19))" \
 	  --skip "$$((first + 25))" --skip "$$((first + 29)):return" \
-	  --skip "$$((first + 32))" \
 	  --test "bash tests/test_upgrade_guard.sh" --min-score 100
 
 # ---------- 文档站 ----------

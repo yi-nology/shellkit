@@ -146,6 +146,29 @@ assert_ne "0" "$rc" "a baseline entry that is not a public function must fail"
 err=$(cat "$COV_STDERR")
 assert_contains "$err" "the baseline lists a function that is not a public function: mini_gamma" "the stale baseline entry must be named"
 
+# CASE: 白名单只允许记「当前确实未覆盖」的函数 —— 已经覆盖的还留在里面必须判红
+#
+# 这条是「覆盖回退」的护栏：白名单里留着已覆盖的函数，将来测试被误删、
+# 覆盖消失，那个函数照样在白名单里，棘轮一声不吭 —— CI 照样绿。
+d=$(tmpdir) || _fail "cannot create tmpdir"
+_cov_tree "$d" || _fail "cannot build the mini tree"
+mkdir -p "$d/tools"
+# mini_alpha 是套件调到的那个（已覆盖）：把它留在白名单里就是白名单腐烂
+_cov_baseline "$d/tools/coverage_baseline.txt" "mini_beta
+mini_alpha"
+
+rc=0
+_cov_run rc --root "$d" --suite 'bash tests/run.sh' --baseline "$d/tools/coverage_baseline.txt"
+assert_ne "0" "$rc" "a covered function left in the baseline must fail the ratchet"
+err=$(cat "$COV_STDERR")
+assert_contains "$err" "the baseline lists a covered function: mini_alpha" "the stale baseline entry must be named"
+
+# 正对照：把已覆盖的移出白名单，同样的场景必须变绿
+_cov_baseline "$d/tools/coverage_baseline.txt" "mini_beta"
+rc=0
+_cov_run rc --root "$d" --suite 'bash tests/run.sh' --baseline "$d/tools/coverage_baseline.txt"
+assert_eq "0" "$rc" "the same scenario must pass once the covered function is removed from the baseline"
+
 # CASE: 对真库跑一遍 —— 报告能生成、格式正确、覆盖数字合理
 # 套件只跑 test_str.sh，覆盖的函数远少于全量套件 ⇒ 真库白名单（按全量生成）
 # 罩不住这个套件的未覆盖集合。所以这里先用空基线跑一遍拿到本套件的未覆盖名单，

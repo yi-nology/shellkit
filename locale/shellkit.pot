@@ -8,7 +8,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: shellkit 0.14.0\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-11-11 09:35+0800\n"
+"POT-Creation-Date: 2026-11-11 12:19+0800\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language-Team: LANGUAGE <LL@li.org>\n"
@@ -603,6 +603,9 @@ msgstr ""
 msgid "the target is a directory, refusing to overwrite"
 msgstr ""
 
+msgid "recovered from an interrupted upgrade"
+msgstr ""
+
 msgid "modified locally, left alone"
 msgstr ""
 
@@ -613,6 +616,9 @@ msgid "cannot be verified against the old template, left alone"
 msgstr ""
 
 msgid "the target directory is not writable"
+msgstr ""
+
+msgid "failed to write the upgrade journal"
 msgstr ""
 
 msgid "would add"

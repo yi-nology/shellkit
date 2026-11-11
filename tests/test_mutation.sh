@@ -18,6 +18,9 @@
 #
 # 断言纪律：断完整记录不断单词；临时目录名只用编号；SHELLKIT_LANG=en
 # 由 test_helper.sh 统一设置。
+#
+# TEST_TIMEOUT: 900 —— 真 campaign 要把守卫套件按计分位点数跑那么多遍
+# （每个位点一遍，几分钟），默认的 300 秒上限会把它掐在半路。
 set -u
 . "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/test_helper.sh"
 
@@ -106,33 +109,44 @@ esac
 # --max-sites 封顶保证 < 300 秒。
 #
 # 白名单（--skip，行号 = 锚点 + 偏移，偏移随函数内容变化时会 loud red）：
-#   +3  return   rel_safe 的空/绝对路径防御分支 —— 守卫清单都是正常相对路径，无判据
-#   +6  return   rel_safe 的 */../* 分支 —— 守卫对 ../../escape 的拦截发生在
-#                _sk_valid_name 层，变异放行 .. 时守卫仍绿：守卫对「清单文件列表
-#                带 .. 」这一层没有判据（缺口点名，待 test_upgrade_guard 补用例）
-#   +18 logic    in_dir 的空参数防御分支 —— cmd_upgrade 调用时两参数恒非空，黑盒不可达
-#   +19 return   同上分支的 return 1
 #   +25 return   in_dir 循环的文件系统根出口 —— 需要父目录链走到根，守卫场景不可达
 #   +29:return   $(cd … && pwd -P) 失败分支 —— 需要父目录不存在/不可执行；
 #                守卫场景的悬空符号链接在更外层被拦，走不到这里
-#   +32 return   in_dir 的「目标在工程子目录」分支 —— 守卫覆盖的正常升级只写顶层文件
+#
+# 其余位点现在都有判据（白名单从 7 条缩到 2 条，计分位点 5 → 10）：
+#   rel_safe 的空/绝对路径分支与 .. 分支、in_dir 的空参数防御分支 ——
+#     由 test_upgrade_guard.sh 末尾把函数从源码抽出来直接断言；
+#   in_dir 的「目标在工程子目录」分支 ——
+#     由 test_upgrade_guard.sh 里「工程里已经有子目录」那条用例走到。
 d=$(tmpdir) || _fail "cannot create tmpdir"
 mkdir -p "$d"
 rc=0
 bash "$MUT" --root "$TEST_ROOT" --target shellkit \
   --from-line "$from_line" --to-line "$to_line" --max-sites 12 \
-  --skip "$((from_line + 3))" --skip "$((from_line + 6))" \
-  --skip "$((from_line + 18))" --skip "$((from_line + 19))" \
   --skip "$((from_line + 25))" --skip "$((from_line + 29)):return" \
-  --skip "$((from_line + 32))" \
   --test "bash tests/test_upgrade_guard.sh" --min-score 100 \
   --report "$d/report" >"$d/out" 2>"$d/log" || rc=$?
+report=$(cat "$d/report")
 assert_eq "0" "$rc" "case.4: the upgrade guards must kill every counted mutation (log: $d/log)"
-assert_contains "$(cat "$d/report")" "killed: 5" \
-  "case.4: the campaign must score exactly 5 kills (a shifted region changes the count loudly)"
-assert_contains "$(cat "$d/report")" "survived: 0" \
+assert_contains "$report" "killed: 10" \
+  "case.4: the campaign must score exactly 10 kills (a shifted region changes the count loudly)"
+assert_contains "$report" "survived: 0" \
   "case.4: no counted mutation may survive the upgrade guards"
-assert_contains "$(cat "$d/report")" "score: 100%" \
+assert_contains "$report" "score: 100%" \
   "case.4: the campaign score must be 100% of the counted sites"
+
+# 计分范围必须摆在明面上：得分只对计分位点负责，不许把跳过的藏起来。
+assert_contains "$report" "sites enumerated: " \
+  "case.4: the report must say how many sites were enumerated in the range"
+assert_contains "$report" "campaign window: 12" \
+  "case.4: the report must say how big the campaign window is"
+assert_contains "$report" "scored: 10" \
+  "case.4: the report must say how many sites were actually scored"
+assert_contains "$report" "skipped: 2" \
+  "case.4: the report must say how many sites the whitelist skipped"
+assert_contains "$report" "skipped by the whitelist" \
+  "case.4: the report must list the skipped sites one by one"
+assert_contains "$(cat "$d/out")" "scope: " \
+  "case.4: stdout must carry the same scope line"
 
 exit 0

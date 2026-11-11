@@ -206,10 +206,20 @@ if command -v xgettext >/dev/null 2>&1; then
 fi
 
 # zh_CN 里除文件头外不允许有空 msgstr —— 新增 msgid 忘了翻译会在这里红
+#
+# 数「真的没译文的条目」不能靠 grep 'msgstr ""'：折行的译文第一行也是
+# msgstr ""（折行是 msgmerge 按行宽做的，跟有没有译文无关）。
+# msgattrib 是**按条目**判的 —— 有它就用它；没有就退回 grep（老口径，
+# 宁可误报也不漏报）。
 po="$TEST_ROOT/locale/zh_CN/LC_MESSAGES/shellkit.po"
 if [ -f "$po" ]; then
-  empty=$(grep -c '^msgstr ""$' "$po")
-  assert_eq "1" "$empty" "every msgid in zh_CN has a translation (only the header may be empty)"
+  if command -v msgattrib >/dev/null 2>&1; then
+    # 文件头的 msgid 是空的（""），不算「没译文的条目」⇒ 只数非空 msgid
+    empty=$(msgattrib --untranslated --no-obsolete "$po" | grep -c 'msgid "[^"]' || true)
+  else
+    empty=$(grep -c '^msgstr ""$' "$po")
+  fi
+  assert_eq "0" "$empty" "every msgid in zh_CN has a translation (only the header may be empty)"
 fi
 
 # fuzzy 译文必须为 0。

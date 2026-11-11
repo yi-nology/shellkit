@@ -32,6 +32,10 @@ mkdir -p "$WORK"
 
 # 每文件上限：120 秒太贴着天花板了 —— test_ai_docs.sh 本机就要 ~60 秒，
 # 机器一忙就撞线，于是「负载高」被误读成「测试坏了」。抬到 300 秒。
+#
+# 个别用例天然就慢（变异测试的 campaign 要把守卫套件按计分位点数跑那么多遍），
+# 允许它在文件头里写一行「# TEST_TIMEOUT: 900」单独放宽 ——
+# 只放宽那一个文件，不拖累其他文件的卡死检测。
 TEST_TIMEOUT="${TEST_TIMEOUT:-300}"
 if command -v timeout >/dev/null 2>&1; then
   TIMEOUT_BIN=timeout
@@ -56,6 +60,30 @@ usage: tests/run.sh [options]
   --list            只列出将要执行的测试文件，不执行
   -h, --help        显示这段帮助
 EOF
+}
+
+# _file_timeout FILE —— 这个文件自己的时间上限（秒）
+#
+# 默认用全局的 TEST_TIMEOUT。文件头里写了「# TEST_TIMEOUT: 900」就用它自己的 ——
+# 变异测试那种天然就慢的用例可以单独放宽，不必把全局上限一起抬高
+# （全局抬高会让所有文件的卡死检测都变慢）。
+_file_timeout() {
+  local __f=${1:-} __line
+  [ -f "$__f" ] || {
+    printf '%s' "$TEST_TIMEOUT"
+    return 0
+  }
+  # 取「# TEST_TIMEOUT: 900」里的数字；行尾允许有解释文字。
+  __line=$(awk '/^# TEST_TIMEOUT: *[0-9]/ {
+      sub(/^# TEST_TIMEOUT: */, "")
+      sub(/[^0-9].*$/, "")
+      print
+      exit
+    }' "$__f" 2>/dev/null || true)
+  case "$__line" in
+    '' | *[!0-9]*) printf '%s' "$TEST_TIMEOUT" ;;
+    *) printf '%s' "$__line" ;;
+  esac
 }
 
 die_usage() {
@@ -182,7 +210,7 @@ fi
 _run_one() {
   local __file=$1
   if [ -n "$TIMEOUT_BIN" ]; then
-    "$TIMEOUT_BIN" "$TEST_TIMEOUT" bash "$__file" </dev/null
+    "$TIMEOUT_BIN" "$(_file_timeout "$__file")" bash "$__file" </dev/null
   else
     bash "$__file" </dev/null
   fi
@@ -229,7 +257,7 @@ _run_capture() {
     set +e
     export TEST_TMP_ROOT="$test_root"
     if [ -n "$TIMEOUT_BIN" ]; then
-      "$TIMEOUT_BIN" "$TEST_TIMEOUT" bash "$file" </dev/null >"$out" 2>"$err"
+      "$TIMEOUT_BIN" "$(_file_timeout "$file")" bash "$file" </dev/null >"$out" 2>"$err"
     else
       bash "$file" </dev/null >"$out" 2>"$err"
     fi
@@ -381,7 +409,7 @@ _diagnose_trace() {
     export TEST_TMP_ROOT="$test_root"
     if [ -n "$TIMEOUT_BIN" ]; then
       PS4='+[${BASH_SOURCE[0]##*/}:${LINENO}]: ' \
-        "$TIMEOUT_BIN" "$TEST_TIMEOUT" bash -x "$file" </dev/null >/dev/null 2>"$trace"
+        "$TIMEOUT_BIN" "$(_file_timeout "$file")" bash -x "$file" </dev/null >/dev/null 2>"$trace"
     else
       PS4='+[${BASH_SOURCE[0]##*/}:${LINENO}]: ' \
         bash -x "$file" </dev/null >/dev/null 2>"$trace"
