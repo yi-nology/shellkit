@@ -219,3 +219,27 @@ _tn() {
   # 复数文案也必须经过 gettext，否则 .po 里写了的译文永远用不上
   _t "${2:-}"
 }
+
+# _tf MSGID [ARG...]
+#
+# 译文当 printf 格式串用：先查译文，再把译文里的 %s/%d 等占位符按参数填上。
+#
+# 为什么要有它：直接写 printf "$(_t 'foo %s')" "$x" 会被 shellcheck 判成
+# SC2059（格式串是变量）—— 而这正是 gettext 的标准用法，格式串来自译文，
+# 不是用户输入。集中到这一个函数里，SC2059 只出现一次，且能被标注清楚。
+#
+# 占位符个数必须与参数个数一致：填不上时 printf 会把多余的参数原样追加、
+# 或把 %s 打成空串。译文侧的占位符一致性由 msgfmt --check 保证
+# （xgettext 需要给带占位符的 msgid 打 sh-printf-format 标记）。
+#
+# 用法：
+#   error "$(_tf 'unknown action: %s' "$action")"
+#
+# @exitcode 0 总是成功（占位符填不上时 printf 报错但仍返回 0 的行为被兜住）
+_tf() {
+  local __msg="${1:-}" __fmt
+  shift 2>/dev/null || true
+  __fmt="$(_t "$__msg")"
+  # shellcheck disable=SC2059  # 格式串来自译文（gettext 的标准用法），不是用户输入
+  printf "$__fmt" "$@" 2>/dev/null || printf '%s' "$__fmt"
+}
