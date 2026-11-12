@@ -2,6 +2,17 @@
 本文件由 `tools/release.sh` 在发版时自动追加，已发布的小节不要手改。
 最新的在最前面。每一条对应一个提交 —— 要看「为什么」而不是「改了什么」，读 `docs/MIGRATING.md`。
 
+## 0.18.0 — 2026-11-13
+
+d83bd06 perf(registry): 查询走内存快照，不再每次 fork awk（48ms/次 → 0.9ms/次）
+609b1c1 feat(v0.18.0): #56 / #59-#63 + #69/#70 —— 安全规范、API 基线、doctor --json、错误上下文、安装幂等、故障注入
+f5579e9 feat(v0.18.0): #55/#57/#58 + #64-#67 —— 分支覆盖与故障矩阵、skill 客户端可配置、打包签名与升级提示
+583b05f fix(ci): #71-#75 —— 修复第六轮评审点名的跨平台红灯，并把路线图落文档
+3e06a48 fix(ci): #73 根因 —— bash 3.2 + UTF-8 locale 下 $ident 紧跟汉字会炸，加门禁钉死
+678754c fix(ci): #76 —— compat 容器（root）下权限注入永远不触发，改成 root 感知的 NA
+0cd0491 fix(ci): #77 —— bash 3.x 下 source 语法错误会打死整个 CLI；容器补装 python3/git
+0841d7d test(skill)+chore(coverage): 代为提交并行会话的 #58/#55 滞留改动
+
 ## 0.17.0 — 2026-11-12
 
 6da1e34 docs(release): 补上 Homebrew tap 的回填流程，并修掉生成器里过期的注释
