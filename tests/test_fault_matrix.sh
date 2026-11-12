@@ -212,34 +212,39 @@ out=$("$SK" skill install --dir "$d/2" 2>&1)
 assert_contains "$out" "up to date" "the manifest must agree with the disk after the race"
 
 # CASE: skill|permission —— 写前拒绝：零字节改动
-d=$(tmpdir)
-mkdir -p "$d/3"
-"$SK" skill install --dir "$d/3" >/dev/null 2>&1 || _fail "skill install must succeed"
-printf 'USER EDIT MUST SURVIVE\n' >"$d/3/shellkit/SKILL.md"
-before_skill=$(file_sum "$d/3/shellkit/SKILL.md")
-before_manifest=$(file_sum "$d/3/shellkit/.shellkit-skill-manifest")
+if fault_perm_usable; then
+  d=$(tmpdir)
+  mkdir -p "$d/3"
+  "$SK" skill install --dir "$d/3" >/dev/null 2>&1 || _fail "skill install must succeed"
+  printf 'USER EDIT MUST SURVIVE\n' >"$d/3/shellkit/SKILL.md"
+  before_skill=$(file_sum "$d/3/shellkit/SKILL.md")
+  before_manifest=$(file_sum "$d/3/shellkit/.shellkit-skill-manifest")
 
-client3=$(cd "$d/3" && pwd -P)
-fault_reset
-fault_scope "$client3"
-fault_perm_deny "$client3/shellkit/SKILL.md" write
-rc=0
-fault_run "$SK" skill install --dir "$d/3" --force >"$d/perm.log" 2>&1 || rc=$?
-assert_ne "0" "$rc" "the injected permission denial must make the install fail"
-assert_true fault_trace_has "perm stage=write"
-assert_eq "$before_skill" "$(file_sum "$d/3/shellkit/SKILL.md")" \
-  "not a single byte may change when the write is refused"
-assert_eq "$before_manifest" "$(file_sum "$d/3/shellkit/.shellkit-skill-manifest")" \
-  "the skill manifest must not change either"
-assert_eq "0" "$(fault_count_tmp "$d/3/shellkit" "*.tmp.*")" \
-  "no temp file may be left behind"
-assert_true test -w "$d/3/shellkit"
+  client3=$(cd "$d/3" && pwd -P)
+  fault_reset
+  fault_scope "$client3"
+  fault_perm_deny "$client3/shellkit/SKILL.md" write
+  rc=0
+  fault_run "$SK" skill install --dir "$d/3" --force >"$d/perm.log" 2>&1 || rc=$?
+  assert_ne "0" "$rc" "the injected permission denial must make the install fail"
+  assert_true fault_trace_has "perm stage=write"
+  assert_eq "$before_skill" "$(file_sum "$d/3/shellkit/SKILL.md")" \
+    "not a single byte may change when the write is refused"
+  assert_eq "$before_manifest" "$(file_sum "$d/3/shellkit/.shellkit-skill-manifest")" \
+    "the skill manifest must not change either"
+  assert_eq "0" "$(fault_count_tmp "$d/3/shellkit" "*.tmp.*")" \
+    "no temp file may be left behind"
+  assert_true test -w "$d/3/shellkit"
 
-fault_reset
-rc=0
-fault_run "$SK" skill install --dir "$d/3" --force >"$d/perm2.log" 2>&1 || rc=$?
-assert_eq "0" "$rc" "the retry must succeed once the fault is gone"
-assert_exit_code 0 cmp "$PACK/SKILL.md" "$d/3/shellkit/SKILL.md"
+  fault_reset
+  rc=0
+  fault_run "$SK" skill install --dir "$d/3" --force >"$d/perm2.log" 2>&1 || rc=$?
+  assert_eq "0" "$rc" "the retry must succeed once the fault is gone"
+  assert_exit_code 0 cmp "$PACK/SKILL.md" "$d/3/shellkit/SKILL.md"
+
+else
+  printf '%s\n' 'NA skill|permission: running as root, chmod cannot deny uid 0 (issue #76)'
+fi
 
 printf '%s\n' 'NA skill|signal: 每次写都是「同目录临时文件 + rename」的原子替换，单文件被杀只留 .tmp 残骸、目标永远是完整旧/新内容；信号窗口与本行磁盘满/权限格同构，P0 两段式提交风险在 upgrade 行（crash 套件覆盖），故本格不适用'
 
@@ -309,29 +314,34 @@ assert_false test -e "$proj/vendor/.shellkit-new"
 assert_false test -e "$proj/vendor/.shellkit-old"
 
 # CASE: install-self|permission —— 换入被拒：旧副本完好、可恢复
-prefix=$(new_prefix pperm) || _fail "install-self setup failed"
-old_sum=$(file_sum "$prefix/share/shellkit.old/lib/bootstrap.sh")
+if fault_perm_usable; then
+  prefix=$(new_prefix pperm) || _fail "install-self setup failed"
+  old_sum=$(file_sum "$prefix/share/shellkit.old/lib/bootstrap.sh")
 
-fault_reset
-fault_scope "$prefix"
-fault_perm_deny "$prefix/share/shellkit" rename
-rc=0
-fault_run "$SK" install-self --prefix "$prefix" >"$work/pperm.log" 2>&1 || rc=$?
-assert_ne "0" "$rc" "the injected permission denial must make install-self fail"
-assert_true fault_trace_has "perm stage=rename"
-assert_true test -f "$prefix/share/shellkit.old/lib/bootstrap.sh"
-assert_eq "$old_sum" "$(file_sum "$prefix/share/shellkit.old/lib/bootstrap.sh")" \
-  "the old copy must stay byte-identical"
-assert_true test -w "$prefix/share"
+  fault_reset
+  fault_scope "$prefix"
+  fault_perm_deny "$prefix/share/shellkit" rename
+  rc=0
+  fault_run "$SK" install-self --prefix "$prefix" >"$work/pperm.log" 2>&1 || rc=$?
+  assert_ne "0" "$rc" "the injected permission denial must make install-self fail"
+  assert_true fault_trace_has "perm stage=rename"
+  assert_true test -f "$prefix/share/shellkit.old/lib/bootstrap.sh"
+  assert_eq "$old_sum" "$(file_sum "$prefix/share/shellkit.old/lib/bootstrap.sh")" \
+    "the old copy must stay byte-identical"
+  assert_true test -w "$prefix/share"
 
-fault_reset
-rc=0
-fault_run "$SK" install-self --prefix "$prefix" >"$work/pperm2.log" 2>&1 || rc=$?
-assert_eq "0" "$rc" "the retry must recover once the fault is gone"
-assert_true test -f "$prefix/share/shellkit/lib/bootstrap.sh"
-assert_eq "USER-MARK" "$(cat "$prefix/share/shellkit/USER.txt")" "the user file must survive the recovery"
-assert_false test -e "$prefix/share/shellkit.old"
-assert_false test -e "$prefix/share/shellkit.new"
+  fault_reset
+  rc=0
+  fault_run "$SK" install-self --prefix "$prefix" >"$work/pperm2.log" 2>&1 || rc=$?
+  assert_eq "0" "$rc" "the retry must recover once the fault is gone"
+  assert_true test -f "$prefix/share/shellkit/lib/bootstrap.sh"
+  assert_eq "USER-MARK" "$(cat "$prefix/share/shellkit/USER.txt")" "the user file must survive the recovery"
+  assert_false test -e "$prefix/share/shellkit.old"
+  assert_false test -e "$prefix/share/shellkit.new"
+
+else
+  printf '%s\n' 'NA install-self|permission: running as root, chmod cannot deny uid 0 (issue #76)'
+fi
 
 # CASE: install-self|signal —— 提交前（stage 还在铺）被杀 ⇒ 旧副本无损、重跑收敛
 #
@@ -397,30 +407,35 @@ fault_run bash "$REPAIR" --prefix "$prefix" >"$work/rconc2.log" 2>&1 || rc=$?
 assert_eq "0" "$rc" "a final repair pass must be clean"
 
 # CASE: repair|permission —— 只读时明确失败，什么都不删
-prefix=$(new_prefix rperm) || _fail "repair setup failed"
+if fault_perm_usable; then
+  prefix=$(new_prefix rperm) || _fail "repair setup failed"
 
-fault_reset
-fault_scope "$prefix"
-fault_perm_deny_sticky "$prefix/share/shellkit" rename
-rc=0
-out=$(fault_run bash "$REPAIR" --prefix "$prefix" 2>&1) || rc=$?
-assert_ne "0" "$rc" "a read-only slot must make repair fail explicitly"
-assert_contains "$out" "failed to move the old copy back" "the failure must be named"
-assert_true fault_trace_has "perm stage=rename"
-# 什么都不删：旧副本原封不动，用户数据还在
-assert_true test -f "$prefix/share/shellkit.old/lib/bootstrap.sh"
-assert_eq "USER-MARK" "$(cat "$prefix/share/shellkit.old/USER.txt")" \
-  "the user file must survive the refused repair"
-assert_false test -e "$prefix/share/shellkit"
-assert_file_mode "$prefix/share" "500" "the sticky denial must still be in place"
+  fault_reset
+  fault_scope "$prefix"
+  fault_perm_deny_sticky "$prefix/share/shellkit" rename
+  rc=0
+  out=$(fault_run bash "$REPAIR" --prefix "$prefix" 2>&1) || rc=$?
+  assert_ne "0" "$rc" "a read-only slot must make repair fail explicitly"
+  assert_contains "$out" "failed to move the old copy back" "the failure must be named"
+  assert_true fault_trace_has "perm stage=rename"
+  # 什么都不删：旧副本原封不动，用户数据还在
+  assert_true test -f "$prefix/share/shellkit.old/lib/bootstrap.sh"
+  assert_eq "USER-MARK" "$(cat "$prefix/share/shellkit.old/USER.txt")" \
+    "the user file must survive the refused repair"
+  assert_false test -e "$prefix/share/shellkit"
+  assert_file_mode "$prefix/share" "500" "the sticky denial must still be in place"
 
-chmod 755 "$prefix/share"
-fault_reset
-rc=0
-fault_run bash "$REPAIR" --prefix "$prefix" >"$work/rperm2.log" 2>&1 || rc=$?
-assert_eq "0" "$rc" "the repair must succeed once the directory is writable"
-assert_true test -f "$prefix/share/shellkit/lib/bootstrap.sh"
-assert_eq "USER-MARK" "$(cat "$prefix/share/shellkit/USER.txt")" "the user file must be restored"
+  chmod 755 "$prefix/share"
+  fault_reset
+  rc=0
+  fault_run bash "$REPAIR" --prefix "$prefix" >"$work/rperm2.log" 2>&1 || rc=$?
+  assert_eq "0" "$rc" "the repair must succeed once the directory is writable"
+  assert_true test -f "$prefix/share/shellkit/lib/bootstrap.sh"
+  assert_eq "USER-MARK" "$(cat "$prefix/share/shellkit/USER.txt")" "the user file must be restored"
+
+else
+  printf '%s\n' 'NA repair|permission: running as root, chmod cannot deny uid 0 (issue #76)'
+fi
 
 # CASE: repair|signal —— 恢复中（旧副本正在挪回）被杀 ⇒ 重跑接上
 prefix=$(new_prefix rsig) || _fail "repair setup failed"

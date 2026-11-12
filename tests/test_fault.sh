@@ -201,105 +201,125 @@ assert_eq "$(file_sum "$work/enospc-bin.old")" "$(file_sum "$proj/bin/tool")" \
 # =============================================================================
 # CASE: 权限拒绝（写前）：写真的失败，目标目录里没有留下半成品
 # =============================================================================
-# 机制：临时文件是靠「目录可写」建出来的 —— 目录不可写时连临时文件都建不出来。
-# 注入是**一次性**的：拒绝这一次之后权限立刻恢复（否则连临时文件都删不掉，
-# 测到的就不是「写失败」，而是「目录整个坏了」）。
-d3="$work/permwrite"
-mkdir -p "$d3"
-printf 'OLD-CONTENT\n' >"$d3/target.txt"
-cp "$d3/target.txt" "$d3/old.txt"
-printf 'NEW-CONTENT\n' >"$d3/source.txt"
+if fault_perm_usable; then
+  # 机制：临时文件是靠「目录可写」建出来的 —— 目录不可写时连临时文件都建不出来。
+  # 注入是**一次性**的：拒绝这一次之后权限立刻恢复（否则连临时文件都删不掉，
+  # 测到的就不是「写失败」，而是「目录整个坏了」）。
+  d3="$work/permwrite"
+  mkdir -p "$d3"
+  printf 'OLD-CONTENT\n' >"$d3/target.txt"
+  cp "$d3/target.txt" "$d3/old.txt"
+  printf 'NEW-CONTENT\n' >"$d3/source.txt"
 
-fault_reset
-fault_perm_deny "$d3/target.txt" write
-rc=0
-run_atomic_copy "$d3/source.txt" "$d3/target.txt" >"$d3/out.log" 2>&1 || rc=$?
-assert_ne "0" "$rc" "the injected permission denial must make the write fail"
-assert_true fault_trace_has "perm stage=write"
-assert_eq "old" "$(fault_file_state "$d3/target.txt" "$d3/old.txt" "$d3/source.txt")" \
-  "the target must keep the old complete content"
-assert_eq "0" "$(fault_count_tmp "$d3" "*.tmp.*")" \
-  "the directory must not keep a half-written temp file"
+  fault_reset
+  fault_perm_deny "$d3/target.txt" write
+  rc=0
+  run_atomic_copy "$d3/source.txt" "$d3/target.txt" >"$d3/out.log" 2>&1 || rc=$?
+  assert_ne "0" "$rc" "the injected permission denial must make the write fail"
+  assert_true fault_trace_has "perm stage=write"
+  assert_eq "old" "$(fault_file_state "$d3/target.txt" "$d3/old.txt" "$d3/source.txt")" \
+    "the target must keep the old complete content"
+  assert_eq "0" "$(fault_count_tmp "$d3" "*.tmp.*")" \
+    "the directory must not keep a half-written temp file"
+
+else
+  printf '%s\n' 'NA perm|write: running as root, chmod cannot deny uid 0 (issue #76)'
+fi
 
 # =============================================================================
 # CASE: 权限拒绝（rename 前）：写真的失败，目标仍是旧的完整内容
 # =============================================================================
-# 机制：临时文件已经写好、正要 rename 落到目标时，目录被改成不可写 ——
-# rename 换不了名（macOS 与 Linux 语义一致：换名要的是目录的写权限）。
-d4="$work/permrename"
-mkdir -p "$d4"
-printf 'OLD-CONTENT\n' >"$d4/target.txt"
-cp "$d4/target.txt" "$d4/old.txt"
-printf 'NEW-CONTENT\n' >"$d4/source.txt"
+if fault_perm_usable; then
+  # 机制：临时文件已经写好、正要 rename 落到目标时，目录被改成不可写 ——
+  # rename 换不了名（macOS 与 Linux 语义一致：换名要的是目录的写权限）。
+  d4="$work/permrename"
+  mkdir -p "$d4"
+  printf 'OLD-CONTENT\n' >"$d4/target.txt"
+  cp "$d4/target.txt" "$d4/old.txt"
+  printf 'NEW-CONTENT\n' >"$d4/source.txt"
 
-fault_reset
-fault_perm_deny "$d4/target.txt" rename
-rc=0
-run_atomic_copy "$d4/source.txt" "$d4/target.txt" >"$d4/out.log" 2>&1 || rc=$?
-assert_ne "0" "$rc" "the injected permission denial must make the write fail"
-assert_true fault_trace_has "perm stage=rename"
-assert_eq "old" "$(fault_file_state "$d4/target.txt" "$d4/old.txt" "$d4/source.txt")" \
-  "the target must keep the old complete content"
-assert_eq "0" "$(fault_count_tmp "$d4" "*.tmp.*")" \
-  "the directory must not keep a half-written temp file"
+  fault_reset
+  fault_perm_deny "$d4/target.txt" rename
+  rc=0
+  run_atomic_copy "$d4/source.txt" "$d4/target.txt" >"$d4/out.log" 2>&1 || rc=$?
+  assert_ne "0" "$rc" "the injected permission denial must make the write fail"
+  assert_true fault_trace_has "perm stage=rename"
+  assert_eq "old" "$(fault_file_state "$d4/target.txt" "$d4/old.txt" "$d4/source.txt")" \
+    "the target must keep the old complete content"
+  assert_eq "0" "$(fault_count_tmp "$d4" "*.tmp.*")" \
+    "the directory must not keep a half-written temp file"
+
+else
+  printf '%s\n' 'NA perm|rename: running as root, chmod cannot deny uid 0 (issue #76)'
+fi
 
 # =============================================================================
 # CASE: 权限拒绝持续存在：目标仍是完整的，但临时文件删不掉
 # =============================================================================
-# 与上面两条的区别：权限不恢复（真实的「磁盘只读 / 权限被改错」现场）。
-# 目标文件仍然是旧的完整内容（rename 没发生），但目录不可写 ⇒ 连临时文件
-# 都删不掉，磁盘上会留下残骸。这条把「一次性注入」与「持续故障」的差别
-# 钉在用例里，免得以后只测前者就以为后者也干净。
-d5="$work/permsticky"
-mkdir -p "$d5"
-printf 'OLD-CONTENT\n' >"$d5/target.txt"
-cp "$d5/target.txt" "$d5/old.txt"
-printf 'NEW-CONTENT\n' >"$d5/source.txt"
+if fault_perm_usable; then
+  # 与上面两条的区别：权限不恢复（真实的「磁盘只读 / 权限被改错」现场）。
+  # 目标文件仍然是旧的完整内容（rename 没发生），但目录不可写 ⇒ 连临时文件
+  # 都删不掉，磁盘上会留下残骸。这条把「一次性注入」与「持续故障」的差别
+  # 钉在用例里，免得以后只测前者就以为后者也干净。
+  d5="$work/permsticky"
+  mkdir -p "$d5"
+  printf 'OLD-CONTENT\n' >"$d5/target.txt"
+  cp "$d5/target.txt" "$d5/old.txt"
+  printf 'NEW-CONTENT\n' >"$d5/source.txt"
 
-fault_reset
-fault_perm_deny_sticky "$d5/target.txt" rename
-rc=0
-run_atomic_copy "$d5/source.txt" "$d5/target.txt" >"$d5/out.log" 2>&1 || rc=$?
-assert_ne "0" "$rc" "the injected permission denial must make the write fail"
-assert_true fault_trace_has "perm stage=rename"
-assert_eq "old" "$(fault_file_state "$d5/target.txt" "$d5/old.txt" "$d5/source.txt")" \
-  "the target must keep the old complete content"
-assert_eq "1" "$(fault_count_tmp "$d5" "*.tmp.*")" \
-  "the temp file cannot be removed while the directory stays unwritable"
-chmod 700 "$d5"
+  fault_reset
+  fault_perm_deny_sticky "$d5/target.txt" rename
+  rc=0
+  run_atomic_copy "$d5/source.txt" "$d5/target.txt" >"$d5/out.log" 2>&1 || rc=$?
+  assert_ne "0" "$rc" "the injected permission denial must make the write fail"
+  assert_true fault_trace_has "perm stage=rename"
+  assert_eq "old" "$(fault_file_state "$d5/target.txt" "$d5/old.txt" "$d5/source.txt")" \
+    "the target must keep the old complete content"
+  assert_eq "1" "$(fault_count_tmp "$d5" "*.tmp.*")" \
+    "the temp file cannot be removed while the directory stays unwritable"
+  chmod 700 "$d5"
+
+else
+  printf '%s\n' 'NA perm|sticky: running as root, chmod cannot deny uid 0 (issue #76)'
+fi
 
 # =============================================================================
 # CASE: 权限拒绝（清单提交前）：文件换了新，清单还是旧的完整内容
 # =============================================================================
-proj=$(new_project permmanifest)
-cp "$proj/lib/app.sh" "$work/permmanifest-app.old"
-cp "$proj/.shellkit-manifest" "$work/permmanifest-manifest.old"
-usersum=$(file_sum "$proj/user-note.txt")
+if fault_perm_usable; then
+  proj=$(new_project permmanifest)
+  cp "$proj/lib/app.sh" "$work/permmanifest-app.old"
+  cp "$proj/.shellkit-manifest" "$work/permmanifest-manifest.old"
+  usersum=$(file_sum "$proj/user-note.txt")
 
-fault_reset
-fault_scope "$proj"
-fault_perm_deny "$proj/.shellkit-manifest" manifest
-rc=0
-fault_run "$TEST_ROOT/shellkit" upgrade "$proj" --template "$tpl" >"$work/permmanifest.log" 2>&1 || rc=$?
-assert_ne "0" "$rc" "the injected permission denial must make the upgrade fail"
-assert_true fault_trace_has "perm stage=manifest"
+  fault_reset
+  fault_scope "$proj"
+  fault_perm_deny "$proj/.shellkit-manifest" manifest
+  rc=0
+  fault_run "$TEST_ROOT/shellkit" upgrade "$proj" --template "$tpl" >"$work/permmanifest.log" 2>&1 || rc=$?
+  assert_ne "0" "$rc" "the injected permission denial must make the upgrade fail"
+  assert_true fault_trace_has "perm stage=manifest"
 
-snap=$(fault_snapshot "$proj/lib/app.sh" "$work/permmanifest-app.old" "$tpl/lib/app.sh" \
-  "$proj/.shellkit-manifest" "$proj/user-note.txt" "$usersum")
-# 文件已经整体换成新内容（不是半截）
-assert_eq "new" "$(snap_get "$snap" target.state)" \
-  "the file must be replaced as a whole before the manifest commit"
-# 清单提交失败 ⇒ 还是旧的那份，而且完整
-assert_eq "complete" "$(snap_get "$snap" manifest.state)" \
-  "the manifest must stay complete"
-assert_eq "$(file_sum "$work/permmanifest-manifest.old")" "$(file_sum "$proj/.shellkit-manifest")" \
-  "the manifest must still be the old one"
-assert_eq "0" "$(snap_get "$snap" manifest.leftovers)" \
-  "the manifest must not leave a half-written temp file"
-assert_eq "intact" "$(snap_get "$snap" user.state)" \
-  "the user's own file must survive"
-# 这一轮的账没结清 ⇒ 升级日志必须留着（下次恢复的唯一依据）
-assert_true test -f "$proj/.shellkit-upgrade-journal"
+  snap=$(fault_snapshot "$proj/lib/app.sh" "$work/permmanifest-app.old" "$tpl/lib/app.sh" \
+    "$proj/.shellkit-manifest" "$proj/user-note.txt" "$usersum")
+  # 文件已经整体换成新内容（不是半截）
+  assert_eq "new" "$(snap_get "$snap" target.state)" \
+    "the file must be replaced as a whole before the manifest commit"
+  # 清单提交失败 ⇒ 还是旧的那份，而且完整
+  assert_eq "complete" "$(snap_get "$snap" manifest.state)" \
+    "the manifest must stay complete"
+  assert_eq "$(file_sum "$work/permmanifest-manifest.old")" "$(file_sum "$proj/.shellkit-manifest")" \
+    "the manifest must still be the old one"
+  assert_eq "0" "$(snap_get "$snap" manifest.leftovers)" \
+    "the manifest must not leave a half-written temp file"
+  assert_eq "intact" "$(snap_get "$snap" user.state)" \
+    "the user's own file must survive"
+  # 这一轮的账没结清 ⇒ 升级日志必须留着（下次恢复的唯一依据）
+  assert_true test -f "$proj/.shellkit-upgrade-journal"
+
+else
+  printf '%s\n' 'NA perm|manifest: running as root, chmod cannot deny uid 0 (issue #76)'
+fi
 
 # =============================================================================
 # CASE: 并发：第二个实例明确失败，清单内容完整

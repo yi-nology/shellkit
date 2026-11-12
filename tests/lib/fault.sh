@@ -119,6 +119,16 @@ fault_enospc_scope() {
   return 0
 }
 
+# fault_perm_usable —— 权限注入在当前用户下是否真的有效（0=有效）
+#
+# root 不受权限位约束：chmod 500 拦不住 uid 0 的写入。compat 容器里跑的就是
+# root，那种环境下这条注入永远不触发 —— 断言会把「注入没生效」误报成产品缺陷
+# （CI run 43273232074 的 compat job 就是这么红的，issue #76）。
+# 用法：权限类用例整块包在 `if fault_perm_usable; then ... else <NA> fi` 里。
+fault_perm_usable() {
+  [ "$(id -u)" != "0" ]
+}
+
 # fault_perm_deny PATH STAGE —— 权限拒绝：把 PATH 所在目录改成不可写
 #
 # STAGE 决定什么时候动手：
