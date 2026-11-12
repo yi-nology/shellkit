@@ -171,3 +171,54 @@ assert_contains "$out" "installed" "a fresh install must be reported as installe
 printf 'tampered\n' >>"$d/home30/.claude/skills/shellkit/SKILL.md"
 out=$(HOME="$d/home30" "$SK" skill list 2>/dev/null)
 assert_contains "$out" "modified" "a tampered install must be reported as modified"
+
+# ---------- 卸载的所有权判据（issue #39 的守卫分支，分支覆盖 guards 点名） ----------
+
+# __sk_sum FILE —— 文件 sha256（与清单里的指纹同口径）
+__sk_sum() {
+  if command -v sha256sum >/dev/null 2>&1; then
+    sha256sum "$1" | awk '{print $1}'
+  elif command -v shasum >/dev/null 2>&1; then
+    shasum -a 256 "$1" | awk '{print $1}'
+  else
+    openssl dgst -sha256 "$1" | awk '{print $NF}'
+  fi
+}
+
+# CASE: 清单里有越界路径（../）—— 卸载必须跳过并保留，一个字节都不许删到目录外
+d=$(mktemp -d "$TEST_TMP_ROOT/skill.XXXXXX") || _fail "mktemp failed"
+mkdir -p "$d/40" || _fail "mkdir failed"
+"$SK" skill install --dir "$d/40" >/dev/null 2>&1 || _fail "skill install must succeed"
+printf 'OUTSIDE\n' >"$d/40/OUTSIDE"
+# 清单末尾没有换行（$(render) 会吃掉它），先补一个再追加
+printf '\n../OUTSIDE\t%s\n' "$(__sk_sum "$d/40/OUTSIDE")" \
+  >>"$d/40/shellkit/.shellkit-skill-manifest"
+out=$("$SK" skill uninstall --dir "$d/40" 2>&1)
+rc=0
+"$SK" skill uninstall --dir "$d/40" >/dev/null 2>&1 || rc=$?
+assert_eq "0" "$rc" "the uninstall must still succeed while skipping the unsafe entry"
+assert_contains "$out" "skipped a path outside the install directory" \
+  "the unsafe manifest entry must be named"
+assert_true test -f "$d/40/OUTSIDE"
+# 目录里的正常条目照删（判据没有被越界条目卡死）
+assert_false test -e "$d/40/shellkit/SKILL.md"
+
+# CASE: 清单缺失 ⇒ 退化判据：与当前包逐字节比对 —— 改过的留、加的不碰、一致的删
+d=$(mktemp -d "$TEST_TMP_ROOT/skill.XXXXXX") || _fail "mktemp failed"
+mkdir -p "$d/41" || _fail "mkdir failed"
+"$SK" skill install --dir "$d/41" >/dev/null 2>&1 || _fail "skill install must succeed"
+printf 'EDITED BY USER\n' >"$d/41/shellkit/SKILL.md"
+printf 'MY OWN NOTES\n' >"$d/41/shellkit/references/custom.md"
+rm -f "$d/41/shellkit/.shellkit-skill-manifest"
+out=$("$SK" skill uninstall --dir "$d/41" 2>&1)
+rc=0
+"$SK" skill uninstall --dir "$d/41" >/dev/null 2>&1 || rc=$?
+assert_eq "0" "$rc" "the degraded uninstall must succeed"
+assert_contains "$out" "modified locally, left alone" \
+  "the degraded criterion must report the file it kept"
+assert_true test -f "$d/41/shellkit/SKILL.md"
+assert_eq "EDITED BY USER" "$(cat "$d/41/shellkit/SKILL.md")" "the edit must be byte-identical"
+assert_true test -f "$d/41/shellkit/references/custom.md"
+assert_false test -e "$d/41/shellkit/references/reference.md"
+
+exit 0
