@@ -4,7 +4,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: shellkit\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-11-12 16:29+0800\n"
+"POT-Creation-Date: 2026-11-12 22:11+0800\n"
 "PO-Revision-Date: 2026-11-08 00:00+0800\n"
 "Last-Translator: shellkit contributors\n"
 "Language-Team: shellkit contributors\n"
@@ -225,6 +225,12 @@ msgid "download failed"
 msgstr ""
 
 msgid "curl is required for HTTP probing"
+msgstr ""
+
+msgid "a newer version is available"
+msgstr ""
+
+msgid "run shellkit update"
 msgstr ""
 
 msgid "no supported package manager found"
@@ -837,6 +843,9 @@ msgstr ""
 msgid "where to read more"
 msgstr ""
 
+msgid "remembered the client in"
+msgstr ""
+
 msgid "the skill package is incomplete"
 msgstr ""
 
@@ -874,6 +883,12 @@ msgstr ""
 msgid "not installed"
 msgstr ""
 
+msgid "discovered, not in the list yet"
+msgstr ""
+
+msgid "install with"
+msgstr ""
+
 msgid ""
 "the client directory is a convention of each client; use --dir if it is wrong"
 msgstr ""
@@ -881,7 +896,13 @@ msgstr ""
 msgid "installed the skill into"
 msgstr ""
 
+msgid "the client could not be remembered; add it by hand to"
+msgstr ""
+
 msgid "unknown AI client"
+msgstr ""
+
+msgid "found a candidate directory"
 msgstr ""
 
 msgid "no AI client directory found; use --dir"

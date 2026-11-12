@@ -74,6 +74,8 @@ _sk_msg_lookup_shellkit() {
     'retrying via mirror') printf '%s' '改用镜像重试' ;;
     'download failed') printf '%s' '下载失败' ;;
     'curl is required for HTTP probing') printf '%s' 'HTTP 探测需要 curl' ;;
+    'a newer version is available') printf '%s' '有新版本可用' ;;
+    'run shellkit update') printf '%s' '运行 shellkit update' ;;
     'no supported package manager found') printf '%s' '找不到支持的包管理器' ;;
     'sudo is not available') printf '%s' 'sudo 不可用' ;;
     'This action needs sudo, please enter your password') printf '%s' '此操作需要 sudo 权限，请输入密码：' ;;
@@ -275,6 +277,7 @@ _sk_msg_lookup_shellkit() {
     'what is in the project') printf '%s' '工程里有什么' ;;
     'what to try next') printf '%s' '接下来试试' ;;
     'where to read more') printf '%s' '再往下读' ;;
+    'remembered the client in') printf '%s' '客户端已记入' ;;
     'the skill package is incomplete') printf '%s' 'skill 包不完整' ;;
     'the target exists and is not a directory') printf '%s' '目标已存在且不是目录' ;;
     'refusing to write through a symlink') printf '%s' '拒绝顺着符号链接写入' ;;
@@ -287,9 +290,13 @@ _sk_msg_lookup_shellkit() {
     'installed') printf '%s' '已安装' ;;
     'older version') printf '%s' '旧版本' ;;
     'not installed') printf '%s' '未安装' ;;
+    'discovered, not in the list yet') printf '%s' '发现的目录（尚未登记）' ;;
+    'install with') printf '%s' '用这条命令安装' ;;
     'the client directory is a convention of each client; use --dir if it is wrong') printf '%s' '客户端目录是各家自己的约定；不对就用 --dir 指定' ;;
     'installed the skill into') printf '%s' '已把 skill 装进' ;;
+    'the client could not be remembered; add it by hand to') printf '%s' '客户端未能记入，请手动添加到' ;;
     'unknown AI client') printf '%s' '未知的 AI 客户端' ;;
+    'found a candidate directory') printf '%s' '发现候选目录' ;;
     'no AI client directory found; use --dir') printf '%s' '没找到 AI 客户端目录；用 --dir 指定' ;;
     'removed the skill from') printf '%s' '已从下列目录移除 skill' ;;
     'this copy has no skill package') printf '%s' '这份副本里没有 skill 包' ;;

@@ -52,25 +52,10 @@ jobs:
       - name: build tarball
         run: |
           set -euo pipefail
-          version=$(cat VERSION)
-          name="shellkit-$version"
-          mkdir -p "dist/$name"
-          # 只放跑起来需要的东西：生成器、库、模板、语言包、文档、测试
-          # 少拷一个目录，smoke test 要到几百行之后才会以 127 的形式炸掉 ——
-          # 0.13.0 漏了 CHANGELOG、v0.15.0 漏了 tests/，两次都是这么红的。
-          cp -R shellkit install.sh repair.sh demo.sh lib templates locale po tools tests docs skills examples "dist/$name/"
-          cp README.md AGENTS.md VERSION LICENSE NOTICE Makefile CHANGELOG.md "dist/$name/"
-          rm -rf "dist/$name/docs/superpowers"
-          chmod +x "dist/$name/shellkit" "dist/$name/install.sh" "dist/$name/repair.sh" "dist/$name/demo.sh"
-          tar -C dist -czf "dist/$name.tar.gz" "$name"
-          # skill 包单独打一个 tarball：装进 AI 客户端的就是这个目录
-          # （SKILL.md + references/）。混在主包里的话，用户得自己拆目录，
-          # 还得知道 references/ 是什么 —— 「装一下」的门槛不该这么高。
-          rm -rf "dist/skill"
-          mkdir -p "dist/skill"
-          cp -R skills/shellkit "dist/skill/shellkit"
-          tar -C dist/skill -czf "dist/shellkit-skill-$version.tar.gz" shellkit
-          ( cd dist && sha256sum "$name.tar.gz" "shellkit-skill-$version.tar.gz" > SHA256SUMS )
+          # 打包清单只在 tools/package_tarball.sh 里维护一份，release.yml 与
+          # packages.yml 共用它 —— 内联两份 cp 清单必然漂移（issue #65）。
+          # 「少拷一个目录 smoke 才炸」的教训与逐项点名的清单都在那个脚本里。
+          bash tools/package_tarball.sh
           cat dist/SHA256SUMS
 
       - name: smoke test the artifact
@@ -142,6 +127,14 @@ jobs:
           # demo.sh 走的是 release 资产（发布前拿不到），所以这里验的是包里的 CLI。
           ./shellkit demo "$work/demo2"
 
+      # 签名是可选步骤（issue #66）：没配私钥时 sign_release.sh 明确提示并 0 退出，
+      # 不挡发布；配了私钥却签不动（缺 minisign 等）才红 —— 那时就该红。
+      - name: sign release assets (optional)
+        env:
+          SHELLKIT_MINISIGN_KEY: ${{ secrets.SHELLKIT_MINISIGN_KEY }}
+          SHELLKIT_MINISIGN_PUBKEY: ${{ secrets.SHELLKIT_MINISIGN_PUBKEY }}
+        run: bash tools/sign_release.sh --dist dist
+
       - name: publish
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -150,6 +143,16 @@ jobs:
           # raw.githubusercontent.com 在部分地区不可达，网页上那条一行命令要能走 release。
           tag="$GITHUB_REF_NAME"
           assets=("dist/shellkit-$(cat VERSION).tar.gz" "dist/SHA256SUMS" "install.sh" "repair.sh" "demo.sh" "dist/shellkit-skill-$(cat VERSION).tar.gz")
+          # 签名产物（没配私钥时这些文件不存在 —— 可选，缺了不挡发布）
+          for f in "dist/shellkit-$(cat VERSION).tar.gz.minisig" \
+                   "dist/shellkit-skill-$(cat VERSION).tar.gz.minisig" \
+                   "dist/SHA256SUMS.minisig" \
+                   "install.sh.minisig" \
+                   "dist/shellkit.minisign.pub"; do
+            if [ -f "$f" ]; then
+              assets[${#assets[@]}]="$f"
+            fi
+          done
           if gh release view "$tag" >/dev/null 2>&1; then
             # 同一个 tag 被推了两次（比如先推轻量 tag、后来补推 annotated tag）时，
             # 直接发布会以「release 已存在」失败，把整条流水线染红 —— 而产物其实
@@ -161,3 +164,59 @@ jobs:
               --title "shellkit $(cat VERSION)" \
               --generate-notes
           fi
+
+  # deb / rpm（issue #65）：基于**已发布**的那份 tarball 打包 —— 下载 release
+  # 资产并对 SHA256SUMS，确保包的是「发出去的那份」，不是本地重建的第二份。
+  #
+  # 可选 job：continue-on-error + 不被任何 job 依赖 ⇒ 挂了不挡 release，
+  # 这是验收明写的要求（包还没进主线发版必须物）。同一套脚本在 packages.yml
+  # 里于 PR/推送阶段先跑，这里的失败当信号看，不改发布结论。
+  packages:
+    name: deb/rpm packages (optional)
+    needs: release
+    continue-on-error: true
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+
+      - name: download the published tarball (the single source of truth)
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          ver=$(cat VERSION)
+          mkdir -p dist
+          gh release download "$GITHUB_REF_NAME" --dir dist --clobber \
+            --pattern "shellkit-$ver.tar.gz" --pattern SHA256SUMS
+          # 下载的东西先对校验和，再拿去打包
+          expect=$(awk -v n="shellkit-$ver.tar.gz" '$2==n{print $1}' dist/SHA256SUMS)
+          [ -n "$expect" ] || { echo "no checksum for shellkit-$ver.tar.gz in SHA256SUMS" >&2; exit 1; }
+          actual=$(sha256sum "dist/shellkit-$ver.tar.gz" | awk '{print $1}')
+          [ "$expect" = "$actual" ] || { echo "checksum mismatch: expected $expect, got $actual" >&2; exit 1; }
+          echo "tarball verified: $actual"
+
+      - name: build deb and smoke it (install, run, remove)
+        run: |
+          set -euo pipefail
+          ver=$(cat VERSION)
+          bash tools/package_syspkg.sh --tarball "dist/shellkit-$ver.tar.gz" --out dist deb
+          bash tools/package_smoke.sh --tarball "dist/shellkit-$ver.tar.gz" "dist/shellkit-$ver.deb"
+
+      - name: build rpm and smoke it (install, run, remove)
+        run: |
+          set -euo pipefail
+          ver=$(cat VERSION)
+          # Ubuntu 上 rpmbuild 由 rpm 包提供
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq rpm
+          bash tools/package_syspkg.sh --tarball "dist/shellkit-$ver.tar.gz" --out dist rpm
+          bash tools/package_smoke.sh --tarball "dist/shellkit-$ver.tar.gz" "dist/shellkit-$ver.rpm"
+
+      - name: attach packages to the release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          ver=$(cat VERSION)
+          gh release upload "$GITHUB_REF_NAME" \
+            "dist/shellkit-$ver.deb" "dist/shellkit-$ver.rpm" --clobber

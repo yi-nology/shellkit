@@ -518,7 +518,30 @@ _fault_write_shims() {
 
   cat >"$FAULT_SHIM/mv" <<'FAULT_MV_EOF'
 #!/bin/sh
-# fault.sh 的 rename 替身：按注入配置决定放行 / 改权限 / 拦住 / 杀父进程。
+# fault.sh 的 rename 替身
+# fault_phys PATH —— 该路径的物理写法（与库内部 pwd -P 的口径对齐）
+#
+# 同一个目录可能被写成 /var/... 或 /private/var/...（macOS 的符号链接）：
+# 产品内部按 pwd -P 落盘，测试按创建时的写法给 scope —— 只认一种写法，
+# 注入会静默落空（断言拿到 rc=0，看起来像「注入没生效」）。
+fault_phys() {
+  fp=$1
+  if [ -z "$fp" ]; then
+    return 0
+  fi
+  if [ -d "$fp" ]; then
+    (cd "$fp" 2>/dev/null && pwd -P) || printf "%s" "$fp"
+  else
+    fd=$(dirname "$fp")
+    fb=$(basename "$fp")
+    if [ -d "$fd" ]; then
+      printf "%s/%s" "$(cd "$fd" 2>/dev/null && pwd -P)" "$fb"
+    else
+      printf "%s" "$fp"
+    fi
+  fi
+}
+：按注入配置决定放行 / 改权限 / 拦住 / 杀父进程。
 # 配置全在环境变量里（fault_run 负责导出）。
 dest=""
 for a in "$@"; do dest="$a"; done
@@ -548,7 +571,7 @@ if [ "$skip" = "0" ]; then
 fi
 if [ "$skip" = "0" ] && [ -z "$stage" ] && [ -n "${FAULT_SCOPE:-}" ]; then
   case "$dest" in
-  "$FAULT_SCOPE"/*) stage=rename ;;
+  "$FAULT_SCOPE"/* | "$(fault_phys "$FAULT_SCOPE")"/*) stage=rename ;;
   esac
   # vendor 的暂存目录与库目录不算「工程自己的文件」
   case "$dest" in
@@ -571,7 +594,7 @@ fi
 # 2) 权限拒绝：把目标所在目录改成不可写（之后 rename 必然失败）
 perm_dir=""
 perm_mode=""
-if [ -n "${FAULT_PERM_PATH:-}" ] && [ "$dest" = "$FAULT_PERM_PATH" ]; then
+if [ -n "${FAULT_PERM_PATH:-}" ] && { [ "$dest" = "$FAULT_PERM_PATH" ] || [ "$dest" = "$(fault_phys "$FAULT_PERM_PATH")" ]; }; then
   case "${FAULT_PERM_STAGE:-}" in
   rename)
     perm_dir=$(dirname "$dest")
@@ -627,7 +650,30 @@ FAULT_MV_EOF
 
   cat >"$FAULT_SHIM/cp" <<'FAULT_CP_EOF'
 #!/bin/sh
-# fault.sh 的 copy 替身：磁盘满（ENOSPC）替身。
+# fault.sh 的 copy 替身
+# fault_phys PATH —— 该路径的物理写法（与库内部 pwd -P 的口径对齐）
+#
+# 同一个目录可能被写成 /var/... 或 /private/var/...（macOS 的符号链接）：
+# 产品内部按 pwd -P 落盘，测试按创建时的写法给 scope —— 只认一种写法，
+# 注入会静默落空（断言拿到 rc=0，看起来像「注入没生效」）。
+fault_phys() {
+  fp=$1
+  if [ -z "$fp" ]; then
+    return 0
+  fi
+  if [ -d "$fp" ]; then
+    (cd "$fp" 2>/dev/null && pwd -P) || printf "%s" "$fp"
+  else
+    fd=$(dirname "$fp")
+    fb=$(basename "$fp")
+    if [ -d "$fd" ]; then
+      printf "%s/%s" "$(cd "$fd" 2>/dev/null && pwd -P)" "$fb"
+    else
+      printf "%s" "$fp"
+    fi
+  fi
+}
+：磁盘满（ENOSPC）替身。
 # macOS 没有 cgroup 配额，真造不出「磁盘满」；这里写到一半就报
 # No space left on device 并失败 —— 可观测效果与内核 ENOSPC 一致：
 # 临时文件只写了一半，rename 没发生，目标仍是旧内容。
@@ -644,7 +690,7 @@ dest="$prev"
 
 if [ -n "${FAULT_ENOSPC:-}" ] && [ -n "$src" ] && [ -n "$dest" ] && [ -f "$src" ]; then
   case "$dest" in
-  "$FAULT_ENOSPC"/*)
+  "$FAULT_ENOSPC"/* | "$(fault_phys "$FAULT_ENOSPC")"/*)
     case "$dest" in
     */vendor/* | */.shellkit-new/*) : ;;
     *)
@@ -671,7 +717,30 @@ FAULT_CP_EOF
 
   cat >"$FAULT_SHIM/mktemp" <<'FAULT_MKTEMP_EOF'
 #!/bin/sh
-# fault.sh 的临时文件替身：权限注入的「写前」时机靠它触发
+# fault.sh 的临时文件替身
+# fault_phys PATH —— 该路径的物理写法（与库内部 pwd -P 的口径对齐）
+#
+# 同一个目录可能被写成 /var/... 或 /private/var/...（macOS 的符号链接）：
+# 产品内部按 pwd -P 落盘，测试按创建时的写法给 scope —— 只认一种写法，
+# 注入会静默落空（断言拿到 rc=0，看起来像「注入没生效」）。
+fault_phys() {
+  fp=$1
+  if [ -z "$fp" ]; then
+    return 0
+  fi
+  if [ -d "$fp" ]; then
+    (cd "$fp" 2>/dev/null && pwd -P) || printf "%s" "$fp"
+  else
+    fd=$(dirname "$fp")
+    fb=$(basename "$fp")
+    if [ -d "$fd" ]; then
+      printf "%s/%s" "$(cd "$fd" 2>/dev/null && pwd -P)" "$fb"
+    else
+      printf "%s" "$fp"
+    fi
+  fi
+}
+：权限注入的「写前」时机靠它触发
 # （写文件靠的是「目录可写」：目录不可写时连临时文件都建不出来）。
 tmpl=""
 for a in "$@"; do tmpl="$a"; done
@@ -690,7 +759,7 @@ fault_mode() {
 
 if [ "${FAULT_PERM_STAGE:-}" = "write" ] && [ -n "${FAULT_PERM_PATH:-}" ]; then
   case "$tmpl" in
-  "$FAULT_PERM_PATH".tmp.*)
+  "$FAULT_PERM_PATH".tmp.* | "$(fault_phys "$FAULT_PERM_PATH")".tmp.*)
     dir=$(dirname "$FAULT_PERM_PATH")
     mode=$(fault_mode "$dir")
     chmod 500 "$dir" 2>/dev/null

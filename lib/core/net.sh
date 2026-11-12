@@ -150,3 +150,78 @@ net_wait_http() {
   done
   return "$SK_NET"
 }
+
+# ---------------------------------------------------------------------------
+# 版本检查与升级提示（issue #67）
+# ---------------------------------------------------------------------------
+# _sk_update_hint_cache —— 版本检查缓存的路径；拿不到家目录时返回 1
+#
+# 缓存记两件事：上次检查的时间、上次查到的最新版本（查不到就留空）。
+# 时间是关键：联网失败也记时间，这样没网的机器一周最多被卡一次超时，
+# 而不是每次调用都白等一遍。
+_sk_update_hint_cache() {
+  local __root=${XDG_CACHE_HOME:-}
+  [ -n "$__root" ] || __root=${HOME:-}/.cache
+  [ -n "${HOME:-}${XDG_CACHE_HOME:-}" ] || return 1
+  printf '%s' "$__root/shellkit/version-check"
+}
+
+# _sk_update_hint —— 有新版本就给一条提示；其余情况一律不出声
+#
+# issue #67 的三条纪律：
+#   1. 「是不是交互式终端」由调用方判（shellkit 的分发处），本函数只判
+#      「值不值得提示」—— 这样逻辑能被直接调用来测，不用伪造 tty。
+#   2. 缓存七天有效：缓存新鲜就不联网，联网是例外而不是常态。
+#   3. 联网失败静默返回 —— 无网的机器不能因为一条提示而报错或卡住。
+# 只给**装出来的副本**提示：git 检出的那份跑 update 会去装到 /usr/local，
+# 对它说「跑 shellkit update」是误导（原单说的是「已装副本」）。
+# @exitcode 0 总是成功 —— 提示绝不能影响被调用命令的退出码
+_sk_update_hint() {
+  local __prefix=${1:-} __cur __cache __now __epoch="" __latest="" __line=""
+  local __check=1 __age=0
+  # PREFIX 是调用方判定好的「已装副本」前缀；空 = 不是已装副本，不出声。
+  # 判定留在 CLI 侧：前缀怎么来是安装布局的事，不是网络层的事 ——
+  # 挪进库里的话，库自己没有判断安装布局的依据。
+  [ -n "$__prefix" ] || return 0
+  if [ -n "${SHELLKIT_NO_UPDATE_HINT:-}" ]; then
+    return 0
+  fi
+  __cur=${SK_VERSION:-}
+  [ -n "$__cur" ] || return 0
+  __cache=$(_sk_update_hint_cache) || return 0
+  __now=$(date +%s 2>/dev/null) || return 0
+  if [ -f "$__cache" ]; then
+    IFS=$'\t' read -r __epoch __latest <"$__cache" || true
+    case "$__epoch" in
+      '' | *[!0-9]*) __epoch=0 ;;
+    esac
+    __age=$((__now - __epoch))
+    # 时钟回拨时按 0 算：宁可多查一次，也不把缓存当成永远新鲜
+    [ "$__age" -ge 0 ] || __age=0
+    if [ "$__age" -lt 604800 ]; then
+      __check=0
+    fi
+  fi
+  if [ "$__check" -eq 1 ]; then
+    # 5 秒总超时 / 3 秒连超时：这条提示不配让任何人在屏幕前等
+    __latest=$(net_json GET "${SHELLKIT_RELEASE_API:-}" --path tag_name \
+      --timeout 5 --connect-timeout 3 2>/dev/null) || __latest=""
+    __latest=${__latest#v}
+    case "$__latest" in
+      '' | *[!0-9.]*) __latest="" ;;
+    esac
+    printf -v __line '%s\t%s' "$__now" "$__latest"
+    # 路径边界（坑 8 同类）：目标或它的父目录是软链就不写 ——
+    # fs_atomic_write 换掉的是软链本身（那条安全），但**父目录**是软链时
+    # fs_ensure_dir 会顺着它把缓存写到别处去。宁可不缓存，也不写错地方。
+    if [ -L "$__cache" ] || [ -L "$(dirname "$__cache")" ]; then
+      return 0
+    fi
+    # 失败也写缓存（最新版本留空）：否则没网的机器每次调用都重试一遍超时
+    fs_atomic_write "$__cache" "$__line" 600 || true
+  fi
+  [ -n "$__latest" ] || return 0
+  ver_gt "$__latest" "$__cur" || return 0
+  log_info "$(_t 'a newer version is available'): $__latest ($(_t 'run shellkit update'))"
+  return 0
+}

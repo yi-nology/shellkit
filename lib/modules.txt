@@ -37,7 +37,7 @@ profile      error fs i18n log
 scaffold     error fs i18n log os str validate
 retry        i18n log str
 lock         i18n log str trap
-net          error fs i18n log os
+net          error fs i18n log os ver
 http         error i18n log
 config       fs i18n log str validate
 prompt       error i18n log str

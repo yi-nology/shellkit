@@ -12,6 +12,13 @@ set -u
 GATE="$TEST_ROOT/tools/release_gate.sh"
 SHA="0123456789abcdef0123456789abcdef01234567"
 
+# 覆盖率副本里没有 .git（tools/coverage.sh 不拷历史）：gate 反推 origin 会
+# die 2，整片用例在副本里恒红。真树照旧走 git 检测（URL 解析分支仍被测到），
+# 只有拿不到 git 仓库时才用环境变量兜底。
+if ! git -C "$TEST_ROOT" rev-parse --git-dir >/dev/null 2>&1; then
+  export GITHUB_REPOSITORY=yi-nology/shellkit
+fi
+
 # mk_gh STATE_FILE —— 造一个读状态表的 gh 桩
 # 状态表每行：<检查名> TAB <结论>，结论形如 completed/success、
 # queued/none、MISSING；表里没有的名字按 MISSING 回话。
@@ -125,5 +132,29 @@ assert_eq "3" "$rc" "no gh means no verification means no release"
 rc=0
 env PATH="$bin:$PATH" "$GATE_ENV" bash "$GATE" >/dev/null 2>&1 || rc=$?
 assert_eq "2" "$rc" "a missing SHA must be a usage error"
+
+# CASE: 没有 GITHUB_REPOSITORY 时从 origin 反推 —— 三条解析分支都要被走到：
+# git@ 前缀、https 前缀、非 GitHub 远端（必须 die 2）。桩 git 只回答
+# `config --get remote.origin.url`。覆盖率副本里没有 .git，
+# 走的正是这条环境兜底路径之外的分支（真树的 git 检测在文件头部已说明）。
+printf 'alpha\tcompleted/success\n' >"$d/state"
+for __url in git@github.com:y/x.git https://github.com/y/x.git https://gitlab.com/y/x.git; do
+  __bin=$(mk_gh "$d/state")
+  printf '#!/bin/sh\nprintf '"'"'%%s\n'"'"' '"'"'%s'"'"'\n' "$__url" >"$__bin/git"
+  chmod 755 "$__bin/git"
+  rc=0
+  out=$(env -u GITHUB_REPOSITORY PATH="$__bin:$PATH" SHELLKIT_GATE_CHECKS=alpha \
+    bash "$GATE" "$SHA" --once 2>&1) || rc=$?
+  case "$__url" in
+    https://gitlab.com/*)
+      assert_eq "2" "$rc" "a non-GitHub origin must be rejected ($__url)"
+      assert_contains "$out" "origin is not a GitHub remote" "the rejection must name the cause"
+      ;;
+    *)
+      assert_eq "0" "$rc" "a GitHub origin must be accepted ($__url)"
+      assert_contains "$out" "repository: y/x" "the origin must be parsed into owner/repo ($__url)"
+      ;;
+  esac
+done
 
 exit 0

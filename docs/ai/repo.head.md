@@ -24,10 +24,13 @@
                               check_module_order.sh（模块依赖顺序门禁）
                               check_security.sh（安全边界门禁）/ api_baseline.sh（公开 API 行为基线）
                               bench.sh（性能基准，基线在 tools/bench_baseline.txt）
+                              package_tarball / package_syspkg / package_smoke（deb/rpm 打包与冒烟）
+                              sign_release.sh（minisign 发布签名，可选：没私钥就跳过）
                               release.sh（一条命令发版）/ check_versions.sh（版本引用一致性）
                               site_sync.sh（docs/ → 站点页面）/ site_links.sh（产物链接门禁）
     docs/                     README 之外的深度文档；REFERENCE.md 与 AGENTS.md 是生成物
                               SECURITY.md（安全边界规范）/ JSON.md（doctor --json 字段契约）
+                              TRUST.md（安装信任链：验什么、不验什么、离线怎么验）
     docs/shots/*.shot         截图源：每行 `$ ` 是真要跑的命令，svg 由 make shots 渲染
     examples/                 两个能直接跑的工程，测试全程走真实二进制
     site/                     VuePress 2 文档站（手写页 + docs/ 同步页；Actions 构建，产物不进 git 历史）

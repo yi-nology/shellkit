@@ -3134,6 +3134,174 @@ _sk_skill_clients() {
   printf '%s %s\n' windsurf "$HOME/.codeium/windsurf/skills"
 }
 
+# ---------------------------------------------------------------------------
+# 客户端清单：内置默认集 + 用户配置 + 发现（issue #64）
+#
+# 上面那 7 个只是**默认已知集** —— 支持一个新客户端不该要求改代码。
+# 用户配置是一份独立的文件（见 _sk_skill_client_config），shellkit 只在用户
+# 明确给了 --client 时才往里写；**绝不替用户创建客户端目录** ——
+# 目录在不在是用户的事实，凭空造一个出来只会把事情搞乱（同 install 里
+# 「客户端根目录不在就跳过」那条纪律）。
+# ---------------------------------------------------------------------------
+
+# _sk_skill_client_config —— 用户配置文件路径；没有可用的家目录时返回 1
+#
+# 格式：一行一个客户端，`名字 路径`（空格分隔），# 开头是注释。
+# 路径里可以有空格：读取方用 `read -r 名字 其余`，最后一个变量吃掉整段剩余。
+_sk_skill_client_config() {
+  local __root=${XDG_CONFIG_HOME:-}
+  [ -n "$__root" ] || __root=${HOME:-}
+  [ -n "$__root" ] || return 1
+  printf '%s' "$__root/shellkit/skill-clients"
+}
+
+# _sk_skill_clients_configured —— 用户配置里的客户端（stdout，原样输出每行）
+#
+# 只做过滤与校验，拆分交给调用方 —— 与 _sk_skill_clients 的消费方式一致。
+# 脏行直接跳过：这份文件是用户手编的，坏行不能变成一次意外的安装目标
+# （坑 7：清单里的名字会变成路径）。
+_sk_skill_clients_configured() {
+  local __f __line __name __rest
+  __f=$(_sk_skill_client_config) || return 0
+  [ -f "$__f" ] || return 0
+  while IFS= read -r __line || [ -n "$__line" ]; do
+    case "$__line" in
+      '' | '#'*) continue ;;
+    esac
+    __name=${__line%% *}
+    [ -n "$__name" ] || continue
+    # 名字必须是标识符（斜杠、空格、点点都不许）—— 它会变成 --client 的匹配键
+    case "$__name" in
+      *[!A-Za-z0-9._-]*) continue ;;
+    esac
+    __rest=${__line#"$__name"}
+    # 去掉名字后面的分隔空白（可能不止一个）
+    while [ -n "$__rest" ]; do
+      case "$__rest" in
+        ' '*) __rest=${__rest# } ;;
+        *) break ;;
+      esac
+    done
+    # 路径必须是绝对的：相对路径会相对**当前工作目录**被创建出来，
+    # 没展开的 ~/ 会变成一个真的叫 "~" 的目录 —— 两种都是坑，直接拒收。
+    # 这一条同时挡掉 `bad name /tmp/x` 这种歧义行：它解析出来的路径
+    # （"name /tmp/x"）不是绝对路径。
+    case "$__rest" in
+      /*) ;;
+      *) continue ;;
+    esac
+    printf '%s\n' "$__line"
+  done <"$__f"
+  return 0
+}
+
+# _sk_skill_clients_all —— 默认已知集 + 用户配置（按名字去重，配置优先）
+#
+# 配置先出、默认集后出：同名时保留配置那一行 —— 用户写下的路径是他明确要的。
+# 默认集里重复的名字必须被过滤掉，否则一次 install 会往两个地方各装一份。
+_sk_skill_clients_all() {
+  local __names=" " __name __c
+  while read -r __name __c || [ -n "$__name" ]; do
+    [ -n "$__name" ] || continue
+    __names="$__names$__name "
+    printf '%s %s\n' "$__name" "$__c"
+  done < <(_sk_skill_clients_configured)
+  while read -r __name __c || [ -n "$__name" ]; do
+    [ -n "$__name" ] || continue
+    case "$__names" in
+      *" $__name "*) continue ;;
+    esac
+    printf '%s %s\n' "$__name" "$__c"
+  done < <(_sk_skill_clients)
+  return 0
+}
+
+# _sk_skill_client_record NAME DIR —— 把新客户端记进用户配置（幂等）
+#
+# 只记**表里还没有**的名字：已知客户端的路径是内置约定，--dir 对它是一次性
+# 的逃生舱，不该因为一次 --dir 就永久改掉默认表。
+# 记不上（名字不合法、配置目录不可写）也不让安装失败 —— 装进去才是正事。
+# @exitcode 0 已经记过，或本次记下
+# @exitcode 1 写配置失败
+_sk_skill_client_record() {
+  local __name=${1:-} __dir=${2:-} __f
+  [ -n "$__name" ] && [ -n "$__dir" ] || return 0
+  # 记进配置的是**绝对路径**：相对路径换个工作目录就指错地方了。
+  # 用逻辑 pwd（不加 -P）：find 扫出来的也是 `$HOME/...` 那种写法，
+  # 两边必须同一种口径 —— 否则 macOS 上 /tmp 与 /private/tmp 对不上，
+  # 刚记下的客户端下一次 list 又会被当成新发现。
+  if [ -d "$__dir" ]; then
+    __dir=$(cd "$__dir" 2>/dev/null && pwd) || return 0
+  fi
+  case "$__name" in
+    *[!A-Za-z0-9._-]*) return 0 ;;
+  esac
+  if _sk_skill_client_known "$__name"; then
+    return 0
+  fi
+  __f=$(_sk_skill_client_config) || return 0
+  # 路径边界（坑 7/8 同类）：配置文件或它的父目录是软链就拒绝 ——
+  # fs_ensure_line 会顺着软链目录把这条记录写到别处去。
+  if [ -L "$__f" ] || [ -L "$(dirname "$__f")" ]; then
+    log_warn "$(_t 'the target is a symlink, left alone'): $__f"
+    return 0
+  fi
+  # fs_ensure_line 是幂等的：整行已存在就不动，也不会重写用户手编的其他行
+  fs_ensure_line "$__f" "$__name $__dir" || return 1
+  log_info "$(_t 'remembered the client in'): $__f"
+  return 0
+}
+
+# _sk_skill_norm_dir DIR —— 目录的规范写法（存在时用逻辑 pwd）
+#
+# 比较「已知路径」和「扫到的路径」必须先归一：同一个目录可能被写成
+# `/a//b`、`/a/b`、`/a/./b`，字符串不等但指同一个地方 —— 不归一就会把
+# 刚记下的客户端又当成新发现报一遍（临时目录带 // 就实测踩到过）。
+_sk_skill_norm_dir() {
+  local __d=${1:-}
+  [ -n "$__d" ] || return 0
+  if [ -d "$__d" ]; then
+    (cd "$__d" 2>/dev/null && pwd) || printf '%s' "$__d"
+  else
+    printf '%s' "$__d"
+  fi
+}
+
+# _sk_skill_discover —— 扫已知根目录，找「像 skill 目录但不在清单里」的候选
+#
+# 只发现、只提示：**不创建任何目录**。扫 $HOME 与 $HOME/.config 各两层深 ——
+# 覆盖 `~/.新客户端/skills` 与 `~/.config/新客户端/skill` 两种常见布局；
+# 再深就是别的工程了，不往里钻。
+_sk_skill_discover() {
+  local __root __hit __hitnorm __name __seen=" " __known=" "
+  [ -n "${HOME:-}" ] || return 0
+  while read -r __name __c || [ -n "$__name" ]; do
+    [ -n "$__c" ] || continue
+    __known="$__known$(_sk_skill_norm_dir "$__c") "
+  done < <(_sk_skill_clients_all)
+  for __root in "$HOME/.config" "$HOME"; do
+    [ -d "$__root" ] || continue
+    while IFS= read -r __hit; do
+      [ -n "$__hit" ] || continue
+      __hitnorm=$(_sk_skill_norm_dir "$__hit")
+      case "$__known" in *" $__hitnorm "*) continue ;; esac
+      case "$__seen" in *" $__hitnorm "*) continue ;; esac
+      __seen="$__seen$__hitnorm "
+      # 候选名字取目录的上一层：~/.新客户端/skills -> 新客户端
+      # 去掉前导点：隐藏目录名（~/.claude）按内置表的风格记成 claude，
+      # 否则用户照着建议敲 --client .claude，和 skill list 里的 claude 对不上。
+      __name=$(basename "$(dirname "$__hit")")
+      __name=${__name#.}
+      [ -n "$__name" ] || continue
+      case "$__name" in
+        *[!A-Za-z0-9._-]*) continue ;;
+      esac
+      printf '%s %s\n' "$__name" "$__hit"
+    done < <(find "$__root" -maxdepth 2 -type d \( -name skills -o -name skill \) 2>/dev/null)
+  done
+  return 0
+}
+
 # _sk_skill_client_known NAME —— 这个客户端在表里吗
 _sk_skill_client_known() {
   local __want=$1 __name __c
@@ -3141,7 +3309,7 @@ _sk_skill_client_known() {
     if [ "$__name" = "$__want" ]; then
       return 0
     fi
-  done < <(_sk_skill_clients)
+  done < <(_sk_skill_clients_all)
   return 1
 }
 
@@ -3489,7 +3657,7 @@ EOF
 #   installed                没有清单的老安装（照旧按目录在就算装了）
 #   not installed            目录都没有
 _sk_skill_list() {
-  local __name __c __v __cur __manifest __note __i=0
+  local __name __c __v __cur __manifest __note __i=0 __disc
   __cur=$(_sk_skill_version 2>/dev/null || true)
   printf '%s:\n' "$(_t 'known AI clients')"
   while read -r __name __c || [ -n "$__name" ]; do
@@ -3525,7 +3693,17 @@ _sk_skill_list() {
     else
       printf '  %-10s %-44s %s\n' "$__name" "$__c" "$(_t 'not installed')"
     fi
-  done < <(_sk_skill_clients)
+  done < <(_sk_skill_clients_all)
+  # 发现的候选（issue #64）：只提示、只给命令，不创建任何目录 ——
+  # 目录在不在是用户的事实，shellkit 不替用户凭空造一个。
+  __disc=$(_sk_skill_discover)
+  if [ -n "$__disc" ]; then
+    printf '\n%s\n' "$(_t 'discovered, not in the list yet')"
+    while read -r __name __c || [ -n "$__name" ]; do
+      [ -n "$__name" ] || continue
+      printf '  %-10s %s\n' "$__name" "$(_t 'install with'): --dir $__c --client $__name"
+    done <<<"$__disc"
+  fi
   printf '\n%s\n' "$(_t 'the client directory is a convention of each client; use --dir if it is wrong')"
 }
 
@@ -3539,6 +3717,12 @@ _sk_skill_install() {
       return "$SK_PRECOND"
     fi
     log_ok "$(_t 'installed the skill into'): $__dir/shellkit"
+    # 带了 --client 就把这条记进用户配置：下次 skill list / install 就认识它了。
+    # 只记表里没有的名字；记不上也不让安装失败（装进去才是正事）。
+    if [ -n "$__client" ] && ! _sk_skill_client_known "$__client"; then
+      _sk_skill_client_record "$__client" "$__dir" ||
+        log_warn "$(_t 'the client could not be remembered; add it by hand to'): $(_sk_skill_client_config 2>/dev/null || printf '%s' '?')"
+    fi
     return "$SK_OK"
   fi
 
@@ -3561,9 +3745,16 @@ _sk_skill_install() {
       __ok=$((__ok + 1))
       log_ok "$(_t 'installed the skill into'): $__c/shellkit"
     fi
-  done < <(_sk_skill_clients)
+  done < <(_sk_skill_clients_all)
 
   if [ "$__n" -eq 0 ]; then
+    # 一个已知客户端的根目录都不在：报错之前先告诉用户「哪些像是客户端目录」，
+    # 并给出能直接粘贴的命令 —— 但只提示，不创建（issue #64 的纪律）。
+    while read -r __name __c || [ -n "$__name" ]; do
+      [ -n "$__name" ] || continue
+      log_info "$(_t 'found a candidate directory'): $__c"
+      log_info "$(_t 'install with'): --dir $__c --client $__name"
+    done < <(_sk_skill_discover)
     log_error "$(_t 'no AI client directory found; use --dir')"
     return "$SK_PRECOND"
   fi
@@ -3602,7 +3793,7 @@ _sk_skill_uninstall() {
       __ok=$((__ok + 1))
       log_ok "$(_t 'removed the skill from'): $__c/shellkit"
     fi
-  done < <(_sk_skill_clients)
+  done < <(_sk_skill_clients_all)
 
   if [ "$__n" -eq 0 ]; then
     log_error "$(_t 'no AI client directory found; use --dir')"
@@ -4189,7 +4380,15 @@ cmd_update() {
 }
 
 if [ "$SK_BOOTSTRAP_OK" -eq 1 ]; then
-  cli_run "$@"
+  __sk_rc=0
+  cli_run "$@" || __sk_rc=$?
+  # 升级提示（issue #67）：只在**交互式终端**给 —— CI 与管道里一个字都不出，
+  # 也绝不能改变命令的退出码。放在命令之后：先干正事，再顺嘴提一句。
+  if [ "$__sk_rc" -eq 0 ] && [ -t 0 ] && [ -t 1 ]; then
+    # 前缀由 CLI 这边判（安装布局的事），库里只负责「值不值得提示」
+    _sk_update_hint "$(_sk_running_prefix)" || true
+  fi
+  exit "$__sk_rc"
 else
   # 库自己都不完整：没有 cli 分发器可用，走降级自检路径（报出缺什么，退出 5）
   _sk_doctor_bootstrap_failed "$@" || exit $?

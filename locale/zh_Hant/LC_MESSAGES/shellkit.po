@@ -4,7 +4,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: shellkit\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-11-12 16:29+0800\n"
+"POT-Creation-Date: 2026-11-12 22:11+0800\n"
 "PO-Revision-Date: 2026-11-08 00:00+0800\n"
 "Last-Translator: shellkit contributors\n"
 "Language-Team: shellkit contributors\n"
@@ -226,6 +226,12 @@ msgstr "下載失敗"
 
 msgid "curl is required for HTTP probing"
 msgstr "HTTP 探測需要 curl"
+
+msgid "a newer version is available"
+msgstr "有新版本可用"
+
+msgid "run shellkit update"
+msgstr "執行 shellkit update"
 
 msgid "no supported package manager found"
 msgstr "找不到支援的套件管理器"
@@ -839,6 +845,9 @@ msgstr "接下來試試"
 msgid "where to read more"
 msgstr "再往下讀"
 
+msgid "remembered the client in"
+msgstr "用戶端已記入"
+
 msgid "the skill package is incomplete"
 msgstr "skill 包不完整"
 
@@ -876,6 +885,12 @@ msgstr "舊版本"
 msgid "not installed"
 msgstr "未安裝"
 
+msgid "discovered, not in the list yet"
+msgstr "發現的目錄（尚未登記）"
+
+msgid "install with"
+msgstr "用這條命令安裝"
+
 msgid ""
 "the client directory is a convention of each client; use --dir if it is wrong"
 msgstr "客戶端目錄是各家自己的約定；不對就用 --dir 指定"
@@ -883,8 +898,14 @@ msgstr "客戶端目錄是各家自己的約定；不對就用 --dir 指定"
 msgid "installed the skill into"
 msgstr "已把 skill 裝進"
 
+msgid "the client could not be remembered; add it by hand to"
+msgstr "用戶端未能記入，請手動添加到"
+
 msgid "unknown AI client"
 msgstr "未知的 AI 客戶端"
+
+msgid "found a candidate directory"
+msgstr "發現候選目錄"
 
 msgid "no AI client directory found; use --dir"
 msgstr "沒找到 AI 客戶端目錄；用 --dir 指定"

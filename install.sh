@@ -10,6 +10,10 @@
 # 这个脚本自己不往 PREFIX 里放任何文件：它只负责取版本、下载、校验、解包，
 # 然后把控制权交给包内自带的 `shellkit install-self`。安装逻辑只有一份。
 #
+# 可选验签（issue #66）：配了 minisign 公钥就验 tarball 与 SHA256SUMS 的签名，
+# 不配公钥则完全跳过、行为与从前一致。本脚本不验它自己（curl | bash 形态
+# 决定的），验什么 / 不验什么 / 离线怎么验，全在 docs/TRUST.md。
+#
 # 退出码：0 成功 / 1 一般错误 / 2 用法 / 3 前置条件 / 4 网络 / 5 校验。
 #
 # 在 git 检出版本里直接跑，装的是当前工作树（不联网）；curl | bash 走 release。
@@ -71,6 +75,23 @@ sha256() {
     die "no sha256 tool found (sha256sum, shasum or openssl)" "$SK_PRECOND"
   fi
 }
+# sig_pub_configured —— 是否配了验签公钥（两个环境变量任一即可）
+sig_pub_configured() {
+  [ -n "${SHELLKIT_MINISIGN_PUBKEY:-}" ] || [ -n "${SHELLKIT_MINISIGN_PUBKEY_FILE:-}" ]
+}
+
+# sig_verify FILE —— 验 FILE 同目录 <FILE>.minisig 的 minisign 签名。
+# 前置（minisign 存在、公钥文件可读）由调用方先挡；-q 只留退出码，提示自己打。
+# 返回码：0 通过 / 1 不通过
+sig_verify() {
+  local __file=$1
+  if [ -n "${SHELLKIT_MINISIGN_PUBKEY:-}" ]; then
+    minisign -Vm "$__file" -P "$SHELLKIT_MINISIGN_PUBKEY" -q >/dev/null 2>&1
+  else
+    minisign -Vm "$__file" -p "$SHELLKIT_MINISIGN_PUBKEY_FILE" -q >/dev/null 2>&1
+  fi
+}
+
 usage() {
   printf 'Usage: %s [options]\n' "$PROG" >&2
   cat >&2 <<'EOF'
@@ -87,6 +108,8 @@ usage() {
   VERSION                同 --version
   SHELLKIT_RELEASE_API   取最新版本号的端点（默认 GitHub release API）
   SHELLKIT_RELEASE_BASE  release 资产前缀，走镜像时换这个
+  SHELLKIT_MINISIGN_PUBKEY      配了就验 minisign 签名（公钥 base64 串）
+  SHELLKIT_MINISIGN_PUBKEY_FILE 同上，用 .pub 文件路径（两者都给时优先前者）
 
 装完把 PREFIX/bin 加进 PATH 即可。本脚本不覆盖 PREFIX 下的无关文件：
 它只在 PREFIX/share/shellkit 放一份完整子树，并写 MANIFEST 供 --uninstall 用。
@@ -222,6 +245,27 @@ else
   say "downloading shellkit $ver"
   fetch "$base/shellkit-$ver.tar.gz" "$tmp/pkg.tar.gz" || die "download failed: $base/shellkit-$ver.tar.gz" "$SK_NET"
   fetch "$base/SHA256SUMS" "$tmp/SHA256SUMS" || die "download failed: $base/SHA256SUMS" "$SK_NET"
+  # 可选验签：先锚「清单与包是不是我们发的」，再信 sha256 ——
+  # sha256 只能防「下载没被改」，防不住清单和包被一起换掉（issue #66）。
+  # 没配公钥就整段跳过：现有用户的默认行为一个字节都不变。
+  if sig_pub_configured; then
+    need minisign
+    if [ -n "${SHELLKIT_MINISIGN_PUBKEY_FILE:-}" ] && [ ! -f "$SHELLKIT_MINISIGN_PUBKEY_FILE" ]; then
+      die "public key file not found: $SHELLKIT_MINISIGN_PUBKEY_FILE" "$SK_PRECOND"
+    fi
+    # 缺签名资产算校验失败（5），与「SHA256SUMS 里没有校验和」同一口径
+    fetch "$base/SHA256SUMS.minisig" "$tmp/SHA256SUMS.minisig" ||
+      die "missing or unreachable signature: $base/SHA256SUMS.minisig" "$SK_VERIFY"
+    sig_verify "$tmp/SHA256SUMS" ||
+      die "signature verification failed for SHA256SUMS (minisign)" "$SK_VERIFY"
+    fetch "$base/shellkit-$ver.tar.gz.minisig" "$tmp/pkg.tar.gz.minisig" ||
+      die "missing or unreachable signature: $base/shellkit-$ver.tar.gz.minisig" "$SK_VERIFY"
+    sig_verify "$tmp/pkg.tar.gz" ||
+      die "signature verification failed for shellkit-$ver.tar.gz (minisign)" "$SK_VERIFY"
+    ok "signature verified: SHA256SUMS, shellkit-$ver.tar.gz"
+  else
+    say "signature verification skipped (no public key configured); docs/TRUST.md explains how to enable it"
+  fi
   expect=$(awk -v n="shellkit-$ver.tar.gz" '$2==n{print $1}' "$tmp/SHA256SUMS")
   [ -n "$expect" ] || die "no checksum for shellkit-$ver.tar.gz in SHA256SUMS" "$SK_VERIFY"
   actual=$(sha256 "$tmp/pkg.tar.gz")

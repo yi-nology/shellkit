@@ -1,0 +1,126 @@
+name: packages
+
+# deb / rpm 构建与冒烟（issue #65）+ minisign 签名工具链往返（issue #66）。
+#
+# 与 release 的关系：
+#   - 这里是 PR / 推送阶段的早期信号：包能不能建、装上跑不跑得通、卸得干不干净；
+#   - release.yml 里另有一个 continue-on-error 的可选 job，在**已发布**的 tarball
+#     上重跑同一套脚本 —— 挂了不挡 release（验收明写）；
+#   - 刻意不进 tools/release_gate.sh 的必需检查清单：它不是主线发版必须物。
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  deb:
+    name: deb build + smoke (install, run, remove)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+
+      - name: build the tarball (single source of truth)
+        run: bash tools/package_tarball.sh
+
+      - name: build the deb
+        run: |
+          set -euo pipefail
+          ver=$(cat VERSION)
+          bash tools/package_syspkg.sh --tarball "dist/shellkit-$ver.tar.gz" --out dist deb
+
+      - name: "smoke: install, run, remove (deb)"
+        run: |
+          set -euo pipefail
+          ver=$(cat VERSION)
+          bash tools/package_smoke.sh --tarball "dist/shellkit-$ver.tar.gz" "dist/shellkit-$ver.deb"
+
+  rpm:
+    name: rpm build + smoke (install, run, remove)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+
+      - name: install rpmbuild
+        run: |
+          set -euo pipefail
+          # Ubuntu 上 rpmbuild 由 rpm 包提供
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq rpm
+          command -v rpmbuild
+
+      - name: build the tarball (single source of truth)
+        run: bash tools/package_tarball.sh
+
+      - name: build the rpm
+        run: |
+          set -euo pipefail
+          ver=$(cat VERSION)
+          bash tools/package_syspkg.sh --tarball "dist/shellkit-$ver.tar.gz" --out dist rpm
+
+      - name: "smoke: install, run, remove (rpm)"
+        run: |
+          set -euo pipefail
+          ver=$(cat VERSION)
+          bash tools/package_smoke.sh --tarball "dist/shellkit-$ver.tar.gz" "dist/shellkit-$ver.rpm"
+
+  # 签名工具链往返（issue #66）：CI 里没有真私钥（真私钥只在 release 的 secret 里），
+  # 所以用一把**临时密钥**跑完整链路：生成 → sign_release.sh 签 → minisign 验 →
+  # 篡改一个字节后验签必须红。这样「私钥到位的那天」工具链本身已经被验证过。
+  sign:
+    name: minisign toolchain roundtrip
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+
+      - name: install minisign
+        run: |
+          set -euo pipefail
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq minisign
+          minisign -v || true
+
+      - name: sign with an ephemeral key and verify the roundtrip
+        run: |
+          set -euo pipefail
+          work=$(mktemp -d)
+          # -W：私钥不加密，非交互（CI 不该卡在密码提示上）
+          minisign -G -W -f -s "$work/key" -p "$work/key.pub" </dev/null
+          mkdir -p "$work/dist"
+          printf 'release fixture\n' >"$work/dist/payload.txt"
+          printf '%s  %s\n' "$(sha256sum "$work/dist/payload.txt" | awk '{print $1}')" payload.txt \
+            >"$work/dist/SHA256SUMS"
+          SHELLKIT_MINISIGN_KEY="$work/key" \
+            SHELLKIT_MINISIGN_PUBKEY="$work/key.pub" \
+            bash tools/sign_release.sh --dist "$work/dist"
+
+          echo "== verification must pass =="
+          minisign -Vm "$work/dist/SHA256SUMS" -p "$work/dist/shellkit.minisign.pub"
+          minisign -Vm "$work/dist/payload.txt" -p "$work/dist/shellkit.minisign.pub"
+
+          echo "== a tampered file must fail =="
+          printf 'tampered\n' >>"$work/dist/payload.txt"
+          if minisign -Vm "$work/dist/payload.txt" -p "$work/dist/shellkit.minisign.pub" -q; then
+            echo "tampered payload passed verification — the judgment has no teeth" >&2
+            exit 1
+          fi
+          echo "tampered payload rejected, as it must be"
+
+      - name: without a key the signer must skip loudly and exit 0
+        run: |
+          set -euo pipefail
+          bash tools/package_tarball.sh
+          out=$(bash tools/sign_release.sh --dist dist 2>&1)
+          printf '%s\n' "$out"
+          case "$out" in
+            *skipped*\ SHELLKIT_MINISIGN_KEY*) ;;
+            *)
+              echo "sign_release.sh did not say it skipped (no-key path must be explicit)" >&2
+              exit 1
+              ;;
+          esac
+          if ls dist/*.minisig >/dev/null 2>&1; then
+            echo "signatures were produced without a key — fabricated signature artifacts" >&2
+            exit 1
+          fi
