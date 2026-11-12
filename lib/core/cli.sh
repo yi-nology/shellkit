@@ -192,7 +192,7 @@ _sk_suggest() {
 # @exitcode 1 命令有 handler 但没实现
 # @exitcode 其他 命令自身的退出码
 cli_run() {
-  local __name="" __fn="" __rc=0
+  local __name="" __fn="" __rc=0 __depth=""
   while [ "$#" -gt 0 ]; do
     case "$1" in
       -h | --help)
@@ -261,8 +261,15 @@ cli_run() {
   fi
 
   # log_error 已经把消息写进 stderr 并记进 SK_ERRMSG，这里不需要再"补印"一次
+  # 错误上下文栈（issue #63）：命令失败时嵌套调用不会逐层 pop，
+  # 栈里会留下帧 —— 而 pop 是 LIFO 的，留下的帧会让下一次 pop 弹错层，
+  # 后面的报错会带上上一条命令的操作名。这里按「进来时的深度」统一收干净：
+  # 栈是诊断用的瞬时状态，命令结束就必须回到进入时的样子。
+  # 错误消息在命令返回前就已经印完，回收不会丢掉任何一条。
+  __depth=$(_sk_err_ctx_depth)
   __rc=0
   "$__fn" "$@" || __rc=$?
+  _sk_err_ctx_unwind "$__depth" || true
   return "$__rc"
 }
 

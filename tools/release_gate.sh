@@ -109,9 +109,34 @@ _gate_one() {
   printf '%s' "$__out"
 }
 
+# _gate_count LIST —— 清单里实际有几条必需检查
+#
+# ⚠ 不能用 `printf '%s' "$LIST" | tr '|' '\n' | wc -l`：printf 不补尾换行，
+# wc -l 数的是**换行符个数**而不是行数 ⇒ 永远比实际条数少 1（issue #70：
+# 清单 13 条却报 12，跟下面 verdict 行的 13 对不上 —— 同一个清单两个数）。
+# 这里按 | 逐段拆、空段丢掉 —— 与判定循环的口径完全一致。
+_gate_count() {
+  local __rest=${1:-} __n=0 __item
+  while [ -n "$__rest" ]; do
+    case "$__rest" in
+      *'|'*)
+        __item=${__rest%%|*}
+        __rest=${__rest#*|}
+        ;;
+      *)
+        __item=$__rest
+        __rest=""
+        ;;
+    esac
+    [ -n "$__item" ] || continue
+    __n=$((__n + 1))
+  done
+  printf '%s' "$__n"
+}
+
 _say "repository: $GATE_REPO"
 _say "commit: $SHA"
-_say "required checks: $(printf '%s' "$CHECKS" | tr '|' '\n' | wc -l | tr -d ' ')"
+_say "required checks: $(_gate_count "$CHECKS")"
 
 __waited=0
 while :; do

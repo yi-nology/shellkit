@@ -111,16 +111,16 @@ if [ "$SK_BOOTSTRAP_OK" -eq 1 ]; then
   cli_cmd demo "$(_t 'generate a demo project and walk through it')" "demo [DIR] [--no-test]"
   cli_cmd upgrade "$(_t 'update a generated project to the current template')" "upgrade <dir> [--check] [--force]"
   cli_group "$(_t 'environment')"
-  cli_cmd doctor "$(_t 'check the runtime environment')" "doctor [--dir DIR]"
+  cli_cmd doctor "$(_t 'check the runtime environment')" "doctor [--dir DIR] [--json]"
   cli_cmd list "$(_t 'list templates and library modules')" "list"
   cli_group "$(_t 'existing projects')"
-  cli_cmd vendor "$(_t 'sync the library into an existing project')" "vendor <dir> [--check]"
+  cli_cmd vendor "$(_t 'sync the library into an existing project')" "vendor <dir> [--check] [--force]"
   cli_group "$(_t 'documentation')"
   cli_cmd docs "$(_t 'regenerate the API reference')" "docs [--check]"
   cli_cmd man "$(_t 'generate man pages')" "man [--out DIR]"
   cli_cmd completion "$(_t 'print a shell completion script')" "completion [bash|zsh]"
   cli_group "$(_t 'installation')"
-  cli_cmd install-self "$(_t 'install shellkit into PATH')" "install-self [--prefix DIR]"
+  cli_cmd install-self "$(_t 'install shellkit into PATH')" "install-self [--prefix DIR] [--force]"
   cli_cmd uninstall-self "$(_t 'remove an installed shellkit')" "uninstall-self [--prefix DIR]"
   cli_cmd update "$(_t 'update an installed shellkit')" "update [--check] [--from FILE] [--sha256 SUM] [--prefix DIR]"
   cli_group "$(_t 'AI clients')"
@@ -233,42 +233,400 @@ _sk_copy_legal() {
   return 0
 }
 
-# _sk_vendor_stage STAGE —— 把整份库副本铺到候选目录里
+# ---------- 安装/同步的所有权清单（issue #69）----------
 #
-# 只管铺，不管换：铺失败由调用方清候选目录，原来的副本一个字节都不动。
-_sk_vendor_stage() {
-  local __stage=$1
-  # ${__stage:?} 是安全阀：万一变量异常为空，绝不让 rm 落到 /lib 上
-  # tools/ 与 docs/ 是 shellkit 仓库自己的门禁输入，**不进副本**：
-  # 副本的职责是「库能跟着工程走 + 工程能自己升级」，不是把仓库整套搬过去。
-  # 少了它们，副本里的 shellkit docs 会明确报前置条件错（见 cmd_docs）。
-  rm -rf "${__stage:?}/lib" "${__stage:?}/locale" "${__stage:?}/templates" "${__stage:?}/tests" || return 1
-  _sk_copy_tree "$SELF_DIR/lib" "$__stage/lib" || return 1
-  _sk_copy_tree "$SELF_DIR/locale" "$__stage/locale" || return 1
-  _sk_copy_tree "$SELF_DIR/templates" "$__stage/templates" || return 1
-  # 只拷测试基建的两份文件：副本要能跑「渲染模板 → 生成工程」这条链，
-  # 而渲染要 tests/test_helper.sh 与 tests/run.sh。整份 tests/ 有几十个
-  # 仓库自测文件，工程用不上，不该进 vendor。
-  fs_ensure_dir "$__stage/tests" 755 || return 1
-  cp -f "$SELF_DIR/tests/test_helper.sh" "$__stage/tests/test_helper.sh" || return 1
-  cp -f "$SELF_DIR/tests/run.sh" "$__stage/tests/run.sh" || return 1
-  chmod 755 "$__stage/tests/run.sh" || return 1
-  cp "$SELF_DIR/VERSION" "$__stage/VERSION" || return 1
-  # 副本必须自带 CLI：工程被 vendor 到别的机器时，PATH 上不一定有 shellkit。
-  # 没有 CLI，副本就永远升不了级 —— 而升级正是 vendor 这套机制存在的理由。
-  cp -f "$SELF_DIR/shellkit" "$__stage/shellkit" || return 1
-  chmod 755 "$__stage/shellkit" || return 1
-  # 修复脚本也要跟着走：副本自己被中断时 CLI 起不来，
-  # 唯一还能救它的就是同目录下那份不依赖任何库的 repair.sh。
-  if [ -f "$SELF_DIR/repair.sh" ]; then
-    cp -f "$SELF_DIR/repair.sh" "$__stage/repair.sh" || return 1
-    chmod 755 "$__stage/repair.sh" || return 1
-  fi
-  # MIT 许可证要求「副本里带上版权声明」，所以 vendor 出来的副本必须带 LICENSE 与 NOTICE
-  _sk_copy_legal "$__stage" || return 1
+# vendor 副本与 install-self 副本都是「我们装的一套文件」。
+# 用户改过其中某个文件时，重装不该把它静默盖掉 —— 这与 skill 安装是同一个
+# 问题，机制也同构：记一份**基线**（上次成功应用的文件指纹），重装时拿磁盘上
+# 的内容与基线比：
+#   内容 == 基线      ⇒ 还是我们装的原文 ⇒ 可以覆盖（这就是升级通道）
+#   内容 != 基线      ⇒ 用户改过 ⇒ 默认保留并告警，基线也不推进
+#
+# 三份清单各管各的，别混：
+#   .shellkit-manifest         工程的模板基线（new / upgrade 用的）
+#   MANIFEST                   安装文件表（install-self 记「装了哪些文件」）
+#   .shellkit-vendor-manifest  vendor 副本的所有权清单
+#   .shellkit-install-manifest install-self 副本的所有权清单
+
+# _sk_own_ship_list_vendor —— vendor 副本会带的文件清单（相对副本根，每行一个）
+#
+# 清单要排序：所有权清单是逐行比对的，顺序不定就没法逐字节 diff。
+# 用 find 扫目录而不是 ls：ls 的顺序随 locale 变，而且会把文件名里的换行拆开。
+_sk_own_ship_list_vendor() {
+  local __d __f
+  {
+    for __d in lib locale templates; do
+      [ -d "$SELF_DIR/$__d" ] || continue
+      (cd "$SELF_DIR/$__d" && find . -type f -print) | sed "s|^\./|$__d/|"
+    done
+    for __f in tests/test_helper.sh tests/run.sh VERSION shellkit repair.sh LICENSE NOTICE; do
+      if [ -f "$SELF_DIR/$__f" ]; then
+        printf '%s\n' "$__f"
+      fi
+    done
+  } | LC_ALL=C sort
+  # 显式返回 0：管道的状态在 pipefail 下是「最后一个非零的状态」——
+  # 上面那个 for 循环的最后一次 [ -f ... ] 为假时，整条管道就是失败的。
+  # 而清单文件里少一个 NOTICE（比如从发布包里装的副本）就会踩到：
+  # 函数返回非零 ⇒ 调用方以为「列清单失败」⇒ 安装当场退出。
   return 0
 }
 
+# _sk_own_ship_list_install —— install-self 副本会带的文件清单（相对副本根，每行一个）
+#
+# 与 vendor 的差别：安装的是整套开发副本（tools/ docs/ tests/ skills/ 都要），
+# 而 vendor 只带「库能跟着工程走」的那几样。
+_sk_own_ship_list_install() {
+  local __d __f
+  {
+    for __d in lib templates locale skills tools docs tests; do
+      [ -d "$SELF_DIR/$__d" ] || continue
+      (cd "$SELF_DIR/$__d" && find . -type f -print) | sed "s|^\./|$__d/|"
+    done
+    for __f in AGENTS.md VERSION shellkit repair.sh LICENSE NOTICE; do
+      if [ -f "$SELF_DIR/$__f" ]; then
+        printf '%s\n' "$__f"
+      fi
+    done
+  } | LC_ALL=C sort
+  # 显式返回 0：理由同 _sk_own_ship_list_vendor —— pipefail 下
+  # 「最后一个 [ -f ... ] 为假」会让整条管道判失败。
+  return 0
+}
+
+# _sk_own_has_rel RELS_FILE REL —— RELS_FILE 里有没有 REL
+_sk_own_has_rel() {
+  local __f=${1:-} __rel=${2:-} __l
+  [ -n "$__f" ] && [ -n "$__rel" ] || return 1
+  while IFS= read -r __l; do
+    if [ "$__l" = "$__rel" ]; then
+      return 0
+    fi
+  done <"$__f"
+  return 1
+}
+
+# _sk_own_sum_table ROOT RELS_FILE OUT —— 写出「相对路径 TAB 摘要」对照表
+#
+# 摘要一次进程算完（几百个文件逐个调 sha256sum 就是几百次 fork），
+# 再用 awk 把「摘要 → 路径」接回清单顺序：接回是 O(n)，
+# 而按路径逐个查是 O(n²)（一百多个文件就是几万次比较，慢机器上很明显）。
+# 没有摘要工具时返回 1。
+_sk_own_sum_table() {
+  local __root=${1:-} __rels=${2:-} __out=${3:-} __raw __line
+  local __tool=() __args=()
+  [ -n "$__root" ] && [ -n "$__rels" ] && [ -n "$__out" ] || return 1
+  [ -d "$__root" ] || return 1
+  if [ ! -s "$__rels" ]; then
+    : >"$__out"
+    return 0
+  fi
+  if command -v sha256sum >/dev/null 2>&1; then
+    __tool=(sha256sum)
+  elif command -v shasum >/dev/null 2>&1; then
+    __tool=(shasum -a 256)
+  else
+    return 1
+  fi
+  # 清单里的名字逐个收进数组：名字里可能有空格 —— 不加引号的 $(cat file)
+  # 会按空白拆词，含空格的文件名会被算到另一个文件头上。
+  # 数组展开保持原样；set -f 再兜一层，不让 shell 把名字里的 * 当通配符展开。
+  while IFS= read -r __line; do
+    [ -n "$__line" ] || continue
+    __args[${#__args[@]}]="$__line"
+  done <"$__rels"
+  if [ "${#__args[@]}" -eq 0 ]; then
+    : >"$__out"
+    return 0
+  fi
+  __raw=$(cd "$__root" && set -f && "${__tool[@]}" ${__args[@]+"${__args[@]}"} 2>/dev/null) || __raw=""
+  # sha256sum 输出「摘要 两个空格 路径」；这里拆成「路径 TAB 摘要」。
+  # 用 tab 而不是空格分列：路径里可能有空格。
+  printf '%s\n' "$__raw" |
+    awk '{
+      i = index($0, "  ")
+      if (i > 0) print substr($0, i + 2) "\t" substr($0, 1, i - 1)
+    }' |
+    awk -F'\t' 'FILENAME==ARGV[1] { s[$1]=$2; next } { print $1 "\t" (($1 in s) ? s[$1] : "-") }' - "$__rels" >"$__out"
+  return 0
+}
+
+# _sk_own_in_tree REL TREES —— REL 是不是在某个整树目录里
+_sk_own_in_tree() {
+  local __rel=${1:-} __trees=${2:-} __t
+  [ -n "$__rel" ] || return 1
+  for __t in $__trees; do
+    case "$__rel" in
+      "$__t"/*) return 0 ;;
+    esac
+  done
+  return 1
+}
+
+# _sk_own_sync SRC STAGE MANIFEST RELS_FILE TREES [FORCE] —— 按所有权清单同步文件
+#
+# SRC 是新版本的家；STAGE 是正在铺的副本根 —— 调用方已经先把旧副本的内容
+# 原样搬进 STAGE 了（用户自己加的文件也在里面）。
+# TREES 是要整树复制的目录（空格分隔，如 "lib locale templates"）；
+# 清单里其余的文件逐个复制。
+# FORCE=1 时无条件覆盖（用户明确说了要覆盖）。
+#
+# 三步：
+#   1. 决定每个文件的动作（按所有权清单判）
+#   2. 用户改过的文件先挪到一边，整树铺过去之后放回来
+#   3. 写新清单
+#
+# 为什么整树复制而不是逐文件复制：一份副本有上百个文件，逐个复制就是几百次
+# 进程（慢机器上装一次要等一分钟）；整树复制只要几次。
+# 代价是整树复制会盖掉用户改过的文件 —— 所以第 2 步先把它们挪走。
+#
+# 整树复制用「先删后拷」而不是合并覆盖：合并覆盖会顺着目标上的软链写穿
+# （坑 8），而整棵换掉就没有软链可顺。
+#
+# 计数写进 _SK_OWN_N_W / _SK_OWN_N_S / _SK_OWN_N_K / _SK_OWN_N_DEL。
+# @exitcode 0 同步完成；1 复制或写清单失败
+_sk_own_sync() {
+  local __src=${1:-} __stage=${2:-} __manifest=${3:-} __rels=${4:-} __trees=${5:-}
+  local __force=${6:-0}
+  # DESTROOT 是「这件事最后落在哪」—— 报错时报它，不报暂存目录：
+  # 暂存目录叫 .shellkit-new，用户在报错里看到它只会更糊涂。
+  local __destroot=${7:-$__stage}
+  local __rel __srcf __dstf __cur __new __base __act __txt __ownf __tree
+  local __srcsums __dstsums __table __keep __n_w=0 __n_s=0 __n_k=0 __n_del=0
+  local __i=0
+
+  _SK_OWN_N_W=0
+  _SK_OWN_N_S=0
+  _SK_OWN_N_K=0
+  _SK_OWN_N_DEL=0
+
+  [ -n "$__src" ] && [ -n "$__stage" ] && [ -n "$__manifest" ] && [ -n "$__rels" ] || return 1
+
+  __srcsums=$(mktemp "${TMPDIR:-/tmp}/shellkit-src-sums.XXXXXX") || return 1
+  __dstsums=$(mktemp "${TMPDIR:-/tmp}/shellkit-dst-sums.XXXXXX") || {
+    rm -f "$__srcsums" 2>/dev/null || true
+    return 1
+  }
+  __table=$(mktemp "${TMPDIR:-/tmp}/shellkit-sum-table.XXXXXX") || {
+    rm -f "$__srcsums" "$__dstsums" 2>/dev/null || true
+    return 1
+  }
+  __keep=$(mktemp -d "${TMPDIR:-/tmp}/shellkit-own-keep.XXXXXX") || {
+    rm -f "$__srcsums" "$__dstsums" 2>/dev/null || true
+    return 1
+  }
+
+  # 旧清单：记的是**基线**（上次成功应用的文件指纹）。
+  __ownf="$__stage/$__manifest"
+  _sk_fs_own_read "$__ownf"
+
+  # 上游删掉的文件：副本里也删掉。清单里的相对路径先过合法性校验 ——
+  # 清单是磁盘上的文件，用户可以改，拿它拼路径就能写到副本之外。
+  __i=0
+  while [ "$__i" -lt "${#_SK_OWN_RELS[@]}" ]; do
+    __rel=${_SK_OWN_RELS[$__i]}
+    if _sk_fs_rel_safe "$__rel" && ! _sk_own_has_rel "$__rels" "$__rel"; then
+      rm -f "$__stage/$__rel" 2>/dev/null || true
+      __n_del=$((__n_del + 1))
+    fi
+    __i=$((__i + 1))
+  done
+
+  # 摘要一次算完：源与目标各一次，再 join 成一张表（相对路径、源摘要、目标摘要）
+  if ! _sk_own_sum_table "$__src" "$__rels" "$__srcsums"; then
+    rm -f "$__srcsums" "$__dstsums" "$__table" 2>/dev/null || true
+    rm -rf "$__keep" 2>/dev/null || true
+    return 1
+  fi
+  _sk_own_sum_table "$__stage" "$__rels" "$__dstsums" || {
+    rm -f "$__srcsums" "$__dstsums" "$__table" 2>/dev/null || true
+    rm -rf "$__keep" 2>/dev/null || true
+    return 1
+  }
+  awk -F'	' '
+    FILENAME==ARGV[1] { src[$1]=$2; next }
+    FILENAME==ARGV[2] { dst[$1]=$2; next }
+    { print $1 "\t" (($1 in src) ? src[$1] : "-") "\t" (($1 in dst) ? dst[$1] : "-") }
+  ' "$__srcsums" "$__dstsums" "$__rels" >"$__table"
+
+  _SK_OWN_NEW_RELS=()
+  _SK_OWN_NEW_SUMS=()
+  _SK_OWN_KEEP=()
+  while IFS=$'\t' read -r __rel __new __cur; do
+    [ -n "$__rel" ] || continue
+    # 这两个是安装过程自己生成的，不是「装过去」的文件
+    case "$__rel" in
+      MANIFEST | */MANIFEST | .shellkit-install-manifest | .shellkit-vendor-manifest) continue ;;
+    esac
+    _sk_fs_rel_safe "$__rel" || continue
+    __srcf="$__src/$__rel"
+    [ -f "$__srcf" ] || continue
+    __dstf="$__stage/$__rel"
+    [ "$__new" = "-" ] && continue
+    __base=$(_sk_fs_own_sum "$__rel")
+    __act="W"
+    if [ -L "$__dstf" ]; then
+      # 位置上是个软链：不跟随也不替换 —— 那可能是用户自己的东西
+      log_warn "$(_t 'the target is a symlink, left alone'): $__rel ($(_sk_err_path_info "$__destroot/$__rel"))"
+      __act="K"
+    elif [ ! -e "$__dstf" ]; then
+      # 目标不在了：补上。用户删掉一个文件不算「用户改过」——
+      # 与 skill 安装路径同一口径（那边也是「不在 ⇒ 写」）。
+      __act="W"
+    elif [ -n "$__cur" ] && [ "$__cur" = "$__new" ]; then
+      __act="S"
+    elif [ -n "$__base" ] && [ "$__cur" = "$__base" ]; then
+      __act="W"
+    elif [ "$__force" = "1" ]; then
+      # 用户明确说了要覆盖
+      __act="W"
+    elif [ -n "$__base" ]; then
+      # 有基线、内容又对不上 ⇒ 用户改过
+      log_warn "$(_t 'modified locally, left alone'): $__rel ($(_sk_err_path_info "$__destroot/$__rel"))"
+      __act="K"
+    fi
+    case "$__act" in
+      W)
+        _SK_OWN_NEW_RELS[${#_SK_OWN_NEW_RELS[@]}]=$__rel
+        _SK_OWN_NEW_SUMS[${#_SK_OWN_NEW_SUMS[@]}]=$__new
+        __n_w=$((__n_w + 1))
+        ;;
+      S)
+        _SK_OWN_NEW_RELS[${#_SK_OWN_NEW_RELS[@]}]=$__rel
+        _SK_OWN_NEW_SUMS[${#_SK_OWN_NEW_SUMS[@]}]=$__new
+        __n_s=$((__n_s + 1))
+        ;;
+      K)
+        # 用户改过的：基线不推进 —— 推进了就等于把用户的编辑记成「我们装的原文」，
+        # 下一次同步就会静默覆盖掉。
+        if [ -n "$__base" ]; then
+          _SK_OWN_NEW_RELS[${#_SK_OWN_NEW_RELS[@]}]=$__rel
+          _SK_OWN_NEW_SUMS[${#_SK_OWN_NEW_SUMS[@]}]=$__base
+        fi
+        # 挪到一边：整树复制会盖掉它
+        fs_ensure_dir "$__keep/$(dirname "$__rel")" 755 || return 1
+        if [ -L "$__dstf" ]; then
+          cp -P "$__dstf" "$__keep/$__rel" 2>/dev/null || true
+        elif [ -f "$__dstf" ]; then
+          cp -f "$__dstf" "$__keep/$__rel" 2>/dev/null || true
+        fi
+        _SK_OWN_KEEP[${#_SK_OWN_KEEP[@]}]=$__rel
+        __n_k=$((__n_k + 1))
+        ;;
+    esac
+  done <"$__table"
+
+  # 整树铺过去：先删后拷，树上就算有软链也不会被写穿
+  for __tree in $__trees; do
+    [ -n "$__tree" ] || continue
+    [ -d "$__src/$__tree" ] || continue
+    if ! _sk_copy_tree "$__src/$__tree" "$__stage/$__tree"; then
+      rm -rf "$__keep" 2>/dev/null || true
+      rm -f "$__srcsums" "$__dstsums" 2>/dev/null || true
+      return 1
+    fi
+  done
+
+  # 清单里不在整树目录里的文件（VERSION、shellkit、tests/…）逐个搬
+  __i=0
+  while [ "$__i" -lt "${#_SK_OWN_NEW_RELS[@]}" ]; do
+    __rel=${_SK_OWN_NEW_RELS[$__i]}
+    if ! _sk_own_in_tree "$__rel" "$__trees"; then
+      __srcf="$__src/$__rel"
+      if [ -f "$__srcf" ]; then
+        fs_ensure_dir "$(dirname "$__stage/$__rel")" 755 || return 1
+        fs_atomic_copy "$__srcf" "$__stage/$__rel" || return 1
+      fi
+    fi
+    __i=$((__i + 1))
+  done
+
+  # 用户改过的文件放回来
+  __i=0
+  while [ "$__i" -lt "${#_SK_OWN_KEEP[@]}" ]; do
+    __rel=${_SK_OWN_KEEP[$__i]}
+    if [ -e "$__keep/$__rel" ] || [ -L "$__keep/$__rel" ]; then
+      fs_ensure_dir "$(dirname "$__stage/$__rel")" 755 || return 1
+      rm -f "$__stage/$__rel" 2>/dev/null || true
+      if [ -L "$__keep/$__rel" ]; then
+        cp -P "$__keep/$__rel" "$__stage/$__rel" 2>/dev/null || true
+      else
+        cp -f "$__keep/$__rel" "$__stage/$__rel" 2>/dev/null || true
+      fi
+    fi
+    __i=$((__i + 1))
+  done
+
+  # 清单落盘：所有权与基线以这一轮结束时的状态为准。
+  # 旧清单（_SK_OWN_RELS）到这里才让位 —— 决策时要靠它查基线。
+  _SK_OWN_RELS=()
+  _SK_OWN_SUMS=()
+  __i=0
+  while [ "$__i" -lt "${#_SK_OWN_NEW_RELS[@]}" ]; do
+    _SK_OWN_RELS[${#_SK_OWN_RELS[@]}]=${_SK_OWN_NEW_RELS[$__i]}
+    _SK_OWN_SUMS[${#_SK_OWN_SUMS[@]}]=${_SK_OWN_NEW_SUMS[$__i]}
+    __i=$((__i + 1))
+  done
+  __txt=$(_sk_fs_own_render)
+  if [ -n "$__txt" ]; then
+    fs_atomic_write "$__stage/$__manifest" "$__txt" 644 || return 1
+  else
+    rm -f "$__stage/$__manifest" 2>/dev/null || true
+  fi
+
+  rm -rf "$__keep" 2>/dev/null || true
+  rm -f "$__srcsums" "$__dstsums" "$__table" 2>/dev/null || true
+  _SK_OWN_N_W=$__n_w
+  _SK_OWN_N_S=$__n_s
+  _SK_OWN_N_K=$__n_k
+  _SK_OWN_N_DEL=$__n_del
+  return 0
+}
+
+# _sk_own_chmod_exec FILE —— 给文件加可执行位；软链不碰
+#
+# chmod 会顺着软链改到链接指向的那个文件 —— 那是副本之外的东西，不能碰。
+_sk_own_chmod_exec() {
+  local __f=${1:-}
+  [ -n "$__f" ] || return 0
+  [ -f "$__f" ] || return 0
+  [ -L "$__f" ] && return 0
+  chmod 755 "$__f" 2>/dev/null || true
+  return 0
+}
+# _sk_vendor_stage STAGE [FORCE] —— 把整份库副本铺到候选目录里
+#
+# 只管铺，不管换：铺失败由调用方清候选目录，原来的副本一个字节都不动。
+#
+# 逐个文件按所有权清单决定写不写（见 _sk_own_sync）：用户改过的文件保留并告警，
+# 不是我们装的文件不碰，上游删掉的文件删掉。这样重复同步是幂等的，
+# 也不会盖掉用户的编辑（issue #69）。
+#
+# tools/ 与 docs/ 是 shellkit 仓库自己的门禁输入，**不进副本**：
+# 副本的职责是「库能跟着工程走 + 工程能自己升级」，不是把仓库整套搬过去。
+# 少了它们，副本里的 shellkit docs 会明确报前置条件错（见 cmd_docs）。
+# @exitcode 0 铺完；1 失败
+_sk_vendor_stage() {
+  local __stage=$1 __force=${2:-0} __destroot=${3:-$1} __rels
+  # {__stage:?} 是安全阀：万一变量异常为空，绝不让写落到 /lib 上
+  fs_ensure_dir "$__stage" 755 || return 1
+  __rels=$(mktemp "${TMPDIR:-/tmp}/shellkit-vendor-rels.XXXXXX") || return 1
+  _sk_own_ship_list_vendor >"$__rels" || {
+    rm -f "$__rels" 2>/dev/null || true
+    return 1
+  }
+  # 整树目录交给 _sk_own_sync 整棵换掉；清单里其余的文件逐个搬
+  if ! _sk_own_sync "$SELF_DIR" "$__stage" ".shellkit-vendor-manifest" "$__rels" "lib locale templates" "$__force" "$__destroot"; then
+    rm -f "$__rels" 2>/dev/null || true
+    return 1
+  fi
+  rm -f "$__rels" 2>/dev/null || true
+  # 可执行位：副本要能直接跑（CLI 与修复脚本）
+  _sk_own_chmod_exec "$__stage/shellkit"
+  _sk_own_chmod_exec "$__stage/repair.sh"
+  _sk_own_chmod_exec "$__stage/tests/run.sh"
+  return 0
+}
 # _sk_proj_lock_name DIR —— 由工程绝对路径算出锁名：同一个工程一把锁。
 # 锁名只收 [A-Za-z0-9_.-]，路径过不了名字校验，用 cksum 收成数字；
 # 不同路径撞同一个和的概率极低，撞了也只是多一次串行，不影响正确性。
@@ -336,7 +694,7 @@ _sk_dir_swap_apply() {
   return 0
 }
 
-# _sk_vendor_install DIR —— 把库整目录同步进 DIR/vendor/shellkit。
+# _sk_vendor_install DIR [FORCE] —— 把库整目录同步进 DIR/vendor/shellkit。
 #
 # 用「整目录替换」而不是逐文件覆盖：模块被删掉时不会留残骸。
 #
@@ -348,21 +706,29 @@ _sk_dir_swap_apply() {
 #
 # 旧副本里用户自己加的文件要留着：候选目录先把旧内容原样搬进去，
 # 再在上面做同样的替换动作 —— 与旧行为一致，只是不再就地改。
+#
+# 用户**改过**的 shellkit 自有文件也留着（issue #69）：逐个文件按所有权清单判断，
+# 内容与基线不符就跳过并告警，基线不推进。FORCE=1 时无条件覆盖。
+#
+# @exitcode 0 同步完成；1 失败
 _sk_vendor_install() {
-  local __dir=$1 __dest __stage __old __lock
+  local __dir=$1 __force=${2:-0} __dest __stage __old __lock
   __dest="$__dir/vendor/shellkit"
   __stage="$__dir/vendor/.shellkit-new"
   __old="$__dir/vendor/.shellkit-old"
+  # 错误上下文：这一段在做什么。底层失败时顶层输出要能看出
+  # 「这是在同步 vendor 副本」，而不是一句没头没尾的路径。
+  _sk_err_ctx_push "$(_t 'syncing')" "dir=$(_sk_err_abs_path "$__dir")"
   # vendor/ 必须是工程里的真目录：
   # 它要是指向别处的符号链接，后面的 rm -rf + cp -R 就写到工程之外去了。
   if [ -L "$__dir/vendor" ]; then
-    log_error "$(_t 'the vendor directory is a symlink, refusing to install'): $__dir/vendor"
+    log_error "$(_t 'the vendor directory is a symlink, refusing to install'): $__dir/vendor ($(_sk_err_path_info "$__dir/vendor"))"
     return 1
   fi
   # vendor/shellkit 本身也不能是符号链接：
   # 顺着它删会删到工程外面去。
   if [ -L "$__dest" ]; then
-    log_error "$(_t 'the vendored library is a symlink, refusing to install'): $__dest"
+    log_error "$(_t 'the vendored library is a symlink, refusing to install'): $__dest ($(_sk_err_path_info "$__dest"))"
     return 1
   fi
   # 并发互斥：vendor 的暂存目录名是固定的（.shellkit-new / .shellkit-old），
@@ -384,18 +750,27 @@ _sk_vendor_install() {
       return 1
     }
   fi
-  _sk_vendor_stage "$__stage" || {
+  _sk_vendor_stage "$__stage" "$__force" "$__dest" || {
     rm -rf "$__stage" 2>/dev/null || true
     return 1
   }
+  # 副本与现有的一模一样 ⇒ 什么都不用动：重复同步是幂等的，不产生无谓写入。
+  # （老实现每次都把整份副本重铺一遍，文件全部重写 —— 看着无害，
+  #   但装好的副本正被别的进程读着，反复重写没有好处。）
+  if _sk_vendor_same "$__stage" "$__dest"; then
+    rm -rf "$__stage" "$__old" 2>/dev/null || true
+    log_info "$(_t 'already up to date'): $__dest"
+    _sk_err_ctx_pop || true
+    return 0
+  fi
   # 换上去：旧的挪开、新的挪进来。两次 rename 都在同一个文件系统里。
   if ! _sk_dir_swap_apply "$__stage" "$__dest" "$__old"; then
     return 1
   fi
   rm -rf "$__old" 2>/dev/null || true
+  _sk_err_ctx_pop || true
   return 0
 }
-
 # _sk_vendor_same SRC DST —— 内容逐字节一致才返回 0
 _sk_vendor_same() {
   local __src=$1 __dst=$2
@@ -715,6 +1090,8 @@ EOF
   log_section "$(_t 'creating'): $__dir"
   # 注意 set -e 在这里是靠不住的：cmd_new 由 cli_run 用 `|| __rc=$?` 调用，
   # 整个函数体因此不在 errexit 的保护下（issue #29）。所以每处落盘都显式判错。
+  # 错误上下文：生成失败时要能看出「这是在生成哪个工程」
+  _sk_err_ctx_push "$(_t 'creating')" "dir=$(_sk_err_abs_path "$__dir")"
   fs_ensure_dir "$__dir" 755 || return "$SK_PRECOND"
   if ! _sk_new_run_hooks pre "$__tpl" "$__dir" "$__name" "${__cmds[@]}"; then
     log_error "$(_t 'failed to generate the project'): $__dir"
@@ -750,6 +1127,7 @@ EOF
   printf '    cd %s\n' "$__dir"
   printf '    make test\n'
   printf '    shellkit upgrade %s\n' "$__dir"
+  _sk_err_ctx_pop || true
   return "$SK_OK"
 }
 
@@ -1122,6 +1500,9 @@ cmd_upgrade() {
     log_error "$(_t 'cannot resolve the target directory'): $__dir"
     return "$SK_PRECOND"
   fi
+  # 错误上下文：升级失败时要能看出「这是在升级哪个工程」。
+  # 目录用绝对路径 —— 报错里出现一个相对的 "."，用户还得自己猜是哪个目录。
+  _sk_err_ctx_push "$(_t 'upgrading')" "dir=$__dirabs"
   # 并发互斥：同一工程同时只有一个升级能动手 —— 清单与文件的一致性依赖
   # 「读-改-写」不被打断。--check 只读，不抢锁。
   if [ "$__check" != "1" ]; then
@@ -1225,7 +1606,7 @@ EOF
       return "$SK_VERIFY"
     fi
     if [ -L "$__target" ]; then
-      log_warn "$(_t 'the target is a symlink, left alone'): $__rel"
+      log_warn "$(_t 'the target is a symlink, left alone'): $__rel ($(_sk_err_path_info "$__target"))"
       __skipped=$((__skipped + 1))
       _SK_UPGRADE_ACTS[${#_SK_UPGRADE_ACTS[@]}]="S"
       __i=$((__i + 1))
@@ -1461,6 +1842,7 @@ EOF
   fi
   printf '\n'
   log_ok "$(_t 'upgrade finished'): $__updated updated, $__added added, $__skipped left alone"
+  _sk_err_ctx_pop || true
   return "$SK_OK"
 }
 
@@ -1489,14 +1871,351 @@ cmd_completion() {
 }
 
 # ---------- doctor ----------
+#
+# doctor 有两个输出形态：默认的人读形态（逐行文本）与 --json 的机器可读形态
+# （一份 JSON 文档）。两种形态跑的是同一套检查 —— 检查逻辑只有一份，
+# 输出格式是渲染问题。
+#
+# 两个形态各自的硬约束：
+#   文本形态 —— 老输出必须逐字不变（有人拿它做 diff，有人在 CI 里比对）；
+#   JSON 形态 —— 字段名稳定；缺必需的工具与缺可选的工具分开报。
+#
+# JSON 形态存在的理由：doctor 的输出要能直接贴进 issue，也能被脚本直接消费。
+# 散行的文本贴进去还得人读一遍。
 
+# _sk_doctor_json_escape STR —— 把 JSON 特殊字符转义掉，打印结果
+#
+# 自己实现而不用 log 模块的 _sk_json_escape：doctor 有一条「库自己都坏了」
+# 的降级路径（_sk_doctor_bootstrap_failed），那时 log 模块可能压根没加载。
+# 降级路径也要能出 JSON —— 这与 repair.sh 不依赖库是同一个理由。
+#
+# 逐字符处理，不用批量替换：批量替换里「替换串自己也要写反斜杠」的转义
+# 规则容易看走眼（一个反斜杠的个数错了，输出就不是合法 JSON），而逐字符
+# 只有一处要写反斜杠 —— case 分支里的 \" 与 \\。
+#
+# 只转义 JSON 必需的：反斜杠、双引号与控制字符；UTF-8 多字节原样保留
+# （JSON 允许直接写非 ASCII）。
+_sk_doctor_json_escape() {
+  local __s=${1:-} __rest __c __code __out=""
+  __rest=$__s
+  while [ -n "$__rest" ]; do
+    __c=${__rest:0:1}
+    __rest=${__rest:1}
+    case "$__c" in
+      '\') __out="${__out}\\" ;;
+      '"') __out="${__out}\"" ;;
+      $'\n') __out="${__out}\n" ;;
+      $'\r') __out="${__out}\r" ;;
+      $'\t') __out="${__out}\t" ;;
+      [[:cntrl:]])
+        printf -v __code '%d' "'$__c"
+        printf -v __code '\u%04x' "$__code"
+        __out="${__out}${__code}"
+        ;;
+      *) __out="${__out}${__c}" ;;
+    esac
+  done
+  printf '%s' "$__out"
+}
+
+# _sk_doctor_json_str STR —— 打印一个 JSON 字符串值（含两侧引号）
+_sk_doctor_json_str() {
+  printf '"%s"' "$(_sk_doctor_json_escape "${1:-}")"
+}
+
+# _sk_doctor_json_array ITEM... —— 打印一个 JSON 字符串数组
+#
+# 空数组给 "[]"，不是 "" —— 空数组与「没有这个字段」在 JSON 里是两件事。
+_sk_doctor_json_array() {
+  local __first=1 __part __out="["
+  for __part in "$@"; do
+    [ -n "$__part" ] || continue
+    if [ "$__first" = "0" ]; then
+      __out="$__out,"
+    fi
+    __first=0
+    __out="$__out$(_sk_doctor_json_str "$__part")"
+  done
+  printf '%s]' "$__out"
+}
+
+# _sk_doctor_json_split STR —— 逗号分隔的名单转成 JSON 字符串数组
+#
+# 模块扫描的结果是 "http, retry" 这种逗号分隔的串（逗号后带空格），
+# 拆成数组才好让脚本按名字取。
+#
+# 掐头去尾用参数展开而不是 sed：sed 的空白类写法在不同实现上有差异，
+# 而这里要的就是「去掉两端空白」，参数展开没有歧义。
+_sk_doctor_json_split() {
+  local __s=${1:-} __first=1 __out="[" __part
+  if [ -z "$__s" ]; then
+    printf '%s]' "$__out"
+    return 0
+  fi
+  while IFS= read -r __part; do
+    __part=${__part#"${__part%%[![:space:]]*}"}
+    __part=${__part%"${__part##*[![:space:]]}"}
+    [ -n "$__part" ] || continue
+    if [ "$__first" = "0" ]; then
+      __out="$__out,"
+    fi
+    __first=0
+    __out="$__out$(_sk_doctor_json_str "$__part")"
+  done <<EOF
+$(printf '%s' "$__s" | tr ',' '\n')
+EOF
+  printf '%s]' "$__out"
+}
+
+# _sk_doctor_json_modules —— 打印模块名字数组（lib/modules.txt 第一列）
+#
+# 清单的读法只有一处定义：lib/bootstrap.sh 的 _sk_module_manifest
+# （第一列是模块名，第二列是依赖）。这里跟 _sk_doctor_scan_modules 一样
+# 用 awk 取第一列，不另抄一份 bash 解析器 —— 抄一份就多一个会漂移的地方。
+#
+# 不依赖库：降级路径上库可能没加载，但清单文件通常还在。
+_sk_doctor_json_modules() {
+  local __file="$SELF_DIR/lib/modules.txt" __first=1 __out="[" __mod
+  if [ -r "$__file" ]; then
+    while IFS= read -r __mod || [ -n "$__mod" ]; do
+      [ -n "$__mod" ] || continue
+      if [ "$__first" = "0" ]; then
+        __out="$__out,"
+      fi
+      __first=0
+      __out="$__out$(_sk_doctor_json_str "$__mod")"
+    done <<EOF
+$(awk '{ sub(/#.*/, ""); if (NF > 0) print $1 }' "$__file")
+EOF
+  fi
+  printf '%s]' "$__out"
+}
+
+# _sk_doctor_missing_modules —— 打印「清单里登记了、但文件不在」的模块名（逗号分隔）
+#
+# 降级路径用：那时 _sk_doctor_scan_modules 跑不起来，但清单文件通常还在，
+# 照样能告诉用户缺了哪几个模块。
+_sk_doctor_missing_modules() {
+  local __file="$SELF_DIR/lib/modules.txt" __out="" __mod
+  if [ -r "$__file" ]; then
+    while IFS= read -r __mod || [ -n "$__mod" ]; do
+      [ -n "$__mod" ] || continue
+      if [ ! -f "$SELF_DIR/lib/core/$__mod.sh" ]; then
+        __out="$__out$__mod, "
+      fi
+    done <<EOF
+$(awk '{ sub(/#.*/, ""); if (NF > 0) print $1 }' "$__file")
+EOF
+  fi
+  printf '%s' "${__out%, }"
+}
+
+# _sk_doctor_redact STR —— 把看起来像凭据的赋值脱敏
+#
+# 复用 run 模块的敏感键名判定（_sk_run_secret_key）：口令、令牌、私钥这类
+# 键名的赋值一律把值遮掉。doctor 的报告要能直接贴进 issue —— 贴出去之前
+# 不能带着凭据。
+#
+# 判的是「键名」不是值：值什么样都行，键名像敏感字段就该遮。
+_sk_doctor_redact() {
+  local __s=${1:-} __k
+  if ! command -v _sk_run_secret_key >/dev/null 2>&1; then
+    printf '%s' "$__s"
+    return 0
+  fi
+  case "$__s" in
+    *=*)
+      __k=${__s%%=*}
+      if _sk_run_secret_key "$__k"; then
+        printf '%s=***' "$__k"
+        return 0
+      fi
+      ;;
+  esac
+  printf '%s' "$__s"
+}
+
+# _sk_doctor_row STATUS NAME [DETAIL] —— 报告里的一行
+#
+# 文本形态：一字不改地打印（老输出必须逐字不变）。
+# JSON 形态：收进 _SK_DOCTOR_ROWS，最后统一输出成文档。
 _sk_doctor_row() {
-  local __status=$1 __name=$2
+  local __status=${1:-} __name=${2:-} __piece
   local __detail=""
   if [ "$#" -ge 3 ]; then
     __detail=$3
   fi
+  if [ "${_SK_DOCTOR_JSON:-0}" = "1" ]; then
+    __piece=$(printf '{"section":%s,"status":%s,"name":%s,"detail":%s}' \
+      "$(_sk_doctor_json_str "${_SK_DOCTOR_SECTION:-}")" \
+      "$(_sk_doctor_json_str "$__status")" \
+      "$(_sk_doctor_json_str "$__name")" \
+      "$(_sk_doctor_json_str "$(_sk_doctor_redact "$__detail")")")
+    if [ -z "$_SK_DOCTOR_ROWS" ]; then
+      _SK_DOCTOR_ROWS="$__piece"
+    else
+      _SK_DOCTOR_ROWS="$_SK_DOCTOR_ROWS,$__piece"
+    fi
+    return 0
+  fi
   printf '  %-6s %-12s %s\n' "$__status" "$__name" "$__detail"
+}
+
+# _sk_doctor_section KEY LABEL —— 一个小节的开始
+#
+# KEY 是机器可读的稳定标识（进 JSON 用，不随语言变）；LABEL 是给人看的
+# 文字（进文本输出）。
+#
+# 文本形态：第一小节前面不带空行，后面每个小节前面带一个空行 —— 与老输出
+# 逐字一致（第一行就是 "environment check"，不是空行开头）。
+_sk_doctor_section() {
+  local __key=${1:-} __label=${2:-}
+  if [ "${_SK_DOCTOR_JSON:-0}" = "1" ]; then
+    _SK_DOCTOR_SECTION=$__key
+    return 0
+  fi
+  if [ "${_SK_DOCTOR_SECTION_N:-0}" = "0" ]; then
+    _SK_DOCTOR_SECTION_N=1
+    printf '%s\n' "$__label"
+  else
+    printf '\n%s\n' "$__label"
+  fi
+}
+
+# _sk_doctor_dep NAME STATUS DETAIL REQUIRED —— 记一条依赖检查
+#
+# REQUIRED=1 表示缺了必然出问题（得重装）；0 表示缺了只是降级（核心功能还在）。
+# 两种分开报，用户才知道「缺了它到底还能不能用」。
+_sk_doctor_dep() {
+  local __name=${1:-} __status=${2:-} __detail=${3:-} __required=${4:-0}
+  local __req __piece
+  if [ "${_SK_DOCTOR_JSON:-0}" = "1" ]; then
+    if [ "$__required" = "1" ]; then
+      __req=true
+    else
+      __req=false
+    fi
+    __piece=$(printf '{"name":%s,"status":%s,"required":%s,"detail":%s}' \
+      "$(_sk_doctor_json_str "$__name")" \
+      "$(_sk_doctor_json_str "$__status")" \
+      "$__req" \
+      "$(_sk_doctor_json_str "$(_sk_doctor_redact "$__detail")")")
+    if [ -z "$_SK_DOCTOR_DEPS" ]; then
+      _SK_DOCTOR_DEPS="$__piece"
+    else
+      _SK_DOCTOR_DEPS="$_SK_DOCTOR_DEPS,$__piece"
+    fi
+    if [ "$__status" != "OK" ]; then
+      if [ "$__required" = "1" ]; then
+        _SK_DOCTOR_MISSING_REQ=$((_SK_DOCTOR_MISSING_REQ + 1))
+      else
+        _SK_DOCTOR_MISSING_OPT=$((_SK_DOCTOR_MISSING_OPT + 1))
+      fi
+    fi
+    return 0
+  fi
+  _sk_doctor_row "$__status" "$__name" "$__detail"
+}
+
+# _sk_doctor_json_emit CODE —— 打印 JSON 形态的诊断报告
+#
+# 字段名是稳定的：加字段可以，改字段的含义要升版本。
+# missing_required 与 missing_optional 分开报 —— 缺了必需的工具得重装，
+# 缺了可选的只是降级，混在一起用户就不知道还能不能用。
+_sk_doctor_json_emit() {
+  local __code=${1:-0}
+  local __mods="" __missing="[]" __empty="[]" __broken="[]" __last_err="" __bash_ok=true
+  local __os="" __arch="" __sysname="" __release="" __machine=""
+  local __verify=false __rows="[]" __deps="[]"
+
+  __mods=$(_sk_doctor_json_modules)
+  if [ -n "${_SK_DOCTOR_MOD_MISSING:-}" ]; then
+    __missing=$(_sk_doctor_json_split "$_SK_DOCTOR_MOD_MISSING")
+  fi
+  if [ -n "${_SK_DOCTOR_MOD_EMPTY:-}" ]; then
+    __empty=$(_sk_doctor_json_split "$_SK_DOCTOR_MOD_EMPTY")
+  fi
+  if [ -n "${_SK_DOCTOR_MOD_BROKEN:-}" ]; then
+    __broken=$(_sk_doctor_json_split "$_SK_DOCTOR_MOD_BROKEN")
+  fi
+
+  if command -v os_name >/dev/null 2>&1; then
+    __os=$(os_name)
+  fi
+  if command -v os_arch >/dev/null 2>&1; then
+    __arch=$(os_arch)
+  fi
+  __sysname=$(uname -s 2>/dev/null)
+  __release=$(uname -r 2>/dev/null)
+  __machine=$(uname -m 2>/dev/null)
+  if ! command -v require_bash >/dev/null 2>&1; then
+    __bash_ok=false
+  elif ! require_bash 3 2 >/dev/null 2>&1; then
+    __bash_ok=false
+  fi
+  __last_err="${_SK_DOCTOR_LAST_ERR:-${SK_ERRMSG:-}}"
+  if [ "${_SK_DOCTOR_VERIFY:-0}" = "1" ]; then
+    __verify=true
+  fi
+  if [ -n "${_SK_DOCTOR_ROWS:-}" ]; then
+    __rows="$_SK_DOCTOR_ROWS"
+  fi
+  if [ -n "${_SK_DOCTOR_DEPS:-}" ]; then
+    __deps="$_SK_DOCTOR_DEPS"
+  fi
+
+  printf '{\n'
+  printf '  "schema": "shellkit.doctor.v1",\n'
+  printf '  "shellkit": {"version": "%s"},\n' "${SK_VERSION:-dev}"
+  printf '  "platform": {"os": "%s", "arch": "%s", "sysname": "%s", "release": "%s", "machine": "%s"},\n' \
+    "$__os" "$__arch" "$__sysname" "$__release" "$__machine"
+  printf '  "bash": {"version": "%s", "satisfied": %s},\n' "${BASH_VERSION:-unknown}" "$__bash_ok"
+  printf '  "modules": {"count": %s, "loadable": %s, "listed": %s, "missing": %s, "empty": %s, "broken": %s},\n' \
+    "${_SK_DOCTOR_MOD_COUNT:-0}" "${_SK_DOCTOR_MOD_LOADABLE:-0}" "$__mods" "$__missing" "$__empty" "$__broken"
+  printf '  "dependencies": [%s],\n' "$__deps"
+  printf '  "vendor": {"state": %s, "detail": %s},\n' \
+    "$(_sk_doctor_json_str "${_SK_DOCTOR_VENDOR_STATE:-none}")" \
+    "$(_sk_doctor_json_str "${_SK_DOCTOR_VENDOR_DETAIL:-}")"
+  printf '  "checks": [%s],\n' "$__rows"
+  printf '  "result": {"missing_required": %s, "missing_optional": %s, "verify_failed": %s, "exit_code": %s},\n' \
+    "${_SK_DOCTOR_MISSING_REQ:-0}" "${_SK_DOCTOR_MISSING_OPT:-0}" "$__verify" "$__code"
+  printf '  "last_error": %s\n' "$(_sk_doctor_json_str "$__last_err")"
+  printf '}\n'
+}
+
+# _sk_doctor_json_emit_degraded —— 降级路径（库没加载起来）的 JSON 报告
+#
+# 库坏了的时候恰恰最需要一份能贴进 issue 的报告，所以这条路径也得能出 JSON。
+# 只报不依赖库就能确定的东西：版本、模块清单与缺哪些、失败原因。
+_sk_doctor_json_emit_degraded() {
+  local __mods="" __missing="[]" __rows="[]" __msg=""
+  local __file="$SELF_DIR/lib/modules.txt"
+
+  __mods=$(_sk_doctor_json_modules)
+  __missing=$(_sk_doctor_json_split "$(_sk_doctor_missing_modules)")
+  if [ -n "${_SK_DOCTOR_ROWS:-}" ]; then
+    __rows="$_SK_DOCTOR_ROWS"
+  fi
+  __msg="the library could not be loaded"
+  if command -v _t >/dev/null 2>&1; then
+    __msg=$(_t 'the library could not be loaded')
+  fi
+
+  printf '{\n'
+  printf '  "schema": "shellkit.doctor.v1",\n'
+  printf '  "shellkit": {"version": "%s"},\n' "${SK_VERSION:-dev}"
+  printf '  "platform": {"os": "%s", "arch": "%s", "sysname": "%s", "release": "%s", "machine": "%s"},\n' \
+    "$(uname -s 2>/dev/null)" "$(uname -m 2>/dev/null)" "$(uname -s 2>/dev/null)" \
+    "$(uname -r 2>/dev/null)" "$(uname -m 2>/dev/null)"
+  printf '  "bash": {"version": "%s", "satisfied": false},\n' "${BASH_VERSION:-unknown}"
+  printf '  "modules": {"count": %s, "loadable": %s, "listed": %s, "missing": %s, "empty": %s, "broken": %s},\n' \
+    "${_SK_DOCTOR_MOD_COUNT:-0}" "${_SK_DOCTOR_MOD_LOADABLE:-0}" "$__mods" "$__missing" "[]" "[]"
+  printf '  "dependencies": [],\n'
+  printf '  "vendor": {"state": "unknown", "detail": ""},\n'
+  printf '  "checks": [%s],\n' "$__rows"
+  printf '  "result": {"missing_required": 0, "missing_optional": 0, "verify_failed": true, "exit_code": 5},\n'
+  printf '  "last_error": %s\n' "$(_sk_doctor_json_str "$__msg")"
+  printf '}\n'
 }
 
 # _sk_doctor_scan_modules —— 扫 lib/modules.txt，把「登记了但文件不在 / 是空的 / 坏了」的模块分开记下
@@ -1507,6 +2226,7 @@ _sk_doctor_row() {
 # （第一列是模块名，第二列是依赖）。这里用 awk 取第一列，不再抄一份 bash 解析器 ——
 # 抄一份就多一个会漂移的地方。
 _SK_DOCTOR_MOD_COUNT=0
+_SK_DOCTOR_MOD_LOADABLE=0
 _SK_DOCTOR_MOD_MISSING=""
 _SK_DOCTOR_MOD_EMPTY=""
 _SK_DOCTOR_MOD_BROKEN=""
@@ -1514,6 +2234,7 @@ _SK_DOCTOR_MOD_BROKEN=""
 _sk_doctor_scan_modules() {
   local __file="$SELF_DIR/lib/modules.txt" __name __f __bash
   _SK_DOCTOR_MOD_COUNT=0
+  _SK_DOCTOR_MOD_LOADABLE=0
   _SK_DOCTOR_MOD_MISSING=""
   _SK_DOCTOR_MOD_EMPTY=""
   _SK_DOCTOR_MOD_BROKEN=""
@@ -1534,7 +2255,10 @@ _sk_doctor_scan_modules() {
     # 语法坏掉的模块要等 source 时才炸；这里提前一步，把它和「缺失」分开报
     if ! "$__bash" -n "$__f" 2>/dev/null; then
       _SK_DOCTOR_MOD_BROKEN="$_SK_DOCTOR_MOD_BROKEN, $__name"
+      continue
     fi
+    # 文件在、非空、语法也对 ⇒ 这个模块真的能被加载
+    _SK_DOCTOR_MOD_LOADABLE=$((_SK_DOCTOR_MOD_LOADABLE + 1))
   done <<EOF
 $(awk '{ sub(/#.*/, ""); if (NF > 0) print $1 }' "$__file")
 EOF
@@ -1680,7 +2404,7 @@ _sk_doctor_vendor_check() {
 #   这时候连 log_error 都可能不存在，所以只用 printf 往 stderr 写。
 #   退出码：用法错 2；库不完整 5。
 _sk_doctor_bootstrap_failed() {
-  local __arg __skip=0
+  local __arg __skip=0 __json=0
   for __arg in "$@"; do
     if [ "$__skip" = "1" ]; then
       __skip=0
@@ -1690,6 +2414,10 @@ _sk_doctor_bootstrap_failed() {
       doctor) continue ;;
       --dir)
         __skip=1
+        continue
+        ;;
+      --json)
+        __json=1
         continue
         ;;
       -V | --version)
@@ -1704,15 +2432,32 @@ _sk_doctor_bootstrap_failed() {
     esac
   done
 
+  _SK_DOCTOR_JSON=$__json
+  _SK_DOCTOR_ROWS=""
+  _SK_DOCTOR_DEPS=""
+  _SK_DOCTOR_SECTION=""
+  _SK_DOCTOR_SECTION_N=0
+  _SK_DOCTOR_MISSING_REQ=0
+  _SK_DOCTOR_MISSING_OPT=0
+  _SK_DOCTOR_VERIFY=1
+  _SK_DOCTOR_LAST_ERR=""
+
+  if [ "$__json" = "1" ]; then
+    _sk_doctor_section "library" "$(_t 'library integrity')"
+    _sk_doctor_lib_check || true
+    _sk_doctor_json_emit_degraded
+    return 5
+  fi
+
   printf '%s\n' "$(_t 'library integrity')"
   _sk_doctor_lib_check || true
   printf '\n'
   printf 'shellkit: %s\n' "$(_t 'the library could not be loaded')" >&2
   return 5
 }
-
 cmd_doctor() {
-  local __dir="" __missing=0 __optional_missing=0 __verify=0 __ver
+  local __dir="" __missing=0 __optional_missing=0 __verify=0 __ver __rc="$SK_OK"
+  _SK_DOCTOR_JSON=0
   while [ "$#" -gt 0 ]; do
     case "$1" in
       --dir)
@@ -1724,6 +2469,7 @@ cmd_doctor() {
         shift
         ;;
       --dir=*) __dir="${1#*=}" ;;
+      --json) _SK_DOCTOR_JSON=1 ;;
       -h | --help)
         cli_usage_cmd doctor
         return "$SK_OK"
@@ -1737,67 +2483,76 @@ cmd_doctor() {
   done
   [ -n "$__dir" ] || __dir=$(pwd)
 
-  printf '%s\n' "$(_t 'environment check')"
+  _SK_DOCTOR_ROWS=""
+  _SK_DOCTOR_DEPS=""
+  _SK_DOCTOR_SECTION=""
+  _SK_DOCTOR_SECTION_N=0
+  _SK_DOCTOR_MISSING_REQ=0
+  _SK_DOCTOR_MISSING_OPT=0
+  _SK_DOCTOR_VERIFY=0
+  _SK_DOCTOR_LAST_ERR=""
+
+  _sk_doctor_section "environment" "$(_t 'environment check')"
 
   __ver="${BASH_VERSION:-unknown}"
   if require_bash 3 2 >/dev/null 2>&1; then
-    _sk_doctor_row "OK" "bash" "$__ver"
+    _sk_doctor_dep "bash" "OK" "$__ver" 1
   else
-    _sk_doctor_row "FAIL" "bash" "$__ver ($(_t 'needs 3.2 or newer'))"
+    _sk_doctor_dep "bash" "FAIL" "$__ver ($(_t 'needs 3.2 or newer'))" 1
     __missing=1
   fi
 
   if os_has_cmd sha256sum || os_has_cmd shasum; then
-    _sk_doctor_row "OK" "sha256" "$(command -v sha256sum 2>/dev/null || command -v shasum)"
+    _sk_doctor_dep "sha256" "OK" "$(command -v sha256sum 2>/dev/null || command -v shasum)" 1
   else
-    _sk_doctor_row "FAIL" "sha256" "$(_t 'sha256sum or shasum is required')"
+    _sk_doctor_dep "sha256" "FAIL" "$(_t 'sha256sum or shasum is required')" 1
     __missing=1
   fi
 
   if os_has_cmd curl || os_has_cmd wget; then
-    _sk_doctor_row "OK" "download" "$(command -v curl 2>/dev/null || command -v wget)"
+    _sk_doctor_dep "download" "OK" "$(command -v curl 2>/dev/null || command -v wget)" 0
   else
-    _sk_doctor_row "WARN" "download" "$(_t 'curl or wget is needed for downloads')"
+    _sk_doctor_dep "download" "WARN" "$(_t 'curl or wget is needed for downloads')" 0
     __optional_missing=1
   fi
 
   if [ -n "${SK_GETTEXT:-}" ]; then
-    _sk_doctor_row "OK" "gettext" "$SK_GETTEXT"
+    _sk_doctor_dep "gettext" "OK" "$SK_GETTEXT" 0
   else
-    _sk_doctor_row "WARN" "gettext" "$(_t 'translations disabled, English only')"
+    _sk_doctor_dep "gettext" "WARN" "$(_t 'translations disabled, English only')" 0
     __optional_missing=1
   fi
 
   if os_has_cmd msgfmt && os_has_cmd xgettext; then
-    _sk_doctor_row "OK" "po tools" "$(command -v msgfmt)"
+    _sk_doctor_dep "po tools" "OK" "$(command -v msgfmt)" 0
   else
-    _sk_doctor_row "WARN" "po tools" "$(_t 'xgettext and msgfmt are needed to update translations')"
+    _sk_doctor_dep "po tools" "WARN" "$(_t 'xgettext and msgfmt are needed to update translations')" 0
     __optional_missing=1
   fi
 
   if os_has_cmd shellcheck; then
-    _sk_doctor_row "OK" "shellcheck" "$(command -v shellcheck)"
+    _sk_doctor_dep "shellcheck" "OK" "$(command -v shellcheck)" 0
   else
-    _sk_doctor_row "WARN" "shellcheck" "$(_t 'not installed, lint will be skipped')"
+    _sk_doctor_dep "shellcheck" "WARN" "$(_t 'not installed, lint will be skipped')" 0
     __optional_missing=1
   fi
 
   if os_has_cmd shfmt; then
-    _sk_doctor_row "OK" "shfmt" "$(command -v shfmt)"
+    _sk_doctor_dep "shfmt" "OK" "$(command -v shfmt)" 0
   else
-    _sk_doctor_row "WARN" "shfmt" "$(_t 'not installed, format check will be skipped')"
+    _sk_doctor_dep "shfmt" "WARN" "$(_t 'not installed, format check will be skipped')" 0
     __optional_missing=1
   fi
 
   _sk_doctor_row "INFO" "os" "$(os_name)/$(os_arch)"
   _sk_doctor_row "INFO" "shellkit" "$SK_VERSION"
 
-  printf '\n%s\n' "$(_t 'library integrity')"
+  _sk_doctor_section "library" "$(_t 'library integrity')"
   if ! _sk_doctor_lib_check; then
     __verify=1
   fi
 
-  printf '\n%s\n' "$(_t 'vendor check')"
+  _sk_doctor_section "vendor" "$(_t 'vendor check')"
   if ! _sk_doctor_vendor_check "$__dir"; then
     __verify=1
   fi
@@ -1818,6 +2573,23 @@ cmd_doctor() {
       ;;
   esac
 
+  if [ "$__verify" -ne 0 ]; then
+    __rc="$SK_VERIFY"
+    _SK_DOCTOR_LAST_ERR="$(_t 'library integrity check failed')"
+  elif [ "$__missing" -ne 0 ]; then
+    __rc="$SK_PRECOND"
+    _SK_DOCTOR_LAST_ERR="$(_t 'required tooling is missing')"
+  elif [ "$__optional_missing" -ne 0 ]; then
+    __rc="$SK_OK"
+    _SK_DOCTOR_LAST_ERR="$(_t 'optional tooling is missing; core features still work')"
+  fi
+
+  if [ "${_SK_DOCTOR_JSON:-0}" = "1" ]; then
+    _SK_DOCTOR_VERIFY=$__verify
+    _sk_doctor_json_emit "$__rc"
+    return "$__rc"
+  fi
+
   printf '\n'
   if [ "$__verify" -ne 0 ]; then
     log_error "$(_t 'library integrity check failed')"
@@ -1834,7 +2606,6 @@ cmd_doctor() {
   log_ok "$(_t 'all checks passed')"
   return "$SK_OK"
 }
-
 # ---------- list ----------
 
 cmd_list() {
@@ -1934,7 +2705,7 @@ cmd_man() {
 # ---------- vendor ----------
 
 cmd_vendor() {
-  local __dir="" __check=0 __dest __stale=0 __x
+  local __dir="" __check=0 __force=0 __dest __stale=0 __x
   while [ "$#" -gt 0 ]; do
     case "$1" in
       -h | --help)
@@ -1943,6 +2714,9 @@ cmd_vendor() {
         ;;
       --check)
         __check=1
+        ;;
+      --force)
+        __force=1
         ;;
       --?*)
         log_error "$(_t 'unknown option'): $1"
@@ -1979,7 +2753,9 @@ cmd_vendor() {
       fi
     done
     if [ "$__stale" -ne 0 ]; then
-      log_info "$(_t 'run without --check to update'): shellkit vendor $__dir"
+      # 提示不能说谎：同步**不会**覆盖用户改过的文件（issue #69），
+      # 说「再跑一次就能更新」会让人以为那一下能改掉它。
+      log_info "$(_t 'run without --check to sync (locally modified files are kept)'): shellkit vendor $__dir"
       return "$SK_VERIFY"
     fi
     log_ok "$(_t 'vendored library is up to date'): $__dest ($SK_VERSION)"
@@ -1993,7 +2769,7 @@ cmd_vendor() {
   fi
 
   log_section "$(_t 'syncing'): $__dest"
-  if ! _sk_vendor_install "$__dir"; then
+  if ! _sk_vendor_install "$__dir" "$__force"; then
     log_error "$(_t 'failed to sync the vendored library'): $__dest"
     return "$SK_ERR"
   fi
@@ -2578,6 +3354,14 @@ _sk_skill_uninstall_from() {
     while [ "$__i" -lt "${#_SK_OWN_RELS[@]}" ]; do
       __rel=${_SK_OWN_RELS[$__i]}
       __sum=${_SK_OWN_SUMS[$__i]}
+      # 清单是磁盘上的文件，用户可以改 —— 里面的名字会变成 rm 的目标路径。
+      # 不校验的话，名字里带 ../ 就能把文件删到 skill 目录之外（坑 7 同类）。
+      if ! _sk_fs_rel_safe "$__rel"; then
+        log_warn "$(_t 'skipped a path outside the install directory'): $__rel"
+        __n_keep=$((__n_keep + 1))
+        __i=$((__i + 1))
+        continue
+      fi
       if [ -L "$__dstabs/$__rel" ]; then
         log_warn "$(_t 'the target is a symlink, left alone'): $__rel"
         __n_keep=$((__n_keep + 1))
@@ -2640,6 +3424,10 @@ EOF
   __i=0
   while [ "$__i" -lt "${#_SK_OWN_RELS[@]}" ]; do
     __rel=${_SK_OWN_RELS[$__i]}
+    if ! _sk_fs_rel_safe "$__rel"; then
+      __i=$((__i + 1))
+      continue
+    fi
     if [ -e "$__dstabs/$__rel" ] || [ -L "$__dstabs/$__rel" ]; then
       _SK_KEEP_RELS[${#_SK_KEEP_RELS[@]}]=$__rel
       _SK_KEEP_SUMS[${#_SK_KEEP_SUMS[@]}]=${_SK_OWN_SUMS[$__i]}
@@ -3007,7 +3795,7 @@ _sk_tree_version() {
 }
 
 cmd_install_self() {
-  local __prefix="/usr/local" __dest __bin __stage __old __rbin
+  local __prefix="/usr/local" __dest __bin __stage __old __rbin __force=0 __d __rels
   while [ "$#" -gt 0 ]; do
     case "$1" in
       --prefix)
@@ -3020,6 +3808,9 @@ cmd_install_self() {
         ;;
       --prefix=*)
         __prefix="${1#*=}"
+        ;;
+      --force)
+        __force=1
         ;;
       -h | --help)
         cli_usage_cmd install-self
@@ -3035,9 +3826,19 @@ cmd_install_self() {
 
   __prefix="${__prefix%/}"
   __dest="$(_sk_install_dest "$__prefix")"
+  # 错误上下文：装失败时要能看出「这是在装到哪」
+  _sk_err_ctx_push "$(_t 'installing')" "prefix=$(_sk_err_abs_path "$__prefix")"
   __bin="$__prefix/bin/shellkit"
-  fs_ensure_dir "$__prefix/bin" 755 || return "$SK_PRECOND"
-  fs_ensure_dir "$__dest" 755 || return "$SK_PRECOND"
+  if ! fs_ensure_dir "$__prefix/bin" 755; then
+    log_error "$(_t 'no write permission'): $__prefix/bin"
+    log_info "$(_t 'try a writable prefix'): --prefix ~/.local"
+    return "$SK_PRECOND"
+  fi
+  if ! fs_ensure_dir "$__dest" 755; then
+    log_error "$(_t 'no write permission'): $__dest"
+    log_info "$(_t 'try a writable prefix'): --prefix ~/.local"
+    return "$SK_PRECOND"
+  fi
 
   if [ ! -w "$__prefix/bin" ]; then
     log_error "$(_t 'no write permission'): $__prefix/bin"
@@ -3062,82 +3863,33 @@ cmd_install_self() {
   fs_ensure_dir "$__stage" 755 || return "$SK_PRECOND"
 
   log_section "$(_t 'installing'): $__dest"
-  _sk_copy_tree "$SELF_DIR/lib" "$__stage/lib" || {
-    rm -rf "$__stage" 2>/dev/null || true
-    return "$SK_ERR"
-  }
-  _sk_copy_tree "$SELF_DIR/templates" "$__stage/templates" || {
-    rm -rf "$__stage" 2>/dev/null || true
-    return "$SK_ERR"
-  }
-  _sk_copy_tree "$SELF_DIR/locale" "$__stage/locale" || {
-    rm -rf "$__stage" 2>/dev/null || true
-    return "$SK_ERR"
-  }
-  # 只装得进源码树里真有的东西：vendor 出来的副本可能没有 skills/
-  if [ -d "$SELF_DIR/skills" ]; then
-    _sk_copy_tree "$SELF_DIR/skills" "$__stage/skills" || {
+  # 旧副本先原样搬进阶段目录：用户自己加的文件与改过的文件都要留着
+  # （阶段目录从源码全新铺起会把它们全丢 —— issue #69）
+  if [ -d "$__dest" ]; then
+    cp -R "$__dest/." "$__stage/" || {
       rm -rf "$__stage" 2>/dev/null || true
       return "$SK_ERR"
     }
   fi
-  # tools/ 与 docs/ 是文档门禁的输入：少了它们，装完的副本第一次跑 docs 就会崩
-  if [ -d "$SELF_DIR/tools" ]; then
-    _sk_copy_tree "$SELF_DIR/tools" "$__stage/tools" || {
-      rm -rf "$__stage" 2>/dev/null || true
-      return "$SK_ERR"
-    }
-  fi
-  if [ -d "$SELF_DIR/docs" ]; then
-    _sk_copy_tree "$SELF_DIR/docs" "$__stage/docs" || {
-      rm -rf "$__stage" 2>/dev/null || true
-      return "$SK_ERR"
-    }
-  fi
-  # tests/ 必须一起装：`shellkit new` 会把 tests/test_helper.sh 与 tests/run.sh
-  # 拷进新工程，装好的副本里没有它们，新工程 make test 必然 127（issue #28）。
-  if [ -d "$SELF_DIR/tests" ]; then
-    _sk_copy_tree "$SELF_DIR/tests" "$__stage/tests" || {
-      rm -rf "$__stage" 2>/dev/null || true
-      return "$SK_ERR"
-    }
-  fi
-  if [ -f "$SELF_DIR/AGENTS.md" ]; then
-    cp -f "$SELF_DIR/AGENTS.md" "$__stage/AGENTS.md" || {
-      rm -rf "$__stage" 2>/dev/null || true
-      return "$SK_ERR"
-    }
-  fi
-  cp -f "$SELF_DIR/VERSION" "$__stage/VERSION" || {
+  # 逐文件同步：内容与基线不符的就是用户改过的，默认保留并告警
+  __rels=$(mktemp "${TMPDIR:-/tmp}/shellkit-install-rels.XXXXXX") || {
     rm -rf "$__stage" 2>/dev/null || true
     return "$SK_ERR"
   }
-  # MIT 许可证要求「副本里带上版权声明」：装出来的副本也必须带 LICENSE 与 NOTICE
-  _sk_copy_legal "$__stage" || {
+  _sk_own_ship_list_install >"$__rels" || {
+    rm -f "$__rels" 2>/dev/null || true
     rm -rf "$__stage" 2>/dev/null || true
     return "$SK_ERR"
   }
-  cp -f "$SELF_DIR/shellkit" "$__stage/shellkit" || {
+  if ! _sk_own_sync "$SELF_DIR" "$__stage" ".shellkit-install-manifest" "$__rels" "lib templates locale skills tools docs tests" "$__force" "$__dest"; then
+    rm -f "$__rels" 2>/dev/null || true
     rm -rf "$__stage" 2>/dev/null || true
     return "$SK_ERR"
-  }
-  chmod 755 "$__stage/shellkit" || {
-    rm -rf "$__stage" 2>/dev/null || true
-    return "$SK_ERR"
-  }
-  # 修复脚本随安装一起落地：装到一半被打断时 CLI 起不来，
-  # 唯一还能救它的就是这份不依赖任何库的 repair.sh ——
-  # 它也在 .old 副本里（那次 rename 之前它已经就位了）。
-  if [ -f "$SELF_DIR/repair.sh" ]; then
-    cp -f "$SELF_DIR/repair.sh" "$__stage/repair.sh" || {
-      rm -rf "$__stage" 2>/dev/null || true
-      return "$SK_ERR"
-    }
-    chmod 755 "$__stage/repair.sh" || {
-      rm -rf "$__stage" 2>/dev/null || true
-      return "$SK_ERR"
-    }
   fi
+  rm -f "$__rels" 2>/dev/null || true
+  # 可执行位：装好的副本要能直接跑
+  _sk_own_chmod_exec "$__stage/shellkit"
+  _sk_own_chmod_exec "$__stage/repair.sh"
 
   if ! _sk_manifest_write "$__stage"; then
     log_error "$(_t 'failed to write the install manifest'): $__dest/MANIFEST"
@@ -3145,11 +3897,18 @@ cmd_install_self() {
     return "$SK_ERR"
   fi
 
-  # 换上去：旧的挪开、新的挪进来。两次 rename 都在同一个文件系统里。
-  # 正跑在装好的副本上时（SELF_DIR == __dest），被挪开的正是运行中的目录 ——
-  # 脚本靠已打开的 fd 继续执行，rename 不影响它；这正是 vendor 自同步已验证过的路径。
-  if ! _sk_dir_swap_apply "$__stage" "$__dest" "$__old"; then
-    return "$SK_ERR"
+  # 装好的副本与要装的一模一样 ⇒ 什么都不用动：重复安装是幂等的，
+  # 不产生无谓写入。软链照旧要补 —— 它在副本外面，换名不影响它。
+  if [ -d "$__dest" ] && diff -r -q "$__stage" "$__dest" >/dev/null 2>&1; then
+    rm -rf "$__stage" 2>/dev/null || true
+    log_info "$(_t 'already up to date'): $__dest"
+  else
+    # 换上去：旧的挪开、新的挪进来。两次 rename 都在同一个文件系统里。
+    # 正跑在装好的副本上时（SELF_DIR == __dest），被挪开的正是运行中的目录 ——
+    # 脚本靠已打开的 fd 继续执行，rename 不影响它；这正是 vendor 自同步已验证过的路径。
+    if ! _sk_dir_swap_apply "$__stage" "$__dest" "$__old"; then
+      return "$SK_ERR"
+    fi
   fi
   rm -rf "$__old" 2>/dev/null || true
 
@@ -3166,6 +3925,7 @@ cmd_install_self() {
     return "$SK_ERR"
   }
   log_ok "$(_t 'installed'): $__bin"
+  _sk_err_ctx_pop || true
   # 修复入口也挂一个：CLI 坏掉时它指向的那份副本可能已经没了，
   # 但 $PREFIX/share/shellkit.old/repair.sh 一定还在（见 repair.sh 自己的说明）。
   if [ -f "$__dest/repair.sh" ]; then

@@ -5,34 +5,38 @@
 # 与「两次 rename 之间被 SIGKILL / 断电」留下完全相同的磁盘状态。
 set -u
 . "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/test_helper.sh"
+. "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/lib/fault.sh"
 
 work=$(tmpdir)
 locks="$work/locks"
 mkdir -p "$locks"
+export SHELLKIT_LOCK_DIR="$locks"
 proj="$work/app"
 "$TEST_ROOT/shellkit" new "$proj" --cmd run --yes >/dev/null 2>&1
+# 基线工程必须完整：不完整的话，下面的断言测的就不是「切换中途被杀」
+if [ ! -f "$proj/.shellkit-manifest" ]; then
+  _fail "the base project is incomplete: shellkit new did not finish"
+fi
 # vendor 里放一个用户自己加的文件：恢复与重装都必须把它保住
 printf 'MINE\n' >"$proj/vendor/shellkit/user-note.txt"
 
-# mv 替身：第一次 rename 落地后杀掉父进程（== 两个 rename 之间被杀）
-shim="$work/shim"
-mkdir -p "$shim"
-cat >"$shim/mv" <<'EOF'
-#!/bin/sh
-case "$2" in
-  */.shellkit-old | *.old)
-    /bin/mv "$@" || exit $?
-    kill -9 "$PPID"
-    exit 1
-    ;;
-esac
-exec /bin/mv "$@"
-EOF
-chmod +x "$shim/mv"
+# 让副本与源不一样，才有「换名」这回事：
+# 幂等语义下，副本与源逐字相同时根本不会换名（没有 rename ⇒ 也就没有
+# 「换到一半被打断」这个状态）。这里删掉副本里的一个文件 ——
+# 同步会把它补回去，于是两份不同 ⇒ 触发换名。
+rm -f "$proj/vendor/shellkit/VERSION"
+
+# 受控中断：走共享的故障注入层 ——
+# 第一次 rename（旧副本挪开、新的还没换上）落地后杀掉父进程，
+# 与「两次 rename 之间被杀 / 断电」留下完全相同的磁盘状态。
+#   fault_signal_kill recover after 1
+# recover 这一档匹配的正是「换名落到 .shellkit-old / *.old」的那次 rename。
 
 # CASE: vendor 切换在两次 rename 之间被杀
+fault_reset
+fault_signal_kill recover after 1
 rc=0
-PATH="$shim:$PATH" SHELLKIT_LOCK_DIR="$locks" "$TEST_ROOT/shellkit" vendor "$proj" >/dev/null 2>&1 || rc=$?
+fault_run "$TEST_ROOT/shellkit" vendor "$proj" >/dev/null 2>&1 || rc=$?
 assert_ne "0" "$rc" "the interrupted vendor must not report success"
 # 被杀后的状态：dest 不见了，.shellkit-old 是唯一完整的副本
 assert_false test -e "$proj/vendor/shellkit"
@@ -53,8 +57,12 @@ assert_false test -e "$proj/vendor/.shellkit-old"
 prefix="$work/prefix"
 SHELLKIT_LOCK_DIR="$locks" "$TEST_ROOT/shellkit" install-self --prefix "$prefix" >/dev/null 2>&1
 assert_true test -f "$prefix/share/shellkit/lib/bootstrap.sh"
+# 同理：装好的副本与源逐字相同时不会换名，删一个文件制造出差异
+rm -f "$prefix/share/shellkit/VERSION"
+fault_reset
+fault_signal_kill recover after 1
 rc=0
-PATH="$shim:$PATH" SHELLKIT_LOCK_DIR="$locks" "$TEST_ROOT/shellkit" install-self --prefix "$prefix" >/dev/null 2>&1 || rc=$?
+fault_run "$TEST_ROOT/shellkit" install-self --prefix "$prefix" >/dev/null 2>&1 || rc=$?
 assert_ne "0" "$rc" "the interrupted install-self must not report success"
 assert_false test -e "$prefix/share/shellkit"
 assert_true test -f "$prefix/share/shellkit.old/lib/bootstrap.sh"

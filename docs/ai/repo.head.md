@@ -22,9 +22,12 @@
                               单独 `make bats-check` 跑，CI 里有专门的 job
     tools/                    shdoc.awk / comment_coverage.awk / ai_doc.sh / check_docs.sh / term_shot.py
                               check_module_order.sh（模块依赖顺序门禁）
+                              check_security.sh（安全边界门禁）/ api_baseline.sh（公开 API 行为基线）
+                              bench.sh（性能基准，基线在 tools/bench_baseline.txt）
                               release.sh（一条命令发版）/ check_versions.sh（版本引用一致性）
                               site_sync.sh（docs/ → 站点页面）/ site_links.sh（产物链接门禁）
     docs/                     README 之外的深度文档；REFERENCE.md 与 AGENTS.md 是生成物
+                              SECURITY.md（安全边界规范）/ JSON.md（doctor --json 字段契约）
     docs/shots/*.shot         截图源：每行 `$ ` 是真要跑的命令，svg 由 make shots 渲染
     examples/                 两个能直接跑的工程，测试全程走真实二进制
     site/                     VuePress 2 文档站（手写页 + docs/ 同步页；Actions 构建，产物不进 git 历史）
@@ -44,7 +47,7 @@
 
     make check     # syntax + test + lint + module-order-check + check-exitcode-docs +
                   # local-names-check + module-count-check + pipe-safety-check +
-                  # dup-functions-check +
+                  # dup-functions-check + security-check + api-baseline-check +
                   # docs-check + versions-check + check-docs +
                   # cookbook-check + messages-check + examples + fmt，CI 也是这组
     make bats-check  # tests/bats 下的 bats 用例（bats 是外部依赖，不进 check）
@@ -170,6 +173,9 @@
     bash tools/check_exitcode_docs.sh # 只看公开函数有没有写明返回码
     bash tools/check_cookbook_count.sh # 只看文档里说的场景数对不对
     bash tools/check_pipe_safety.sh  # 只看管道里有没有会提前退出的消费者
+    bash tools/check_security.sh     # 只看安全边界（路径/软链/权限/脱敏/锁/原子写）
+    bash tools/api_baseline.sh       # 只看公开 API 的承诺与基线、MIGRATING 声明是否一致
+    bash tools/bench.sh              # 只看性能基准（--check 跟基线比；--write-baseline 重写基线）
     bash tools/coverage.sh --write-baseline  # 按真实覆盖率重生成白名单（只记当前未覆盖的）
     bash tools/mutation.sh --target shellkit --test "bash tests/test_upgrade_guard.sh" \
       --from-line $(grep -n '^_sk_upgrade_rel_safe()' shellkit | cut -d: -f1) \

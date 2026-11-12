@@ -14,11 +14,18 @@ assert_exit_code 0 "$TEST_ROOT/shellkit" vendor "$proj" --check
 printf '# drift\n' >>"$proj/vendor/shellkit/lib/core/log.sh"
 assert_exit_code 5 "$TEST_ROOT/shellkit" vendor "$proj" --check
 
-# 同步回去，并把改动冲掉
-assert_exit_code 0 "$TEST_ROOT/shellkit" vendor "$proj"
+# 同步**不冲掉**用户改过的文件（issue #69）：保留并告警
+out=$(bash "$TEST_ROOT/shellkit" vendor "$proj" 2>&1) && rc=0 || rc=$?
+assert_eq 0 "$rc" "the sync still succeeds with a locally modified file"
+assert_contains "$out" "modified locally, left alone" "the local change is reported"
+assert_contains "$(cat "$proj/vendor/shellkit/lib/core/log.sh")" "drift" "the local change survives the sync"
+# 副本仍与库不同 ⇒ --check 仍判红（这是「副本与库不一致」的事实，不是假红）
+assert_exit_code 5 "$TEST_ROOT/shellkit" vendor "$proj" --check
+# --force 才覆盖；覆盖之后副本与库一致，--check 回绿
+assert_exit_code 0 "$TEST_ROOT/shellkit" vendor "$proj" --force
 assert_exit_code 0 "$TEST_ROOT/shellkit" vendor "$proj" --check
 if grep -q 'drift' "$proj/vendor/shellkit/lib/core/log.sh"; then
-  _fail "vendor 同步没有覆盖掉被改动的副本"
+  _fail "vendor --force 没有覆盖掉被改动的副本"
 fi
 assert_eq "$(cat "$TEST_ROOT/VERSION")" "$(cat "$proj/vendor/shellkit/VERSION")" "VERSION is synced"
 
@@ -59,7 +66,8 @@ assert_exit_code 0 bash "$proj/vendor/shellkit/shellkit" upgrade "$proj"
 # CLI 与模板漂移也要被 --check 抓到
 printf '# drift\n' >>"$proj/vendor/shellkit/shellkit"
 assert_exit_code 5 "$TEST_ROOT/shellkit" vendor "$proj" --check
-assert_exit_code 0 "$TEST_ROOT/shellkit" vendor "$proj"
+# 同样：本地改动被保留 ⇒ --check 仍判红；--force 才覆盖
+assert_exit_code 0 "$TEST_ROOT/shellkit" vendor "$proj" --force
 assert_exit_code 0 "$TEST_ROOT/shellkit" vendor "$proj" --check
 
 # 用工程自带的副本同步本工程（README 记载的离线升级用法）：目标就是运行源，

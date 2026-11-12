@@ -14,14 +14,14 @@
 
 | 命令 | 用法 | 说明 |
 | --- | --- | --- |
-| `shellkit doctor` | `doctor [--dir DIR]` | check the runtime environment |
+| `shellkit doctor` | `doctor [--dir DIR] [--json]` | check the runtime environment |
 | `shellkit list` | `list` | list templates and library modules |
 
 ## existing projects
 
 | 命令 | 用法 | 说明 |
 | --- | --- | --- |
-| `shellkit vendor` | `vendor <dir> [--check]` | sync the library into an existing project |
+| `shellkit vendor` | `vendor <dir> [--check] [--force]` | sync the library into an existing project |
 
 ## documentation
 
@@ -35,7 +35,7 @@
 
 | 命令 | 用法 | 说明 |
 | --- | --- | --- |
-| `shellkit install-self` | `install-self [--prefix DIR]` | install shellkit into PATH |
+| `shellkit install-self` | `install-self [--prefix DIR] [--force]` | install shellkit into PATH |
 | `shellkit uninstall-self` | `uninstall-self [--prefix DIR]` | remove an installed shellkit |
 | `shellkit update` | `update [--check] [--from FILE] [--sha256 SUM] [--prefix DIR]` | update an installed shellkit |
 

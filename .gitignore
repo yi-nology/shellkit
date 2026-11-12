@@ -10,3 +10,15 @@ site/node_modules/
 
 # 本地运行时落在仓库根的临时件（内容是 skill 清单，不是仓库产物）
 .DOCS.*
+
+# 凭据文件不入库。门禁 tools/check_security.sh 的 secret.tracked 查的是「已经入库的」，
+# 这里管的是「还没入库的」—— 忽略规则不能只靠评审兜着。
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+id_rsa
+id_dsa
+id_ecdsa
+id_ed25519

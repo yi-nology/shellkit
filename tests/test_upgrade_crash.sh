@@ -16,10 +16,12 @@
 # 一次升级含模板渲染与 vendor 同步，几分钟是正常的。
 set -u
 . "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/test_helper.sh"
+. "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/lib/fault.sh"
 
 work=$(tmpdir)
 locks="$work/locks"
 mkdir -p "$locks"
+export SHELLKIT_LOCK_DIR="$locks"
 
 # ---- 改过的模板：让升级真的有事可做 ----
 tpl="$work/tpl"
@@ -28,38 +30,13 @@ for rel in README.md AGENTS.md Makefile .shellcheckrc lib/app.sh tests/test_help
   printf '\n# crash-test marker\n' >>"$tpl/$rel"
 done
 
-# ---- mv 替身：数到第 N 次「落到工程文件上」的 rename 就杀掉父进程 ----
-shim="$work/shim"
-mkdir -p "$shim"
-cat >"$shim/mv" <<'SHIM_EOF'
-#!/bin/sh
-# 最后一个参数是目标路径
-dest=""
-for a in "$@"; do dest=$a; done
-case "$dest" in
-  "$SK_CRASH_PROJ"/*) ;;
-  *) exec /bin/mv "$@" ;;
-esac
-# 清单、升级日志、vendor 的切换都不算「工程文件」
-case "$dest" in
-  */.shellkit-manifest | */.shellkit-upgrade-journal | */vendor/*)
-    exec /bin/mv "$@"
-    ;;
-esac
-n=0
-if [ -f "$SK_CRASH_COUNT" ]; then
-  n=$(cat "$SK_CRASH_COUNT")
-fi
-n=$((n + 1))
-printf '%s' "$n" >"$SK_CRASH_COUNT"
-/bin/mv "$@" || exit $?
-if [ "$n" -ge "$SK_CRASH_AT" ]; then
-  kill -9 "$PPID"
-  exit 1
-fi
-exit 0
-SHIM_EOF
-chmod +x "$shim/mv"
+# ---- 受控中断：走共享的故障注入层 ----
+#
+# 数到第 N 次「落到工程文件上」的 rename 就杀掉父进程 —— 与「rename 已成功、
+# 进程尚未来得及提交清单」的磁盘状态完全一样。
+# 替身怎么造由 tests/lib/fault.sh 负责（这里不再各写各的）：
+#   fault_scope      哪个目录算「工程目录」（rename 阶段判「工程自己的文件」）
+#   fault_signal_kill rename after N  数到第 N 次换工程文件时杀掉父进程
 
 # file_sum FILE —— 文件的 sha256
 file_sum() {
@@ -95,14 +72,14 @@ assert_eq "8" "$n_total" "the project must own all eight template files"
 for n in 1 2 3 4 5 6 7 8; do
   proj="$work/p$n"
   cp -R "$base" "$proj"
-  count="$work/count.$n"
-  rm -f "$count"
 
   # ---- 崩在第 n 个文件提交之后 ----
+  fault_reset
+  fault_scope "$proj"
+  fault_signal_kill rename after "$n"
   rc=0
-  PATH="$shim:$PATH" SHELLKIT_LOCK_DIR="$locks" \
-    SK_CRASH_PROJ="$proj" SK_CRASH_AT="$n" SK_CRASH_COUNT="$count" \
-    "$TEST_ROOT/shellkit" upgrade "$proj" --template "$tpl" >"$work/crash.$n.log" 2>&1 || rc=$?
+  fault_run "$TEST_ROOT/shellkit" upgrade "$proj" --template "$tpl" \
+    >"$work/crash.$n.log" 2>&1 || rc=$?
   assert_ne "0" "$rc" "the interrupted upgrade must not report success (n=$n)"
 
   # 升级日志必须已经落盘：没有它就没有恢复的依据
@@ -120,7 +97,8 @@ for n in 1 2 3 4 5 6 7 8; do
   assert_eq "$n" "$ahead" "the crash must leave exactly $n file(s) ahead of the manifest (n=$n)"
 
   # ---- 重跑：必须把基线推进到正确值 ----
-  out=$(SHELLKIT_LOCK_DIR="$locks" "$TEST_ROOT/shellkit" upgrade "$proj" --template "$tpl" 2>&1)
+  fault_reset
+  out=$(fault_run "$TEST_ROOT/shellkit" upgrade "$proj" --template "$tpl" 2>&1)
   assert_contains "$out" "upgrade finished" "the recovery upgrade must finish (n=$n)"
   assert_false test -e "$proj/.shellkit-upgrade-journal"
 
@@ -131,7 +109,7 @@ for n in 1 2 3 4 5 6 7 8; do
   done
 
   # ---- 再跑一次：没有任何文件被冻结 ----
-  out=$(SHELLKIT_LOCK_DIR="$locks" "$TEST_ROOT/shellkit" upgrade "$proj" --template "$tpl" 2>&1)
+  out=$(fault_run "$TEST_ROOT/shellkit" upgrade "$proj" --template "$tpl" 2>&1)
   assert_contains "$out" "0 updated, 0 added, 0 left alone" "no file may stay frozen after the recovery (n=$n)"
 done
 

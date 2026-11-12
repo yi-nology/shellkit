@@ -9,7 +9,7 @@ SOURCES := shellkit install.sh repair.sh demo.sh lib/bootstrap.sh $(wildcard lib
 TEMPLATES := $(shell find templates -type f)
 SHOTS := $(wildcard docs/shots/*.shot)
 
-.PHONY: help test syntax lint lint-templates fmt messages messages-check docs docs-check versions-check check-docs cookbook-check shots examples check install release release-dry site-deps site-sync site site-serve local-names-check module-count-check pipe-safety-check dup-functions-check mutation
+.PHONY: help test syntax lint lint-templates fmt messages messages-check docs docs-check versions-check check-docs cookbook-check shots examples check install release release-dry site-deps site-sync site site-serve local-names-check module-count-check pipe-safety-check dup-functions-check mutation security-check api-baseline-check bench
 
 help:
 	@printf '%s\n' \
@@ -34,6 +34,9 @@ help:
 	  'make bats-check  跑 bats 用例（tests/bats，每个 @test 一个独立进程）' \
 	  'make coverage    公开函数级覆盖率（带白名单棘轮，不进 check）' \
 	  'make mutation    变异测试：升级路径守卫用例的判据能力（不进 check）' \
+  'make security-check  安全边界的机器判据（路径/软链/权限/脱敏/锁/原子写）' \
+  'make api-baseline-check  公开 API 行为基线（返回码或函数集变了就红）' \
+  'make bench        性能基准：记录与对比基线（不进 check，CI 里只出报告）' \
 	  'make release VERSION=x.y.z  发版：升版本→重生成产物→门禁→commit→tag→push' \
 	  'make release-dry VERSION=x.y.z  同 release，但跑完还原工作树、不提交' \
 	  'make site        构建文档站（先跑 tools/site_sync.sh 从 docs/ 同步）' \
@@ -175,7 +178,22 @@ dup-functions-check:
 pipe-safety-check:
 	@$(BASH) tools/check_pipe_safety.sh
 
-check: syntax test lint module-order-check check-exitcode-docs local-names-check module-count-check pipe-safety-check dup-functions-check docs-check versions-check check-docs cookbook-check messages-check examples fmt
+# 安全边界：路径守卫、软链、权限、密钥脱敏、单实例锁、原子写 —— 十条机器判据
+# （规范见 docs/SECURITY.md）
+security-check:
+	@$(BASH) tools/check_security.sh
+
+# 公开 API 行为基线：函数集、承诺返回码、探针实测返回码。
+# 改了公开函数的返回码却没在 docs/MIGRATING.md 里声明 ⇒ 这里红。
+api-baseline-check:
+	@$(BASH) tools/api_baseline.sh
+
+# 性能基准：跑一遍基准并与基线对比。刻意不进 check —— 基准是观察量不是判据，
+# 机器快慢差几倍很正常，拿它当门禁只会变成随机红灯。
+bench:
+	@$(BASH) tools/bench.sh
+
+check: syntax test lint module-order-check check-exitcode-docs local-names-check module-count-check pipe-safety-check dup-functions-check security-check api-baseline-check docs-check versions-check check-docs cookbook-check messages-check examples fmt
 
 install:
 	./shellkit install-self --prefix $(PREFIX)/usr

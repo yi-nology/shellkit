@@ -58,6 +58,32 @@ rc=$?
 assert_eq "0" "$rc" "all required checks green must pass the gate"
 assert_contains "$out" "verdict: PASSED" "the verdict must say passed"
 
+# CASE: 「required checks: N」必须等于清单的实际条数（issue #70）
+#
+# 旧写法是 `printf '%s' "$CHECKS" | tr '|' '\n' | wc -l`：printf 不补尾换行，
+# wc -l 数的是换行符个数 ⇒ 永远比实际条数少 1。三条清单报 2，
+# 下一行 verdict 却说 3 —— 同一个清单两个数字，谁也说不清哪个对。
+# 这里把 N 钉死：传几条就得报几条（1/2/3/5 都试一遍，多的少的都钉住）。
+for __list in alpha 'alpha|beta' 'alpha|beta|gamma' 'alpha|beta|gamma|delta|epsilon'; do
+  __want=$(printf '%s\n' "$__list" | awk -F'|' '{ print NF }')
+  printf '%s\n' "$__list" | tr '|' '\n' | while IFS= read -r __n; do
+    [ -n "$__n" ] || continue
+    printf '%s\tcompleted/success\n' "$__n"
+  done >"$d/state-list"
+  __bin=$(mk_gh "$d/state-list")
+  out=$(env PATH="$__bin:$PATH" "SHELLKIT_GATE_CHECKS=$__list" bash "$GATE" "$SHA" --once 2>&1)
+  rc=$?
+  assert_eq "0" "$rc" "a list of green checks must pass the gate"
+  printf '%s\n' "$out" >"$d/gate.out"
+  __got=""
+  while IFS= read -r __line; do
+    case "$__line" in
+      *"required checks: "*) __got=${__line##*required checks: } ;;
+    esac
+  done <"$d/gate.out"
+  assert_eq "$__want" "$__got" "the required-check count must equal the number of checks listed ($__list)"
+done
+
 # CASE: 一个必需检查失败 ⇒ 不放行，退出码 1，点名是谁
 printf 'alpha\tcompleted/success\nbeta\tcompleted/failure\ngamma\tcompleted/success\n' >"$d/state"
 out=$(env PATH="$bin:$PATH" "$GATE_ENV" bash "$GATE" "$SHA" --once 2>&1)

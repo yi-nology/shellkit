@@ -327,11 +327,11 @@ fs_ensure_dir DIR [MODE] —— 幂等建目录；给了 MODE 就 chmod
 
 ### `fs_atomic_write`
 
-fs_atomic_write FILE CONTENT [MODE] —— 原子写文件；默认权限 600，父目录不存在会先建
+fs_atomic_write FILE CONTENT [MODE] —— 原子写文件；默认权限 600，父目录不存在会先建 权限：MODE 给什么就是什么（默认 600），**覆盖已有文件也照样改**。 与 fs_atomic_copy 的分工：那个不传 MODE 时保留目标原权限，这个总是按 MODE 写 —— 「写内容」的场景（清单、配置）要的就是「权限是定死的」，不然改一次配置就把 权限改了。
 
 **退出码**
 
-- 0 写成功（临时文件 + mv，原文件权限保留）
+- 0 写成功（临时文件 + rename）
 - 2 没给参数
 - 1 建目录、落临时文件或改名失败
 

@@ -222,13 +222,244 @@ log_ok() { _sk_log OK 20 "$@"; }
 # @exitcode 0 总是成功（级别不够时什么都不输出）
 log_warn() { _sk_log WARN 30 "$@"; }
 
+# ---------------------------------------------------------------------------
+# 错误上下文：路径信息与操作栈（issue #63）
+#
+# 失败信息要回答三个问题：哪一步失败了、当时的输入是什么、当时的文件在哪。
+# 只说「哪一步」不够 —— 用户真正要看到的是「哪个文件、绝对路径、指向哪里」。
+#
+# 两块能力：
+#   1. 路径上下文（_sk_err_path_info）：绝对路径 + 软链指向
+#   2. 操作栈（_sk_err_ctx_push）：模块之间传「当前在做什么」，出错时组装成一条链
+#
+# 纯内部能力，不新增公开 API。既有错误文案不推翻 —— 上下文是**追加**的：
+# 上下文栈为空时，log_error（以及走它的 die / fail）的输出与以前逐字相同。
+# ---------------------------------------------------------------------------
+
+# 上下文栈：操作名与参数各一个平行数组（bash 3.2 没有关联数组）
+_SK_ERR_CTX_OPS=()
+_SK_ERR_CTX_PARAMS=()
+
+# _sk_secret_key_name KEY —— 键名看起来是不是敏感字段
+#
+# 判断的是「键名」，不是值：值什么样都行，键名像敏感字段就该遮。
+# 常见写法：--password、--api-key、API_TOKEN=...、DB_PASSWORD=...
+#
+# 为什么住在 log 而不是 run：log 比 run 先加载（run 依赖 log），反向不行 ——
+# 而错误上下文的脱敏要用它，log 用不到 run。
+# run.sh 里的 _sk_run_secret_key 现在是它的壳（那个名字已有调用方，不改）。
+_sk_secret_key_name() {
+  local __k=${1:-} __l
+  __l=$(printf '%s' "$__k" | tr 'A-Z' 'a-z')
+  case "$__l" in
+    *password* | *passwd* | *secret* | *token* | *apikey* | *api[_-]key* | \
+      *access[_-]key* | *private[_-]key* | *credential* | *authorization*)
+      return 0
+      ;;
+  esac
+  # 以 key 结尾的（X-Api-Key、X-Custom-Key）：分隔符是词边界，
+  # 否则 monkey 这种普通词也会被当成敏感字段 —— 过度脱敏会让日志失去排障价值。
+  case "$__l" in
+    key | *[-_.]key) return 0 ;;
+  esac
+  return 1
+}
+
+# _sk_err_redact_param PARAM —— 一条 KEY=VALUE 参数；敏感键名的值遮成 ***
+#
+# 上下文里的参数是「当时的输入」，而输入里常常混着口令 ——
+# 错误上下文会进日志、进工单、进 issue，所以脱敏是默认行为而不是可选项。
+_sk_err_redact_param() {
+  local __p=${1:-} __k="" __v=""
+  [ -n "$__p" ] || return 0
+  case "$__p" in
+    *=*)
+      __k=${__p%%=*}
+      __v=${__p#*=}
+      ;;
+    *)
+      printf '%s' "$__p"
+      return 0
+      ;;
+  esac
+  if _sk_secret_key_name "$__k"; then
+    printf '%s=***' "$__k"
+  else
+    printf '%s' "$__p"
+  fi
+}
+
+# _sk_err_ctx_push OP [KEY=VALUE ...] —— 压一层「当前在做什么」
+#
+# OP 是**已经本地化过**的操作名（调用方传 $(...) 的结果）。
+# 参数是 KEY=VALUE 形式；键名像敏感字段时值自动遮成 ***。
+#
+# 为什么用栈而不是单个变量：一次调用链有多层 ——「升级工程」里面会「同步 vendor」，
+# 底层失败时顶层要能说清楚「这是在升级工程时同步 vendor 失败」。
+_sk_err_ctx_push() {
+  local __op=${1:-} __p __params=""
+  if [ "$#" -gt 0 ]; then
+    shift
+  fi
+  for __p in "$@"; do
+    [ -n "$__p" ] || continue
+    if [ -n "$__params" ]; then
+      __params="$__params $(_sk_err_redact_param "$__p")"
+    else
+      __params=$(_sk_err_redact_param "$__p")
+    fi
+  done
+  _SK_ERR_CTX_OPS[${#_SK_ERR_CTX_OPS[@]}]="$__op"
+  _SK_ERR_CTX_PARAMS[${#_SK_ERR_CTX_PARAMS[@]}]="$__params"
+  return 0
+}
+
+# _sk_err_ctx_pop —— 弹掉栈顶那层；栈空时返回 1
+_sk_err_ctx_pop() {
+  local __n=${#_SK_ERR_CTX_OPS[@]} __i=0 __last=0
+  local __ops=() __params=()
+  [ "$__n" -gt 0 ] || return 1
+  __last=$((__n - 1))
+  while [ "$__i" -lt "$__n" ]; do
+    if [ "$__i" -ne "$__last" ]; then
+      __ops[${#__ops[@]}]="${_SK_ERR_CTX_OPS[$__i]}"
+      __params[${#__params[@]}]="${_SK_ERR_CTX_PARAMS[$__i]}"
+    fi
+    __i=$((__i + 1))
+  done
+  _SK_ERR_CTX_OPS=(${__ops[@]+"${__ops[@]}"})
+  _SK_ERR_CTX_PARAMS=(${__params[@]+"${__params[@]}"})
+  return 0
+}
+
+# _sk_err_ctx_depth —— 当前栈深
+#
+# 分发层用它记住「命令进来时栈有多深」，命令结束时把栈收到这个深度。
+_sk_err_ctx_depth() {
+  printf '%s' "${#_SK_ERR_CTX_OPS[@]}"
+}
+
+# _sk_err_ctx_unwind DEPTH —— 把栈截回 DEPTH 层；已经比它浅就什么都不做
+#
+# 为什么光有 pop 不够：嵌套调用失败时各个 return 不会逐层 pop
+# （cmd_upgrade 就会在 _sk_vendor_install 失败后继续写清单），
+# 栈里会留下面包屑 —— 而 pop 是 LIFO 的，留下的帧会让下一次 pop 弹错层，
+# 后面的报错会带上一条命令的操作名。
+# 栈是诊断用的瞬时状态，命令结束就必须回到进入时的样子；
+# 由分发层统一回收，就不会依赖每个失败路径都记得 pop。
+# 与 _sk_err_ctx_pop 同构（循环 + ${arr[@]+...} 守卫），避开 bash 3.2 空数组展开。
+_sk_err_ctx_unwind() {
+  # ${1-} 而不是 ${1:-0}：DEPTH 是必填的。空串是调用方的 bug，
+  # 当成 0 会让它静默清空整条栈 —— 那正是这条判据要挡的「悄悄把现场抹掉」。
+  local __keep=${1-} __n=${#_SK_ERR_CTX_OPS[@]} __i=0
+  local __ops=() __params=()
+  case "$__keep" in
+    '' | *[!0-9]*) return 1 ;;
+  esac
+  [ "$__n" -le "$__keep" ] && return 0
+  while [ "$__i" -lt "$__keep" ]; do
+    __ops[${#__ops[@]}]="${_SK_ERR_CTX_OPS[$__i]}"
+    __params[${#__params[@]}]="${_SK_ERR_CTX_PARAMS[$__i]}"
+    __i=$((__i + 1))
+  done
+  _SK_ERR_CTX_OPS=(${__ops[@]+"${__ops[@]}"})
+  _SK_ERR_CTX_PARAMS=(${__params[@]+"${__params[@]}"})
+  return 0
+}
+
+# _sk_err_ctx_render —— 把上下文栈渲染成一行；栈空时是空串
+#
+# 形如：syncing (dir=/path/to/project) > upgrading (dir=/path/to/project)
+_sk_err_ctx_render() {
+  local __i=0 __n=${#_SK_ERR_CTX_OPS[@]} __out="" __op __params
+  while [ "$__i" -lt "$__n" ]; do
+    __op=${_SK_ERR_CTX_OPS[$__i]}
+    __params=${_SK_ERR_CTX_PARAMS[$__i]}
+    if [ -n "$__op" ]; then
+      if [ -n "$__params" ]; then
+        __out="$__out${__out:+ > }$__op ($__params)"
+      else
+        __out="$__out${__out:+ > }$__op"
+      fi
+    fi
+    __i=$((__i + 1))
+  done
+  printf '%s' "$__out"
+}
+
+# _sk_err_ctx_suffix —— 上下文的可打印后缀；栈空时是空串
+#
+# 空栈时为空串是硬要求：既有错误文案不推翻（issue #63 的约束），
+# 所有没压上下文的调用点，输出与以前逐字相同。
+_sk_err_ctx_suffix() {
+  local __txt
+  __txt=$(_sk_err_ctx_render)
+  [ -n "$__txt" ] || return 0
+  printf ' [context: %s]' "$__txt"
+}
+
+# _sk_err_abs_path PATH —— 绝对路径
+#
+# 叶子不存在时按父目录解析 —— 待生成的目录（工程目录、prefix）
+# 往往还不存在，这时整条路径没法 pwd，但父目录总是存在的。
+_sk_err_abs_path() {
+  local __p=${1:-} __dir="" __base=""
+  [ -n "$__p" ] || return 0
+  # 现成的目录直接 cd 过去取真实路径 —— 这一条同时解决 "." 与 ".."：
+  # 按「父目录 + basename」拼的话，basename(".") 是 "."，拼出来会多个 "/."。
+  # 软链不算：软链的路径本身就是身份，解析成目标就看不见这个软链了。
+  if [ -d "$__p" ] && [ ! -L "$__p" ]; then
+    printf '%s' "$(cd "$__p" 2>/dev/null && pwd -P)"
+    return 0
+  fi
+  __base=${__p##*/}
+  __dir=${__p%/*}
+  [ "$__dir" = "$__p" ] && __dir="."
+  if [ -d "$__dir" ]; then
+    printf '%s/%s' "$(cd "$__dir" 2>/dev/null && pwd -P)" "$__base"
+  else
+    printf '%s' "$__p"
+  fi
+}
+
+# _sk_err_path_info PATH —— 路径上下文：绝对路径 + 软链指向
+#
+# 输出形如：path=/abs/file symlink=/abs/target
+# 软链指向用 readlink 的结果；相对指向按链接所在目录解析成绝对路径 ——
+# 原样打印相对指向对排障没用（相对于谁？）。
+_sk_err_path_info() {
+  local __p=${1:-} __abs="" __link="" __tgt="" __dir=""
+  [ -n "$__p" ] || return 0
+  __abs=$(_sk_err_abs_path "$__p")
+  printf 'path=%s' "$__abs"
+  if [ -L "$__p" ]; then
+    __link=$(readlink "$__p" 2>/dev/null) || __link=""
+    if [ -n "$__link" ]; then
+      __dir=${__abs%/*}
+      case "$__link" in
+        /*) __tgt="$__link" ;;
+        *) __tgt="$__dir/$__link" ;;
+      esac
+      printf ' symlink=%s' "$__tgt"
+    fi
+  fi
+  return 0
+}
+
 # log_error MSG... —— 输出错误（stderr），并把最后一条错误记进 SK_ERRMSG
 # @exitcode 0 总是成功；同时把消息记进 SK_ERRMSG
 log_error() {
+  local __msg="$*"
+  # 错误上下文（issue #63）：栈空时输出与以前逐字相同；
+  # 栈非空时把「当前在做什么」接在消息后面 ——
+  # 底层失败时，顶层输出要能看出这是在装 skill 还是在升级工程。
+  if [ "${#_SK_ERR_CTX_OPS[@]}" -gt 0 ]; then
+    __msg="$__msg$(_sk_err_ctx_suffix)"
+  fi
   # 公开变量：供调用方在退出前读取最后一条错误
   # shellcheck disable=SC2034
-  SK_ERRMSG="$*"
-  _sk_log ERROR 40 "$@"
+  SK_ERRMSG="$__msg"
+  _sk_log ERROR 40 "$__msg"
 }
 
 # log_debug MSG... —— 仅在 SHELLKIT_DEBUG=1 或 SHELLKIT_LOG_LEVEL=debug 时输出

@@ -4,7 +4,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: shellkit\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-11-12 02:08+0800\n"
+"POT-Creation-Date: 2026-11-12 16:29+0800\n"
 "PO-Revision-Date: 2026-11-08 00:00+0800\n"
 "Last-Translator: shellkit contributors\n"
 "Language-Team: shellkit contributors\n"
@@ -464,6 +464,15 @@ msgstr "把 AI skill 装进 AI 客户端"
 msgid "usage"
 msgstr "用法"
 
+msgid "the target is a symlink, left alone"
+msgstr "目标是符号链接，保持原样"
+
+msgid "modified locally, left alone"
+msgstr "本地已修改，保持原样"
+
+msgid "syncing"
+msgstr "正在同步"
+
 msgid "the vendor directory is a symlink, refusing to install"
 msgstr "vendor 目录是符号链接，拒绝安装"
 
@@ -472,6 +481,9 @@ msgstr "vendor 出来的库是符号链接，拒绝安装"
 
 msgid "recovering the vendored library after an interrupted swap"
 msgstr "正在从被打断的切换中恢复库副本"
+
+msgid "already up to date"
+msgstr "已是最新版本："
 
 msgid "path exists and is not a directory"
 msgstr "路径已存在且不是目录"
@@ -608,9 +620,6 @@ msgstr "清单早于指纹基线；无法核对的文件保持原样"
 msgid "refusing to write outside the project directory"
 msgstr "拒绝写到工程目录之外"
 
-msgid "the target is a symlink, left alone"
-msgstr "目标是符号链接，保持原样"
-
 msgid "the target path is blocked by a file"
 msgstr "目标的父路径是个文件，建不出来"
 
@@ -619,9 +628,6 @@ msgstr "目标位置是个目录，拒绝覆盖"
 
 msgid "recovered from an interrupted upgrade"
 msgstr "从被中断的升级中恢复"
-
-msgid "modified locally, left alone"
-msgstr "本地已修改，保持原样"
 
 msgid "no recorded fingerprint, left alone"
 msgstr "没有记录的指纹，保持原样"
@@ -659,6 +665,9 @@ msgstr "同步库副本失败"
 msgid "upgrade finished"
 msgstr "升级完成"
 
+msgid "the library could not be loaded"
+msgstr "库无法加载"
+
 msgid "library file is missing"
 msgstr "库文件缺失"
 
@@ -676,9 +685,6 @@ msgstr "模块文件齐备"
 
 msgid "library integrity"
 msgstr "库完整性"
-
-msgid "the library could not be loaded"
-msgstr "库无法加载"
 
 msgid "environment check"
 msgstr "环境检查"
@@ -767,17 +773,14 @@ msgstr "已写入 man 手册页"
 msgid "vendored library is out of date"
 msgstr "工程里的库副本已过期"
 
-msgid "run without --check to update"
-msgstr "去掉 --check 重跑即可更新"
+msgid "run without --check to sync (locally modified files are kept)"
+msgstr "去掉 --check 重跑即可同步（用户改过的文件会保留）"
 
 msgid "vendored library is up to date"
 msgstr "工程里的库副本已是最新"
 
 msgid "refusing to overwrite a directory that is not a shellkit vendor"
 msgstr "拒绝覆盖不是 shellkit 副本的目录"
-
-msgid "syncing"
-msgstr "正在同步"
 
 msgid "load it from your scripts"
 msgstr "在脚本里这样加载"
@@ -848,6 +851,9 @@ msgstr "拒绝顺着符号链接写入"
 msgid "the skill is up to date"
 msgstr "skill 已是最新"
 
+msgid "skipped a path outside the install directory"
+msgstr "跳过了安装目录之外的路径："
+
 msgid ""
 "cannot verify which files were installed by shellkit; nothing was removed"
 msgstr "无法分辨哪些文件是 shellkit 装的；什么都没有删除"
@@ -895,14 +901,14 @@ msgstr "只允许一个动作"
 msgid "only one client is allowed"
 msgstr "只允许一个客户端"
 
+msgid "installing"
+msgstr "正在安装"
+
 msgid "try a writable prefix"
 msgstr "换一个可写的前缀"
 
 msgid "recovering the installed copy after an interrupted swap"
 msgstr "正在从被打断的切换中恢复已安装的副本"
-
-msgid "installing"
-msgstr "正在安装"
 
 msgid "failed to write the install manifest"
 msgstr "写入安装清单失败"
@@ -918,9 +924,6 @@ msgstr "没有删除任何东西；确认无误请手工删除该目录"
 
 msgid "removing"
 msgstr "正在删除："
-
-msgid "skipped a path outside the install directory"
-msgstr "跳过了安装目录之外的路径："
 
 msgid "failed to remove"
 msgstr "删除失败："
@@ -948,9 +951,6 @@ msgstr "正在检查新版本"
 
 msgid "cannot read the latest version from the release API"
 msgstr "无法从 release API 读出最新版本"
-
-msgid "already up to date"
-msgstr "已是最新版本："
 
 msgid "current version"
 msgstr "当前版本："
@@ -996,3 +996,6 @@ msgstr "已开启强制模式"
 
 msgid "finished"
 msgstr "完成"
+
+#~ msgid "run without --check to update"
+#~ msgstr "去掉 --check 重跑即可更新"

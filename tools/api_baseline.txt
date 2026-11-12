@@ -1,0 +1,178 @@
+# shellkit 公开 API 行为基线
+#
+# 由 `bash tools/api_baseline.sh --write-baseline` 生成 —— **不要手工维护**。
+# 手工改这里没有意义：门禁会拿它跟源码重算的结果逐项比对，对不上就红；
+# 手改「声明版本」也躲不过 —— 门禁会回查 docs/MIGRATING.md。
+#
+# 格式（制表符分隔，每行一个公开函数）：
+#   名字            公开函数名（lib/core/*.sh 里不以 _ 开头的函数）
+#   承诺返回码      逗号分隔，来自源码注释里的 @exitcode 行（唯一真相源）
+#   状态            active=还在 / removed=已删除（删除公开函数也是行为变更）
+#   声明版本        这一版承诺是在哪个版本里写进 MIGRATING 的；- = 沿用基线，没有单独声明
+#   探针            probe=沙箱里真调过 / skip=没调
+#   探针断言        探针断言过的返回码（逗号分隔）；skip 时为 -
+#   不入探针的原因  probe 时为 -
+#
+baseline-version: 0.17.0
+ask	0,1,2,3	active	-	probe	0,3	-
+ask_choice	0,1,2,3	active	-	probe	0,3	-
+ask_yn	0,1,2,3	active	-	probe	0,3	-
+cli_cmd	0,2	active	-	probe	0	-
+cli_completion_script	0,2	active	-	probe	0	-
+cli_group	0,2	active	-	probe	0	-
+cli_has	0,1	active	-	probe	0,1	-
+cli_opt	0,2	active	-	probe	0	-
+cli_opt_init	0	active	-	probe	0	-
+cli_opts	0,2	active	-	probe	0	-
+cli_run	0,1,2,其他	active	-	probe	0	-
+cli_usage_cmd	0	active	-	probe	0	-
+cli_usage_global	0	active	-	probe	0	-
+conf_disable	0,1,2	active	-	probe	0	-
+conf_file	0	active	-	probe	0	-
+conf_format	0	active	-	probe	0	-
+conf_get	0,2	active	-	probe	0	-
+conf_get_any	0,2	active	-	probe	0	-
+conf_has	0,1,2	active	-	probe	0,1	-
+conf_init	0,2	active	-	probe	0	-
+conf_keys	0	active	-	probe	0	-
+conf_load_dotenv	0,2,3	active	-	probe	0	-
+conf_set	0,1,2,3	active	-	probe	0	-
+conf_source	0,2,3	active	-	probe	0	-
+conf_unset	0,1,2	active	-	probe	0	-
+confirm	0,1,2,3	active	-	probe	0,1	-
+die	0,2	active	-	skip	-	会 exit 进程（退出码由参数决定，不在 @exitcode 承诺集合里）
+fail	0,2,其他	active	-	probe	0,2,7	-
+fs_atomic_copy	0,1,2	active	-	probe	0	-
+fs_atomic_write	0,1,2	active	-	probe	0	-
+fs_backup	0,1,2	active	-	probe	0	-
+fs_ensure_block	0,1,2	active	-	probe	0	-
+fs_ensure_dir	0,1,2	active	-	probe	0	-
+fs_ensure_line	0,1,2	active	-	probe	0	-
+fs_ensure_symlink	0,1,2	active	-	probe	0	-
+fs_tmp_init	0,1	active	-	probe	0	-
+fs_tmpdir	0,1	active	-	probe	0	-
+http_github_latest_tag	0,2	active	-	skip	-	需要网络
+http_github_release_asset	0,2	active	-	skip	-	需要网络
+lock_acquire	0,2,3	active	-	probe	0	-
+lock_held	0,1,2	active	-	probe	0,1	-
+lock_release	0,2,3	active	-	probe	0	-
+log_debug	0	active	-	probe	0	-
+log_error	0	active	-	probe	0	-
+log_info	0	active	-	probe	0	-
+log_ok	0	active	-	probe	0	-
+log_section	0	active	-	probe	0	-
+log_warn	0	active	-	probe	0	-
+man_count_functions	0	active	-	probe	0	-
+man_module_page	0,2	active	-	probe	0	-
+man_modules	0	active	-	probe	0	-
+man_page	0	active	-	probe	0	-
+man_write_all	0,3	active	-	skip	-	一次要渲染 24 页 man（本机实测 86 秒），太慢
+net_download	0,1,2,3,4,5	active	-	skip	-	需要网络（会真的下载文件）
+net_escape_json	0	active	-	probe	0	-
+net_json	0,2,3,4,5	active	-	skip	-	需要网络
+net_request	0,2,3,4	active	-	skip	-	需要网络
+net_sha256	0,1,2	active	-	probe	0	-
+net_verify	0,2,5	active	-	probe	0,5	-
+net_wait_http	0,2,3,4	active	-	skip	-	需要网络（还会逐秒 sleep 等 HTTP）
+net_wait_port	0,2,4	active	-	skip	-	需要网络（还会逐秒 sleep 等端口）
+os_arch	0	active	-	probe	0	-
+os_desktop_env	0	active	-	probe	0	-
+os_distro_family	0	active	-	probe	0	-
+os_distro_id	0	active	-	probe	0	-
+os_distro_name	0	active	-	probe	0	-
+os_has_cmd	0,1,2	active	-	probe	0,1	-
+os_is_desktop	0,1	active	-	probe	0,1	-
+os_is_root	0,1	active	-	probe	0,1	-
+os_md5	0,1,2	active	-	probe	0	-
+os_name	0	active	-	probe	0	-
+os_pkg_install	0,3,其他	active	-	skip	-	会安装系统软件包
+os_pkg_install_root	0,2,3,其他	active	-	skip	-	会提权安装系统软件包
+os_pkg_installed	0,1,2,3	active	-	skip	-	查询结果取决于本机已装的包，跨机器不稳定
+os_pkg_manager	0,1	active	-	probe	0,1	-
+os_pkg_manager_full	0,1	active	-	probe	0,1	-
+os_pkg_remove_root	0,2,3,其他	active	-	skip	-	会提权卸载系统软件包
+os_pkg_update	0,3,其他	active	-	skip	-	会改动系统包索引
+os_pkg_update_root	0,3,其他	active	-	skip	-	会提权刷新系统包索引
+os_release_field	0,2	active	-	probe	0	-
+os_sed_i	0,其他	active	-	probe	0	-
+os_sha256	0,1,2	active	-	probe	0	-
+os_sudo_ready	0,3	active	-	skip	-	可能要交互输入 sudo 口令
+parallel_map	0,2,其他	active	-	probe	0	-
+profile_append	0,1,2	active	-	probe	0	-
+profile_env	0	active	-	probe	0	-
+profile_parse	0	active	-	probe	0	-
+profile_write	0,1,2	active	-	probe	0	-
+registry_add	0	active	-	probe	0	-
+registry_deps	0,1	active	-	probe	0	-
+registry_get	0	active	-	probe	0	-
+registry_list	0	active	-	probe	0	-
+registry_scan	0	active	-	probe	0	-
+registry_scan_multi	0	active	-	probe	0	-
+registry_topo	0,1	active	-	probe	0	-
+registry_visible	0,1	active	-	probe	0	-
+require_bash	0,2,3	active	-	probe	0,3	-
+require_cmd	0,2,3	active	-	probe	0,3	-
+require_file	0,2,3	active	-	probe	0,3	-
+require_root	0,3	active	-	probe	0,3	-
+retry	0,2,其他	active	-	probe	0,2	-
+run	0,2,其他	active	-	probe	0	-
+run_concurrent	0,2,其他	active	-	probe	0	-
+run_func_timeout	0,2,143,其他	active	-	probe	0	-
+run_install_sudo_shim	0	active	-	probe	0	-
+run_timeout	0,2,124,其他	active	-	probe	0	-
+scaffold_config_load	0,2,3	active	-	probe	0	-
+scaffold_manifest_file_sum	0,1	active	-	probe	0,1	-
+scaffold_manifest_get	0,1	active	-	probe	0	-
+scaffold_manifest_list_files	0	active	-	probe	0	-
+scaffold_manifest_read	0,3	active	-	probe	0	-
+scaffold_manifest_write	0,1,2	active	-	probe	0	-
+scaffold_manifest_write_baselines	0,1,2	active	-	probe	0	-
+scaffold_render	0,1,2	active	-	probe	0	-
+scaffold_run_hook	0,1,2	active	-	probe	0	-
+scaffold_vars_get	0,1	active	-	probe	0	-
+scaffold_vars_list	0	active	-	probe	0	-
+scaffold_vars_set	0,2	active	-	probe	0	-
+status_emit	0	active	-	probe	0	-
+status_extra	0	active	-	probe	0	-
+status_is_machine	0,1	active	-	probe	0,1	-
+status_state_valid	0,1	active	-	probe	0,1	-
+status_version	0	active	-	probe	0	-
+str_contains	0,1	active	-	probe	0,1	-
+str_ends_with	0,1	active	-	probe	0,1	-
+str_lower	0,2	active	-	probe	0	-
+str_repeat	0,2	active	-	probe	0	-
+str_starts_with	0,1	active	-	probe	0,1	-
+str_suggest	0,1	active	-	probe	0,1	-
+str_trim	0,2	active	-	probe	0	-
+str_upper	0,2	active	-	probe	0	-
+svc_daemon_reload	0,3,4	active	-	skip	-	需要 systemd/launchd，会改动服务状态
+svc_disable	0,2,3,4	active	-	skip	-	需要 systemd/launchd，会改动服务状态
+svc_disable_now	0,2,3,4	active	-	skip	-	需要 systemd/launchd，会改动服务状态
+svc_enable	0,2,3,4	active	-	skip	-	需要 systemd/launchd，会改动服务状态
+svc_enable_now	0,2,3,4	active	-	skip	-	需要 systemd/launchd，会改动服务状态
+svc_install_unit	0,2,3,4	active	-	skip	-	会往系统目录写 unit 文件（需要 root）
+svc_is_active	0,1,2,3	active	-	skip	-	依赖 systemd/launchd 的运行状态，跨机器不稳定
+svc_is_enabled	0,1,2,3	active	-	skip	-	依赖 systemd/launchd 的运行状态，跨机器不稳定
+svc_platform	0	active	-	probe	0	-
+svc_reload	0,2,3,4	active	-	skip	-	需要 systemd/launchd，会改动服务状态
+svc_restart	0,2,3,4	active	-	skip	-	需要 systemd/launchd，会改动服务状态
+svc_start	0,2,3,4	active	-	skip	-	需要 systemd/launchd，会改动服务状态
+svc_stop	0,2,3,4	active	-	skip	-	需要 systemd/launchd，会改动服务状态
+trap_cleanup	0	active	-	probe	0	-
+trap_install	0	active	-	probe	0	-
+trap_list	0	active	-	probe	0	-
+trap_pop	0	active	-	probe	0	-
+trap_push	0,2	active	-	probe	0	-
+validate_abs_path	0,1	active	-	probe	0,1	-
+validate_enum	0,1	active	-	probe	0,1	-
+validate_ip	0,1	active	-	probe	0,1	-
+validate_key	0,1	active	-	probe	0,1	-
+validate_not_empty	0,1	active	-	probe	0,1	-
+validate_port	0,1	active	-	probe	0,1	-
+validate_single_line	0,1	active	-	probe	0,1	-
+validate_url	0,1	active	-	probe	0,1	-
+validate_version	0,1	active	-	probe	0,1	-
+ver_cmp	0,2	active	-	probe	0	-
+ver_eq	0,1,2	active	-	probe	0,1,2	-
+ver_gt	0,1,2	active	-	probe	0,1,2	-
+ver_lt	0,1,2	active	-	probe	0,1,2	-

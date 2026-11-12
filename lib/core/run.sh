@@ -24,23 +24,10 @@ _sk_run_quote() {
 
 # _sk_run_secret_key KEY —— 这个键名看起来是不是敏感字段
 #
-# 判断的是「键名」，不是值：值什么样都行，键名像敏感字段就该遮。
-# 常见写法：--password、--api-key、API_TOKEN=...、DB_PASSWORD=...
+# 判定实现在 error 模块的 _sk_secret_key_name：那里是错误上下文脱敏要的，
+# 而 run 依赖 error —— 反过来（error 调 run）会成环。
 _sk_run_secret_key() {
-  local __k=${1:-} __l
-  __l=$(printf '%s' "$__k" | tr 'A-Z' 'a-z')
-  case "$__l" in
-    *password* | *passwd* | *secret* | *token* | *apikey* | *api[_-]key* | \
-      *access[_-]key* | *private[_-]key* | *credential* | *authorization*)
-      return 0
-      ;;
-  esac
-  # 以 key 结尾的（X-Api-Key、X-Custom-Key）：分隔符是词边界，
-  # 否则 monkey 这种普通词也会被当成敏感字段 —— 过度脱敏会让日志失去排障价值。
-  case "$__l" in
-    key | *[-_.]key) return 0 ;;
-  esac
-  return 1
+  _sk_secret_key_name "${1:-}"
 }
 
 # _sk_run_secret_header NAME —— 这个请求头名要不要把值遮掉

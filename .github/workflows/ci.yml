@@ -244,6 +244,27 @@ jobs:
       - name: coverage
         run: make coverage
 
+  # 性能基准：出报告，不阻断。
+  #
+  # 为什么不是硬门禁：共享 runner 的波动比代码的性能差异大得多，
+  # 拿它当门禁只会变成随机红灯 —— 而随机红灯很快就会被人忽略，
+  # 连「真的慢了」都看不见了。报告的价值在于看趋势。
+  #
+  # 基线在 tools/bench_baseline.txt（本地用 bash tools/bench.sh --write-baseline 生成）。
+  bench:
+    name: performance bench
+    runs-on: ubuntu-latest
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+
+      - name: measure
+        run: bash tools/bench.sh --summary bench-summary.md
+
+      - name: report
+        if: always()
+        run: cat bench-summary.md >> "$GITHUB_STEP_SUMMARY"
+
   # 变异测试：把语义变异种进升级路径守卫区，守卫用例必须 100% 杀灭。
   # 白名单位点是「当前无判据」的显式记录 —— 杀掉一个就该把它从 --skip 里挪走。
   mutation:

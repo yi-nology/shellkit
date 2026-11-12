@@ -65,7 +65,9 @@ _emit_page() {
     -e 's#](MIGRATING\.md)#](migrating.md)#g' \
     -e 's#](COOKBOOK\.md)#](cookbook.md)#g' \
     -e 's#](RELEASING\.md)#](releasing.md)#g' \
-    -e 's#](MAN\.md)#](man.md)#g' >"$__dest" || return 1
+    -e 's#](MAN\.md)#](man.md)#g' \
+    -e 's#](JSON\.md)#](json.md)#g' \
+    -e 's#](SECURITY\.md)#](security.md)#g' >"$__dest" || return 1
 }
 
 # _funcs_of MODULE —— 该模块公开函数名列表（反引号包裹，空格分隔）
@@ -130,6 +132,8 @@ _emit_page "$DOCS/COOKBOOK.md" "$SITE/guide/cookbook.md" || _die 'failed to writ
 _emit_page "$DOCS/MIGRATING.md" "$SITE/guide/migrating.md" || _die 'failed to write guide/migrating.md'
 _emit_page "$DOCS/RELEASING.md" "$SITE/guide/releasing.md" || _die 'failed to write guide/releasing.md'
 _emit_page "$DOCS/MAN.md" "$SITE/guide/man.md" || _die 'failed to write guide/man.md'
+_emit_page "$DOCS/JSON.md" "$SITE/guide/json.md" || _die 'failed to write guide/json.md'
+_emit_page "$DOCS/SECURITY.md" "$SITE/guide/security.md" || _die 'failed to write guide/security.md'
 
 # ---------- 2. API 参考：总览 + 每模块一页 ----------
 
@@ -206,6 +210,10 @@ _en_notice "$SITE/en/guide/releasing.md" 'Releasing' 'releasing' \
   'How a release happens: one command bumps the version, regenerates artifacts, runs the gates, commits, tags and pushes.'
 _en_notice "$SITE/en/guide/man.md" 'Man pages' 'man' \
   'How shellkit man builds man pages: section 1 from the CLI registry, one page per library module from the module list and the doc comments.'
+_en_notice "$SITE/en/guide/json.md" 'Machine-readable output' 'json' \
+  'The field contract for shellkit doctor --json: version, platform, bash, modules, dependencies, vendor, checks and the verdict.'
+_en_notice "$SITE/en/guide/security.md" 'Security boundaries' 'security' \
+  'The four boundaries shellkit holds: paths, permissions, sensitive arguments and execution isolation — each with the machine checks that enforce it.'
 
 # ---------- 5. 截图 ----------
 
@@ -219,5 +227,5 @@ done
 # 清单是扫出来的：新增页面自动进清单，不会出现「加了页面但 llms.txt 里没有」。
 bash "$ROOT/tools/llms_txt.sh" || _die 'failed to generate llms.txt' 1
 
-_say "pages: 5 synced, 1 reference index, $__nfunc functions across $(printf '%s\n' $MODULES | wc -l | tr -d ' ') modules"
+_say "pages: 7 synced, 1 reference index, $__nfunc functions across $(printf '%s\n' $MODULES | wc -l | tr -d ' ') modules"
 exit 0

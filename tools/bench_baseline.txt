@@ -1,0 +1,21 @@
+# shellkit 性能基线 —— 由 bash tools/bench.sh --write-baseline 生成
+#
+# 格式：<路径> TAB <基线秒> TAB <允许浮动比例> TAB # <口径说明>
+# 基线取的是**多次实测的最小值**：机器上的干扰只会让程序变慢，
+# 最快的一次最接近空闲时的真实成本（拿中位数当基线 = 把当时的负载
+# 固化进基线，之后每次量都显得「变快了」，回归反而看不出来）。
+# 中位数在 JSON / summary 里照旧给出（那是「典型耗时」）。
+# 判定：本次实测的最小值必须落在 [基线 × (1 - 浮动), 基线 × (1 + 浮动)] 内，
+#       否则判为回归（bash tools/bench.sh --check 退出码 1）。
+# 数值必须真跑出来，不许手编：每条路径跑 N 次，单次噪音不进基线。
+# 计时用 python3/perl 的浮点墙上时钟（macOS 的 date 没有 %N）；
+# 建工程（new / upgrade）的时间不计入被测路径。
+#
+# 测量环境：bash 5.3.20(1)-release / Darwin arm64 / load 17.34 / 2026-11-12T10:41:54Z
+# 换一台机器重测，这个数会变 —— 基线只在同一台机器同一环境里可比。
+# band 同理只在**负载相当**时有意义（load 记在上一行）：拿 load 40 下量的基线
+# 去判一台空闲机器，只会得到「快得离谱」的假回归 —— 那种情况先重写基线再谈回归。
+cli_bootstrap	0.072111	0.30	# CLI 启动：bash 进程 source lib/bootstrap.sh，按 lib/modules.txt 加载全部模块
+cli_new	1.619434	0.30	# shellkit new：模板渲染 + 落盘 + 写清单 + vendor 库（建工程的时间不计入）
+cli_upgrade	1.479632	0.30	# shellkit upgrade：指纹比对 + 渲染 + 逐文件原子替换 + vendor 库（建工程的时间不计入）
+test_suite	491.678761	0.30	# bash tests/run.sh：整套测试的墙钟时间（只计时，不代替它跑）
