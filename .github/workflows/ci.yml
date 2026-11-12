@@ -120,14 +120,17 @@ jobs:
           set -euo pipefail
           if command -v apt-get >/dev/null 2>&1; then
             apt-get update -qq
-            apt-get install -y -qq gettext ca-certificates curl tar xz-utils make
+            # python3：tests/test_doctor.sh 的 JSON 值断言靠它解析（jget/jlen）；
+            # git：让容器走 git archive 的正常副本路径（没有它只剩 worktree 退路，
+            # 退路由 coverage ratchet 那条 job 覆盖）。
+            apt-get install -y -qq gettext ca-certificates curl tar xz-utils make python3 git
           else
             # Rocky 9 基础镜像自带 curl-minimal，它和同名 curl 包互斥：
             # 硬装 curl 会报 "curl-minimal ... conflicts with curl"。
             # curl-minimal 已经能下载文件（-fsSL 都支持），所以这里不装 curl，
             # 只补真正缺的包；下载器在下面统一兜底。
             dnf install -y -qq --allowerasing \
-              gettext ca-certificates tar xz make \
+              gettext ca-certificates tar xz make python3 git \
               grep sed gawk findutils diffutils coreutils \
               gmp ncurses-libs
           fi

@@ -71,7 +71,20 @@ for __sk_arg in "$@"; do
 done
 unset __sk_arg
 if [ "$SK_BOOTSTRAP_OK" -eq 1 ]; then
-  if ! . "$SELF_DIR/lib/bootstrap.sh"; then
+  # bash 3.x/4.x：source 到**语法错误**会连整个脚本一起打死（rc=2），`if !` 护不住
+  # —— bash 5 才会把失败交回调用方、走降级自检（issue #77 的复现：
+  #     /bin/bash -c 'set -e; if ! . broken.sh; then echo D; fi; echo A'  → 直接 rc=2
+  #     bash -c 同样一行                                     → DEGRADED / AFTER）。
+  # 所以老 bash 上先用**当前解释器**做一次 `-n` 预检（实测 1.8ms，相对 72ms 启动约
+  # 2.5%），把「文件坏了」变成可处理的条件分支；新 bash 有现成保护，不花这 2ms。
+  # 不预检的话，坏库会让 CLI 以契约外的 2 退出，降级自检（本该报 5）根本没机会跑。
+  if [ "${BASH_VERSINFO[0]}" -lt 5 ]; then
+    if ! "$BASH" -n "$SELF_DIR/lib/bootstrap.sh" 2>/dev/null; then
+      SK_BOOTSTRAP_OK=0
+    elif ! . "$SELF_DIR/lib/bootstrap.sh"; then
+      SK_BOOTSTRAP_OK=0
+    fi
+  elif ! . "$SELF_DIR/lib/bootstrap.sh"; then
     SK_BOOTSTRAP_OK=0
   fi
 fi
