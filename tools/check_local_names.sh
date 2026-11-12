@@ -227,7 +227,7 @@ if [ -n "$__guard" ]; then
       fi
     done
     if [ -z "$__file" ]; then
-      _fail "链路上找不到函数 $__fn（它被删了还是改了名？）"
+      _fail "链路上找不到函数 ${__fn}（它被删了还是改了名？）"
       continue
     fi
     for __name in $(_fn_locals "$__file" "$__fn"); do

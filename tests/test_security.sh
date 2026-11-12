@@ -164,7 +164,7 @@ sections=$(grep '^## ' "$DOC" || true)
 # 四类边界各成一节：按标题判定，不做脆弱的全文匹配
 for __h in 路径边界 权限边界 敏感参数 执行隔离; do
   printf '%s\n' "$sections" | grep -qE "^## .*$__h" ||
-    _fail "docs/SECURITY.md 里没有「$__h」这一节"
+    _fail "docs/SECURITY.md 里没有「${__h}」这一节"
 done
 
 # 与 AGENTS.md 坑清单的互相引用段必须存在
@@ -203,5 +203,5 @@ for __sec in 路径边界 权限边界 敏感参数 执行隔离; do
     inh { print }
   ' "$DOC")
   printf '%s\n' "$__body" | grep -qE '`(path|perm|secret|exec)\.[a-z]+`' ||
-    _fail "docs/SECURITY.md 的「$__sec」这一节没有列出任何机器判据"
+    _fail "docs/SECURITY.md 的「${__sec}」这一节没有列出任何机器判据"
 done

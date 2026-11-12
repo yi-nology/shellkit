@@ -23,6 +23,7 @@
     tools/                    shdoc.awk / comment_coverage.awk / ai_doc.sh / check_docs.sh / term_shot.py
                               check_module_order.sh（模块依赖顺序门禁）
                               check_security.sh（安全边界门禁）/ api_baseline.sh（公开 API 行为基线）
+                              check_ident_boundary.sh（$ident 紧跟非 ASCII 的边界检查，issue #73）
                               bench.sh（性能基准，基线在 tools/bench_baseline.txt）
                               package_tarball / package_syspkg / package_smoke（deb/rpm 打包与冒烟）
                               sign_release.sh（minisign 发布签名，可选：没私钥就跳过）

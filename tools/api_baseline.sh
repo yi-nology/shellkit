@@ -757,11 +757,11 @@ _sk_ab_check() {
         _sk_ab_log "基线说 $name 已删除，但源码里它还在"
         bad=1
       elif [ "$base_codes" != "$codes" ]; then
-        _sk_ab_log "基线与源码对不上: $name（基线 $base_codes / 源码 $codes）"
+        _sk_ab_log "基线与源码对不上: ${name}（基线 $base_codes / 源码 ${codes}）"
         bad=1
       fi
     else
-      _sk_ab_log "新公开函数没进基线: $name（承诺 $codes）—— 跑 bash tools/api_baseline.sh --write-baseline"
+      _sk_ab_log "新公开函数没进基线: ${name}（承诺 ${codes}）—— 跑 bash tools/api_baseline.sh --write-baseline"
       bad=1
     fi
     i=$((i + 1))
@@ -772,7 +772,7 @@ _sk_ab_check() {
     if ! _sk_ab_src_index "$name" >/dev/null; then
       status=${_SK_AB_BASE_STATUS[$i]}
       if [ "$status" != "removed" ]; then
-        _sk_ab_log "基线里有 $name，源码里已经没有了 —— 删公开函数是破坏性变更，必须在 docs/MIGRATING.md 声明并重生成基线"
+        _sk_ab_log "基线里有 ${name}，源码里已经没有了 —— 删公开函数是破坏性变更，必须在 docs/MIGRATING.md 声明并重生成基线"
         bad=1
       fi
     fi
@@ -786,7 +786,7 @@ _sk_ab_check() {
     declared=${_SK_AB_BASE_DECLARED[$i]}
     if [ "$declared" != "-" ] && [ -n "$declared" ]; then
       if ! _sk_ab_declared_at "$name" "$declared"; then
-        _sk_ab_log "基线说 $name 的行为变化声明在 $declared，但 docs/MIGRATING.md 里查不到（版本 $declared 的「会改变结果的行为变化」表格里没有反引号包着的 $name）"
+        _sk_ab_log "基线说 $name 的行为变化声明在 ${declared}，但 docs/MIGRATING.md 里查不到（版本 $declared 的「会改变结果的行为变化」表格里没有反引号包着的 ${name}）"
         bad=1
       fi
     fi
@@ -802,18 +802,18 @@ _sk_ab_check() {
     reason=${_SK_AB_BASE_REASON[$i]}
     if pidx=$(_sk_ab_probe_index "$name"); then
       if [ "$probe" != "probe" ]; then
-        _sk_ab_log "基线与探针表对不上: $name（基线 $probe / 脚本 probe）"
+        _sk_ab_log "基线与探针表对不上: ${name}（基线 $probe / 脚本 probe）"
         bad=1
       elif [ "$expect" != "${_SK_AB_P_EXPECT[$pidx]}" ]; then
-        _sk_ab_log "基线与探针表对不上: $name（基线断言 $expect / 脚本断言 ${_SK_AB_P_EXPECT[$pidx]}）"
+        _sk_ab_log "基线与探针表对不上: ${name}（基线断言 $expect / 脚本断言 ${_SK_AB_P_EXPECT[$pidx]}）"
         bad=1
       fi
     elif jdx=$(_sk_ab_skip_index "$name"); then
       if [ "$probe" != "skip" ]; then
-        _sk_ab_log "基线与探针表对不上: $name（基线 $probe / 脚本 skip）"
+        _sk_ab_log "基线与探针表对不上: ${name}（基线 $probe / 脚本 skip）"
         bad=1
       elif [ "$reason" != "${_SK_AB_S_REASON[$jdx]}" ]; then
-        _sk_ab_log "基线与探针表对不上: $name（不入探针的原因对不上）"
+        _sk_ab_log "基线与探针表对不上: ${name}（不入探针的原因对不上）"
         bad=1
       fi
     fi
@@ -840,7 +840,7 @@ _sk_ab_check() {
         for c in $expect; do
           [ -n "$c" ] || continue
           if ! _sk_ab_covered "$src_codes" "$c"; then
-            _sk_ab_log "探针断言的返回码 $c 不在 $name 的 @exitcode 承诺集合（$src_codes）里"
+            _sk_ab_log "探针断言的返回码 $c 不在 $name 的 @exitcode 承诺集合（${src_codes}）里"
             bad=1
           fi
         done
@@ -848,7 +848,7 @@ _sk_ab_check() {
       fi
       rc=$(_sk_ab_probe_rc "$name")
       if [ "$rc" -ne 0 ]; then
-        _sk_ab_log "探针失败: $name（沙箱里的断言没成立，退出码 $rc）"
+        _sk_ab_log "探针失败: ${name}（沙箱里的断言没成立，退出码 ${rc}）"
         bad=1
       fi
       probe_count=$((probe_count + 1))
@@ -895,17 +895,17 @@ _sk_ab_write() {
       fi
       if [ "$status" = "removed" ]; then
         if ! newver=$(_sk_ab_declared "$name" "$ref"); then
-          _sk_ab_die "公开函数 $name 又回来了（基线说它已删除）—— 这是行为变更，必须在 docs/MIGRATING.md 的「会改变结果的行为变化」表格里声明（版本要新于 $ref）" 5
+          _sk_ab_die "公开函数 $name 又回来了（基线说它已删除）—— 这是行为变更，必须在 docs/MIGRATING.md 的「会改变结果的行为变化」表格里声明（版本要新于 ${ref}）" 5
         fi
         status=active
         declared=$newver
-        _sk_ab_log "$name：删除后复活，声明在 $newver"
+        _sk_ab_log "${name}：删除后复活，声明在 $newver"
       elif [ "$old_codes" != "$codes" ]; then
         if ! newver=$(_sk_ab_declared "$name" "$ref"); then
-          _sk_ab_die "公开函数 $name 的承诺返回码变了（$old_codes → $codes）—— 必须在 docs/MIGRATING.md 的「会改变结果的行为变化」表格里声明（版本要新于 $ref）" 5
+          _sk_ab_die "公开函数 $name 的承诺返回码变了（$old_codes → ${codes}）—— 必须在 docs/MIGRATING.md 的「会改变结果的行为变化」表格里声明（版本要新于 ${ref}）" 5
         fi
         declared=$newver
-        _sk_ab_log "$name：承诺返回码 $old_codes → $codes，声明在 $newver"
+        _sk_ab_log "${name}：承诺返回码 $old_codes → ${codes}，声明在 $newver"
       fi
     fi
     out_names[${#out_names[@]}]=$name
@@ -928,11 +928,11 @@ _sk_ab_write() {
           ref=${_SK_AB_BASE_VERSION:-$cur_version}
         fi
         if ! newver=$(_sk_ab_declared "$name" "$ref"); then
-          _sk_ab_die "公开函数 $name 被删了 —— 删除公开函数是破坏性变更，必须在 docs/MIGRATING.md 的「会改变结果的行为变化」表格里声明（版本要新于 $ref）" 5
+          _sk_ab_die "公开函数 $name 被删了 —— 删除公开函数是破坏性变更，必须在 docs/MIGRATING.md 的「会改变结果的行为变化」表格里声明（版本要新于 ${ref}）" 5
         fi
         declared=$newver
         status=removed
-        _sk_ab_log "$name：已删除，声明在 $newver"
+        _sk_ab_log "${name}：已删除，声明在 $newver"
       fi
       out_names[${#out_names[@]}]=$name
       out_codes[${#out_codes[@]}]=$(_sk_ab_codes_norm "${_SK_AB_BASE_CODES[$i]}")
@@ -1040,7 +1040,7 @@ if [ "$MODE" = "write" ]; then
   _sk_ab_write
 else
   if [ ! -f "$BASELINE" ]; then
-    _sk_ab_die "基线文件不存在: $BASELINE（先跑 bash tools/api_baseline.sh --write-baseline）" 3
+    _sk_ab_die "基线文件不存在: ${BASELINE}（先跑 bash tools/api_baseline.sh --write-baseline）" 3
   fi
   _sk_ab_load_baseline
   _sk_ab_check

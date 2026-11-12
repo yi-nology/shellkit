@@ -330,7 +330,7 @@ _check_perm_mode() {
     }
     __m=$(_mode_of "$__f")
     if [ "$__m" != "600" ]; then
-      _fail "perm.mode" "fs_atomic_write 新建的文件权限是 $__m，应为 600"
+      _fail "perm.mode" "fs_atomic_write 新建的文件权限是 ${__m}，应为 600"
     fi
 
     # 2. fs_atomic_copy 覆盖既有文件：保留原权限
@@ -344,7 +344,7 @@ _check_perm_mode() {
     }
     __m=$(_mode_of "$__t/dst")
     if [ "$__m" != "644" ]; then
-      _fail "perm.mode" "fs_atomic_copy 覆盖既有文件后权限变成 $__m，应保留 644"
+      _fail "perm.mode" "fs_atomic_copy 覆盖既有文件后权限变成 ${__m}，应保留 644"
     fi
 
     # 3. fs_atomic_copy 新建目标：跟随源的权限
@@ -354,7 +354,7 @@ _check_perm_mode() {
     }
     __m=$(_mode_of "$__t/dst2")
     if [ "$__m" != "600" ]; then
-      _fail "perm.mode" "fs_atomic_copy 新建的文件权限是 $__m，应跟随源（600）"
+      _fail "perm.mode" "fs_atomic_copy 新建的文件权限是 ${__m}，应跟随源（600）"
     fi
     exit "$__rc"
   ) || _fail_check

@@ -9,7 +9,7 @@ SOURCES := shellkit install.sh repair.sh demo.sh lib/bootstrap.sh $(wildcard lib
 TEMPLATES := $(shell find templates -type f)
 SHOTS := $(wildcard docs/shots/*.shot)
 
-.PHONY: help test syntax lint lint-templates fmt messages messages-check docs docs-check versions-check check-docs cookbook-check shots examples check install release release-dry site-deps site-sync site site-serve local-names-check module-count-check pipe-safety-check dup-functions-check mutation security-check api-baseline-check bench
+.PHONY: help test syntax lint lint-templates fmt messages messages-check docs docs-check versions-check check-docs cookbook-check shots examples check install release release-dry site-deps site-sync site site-serve local-names-check module-count-check pipe-safety-check dup-functions-check mutation security-check api-baseline-check bench ident-boundary-check
 
 help:
 	@printf '%s\n' \
@@ -165,6 +165,11 @@ check-exitcode-docs:
 local-names-check:
 	@$(BASH) tools/check_local_names.sh
 
+# 标识符边界：$ident 紧跟非 ASCII 会在 bash 3.2 + UTF-8 locale 下把首字节吃进
+# 变量名（set -u 直接 unbound 退出 1）—— 只在 macOS CI 上爆，本机与 Linux 都看不见
+ident-boundary-check:
+	@$(BASH) tools/check_ident_boundary.sh
+
 # 文档里手抄的模块数必须与 lib/modules.txt 一致
 module-count-check:
 	@$(BASH) tools/check_module_count.sh
@@ -193,7 +198,7 @@ api-baseline-check:
 bench:
 	@$(BASH) tools/bench.sh
 
-check: syntax test lint module-order-check check-exitcode-docs local-names-check module-count-check pipe-safety-check dup-functions-check security-check api-baseline-check docs-check versions-check check-docs cookbook-check messages-check examples fmt
+check: syntax test lint module-order-check check-exitcode-docs local-names-check ident-boundary-check module-count-check pipe-safety-check dup-functions-check security-check api-baseline-check docs-check versions-check check-docs cookbook-check messages-check examples fmt
 
 install:
 	./shellkit install-self --prefix $(PREFIX)/usr
