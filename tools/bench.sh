@@ -454,6 +454,13 @@ _push_result() {
 _measure() {
   local __path=$1
   local __i=1 __attempt=0 __ok=0 __start __end __dur
+  # 失败要分两种（issue #75）：test_suite 路径的失败是**被测功能不通过**，
+  # 其余路径的失败才是**性能采集本身没测出来**。混成一个 failed，报告里
+  # 就会把「功能挂了」读成「性能回归」—— 而功能已经有单独的 test job 在报。
+  local __fail_status=failed
+  if [ "$__path" = "test_suite" ]; then
+    __fail_status=func-failed
+  fi
   local __file="$WORK/dur-$__path.txt" __log="$WORK/log-$__path.txt" __prep="$WORK/prep-$__path.txt"
   : >"$__file"
   while [ "$__i" -le "$RUNS" ]; do
@@ -464,7 +471,7 @@ _measure() {
       if ! "_prep_$__path" "$__path" "$__i" >"$__prep" 2>&1; then
         log "path $__path: preparation failed (run $__i, attempt $__attempt)"
         _log_tail "$__prep" 20
-        _push_result "$__path" 0 0 0 failed
+        _push_result "$__path" 0 0 0 "$__fail_status"
         return 1
       fi
       __start=$(_now)
@@ -479,7 +486,7 @@ _measure() {
         __dur=$(_elapsed "$__start" "$__end")
         if ! _is_num "$__dur"; then
           log "path $__path: cannot read the clock (start=$__start end=$__end)"
-          _push_result "$__path" 0 0 0 failed
+          _push_result "$__path" 0 0 0 "$__fail_status"
           return 1
         fi
         printf '%s\n' "$__dur" >>"$__file"
@@ -487,7 +494,7 @@ _measure() {
       fi
     done
     if [ "$__ok" != "1" ]; then
-      _push_result "$__path" 0 0 0 failed
+      _push_result "$__path" 0 0 0 "$__fail_status"
       return 1
     fi
     __i=$((__i + 1))
@@ -621,6 +628,7 @@ _write_baseline() {
 # 基线缺失时那一列留「-」，不猜。
 _write_summary() {
   local __f=$1 __i __p __m __mn __b __row __delta __t __v
+  local __any_func=0
   {
     printf '### shellkit 性能基准
 
@@ -663,11 +671,19 @@ _write_summary() {
 ' \
         "$__p" "$__m" "${RESULT_MIN[$__i]}" "${RESULT_MAX[$__i]}" "$RUNS" \
         "$__b" "$__delta" "$__v" "${RESULT_STATUS[$__i]}"
+      if [ "${RESULT_STATUS[$__i]}" = "func-failed" ]; then
+        __any_func=1
+      fi
       __i=$((__i + 1))
     done
     printf '
 口径：每条路径跑 %s 次；中位数是典型耗时，**基线 / 相对基线 / 判定都取最小值**（干扰只会让程序变慢，最小值最接近空闲成本）；判定 = 最小值是否落在**基线文件里该路径自己的浮动比例**区间内，与 --check 同一条判据（写基线时的缺省浮动比例 ±%s）。
 ' "$RUNS" "$TOLERANCE"
+    if [ "$__any_func" = "1" ]; then
+      printf '
+> ⚠️ test_suite 的失败是**被测功能不通过**，不是性能回归 —— 看 test job 的日志；本 Job 只负责性能指标（issue #75）。
+'
+    fi
   } >"$__f"
 }
 

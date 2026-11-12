@@ -17,15 +17,48 @@
 REPO="$TEST_ROOT"
 
 # _copy_repo DST —— 造一份仓库副本
+#
+# 首选 git archive：拿**提交过的状态**当底，不带工作树里别人的半成品。
+# 但 git 在三种环境下不可用，任何一种都不该让用例以
+# 「tar: This does not look like a tar archive」这种**二次错误**收场（CI #71）：
+#   1. coverage 的临时树没有 .git（coverage.sh 自己的注释就写过这件事）
+#   2. 容器里 checkout 属主与容器内用户不同 ⇒ dubious ownership 拒绝操作
+#   3. 镜像里压根没装 git
+# 所以：报错必须指出**第一因**，然后退到「门禁真正需要的子集」。
 _copy_repo() {
-  local dst=$1
+  local dst=$1 __err __rc=0
   mkdir -p "$dst" || return 1
-  if ! git -C "$REPO" archive HEAD 2>/dev/null | tar -x -C "$dst"; then
-    return 1
+  if command -v git >/dev/null 2>&1 && git -C "$REPO" rev-parse --git-dir >/dev/null 2>&1; then
+    __err=$(mktemp "${TMPDIR:-/tmp}/api-baseline-git.XXXXXX") || return 1
+    if git -c safe.directory="$REPO" -C "$REPO" archive HEAD 2>"$__err" | tar -x -C "$dst"; then
+      rm -f "$__err"
+    else
+      __rc=$?
+      printf 'api_baseline: git archive failed (rc=%s): %s
+' \
+        "$__rc" "$(cat "$__err" 2>/dev/null)" >&2
+      rm -f "$__err"
+      rm -rf "$dst" && mkdir -p "$dst" || return 1
+      _copy_subset "$dst" || return 1
+    fi
+  else
+    printf 'api_baseline: git unavailable here (no git, or no .git under %s); using a worktree subset\n' \
+      "$REPO" >&2
+    _copy_subset "$dst" || return 1
   fi
   mkdir -p "$dst/tools" || return 1
   cp "$REPO/tools/api_baseline.sh" "$dst/tools/" || return 1
   cp "$REPO/tools/api_baseline.txt" "$dst/tools/" || return 1
+  return 0
+}
+
+# _copy_subset DST —— 退路：只拷门禁真正读的那几处（实测 lib/ + MIGRATING + VERSION）
+_copy_subset() {
+  local dst=$1
+  cp -R "$REPO/lib" "$dst/" || return 1
+  mkdir -p "$dst/docs" || return 1
+  cp "$REPO/docs/MIGRATING.md" "$dst/docs/" || return 1
+  cp "$REPO/VERSION" "$dst/" || return 1
   return 0
 }
 
@@ -40,6 +73,20 @@ _gate() {
   return 0
 }
 
+# _assert_gate_rc WANT MSG —— 断言门禁退出码；失败时把门禁输出一起打出来
+#
+# 门禁的退出码只说明「红了」，看不出为什么红：macos runner 上拿到过一个
+# 契约外的 1（契约是 0/2/3/5），日志里却只有 rc 没有门禁报错，无从定位（#73）。
+_assert_gate_rc() {
+  local __want=$1 __msg=$2
+  if [ "$GATE_RC" != "$__want" ]; then
+    printf '%s\n' '--- api_baseline output ---' >&2
+    printf '%s\n' "$GATE_OUT" >&2
+    printf '%s\n' '--- end api_baseline output ---' >&2
+  fi
+  assert_eq "$__want" "$GATE_RC" "$__msg"
+}
+
 # CASE: 基线里的承诺被改坏 ⇒ 门禁必须红
 d=$(tmpdir)
 _copy_repo "$d" || _fail "cannot create the repo copy"
@@ -47,7 +94,7 @@ awk -v FS='\t' -v OFS='\t' '$1 == "str_trim" { $2 = "0,2,9" } { print }' \
   "$d/tools/api_baseline.txt" >"$d/tools/api_baseline.new"
 mv "$d/tools/api_baseline.new" "$d/tools/api_baseline.txt"
 _gate "$d"
-assert_eq "5" "$GATE_RC" "the gate must fail when the baseline does not match the source"
+_assert_gate_rc "5" "the gate must fail when the baseline does not match the source"
 assert_contains "$GATE_OUT" "基线与源码对不上" "the gate must say the baseline does not match the source"
 assert_contains "$GATE_OUT" "str_trim" "the gate must name the mismatched function"
 
@@ -59,7 +106,7 @@ awk '{ if ($0 ~ /-le 65535/) print "    if true; then"; else print }' \
   "$d/lib/core/validate.sh" >"$d/lib/core/validate.new"
 mv "$d/lib/core/validate.new" "$d/lib/core/validate.sh"
 _gate "$d" --probes validate_port
-assert_eq "5" "$GATE_RC" "the gate must fail when a probed function changes behavior"
+_assert_gate_rc "5" "the gate must fail when a probed function changes behavior"
 assert_contains "$GATE_OUT" "探针失败: validate_port" "the probe must catch the behavior change"
 
 # CASE: 公开函数被删掉 ⇒ 门禁必须红
@@ -70,7 +117,7 @@ awk '{ if ($0 ~ /^str_suggest\(\) {$/) sub(/^str_suggest/, "_str_suggest"); prin
   "$d/lib/core/str.sh" >"$d/lib/core/str.new"
 mv "$d/lib/core/str.new" "$d/lib/core/str.sh"
 _gate "$d"
-assert_eq "5" "$GATE_RC" "the gate must fail when a public function disappears"
+_assert_gate_rc "5" "the gate must fail when a public function disappears"
 assert_contains "$GATE_OUT" "str_suggest" "the gate must name the removed function"
 assert_contains "$GATE_OUT" "源码里已经没有了" "the gate must say the function is gone"
 
@@ -83,7 +130,7 @@ awk '{ if ($0 ~ /^str_trim\(\) {$/) print "# @exitcode 9 新的失败码"; print
 mv "$d/lib/core/str.new" "$d/lib/core/str.sh"
 
 _gate "$d"
-assert_eq "5" "$GATE_RC" "an undeclared behavior change must fail the gate"
+_assert_gate_rc "5" "an undeclared behavior change must fail the gate"
 assert_contains "$GATE_OUT" "str_trim" "the gate must name the function whose promise changed"
 
 # 没声明就不许重生成基线 —— 否则「改了行为顺手重生成基线」就能把声明绕过
@@ -108,7 +155,7 @@ assert_eq "0" "$rc" "the baseline must be regenerable once the change is declare
 assert_contains "$out" "str_trim" "the tool should report what changed"
 
 _gate "$d"
-assert_eq "0" "$GATE_RC" "the gate must pass once the change is declared"
+_assert_gate_rc "0" "the gate must pass once the change is declared"
 assert_contains "$GATE_OUT" "api_baseline: ok" "the gate should report success"
 
 # 真实工作树一个字节都没动

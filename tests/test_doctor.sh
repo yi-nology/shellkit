@@ -171,8 +171,19 @@ assert_eq "True" "$(jget "$work/broken.json" result.verify_failed)" "a missing m
 assert_contains "$(jget "$work/broken.json" modules.missing)" "http" "the missing module is named in the report"
 
 # CASE: 缺可选依赖只是降级 —— 退出码仍是 0，必需/可选分开报
-# 受限 PATH：常用系统命令还在，shellcheck / shfmt / gettext 这些装在别处的就没了
-run_doctor env PATH="/usr/bin:/bin:/usr/sbin:/sbin" bash "$TEST_ROOT/shellkit" doctor --json >"$work/min.json" 2>/dev/null && rc=0 || rc=$?
+#
+# PATH 必须是**受控的**（#72）：原来拿 /usr/bin:/bin 当「受限 PATH」，判据
+# 实际读的是 Runner 预装了什么 —— Ubuntu 的 /usr/bin 里 shellcheck/xgettext/curl
+# 都在，只缺 shfmt，missing_optional=1 ⇒ 本机 ≥2、CI 恒红。
+# 现在自己搭一个目录：只放**必需工具与跑 doctor 所需的基础命令**，
+# 可选的一个都不放 ⇒ 与机器预装无关。
+depdir="$work/deppath"
+mkdir -p "$depdir" || _fail "cannot build the controlled PATH directory"
+for __c in bash sh sha256sum shasum awk sed cat grep tr sort head tail wc dirname basename uname mktemp find env printf; do
+  __p=$(command -v "$__c" 2>/dev/null) || continue
+  ln -s "$__p" "$depdir/$__c" 2>/dev/null || true
+done
+run_doctor env PATH="$depdir" bash "$TEST_ROOT/shellkit" doctor --json >"$work/min.json" 2>/dev/null && rc=0 || rc=$?
 assert_eq 0 "$rc" "missing optional tooling does not fail the check"
 assert_eq "0" "$(jget "$work/min.json" result.missing_required)" "optional tooling is not counted as required"
 opt_n="$(jget "$work/min.json" result.missing_optional)"

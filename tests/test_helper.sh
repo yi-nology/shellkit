@@ -90,12 +90,25 @@ assert_stdout_empty() {
   return 0
 }
 
+# _file_mode FILE —— 权限位（八进制）；取不到就输出空
+#
+# 与 lib/core/fs.sh 的 _sk_fs_mode 同一条纪律：**输出必须是八进制**。
+# GNU 的 stat -f 是 --file-system，会吐 `File: "..."` 这种内容且可能退出 0 ——
+# 原来「退出码为 0 就认它」的写法会把文件系统信息当成权限值（CI run 43238779798
+# 的 perm.mode 判据就是这么红的）。
 _file_mode() {
-  if stat -f '%Lp' "$1" >/dev/null 2>&1; then
-    stat -f '%Lp' "$1"
+  local __m=""
+  if __m=$(stat -f '%Lp' "$1" 2>/dev/null); then
+    case "$__m" in
+      '' | *[!0-7]*) __m="" ;;
+    esac
   else
-    stat -c '%a' "$1"
+    __m=""
   fi
+  if [ -z "$__m" ]; then
+    __m=$(stat -c '%a' "$1" 2>/dev/null) || __m=""
+  fi
+  printf '%s' "$__m"
 }
 
 assert_file_mode() {

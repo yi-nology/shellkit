@@ -298,8 +298,15 @@ _check_path_name() {
 
 # ---------------------------------------------------------------- perm.mode
 # 新建文件默认 600；覆盖既有文件时权限按显式口径走（fs_atomic_copy 保留原权限）。
+# _mode_of FILE —— 文件权限位（八进制）；取不到就返回非 0
+#
+# 直接用库里的 _sk_fs_mode，不在门禁里另写一套更弱的判断（两套实现必然漂移）。
+# 教训见 CI run 43238779798：GNU 的 stat -f 是 --file-system，会吐出
+# `File: "..."` 这种非权限内容；只要它退出码为 0，原来
+# `stat -f ... || stat -c ...` 的兜底根本不触发，垃圾值被当成权限，
+# perm.mode 在 Linux 上恒红。_sk_fs_mode 有内容校验：不是八进制就当没取到。
 _mode_of() {
-  stat -f '%Lp' "$1" 2>/dev/null || stat -c '%a' "$1" 2>/dev/null
+  _sk_fs_mode "$1"
 }
 
 _check_perm_mode() {

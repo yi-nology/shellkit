@@ -31,6 +31,7 @@
     docs/                     README 之外的深度文档；REFERENCE.md 与 AGENTS.md 是生成物
                               SECURITY.md（安全边界规范）/ JSON.md（doctor --json 字段契约）
                               TRUST.md（安装信任链：验什么、不验什么、离线怎么验）
+                              ROADMAP.md（三层架构与四阶段：退出条件、战略取舍、迭代节奏）
     docs/shots/*.shot         截图源：每行 `$ ` 是真要跑的命令，svg 由 make shots 渲染
     examples/                 两个能直接跑的工程，测试全程走真实二进制
     site/                     VuePress 2 文档站（手写页 + docs/ 同步页；Actions 构建，产物不进 git 历史）
