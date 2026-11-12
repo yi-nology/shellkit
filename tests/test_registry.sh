@@ -114,3 +114,22 @@ assert_contains "$(registry_list)" "solo" "registry_add puts the entry in the in
 # 同名再登记一次：保持第一次的路径，不重复登记
 registry_add solo "$d/other/.manifest"
 assert_eq "1" "$(registry_list | grep -c '^solo$')" "registry_add does not register the same name twice"
+
+# ---- 内存化回归（2026-11-12：registry_get 改走内存 blob）----
+# ① 指纹行为：登记后**改文件**，查询返回的仍是登记时的值 ——
+#    这是「走内存」与「每次重读文件」的分水岭；哪天有人改回读文件，这条必红。
+mkdir -p "$d/mem"
+printf 'LABEL=Before\n' >"$d/mem/.manifest"
+registry_add mem "$d/mem/.manifest"
+assert_eq "Before" "$(registry_get mem LABEL)" "registry_get reads from the in-memory blob"
+printf 'LABEL=After\n' >"$d/mem/.manifest"
+assert_eq "Before" "$(registry_get mem LABEL)" "registry_get must not re-read the file per query"
+
+# ② 防回归：查询路径不许 fork 外部命令（旧实现每次 fork awk，实测 48ms/次
+#    ⇒ 一个菜单读几百次字段，build_list 卡 20s+）。判据：去掉注释行后，
+#    registry_get / registry_visible 函数体里不得出现外部命令调用。
+for fn in registry_get registry_visible; do
+  body=$(awk -v f="$fn" '$0 ~ "^"f"\(\)" {infn=1} infn && !/^[[:space:]]*#/ {print} infn && /^}/ {exit}' "$TEST_ROOT/lib/core/registry.sh")
+  bad=$(printf '%s\n' "$body" | grep -nE '(^|[[:space:]$(&|])(awk|sed|grep|cat|tr|basename|dirname)[[:space:]]' || true)
+  assert_eq "" "$bad" "$fn must not fork external commands (got: ${bad:-none})"
+done
