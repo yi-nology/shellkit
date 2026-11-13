@@ -270,6 +270,9 @@ _exclude_reason() {
     test_api_baseline.sh)
       printf '%s' "rebuilds a repo copy with git archive HEAD; the coverage copy has no .git so the archive silently yields an empty tree"
       ;;
+    test_api_stability.sh)
+      printf '%s' "runs the api gate itself; its probes would cover functions the product suite never touches (same reason as test_api_baseline.sh)"
+      ;;
     test_ai_docs.sh)
       printf '%s' "compares the generated docs with the source tree; instrumentation changes the source"
       ;;
@@ -293,7 +296,7 @@ _exclude_reason() {
 
 # 排除清单按模式选：test_coverage_branch 两种模式都递归（它自己会调本工具）；
 # test_meta_gates 只在分支模式排除（它的变异器按字面量匹配源码行，分支插桩会改写那些行）。
-COV_EXCLUDES="test_coverage.sh test_coverage_branch.sh test_api_baseline.sh test_ai_docs.sh test_local_names.sh test_module_count.sh test_pipe_safety.sh"
+COV_EXCLUDES="test_coverage.sh test_coverage_branch.sh test_api_baseline.sh test_api_stability.sh test_ai_docs.sh test_local_names.sh test_module_count.sh test_pipe_safety.sh"
 if [ "$MODE" = "branch" ]; then
   COV_EXCLUDES="$COV_EXCLUDES test_meta_gates.sh"
 fi
