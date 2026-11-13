@@ -38,6 +38,7 @@ os_is_root() {
 # @exitcode 0 命令都在
 # @exitcode 1 有命令找不到
 # @exitcode 2 没给参数
+# @stability stable
 os_has_cmd() {
   local __c
   _sk_need_args "$#" 1 "os_has_cmd CMD..." || return $?

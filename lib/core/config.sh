@@ -379,6 +379,7 @@ conf_format() { printf '%s\n' "${SK_CONF_FORMAT:-auto}"; }
 # 取值顺序：配置层 > 配置文件。键存在但值为空时返回空串，不回落默认值。
 # @exitcode 0 成功（stdout 输出值；没配过就输出默认值）
 # @exitcode 2 键名非法
+# @stability stable
 conf_get() {
   local __key=${1:-} __default=${2:-} __file=${SK_CONF_FILE:-} __line __value="" __found=0 __rc
   if ! validate_key "$__key"; then
@@ -468,6 +469,7 @@ conf_get_any() {
 # @exitcode 0 载入成功（非法行跳过并告警）
 # @exitcode 2 没给路径
 # @exitcode 3 文件不存在
+# @stability stable
 conf_load_dotenv() {
   local __file=${1:-} __line __lineno=0 __rc
   if ! validate_not_empty "$__file"; then
@@ -498,6 +500,7 @@ conf_load_dotenv() {
 # @exitcode 0 导出成功（键进环境变量）
 # @exitcode 2 没给路径
 # @exitcode 3 文件不存在
+# @stability stable
 conf_source() {
   local __file=${1:-} __line __lineno=0 __rc
   if ! validate_not_empty "$__file"; then
@@ -530,6 +533,7 @@ conf_source() {
 # @exitcode 2 键名非法或值含换行
 # @exitcode 3 还没 conf_init
 # @exitcode 1 写文件失败
+# @stability stable
 conf_set() {
   local __key=${1:-} __value=${2:-} __file=${SK_CONF_FILE:-} __line __tmp __origin __replaced=0
   local __fmt=${SK_CONF_FORMAT:-auto}
@@ -585,6 +589,7 @@ conf_set() {
 # @exitcode 0 删成功（或本来就没有这个键）
 # @exitcode 2 键名非法
 # @exitcode 1 写文件失败
+# @stability stable
 conf_unset() {
   local __key=${1:-} __file=${SK_CONF_FILE:-} __line __tmp
   local __fmt=${SK_CONF_FORMAT:-auto}
@@ -619,6 +624,7 @@ conf_unset() {
 # @exitcode 0 注释掉成功（或本来就没有这个键）
 # @exitcode 2 键名非法
 # @exitcode 1 写文件失败
+# @stability stable
 conf_disable() {
   local __key=${1:-} __file=${SK_CONF_FILE:-} __line __tmp
   local __fmt=${SK_CONF_FORMAT:-auto}

@@ -84,6 +84,7 @@ _sk_fs_mode() {
 # @exitcode 0 复制成功
 # @exitcode 2 参数错
 # @exitcode 1 源不存在、建目录、落临时文件或改名失败
+# @stability stable
 fs_atomic_copy() {
   local __src=${1:-} __dst=${2:-} __mode=${3:-} __dir __tmp __perm=""
   _sk_need_args "$#" 2 "fs_atomic_copy SRC DST [MODE]" || return $?
@@ -122,6 +123,7 @@ fs_atomic_copy() {
 # @exitcode 0 备份成功（或文件本来就不存在）
 # @exitcode 2 参数错（保留份数不是正整数）
 # @exitcode 1 备份失败
+# @stability stable
 fs_backup() {
   local __file=${1:-} __keep=${2:-3} __stamp __bak __x __i=0 __total __seq=0
   local -a __list=()
@@ -360,6 +362,7 @@ _sk_fs_has_newline() {
 # @exitcode 0 文件已含该行或已写入
 # @exitcode 2 参数错（行为空或含换行）
 # @exitcode 1 写文件失败
+# @stability stable
 fs_ensure_line() {
   local __file=${1:-} __line=${2:-} __tmp
   _sk_need_args "$#" 1 "fs_ensure_line FILE LINE" || return $?
@@ -400,6 +403,7 @@ fs_ensure_line() {
 # @exitcode 0 区块已存在或已写入
 # @exitcode 2 参数错（区块标识非法）
 # @exitcode 1 写文件失败
+# @stability stable
 fs_ensure_block() {
   local __file=${1:-} __begin=${2:-} __end=${3:-} __content=${4:-}
   local __tmp __cf __src

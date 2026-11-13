@@ -134,6 +134,7 @@ _sk_lock_hook() {
 # @exitcode 0 拿到锁（并挂进清理栈）
 # @exitcode 2 锁名非法
 # @exitcode 3 别人正持有（超时或僵锁）
+# @stability stable
 lock_acquire() {
   local __name=${1:-} __wait=${2:-0} __dir __i=0 __stale_tries=0
   if ! _sk_lock_name_ok "$__name"; then

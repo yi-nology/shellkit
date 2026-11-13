@@ -42,6 +42,7 @@ die() {
 # @exitcode 0 不会返回（除非退出码是 0）
 # @exitcode 2 退出码不是合法数字
 # @exitcode 其他 按给定的退出码返回，不退出进程
+# @stability stable
 fail() {
   local __code=${1:-}
   if [ "$#" -gt 0 ]; then
@@ -59,6 +60,7 @@ fail() {
 # @exitcode 0 命令都在
 # @exitcode 2 没给参数
 # @exitcode 3 有命令找不到
+# @stability stable
 require_cmd() {
   local __c
   _sk_need_args "$#" 1 "require_cmd CMD..." || return $?

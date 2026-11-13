@@ -668,6 +668,8 @@ conf_set TARGET "$1"                                          # 原子写、600�
 
 **分级的适用范围（issue #79）**：`@stability` 注解落地之后，本表将**只登记 Stable API
 的行为变化** —— experimental 级的改动在提交信息与 `CHANGELOG.md` 里说明，不构成
-兼容性承诺。当前 162 个公开函数**全部仍是 experimental**（豁免名单
-`tools/stability_exempt.txt` 只许变短），Stable 名单由仓库主人逐个确认后另提提交。
+兼容性承诺。当前 162 个公开函数中 **37 个已晋升 Stable**（名单与准入标准见
+`docs/STABLE-CANDIDATES.md`），其余 125 个仍是 experimental（豁免名单
+`tools/stability_exempt.txt` 只许变短）；Stable 的承诺变更由门禁兜底 —— 不写进本表
+就重生成不了行为基线（判据见 `tests/test_api_stability.sh`）。
 

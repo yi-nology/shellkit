@@ -26,7 +26,7 @@ REPO="$TEST_ROOT"
 #   3. 镜像里压根没装 git
 # 所以：报错必须指出**第一因**，然后退到「门禁真正需要的子集」。
 _copy_repo() {
-  local dst=$1 __err __rc=0
+  local dst=$1 __err __rc=0 __f
   mkdir -p "$dst" || return 1
   if command -v git >/dev/null 2>&1 && git -C "$REPO" rev-parse --git-dir >/dev/null 2>&1; then
     __err=$(mktemp "${TMPDIR:-/tmp}/api-baseline-git.XXXXXX") || return 1
@@ -47,11 +47,20 @@ _copy_repo() {
     _copy_subset "$dst" || return 1
   fi
   mkdir -p "$dst/tools" || return 1
+  # 门禁**代码**从工作树拷：未提交的门禁改动也要能被自证。
   cp "$REPO/tools/api_baseline.sh" "$dst/tools/" || return 1
-  cp "$REPO/tools/api_baseline.txt" "$dst/tools/" || return 1
-  # 分级豁免名单也是门禁的输入（issue #79）：缺了它，规则一会把 162 个老函数
-  # 全判成「新函数没声明」，门禁提前 bad=1 → 探针不跑，用例的探针断言就空了
-  cp "$REPO/tools/stability_exempt.txt" "$dst/tools/" || return 1
+  # 门禁的**数据**（基线 + 分级豁免名单）必须与 archive 取出的 lib 同一份状态：
+  # 无条件用工作树覆盖，会拼出「已提交的 lib + 未提交的数据」自相矛盾的副本 ——
+  # 注解批次（lib 注解 / 基线分级列 / 豁免名单三者一起改）里，规则一、规则三
+  # 会在探针之前先 bad=1，探针不跑，用例死在与被测行为无关的第一因上
+  # （实测：探针病例报不出「探针失败」，37 个函数先被规则一拦下）。
+  # 所以只补 archive 里没有的文件（尚未提交的新门禁数据）；退路 _copy_subset
+  # 全取工作树，lib 与数据同样自洽。
+  for __f in api_baseline.txt stability_exempt.txt; do
+    if [ ! -f "$dst/tools/$__f" ]; then
+      cp "$REPO/tools/$__f" "$dst/tools/" || return 1
+    fi
+  done
   return 0
 }
 

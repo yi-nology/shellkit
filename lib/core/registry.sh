@@ -47,6 +47,7 @@ _registry_scan_one() {
 # @param NAME 条目名
 # @param PATH 清单文件路径
 # @exitcode 0 总是成功
+# @stability stable
 registry_add() {
   local __name=${1:-} __path=${2:-}
   [ -n "$__name" ] && [ -n "$__path" ] || return 0
@@ -74,6 +75,7 @@ registry_add() {
 # registry_scan ROOT PATTERN —— 扫描清单文件并建立索引
 # 条目名 = 清单文件所在目录名。PATTERN 是文件名模式（如 .manifest）。
 # @exitcode 0 总是成功
+# @stability stable
 registry_scan() {
   local __root="${1:-}" __pat="${2:-}"
   _REGISTRY_ROOT="$__root"
@@ -130,6 +132,7 @@ _registry_file() {
 # 匹配语义与旧 awk 实现逐字一致：**行首**恰好 KEY= 的第一处，值去首尾空白。
 # 实现走内存 blob（见文件头「为什么把全文读进内存」），全程不 fork 外部命令。
 # @exitcode 0 总是成功（未声明时 stdout 为空）
+# @stability stable
 registry_get() {
   local __name="${1:-}" __key="${2:-}" __i=0 __n __blob="" __val="" __line
   [ -n "$__name" ] && [ -n "$__key" ] || return 0
@@ -173,6 +176,7 @@ registry_list() {
 # 字段为空 ⇒ 未声明平台限制 ⇒ 可见。平台列表用逗号或空格分隔都行。
 # @exitcode 0 可见
 # @exitcode 1 不可见
+# @stability stable
 registry_visible() {
   local __name="${1:-}" __field="${2:-}" __plats __p __os
   __plats="$(registry_get "$__name" "$__field")"
@@ -236,6 +240,7 @@ _registry_deps_visit() {
 # registry_deps NAME FIELD —— 传递依赖（拓扑序，空格分隔，不含自身）
 # @exitcode 0 成功
 # @exitcode 1 有环
+# @stability stable
 registry_deps() {
   local __name="${1:-}" __field="${2:-}" __m __out=""
   _REGISTRY_VISITED=""
@@ -253,6 +258,7 @@ registry_deps() {
 # registry_topo FIELD —— 全体拓扑序（空格分隔）
 # @exitcode 0 成功
 # @exitcode 1 有环
+# @stability stable
 registry_topo() {
   local __field="${1:-}" __m
   _REGISTRY_VISITED=""

@@ -200,6 +200,7 @@ _sk_run_display() {
 # @exitcode 0 命令成功
 # @exitcode 2 用法错（没给命令、--secret-arg 的序号不是正整数）
 # @exitcode 其他 命令自身的退出码；默认模式下失败会 die，--no-die 只返回码
+# @stability stable
 run() {
   local __always=0 __die=1 __rc=0 __shown
   local __secret_args="" __redact_values=() __x __env_args
@@ -299,6 +300,7 @@ run() {
 # @exitcode 0 全部实例成功（stdout 输出成功实例数）
 # @exitcode 2 参数错（并发数不是正整数、超时值非法、没给命令）
 # @exitcode 其他 第一个失败实例的退出码
+# @stability stable
 run_concurrent() {
   if [ "$#" -eq 0 ]; then
     log_error "$(_t 'usage: run_concurrent N [--timeout SEC] -- COMMAND...')"

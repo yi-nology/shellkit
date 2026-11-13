@@ -73,6 +73,7 @@ validate_port() {
 # validate_ip VALUE —— 四段十进制，每段 0-255，且不接受前导零（010 会被当成八进制）
 # @exitcode 0 IP 合法
 # @exitcode 1 IP 不合法
+# @stability stable
 validate_ip() {
   local __v="${1:-}"
   local __o='(25[0-5]|2[0-4][0-9]|1[0-9][0-9]|[1-9]?[0-9])'

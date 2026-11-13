@@ -191,6 +191,7 @@ _sk_suggest() {
 # @exitcode 2 用法错（没有命令、选项不认识、命令不存在）
 # @exitcode 1 命令有 handler 但没实现
 # @exitcode 其他 命令自身的退出码
+# @stability stable
 cli_run() {
   local __name="" __fn="" __rc=0 __depth=""
   while [ "$#" -gt 0 ]; do
@@ -301,6 +302,7 @@ cli_opt_init() {
 #   VAR 是「选项值要写进的变量名」，不能用库保留名（__ / _sk_ 前缀）。
 # @exitcode 0 注册成功
 # @exitcode 2 选项名非法，或变量名用了库保留名
+# @stability stable
 cli_opt() {
   local __var=${1:-} __long=${2:-} __short=${3:-} __arg=${4:-0}
   _sk_need_args "$#" 2 "cli_opt VAR LONG [SHORT] [TAKES_ARG]" || return $?
@@ -382,6 +384,7 @@ _sk_opt_set() {
 # cli_opts ARGS... —— 按 cli_opt 注册的规则解析子命令选项；剩余位置参数进 SK_OPTS_LEFT
 # @exitcode 0 解析成功（剩余位置参数在 SK_OPTS_LEFT）
 # @exitcode 2 选项不认识或缺值
+# @stability stable
 cli_opts() {
   local __idx="" __opt=""
   SK_OPTS_LEFT=()

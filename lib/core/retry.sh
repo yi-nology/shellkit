@@ -28,6 +28,7 @@ _sk_retry_allowed() {
 # @exitcode 0 最终成功
 # @exitcode 2 参数错（次数不是正整数）
 # @exitcode 其他 被重试命令自身的退出码（放弃重试时返回它）
+# @stability stable
 retry() {
   if [ "$#" -lt 2 ]; then
     log_error "$(_t 'usage: retry ATTEMPTS COMMAND...')"

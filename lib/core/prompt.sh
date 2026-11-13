@@ -141,6 +141,7 @@ _sk_ask_choice_raw() {
 # @exitcode 2 参数错（变量名非法或撞上内部保留名）
 # @exitcode 3 非交互且没有默认值，或超时且没有默认值
 # @exitcode 1 输入被意外关闭
+# @stability stable
 ask() {
   local __var=${1:-} __prompt=${2:-} __default=${3:-} __timeout=${4:-} __msg
   _sk_need_args "$#" 2 "ask VAR PROMPT [DEFAULT] [TIMEOUT]" || return $?
@@ -161,6 +162,7 @@ ask() {
 # @exitcode 2 参数错（变量名非法、撞上内部保留名），或连续三次都不是 y/n
 # @exitcode 3 非交互且没有默认值，或超时且没有默认值
 # @exitcode 1 输入被意外关闭
+# @stability stable
 ask_yn() {
   local __var=${1:-} __prompt=${2:-} __default=${3:-y} __timeout=${4:-}
   _sk_need_args "$#" 2 "ask_yn VAR PROMPT [DEFAULT] [TIMEOUT]" || return $?
@@ -177,6 +179,7 @@ ask_yn() {
 # @exitcode 2 参数错（变量名非法、撞上内部保留名），或连续三次都不是合法选项
 # @exitcode 3 非交互且没有默认值，或超时且没有默认值
 # @exitcode 1 输入被意外关闭
+# @stability stable
 ask_choice() {
   local __var=${1:-} __prompt=${2:-} __choices=${3:-} __default=${4:-} __timeout=${5:-}
   _sk_need_args "$#" 3 "ask_choice VAR PROMPT 'a|b|c' [DEFAULT] [TIMEOUT]" || return $?
@@ -194,6 +197,7 @@ ask_choice() {
 # @exitcode 2 参数错，或连续三次都不是 y/n
 # @exitcode 3 非交互且没有默认值，或超时且没有默认值
 # @exitcode 1 输入被意外关闭
+# @stability stable
 confirm() {
   local __prompt=${1:-} __default=${2:-n} __timeout=${3:-} __confirm_ans=""
   _sk_need_args "$#" 1 "confirm PROMPT [DEFAULT] [TIMEOUT]" || return $?

@@ -63,6 +63,8 @@ die CODE MSG... —— CODE 必须是 0-255；不合法按用法错误退出 2�
 
 fail CODE MSG...  —— 不退出，只返回码；CODE 校验同 die
 
+**稳定性**：stable
+
 **退出码**
 
 - 0 不会返回（除非退出码是 0）
@@ -72,6 +74,8 @@ fail CODE MSG...  —— 不退出，只返回码；CODE 校验同 die
 ### `require_cmd`
 
 require_cmd CMD... —— 零参数返回 SK_USAGE（否则 `require_cmd "$EMPTY"` 会静默通过）
+
+**稳定性**：stable
 
 **退出码**
 
@@ -229,6 +233,8 @@ validate_port VALUE —— 1-65535 的端口号
 
 validate_ip VALUE —— 四段十进制，每段 0-255，且不接受前导零（010 会被当成八进制）
 
+**稳定性**：stable
+
 **退出码**
 
 - 0 IP 合法
@@ -276,6 +282,8 @@ validate_enum VALUE "a|b|c" —— 取值必须在给定集合内
 
 trap_push CMD... —— 注册一个清理动作；后注册的先执行
 
+**稳定性**：stable
+
 **退出码**
 
 - 0 压栈成功
@@ -309,6 +317,8 @@ trap_cleanup —— 逆序执行全部清理动作；幂等；单个失败不中
 
 trap_install —— 安装 EXIT / INT / TERM / HUP 处理器；可重复调用 幂等性不能用标志位：子 shell 会继承变量，却不会继承「会执行」的 trap， 于是「以为装过了、其实没装」，退出时清理不执行。 也不能只靠「当前 shell 里有没有这个 trap」判断 —— bash 5 起，子 shell 里 `trap -p EXIT` 仍会显示父 shell 设的 trap（实测 5.3：看得见、但子 shell 退出时 不执行），而 bash 3.2 显示为空。只查 trap -p 会在 bash 5 的子 shell 里静默漏装， 表现为「( ... ) 里的 lock_acquire 拿到锁却没在退出时释放」。 所以：我们自己装的 trap（含子 shell 里的残影）一律重装一遍（重装同处理器无害）， 并且绝不把它当成「调用方原有的 handler」捕获下来，否则清理时会自噬。
 
+**稳定性**：stable
+
 **退出码**
 
 - 0 装好了（链式保留调用方已有的 EXIT trap，幂等）
@@ -339,6 +349,8 @@ fs_atomic_write FILE CONTENT [MODE] —— 原子写文件；默认权限 600，
 
 fs_atomic_copy SRC DST [MODE] —— 按字节把 SRC 复制到 DST；写法是原子的 与 fs_atomic_write 的分工：那个吃的是「内容」，命令替换会吃掉文件末尾的换行， 搬模板文件会变形；这个直接搬文件，逐字节一致。 为什么不用 cp：cp -f 先 truncate 目标再写 —— 写到一半被打断（断电、磁盘满、 进程被杀）留下的是**半截文件**，既不是旧内容也不是新内容；而且 cp 会跟随 **目标**的符号链接写穿，把内容写到别处去（链接本身纹丝不动，退出码还是 0）。 这里改成「写同目录的临时文件 → rename 过去」：rename 是原子的，失败要么 什么都没发生、要么整体换成新内容；它替换的是符号链接**本身**， 不会顺着链接写到别处。 权限：给了 MODE 就用它；不给时，目标是既有的普通文件就保留它的权限， 否则用源的权限（目标是符号链接时按源走 —— 这里替换的是链接本身）。 副作用：进程被中途杀掉时，目标目录里可能留下一个 `<DST>.tmp.XXXXXX` 的残留。
 
+**稳定性**：stable
+
 **退出码**
 
 - 0 复制成功
@@ -348,6 +360,8 @@ fs_atomic_copy SRC DST [MODE] —— 按字节把 SRC 复制到 DST；写法是�
 ### `fs_backup`
 
 fs_backup FILE [KEEP] —— 产出 FILE.bak.YYYYmmddHHMMSS，按名升序保留最新 KEEP 份
+
+**稳定性**：stable
 
 **退出码**
 
@@ -359,6 +373,8 @@ fs_backup FILE [KEEP] —— 产出 FILE.bak.YYYYmmddHHMMSS，按名升序保留
 
 fs_ensure_line FILE LINE —— 整行精确匹配；不存在才追加。幂等。
 
+**稳定性**：stable
+
 **退出码**
 
 - 0 文件已含该行或已写入
@@ -368,6 +384,8 @@ fs_ensure_line FILE LINE —— 整行精确匹配；不存在才追加。幂等
 ### `fs_ensure_block`
 
 fs_ensure_block FILE BEGIN END CONTENT —— 标记块内内容整体替换；没有就追加。幂等。
+
+**稳定性**：stable
 
 **退出码**
 
@@ -409,6 +427,8 @@ fs_tmp_init —— 在当前 shell 初始化临时目录，并把清理动作推
 
 run [--always] [--no-die] [--secret-arg N] [--redact-value V] [--] CMD... —— 执行命令，失败即 die；--no-die 只返回码 命令行会进日志，敏感参数会被脱敏（键名像敏感字段、请求头、短选项 -u 等）。 启发式总会漏，所以还留了两个显式声明：   --secret-arg N     第 N 个参数（命令名不算）必脱敏，可以写多次   --redact-value V   值等于 V 的地方一律脱敏（令牌夹在参数中间也遮得到） 环境变量 SHELLKIT_SECRET_ARGS="2,3" 等价于 --secret-arg 2 --secret-arg 3， 对所有 run 生效 —— CI 里统一声明最省事。
 
+**稳定性**：stable
+
 **退出码**
 
 - 0 命令成功
@@ -418,6 +438,8 @@ run [--always] [--no-die] [--secret-arg N] [--redact-value V] [--] CMD... ——
 ### `run_concurrent`
 
 run_concurrent N [--timeout SEC] -- CMD... —— 把同一条命令并发跑 N 份 典型用法：对一批目标跑同一个动作（每个实例自己从环境变量读目标）。   run_concurrent 8 -- ./deploy.sh "$target" 输出约定（stdout 只给数据）：   stdout —— 成功实例的数量，一个整数，便于直接 $(...) 取走   stderr —— 每个实例的 stdout/stderr，逐行带 [i/N] 前缀；失败明细也在这里 返回码：全部成功返回 0；有实例失败则返回第一个失败实例的退出码。 注意：这里不用 die —— die 的 exit 在 if / || 里会退出整个 shell。
+
+**稳定性**：stable
 
 **退出码**
 
@@ -506,6 +528,8 @@ os_is_root —— 当前是否以 root 身份运行
 ### `os_has_cmd`
 
 os_has_cmd CMD... —— 零参数返回 SK_USAGE（空真会让前置检查静默通过）
+
+**稳定性**：stable
 
 **退出码**
 
@@ -846,6 +870,8 @@ svc_install_unit NAME —— 从 stdin 读 unit 内容写入系统目录并 daem
 
 ver_cmp A B —— 比较两个版本号
 
+**稳定性**：stable
+
 **退出码**
 
 - 0 比较完成（stdout 输出 -1 / 0 / 1：A<B / A=B / A>B）
@@ -854,6 +880,8 @@ ver_cmp A B —— 比较两个版本号
 ### `ver_gt`
 
 ver_gt A B —— A 是否比 B 新
+
+**稳定性**：stable
 
 **退出码**
 
@@ -865,6 +893,8 @@ ver_gt A B —— A 是否比 B 新
 
 ver_lt A B —— A 是否比 B 旧
 
+**稳定性**：stable
+
 **退出码**
 
 - 0 A < B
@@ -874,6 +904,8 @@ ver_lt A B —— A 是否比 B 旧
 ### `ver_eq`
 
 ver_eq A B —— 两个版本是否相等
+
+**稳定性**：stable
 
 **退出码**
 
@@ -931,6 +963,8 @@ status_extra KEY=VALUE —— 机器模式下输出 EXTRA 行（人类模式不�
 
 与 registry_scan 的区别：registry_scan 扫目录，registry_add 登记单份文件。
 
+**稳定性**：stable
+
 **参数**
 
 - NAME 条目名
@@ -943,6 +977,8 @@ status_extra KEY=VALUE —— 机器模式下输出 EXTRA 行（人类模式不�
 ### `registry_scan`
 
 registry_scan ROOT PATTERN —— 扫描清单文件并建立索引 条目名 = 清单文件所在目录名。PATTERN 是文件名模式（如 .manifest）。
+
+**稳定性**：stable
 
 **退出码**
 
@@ -965,6 +1001,8 @@ registry_scan ROOT PATTERN —— 扫描清单文件并建立索引 条目名 = 
 
 registry_get NAME KEY —— 取字段值（未声明时为空） KEY 以**字面量**参与匹配：它是调用方传进来的字段名，不该有正则语义。 匹配语义与旧 awk 实现逐字一致：**行首**恰好 KEY= 的第一处，值去首尾空白。 实现走内存 blob（见文件头「为什么把全文读进内存」），全程不 fork 外部命令。
 
+**稳定性**：stable
+
 **退出码**
 
 - 0 总是成功（未声明时 stdout 为空）
@@ -981,6 +1019,8 @@ registry_list —— 列出全部条目名（每行一个）
 
 registry_visible NAME FIELD —— 条目在当前平台是否可见 字段为空 ⇒ 未声明平台限制 ⇒ 可见。平台列表用逗号或空格分隔都行。
 
+**稳定性**：stable
+
 **退出码**
 
 - 0 可见
@@ -990,6 +1030,8 @@ registry_visible NAME FIELD —— 条目在当前平台是否可见 字段为�
 
 registry_deps NAME FIELD —— 传递依赖（拓扑序，空格分隔，不含自身）
 
+**稳定性**：stable
+
 **退出码**
 
 - 0 成功
@@ -998,6 +1040,8 @@ registry_deps NAME FIELD —— 传递依赖（拓扑序，空格分隔，不含
 ### `registry_topo`
 
 registry_topo FIELD —— 全体拓扑序（空格分隔）
+
+**稳定性**：stable
 
 **退出码**
 
@@ -1161,6 +1205,8 @@ scaffold_run_hook FILE PROJECT_DIR —— 跑一个模板钩子 钩子是模板�
 
 retry ATTEMPTS CMD... —— 失败退避重试；用法错与校验失败不重试
 
+**稳定性**：stable
+
 **退出码**
 
 - 0 最终成功
@@ -1172,6 +1218,8 @@ retry ATTEMPTS CMD... —— 失败退避重试；用法错与校验失败不重
 ### `lock_acquire`
 
 lock_acquire NAME [WAIT_SEC] —— 0 成功；SK_PRECOND 被占用/超时；SK_USAGE 名字非法
+
+**稳定性**：stable
 
 **退出码**
 
@@ -1377,6 +1425,8 @@ conf_format —— 当前生效的配置格式（auto|env|dotenv）
 
 conf_get KEY [DEFAULT] —— 只输出值；未初始化或无文件时返回默认值 取值顺序：配置层 > 配置文件。键存在但值为空时返回空串，不回落默认值。
 
+**稳定性**：stable
+
 **退出码**
 
 - 0 成功（stdout 输出值；没配过就输出默认值）
@@ -1405,6 +1455,8 @@ conf_get_any KEY [DEFAULT] —— 环境变量 > 配置层 > 配置文件 > 默�
 
 conf_load_dotenv FILE —— 把 dotenv 文件的键值载入配置层 解析规则：空行与 '#' 开头的行忽略；允许行首 export 前缀；键必须是合法变量名； 成对的单/双引号剥掉（引号内内容原样保留，不解释转义）；未加引号的值去行尾空白、 保留中间空格；KEY= 是"键存在且值为空"；同一文件里后出现的键覆盖先出现的。 取舍：只进配置层，不 export 到调用方的环境变量 —— 环境变量优先级最高， 往里塞东西会盖掉调用方自己的设置。确实要导出时用 conf_source。 非法行跳过并告警，不整体失败。文件不存在返回 SK_PRECOND。
 
+**稳定性**：stable
+
 **退出码**
 
 - 0 载入成功（非法行跳过并告警）
@@ -1415,6 +1467,8 @@ conf_load_dotenv FILE —— 把 dotenv 文件的键值载入配置层 解析规
 
 conf_source FILE —— 把 dotenv 文件的键导出为环境变量（供子进程继承） 与 conf_load_dotenv 的区别：这里明确要 export，所以只导环境变量，不进配置层。
 
+**稳定性**：stable
+
 **退出码**
 
 - 0 导出成功（键进环境变量）
@@ -1424,6 +1478,8 @@ conf_source FILE —— 把 dotenv 文件的键导出为环境变量（供子进
 ### `conf_set`
 
 conf_set KEY VALUE —— 校验 + 值未变则跳过 + 原子写 + 600
+
+**稳定性**：stable
 
 **退出码**
 
@@ -1436,6 +1492,8 @@ conf_set KEY VALUE —— 校验 + 值未变则跳过 + 原子写 + 600
 
 conf_unset KEY —— 删掉一个键；幂等，键不存在也算成功
 
+**稳定性**：stable
+
 **退出码**
 
 - 0 删成功（或本来就没有这个键）
@@ -1445,6 +1503,8 @@ conf_unset KEY —— 删掉一个键；幂等，键不存在也算成功
 ### `conf_disable`
 
 conf_disable KEY —— 把 KEY=VALUE 改成注释行，保留原值
+
+**稳定性**：stable
 
 **退出码**
 
@@ -1466,6 +1526,8 @@ conf_keys —— 逐行输出键名（配置层的键在前，文件里的键在
 
 ask VAR PROMPT [DEFAULT] [TIMEOUT] —— 问一个问题，把答案写进 VAR；超时或 EOF 回退默认值   VAR 不能用库内部出参链路上的局部变量名（见 _sk_check_out_name），否则会静默失效。
 
+**稳定性**：stable
+
 **退出码**
 
 - 0 拿到答案（超时或 EOF 时回退默认值）
@@ -1476,6 +1538,8 @@ ask VAR PROMPT [DEFAULT] [TIMEOUT] —— 问一个问题，把答案写进 VAR�
 ### `ask_yn`
 
 ask_yn VAR PROMPT [DEFAULT=y] [TIMEOUT] —— 结果写入 y 或 n
+
+**稳定性**：stable
 
 **退出码**
 
@@ -1488,6 +1552,8 @@ ask_yn VAR PROMPT [DEFAULT=y] [TIMEOUT] —— 结果写入 y 或 n
 
 ask_choice VAR PROMPT "a|b|c" [DEFAULT] [TIMEOUT] —— 多选一；超时或 EOF 回退默认值
 
+**稳定性**：stable
+
 **退出码**
 
 - 0 拿到一个合法选项
@@ -1498,6 +1564,8 @@ ask_choice VAR PROMPT "a|b|c" [DEFAULT] [TIMEOUT] —— 多选一；超时或 E
 ### `confirm`
 
 confirm PROMPT [DEFAULT=n] [TIMEOUT] —— 只返回码
+
+**稳定性**：stable
 
 **退出码**
 
@@ -1565,6 +1633,8 @@ cli_completion_script [bash|zsh] —— 生成补全脚本 子命令名取自注
 
 cli_run ARGS... —— 分发入口：吃全局选项后按名字找同名 cmd_ 前缀的函数
 
+**稳定性**：stable
+
 **退出码**
 
 - 0 命令成功
@@ -1584,6 +1654,8 @@ cli_opt_init —— 清空选项注册表。不接受参数；变量默认值请
 
 cli_opt VAR LONG [SHORT] [TAKES_ARG] —— 注册一个选项；第四个参数为 1 表示这个选项要吃值   VAR 是「选项值要写进的变量名」，不能用库保留名（__ / _sk_ 前缀）。
 
+**稳定性**：stable
+
 **退出码**
 
 - 0 注册成功
@@ -1592,6 +1664,8 @@ cli_opt VAR LONG [SHORT] [TAKES_ARG] —— 注册一个选项；第四个参数
 ### `cli_opts`
 
 cli_opts ARGS... —— 按 cli_opt 注册的规则解析子命令选项；剩余位置参数进 SK_OPTS_LEFT
+
+**稳定性**：stable
 
 **退出码**
 

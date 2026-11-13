@@ -56,6 +56,7 @@ _sk_ver_field() {
 # ver_cmp A B —— 比较两个版本号
 # @exitcode 0 比较完成（stdout 输出 -1 / 0 / 1：A<B / A=B / A>B）
 # @exitcode 2 有版本串非法或缺参数（stdout 空）
+# @stability stable
 ver_cmp() {
   local __a=${1:-} __b=${2:-} __i=0 __x __y
   __a=${__a#v}
@@ -86,6 +87,7 @@ ver_cmp() {
 # @exitcode 0 A > B
 # @exitcode 1 不是
 # @exitcode 2 有版本串非法或缺参数（没法比较）
+# @stability stable
 ver_gt() {
   local __r=""
   __r=$(ver_cmp "${1:-}" "${2:-}") || return $?
@@ -96,6 +98,7 @@ ver_gt() {
 # @exitcode 0 A < B
 # @exitcode 1 不是
 # @exitcode 2 有版本串非法或缺参数（没法比较）
+# @stability stable
 ver_lt() {
   local __r=""
   __r=$(ver_cmp "${1:-}" "${2:-}") || return $?
@@ -106,6 +109,7 @@ ver_lt() {
 # @exitcode 0 相等
 # @exitcode 1 不等
 # @exitcode 2 有版本串非法或缺参数（没法比较，不许当成相等）
+# @stability stable
 ver_eq() {
   local __r=""
   __r=$(ver_cmp "${1:-}" "${2:-}") || return $?

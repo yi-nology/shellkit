@@ -22,6 +22,7 @@ _SK_TRAP_SAVED_HUP=""
 # trap_push CMD... —— 注册一个清理动作；后注册的先执行
 # @exitcode 0 压栈成功
 # @exitcode 2 没给命令
+# @stability stable
 trap_push() {
   if [ "$#" -eq 0 ]; then
     log_error "$(_t 'trap_push requires a command')"
@@ -262,6 +263,7 @@ _sk_trap_on_hup() {
 # 所以：我们自己装的 trap（含子 shell 里的残影）一律重装一遍（重装同处理器无害），
 # 并且绝不把它当成「调用方原有的 handler」捕获下来，否则清理时会自噬。
 # @exitcode 0 装好了（链式保留调用方已有的 EXIT trap，幂等）
+# @stability stable
 trap_install() {
   local __sig
   # 一次读完所有信号：以前是每个信号读两遍，8 轮 mktemp + rm。
