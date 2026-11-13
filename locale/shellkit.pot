@@ -8,7 +8,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: shellkit 0.18.0\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-11-13 03:24+0800\n"
+"POT-Creation-Date: 2026-11-13 08:25+0800\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language-Team: LANGUAGE <LL@li.org>\n"
@@ -120,6 +120,14 @@ msgid "source file does not exist"
 msgstr ""
 
 msgid "invalid keep count"
+msgstr ""
+
+msgid "the ownership manifest version is unreadable; entries were ignored"
+msgstr ""
+
+msgid ""
+"the ownership manifest version is newer than this build understands; entries "
+"were ignored"
 msgstr ""
 
 msgid "the ownership manifest is damaged; entries were ignored"

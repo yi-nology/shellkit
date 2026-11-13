@@ -4,7 +4,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: shellkit\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-11-12 22:11+0800\n"
+"POT-Creation-Date: 2026-11-13 08:25+0800\n"
 "PO-Revision-Date: 2026-11-08 00:00+0800\n"
 "Last-Translator: shellkit contributors\n"
 "Language-Team: shellkit contributors\n"
@@ -118,6 +118,14 @@ msgstr "源文件不存在"
 
 msgid "invalid keep count"
 msgstr "非法的保留份数"
+
+msgid "the ownership manifest version is unreadable; entries were ignored"
+msgstr "所有权清单的版本读不懂，条目已忽略"
+
+msgid ""
+"the ownership manifest version is newer than this build understands; entries "
+"were ignored"
+msgstr "所有权清单的版本比本构建更新，条目已忽略"
 
 msgid "the ownership manifest is damaged; entries were ignored"
 msgstr "所有权清单已损坏；部分条目被忽略"

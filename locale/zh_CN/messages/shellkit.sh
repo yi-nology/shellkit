@@ -38,6 +38,8 @@ _sk_msg_lookup_shellkit() {
     'Bash version is too old') printf '%s' 'Bash 版本过低' ;;
     'source file does not exist') printf '%s' '源文件不存在' ;;
     'invalid keep count') printf '%s' '非法的保留份数' ;;
+    'the ownership manifest version is unreadable; entries were ignored') printf '%s' '所有权清单的版本读不懂，条目已忽略' ;;
+    'the ownership manifest version is newer than this build understands; entries were ignored') printf '%s' '所有权清单的版本比本构建更新，条目已忽略' ;;
     'the ownership manifest is damaged; entries were ignored') printf '%s' '所有权清单已损坏；部分条目被忽略' ;;
     'line must not be empty') printf '%s' '内容不能为空' ;;
     'line must not contain a newline') printf '%s' '内容不能包含换行' ;;

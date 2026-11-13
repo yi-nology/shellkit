@@ -241,19 +241,56 @@ _sk_fs_no_symlink_below() {
   return 0
 }
 
-# _sk_fs_own_read FILE —— 读一份所有权清单（「相对路径 TAB 内容指纹」每行一条）
+# 所有权清单的 schema 版本（issue #78）
+#
+# 措辞与工程清单（.shellkit-manifest 的 manifest_version=2）保持一致 ——
+# 同一个仓库里同一件事只该有一种写法。没有版本行的老清单按 v1 处理：
+# 条目语义与版本化之前逐字节一致。
+_SK_OWN_MANIFEST_VERSION=1
+
+# _sk_fs_own_read FILE —— 读一份所有权清单（首行 manifest_version，其后 rel TAB sum）
 #
 # 读进 _SK_OWN_RELS[] 与 _SK_OWN_SUMS[] 两个平行数组。文件不存在是正常态
 # （还没装过），返回 0、数组为空；格式不对的行跳过并告警 —— 清单损坏不该
 # 把卸载卡死，但也不能静默：用户得知道「清单不完整，可能有东西删不掉」。
+#
+# 版本规则（issue #78）：
+#   - 没有版本行 ⇒ v1（版本化之前的老清单，条目语义与今天完全一致）；
+#   - 版本 ≤ 本构建支持的最高版 ⇒ 照常读（当前只支持 v1）；
+#   - 版本更高 / 读不懂 ⇒ **告警并整份拒读**（数组留空，返回 0）——
+#     宁可让调用方走「没有清单」的退化判据，也绝不按猜出来的格式去删文件。
+#     返回 0 是刻意的：调用方都不带 `||`，返回非零会在 set -e 下打死整个 CLI。
 _sk_fs_own_read() {
-  local __file=${1:-} __line __rel __sum __bad=0
+  local __file=${1:-} __line __rel __sum __bad=0 __ver=1
   _SK_OWN_RELS=()
   _SK_OWN_SUMS=()
   [ -n "$__file" ] || return 1
   [ -f "$__file" ] || return 0
+  # 第一行单独读（bash 内建 read，不 fork）：它是版本行还是条目，决定了
+  # 整份清单能不能按当前格式解释。
+  __line=""
+  IFS= read -r __line <"$__file" || true
+  case "$__line" in
+    manifest_version=*)
+      __ver=${__line#manifest_version=}
+      case "$__ver" in
+        '' | *[!0-9]*)
+          log_warn "$(_t 'the ownership manifest version is unreadable; entries were ignored'): $__file ($__line)"
+          return 0
+          ;;
+      esac
+      if [ "$__ver" -gt "$_SK_OWN_MANIFEST_VERSION" ]; then
+        log_warn "$(_t 'the ownership manifest version is newer than this build understands; entries were ignored'): $__file (v$__ver > v$_SK_OWN_MANIFEST_VERSION)"
+        return 0
+      fi
+      ;;
+  esac
   while IFS=$'\t' read -r __rel __sum || [ -n "$__rel" ]; do
     [ -n "$__rel" ] || continue
+    # 版本行没有 TAB，不参与条目解析，也不该被记成「损坏」
+    case "$__rel" in
+      manifest_version=*) continue ;;
+    esac
     if [ -z "$__sum" ]; then
       __bad=$((__bad + 1))
       continue
@@ -285,6 +322,11 @@ _sk_fs_own_sum() {
 # 数组来自 _SK_OWN_RELS / _SK_OWN_SUMS，调用方改完数组后调它拿文本，自己落盘。
 _sk_fs_own_render() {
   local __i=0
+  # 首行写 schema 版本（issue #78）。三个写入点（_sk_own_sync、skill install、
+  # skill uninstall 重写）都经由这里，调用方零改动。
+  # 已知的跨版本噪音：v0.18.0 及更早的 _sk_fs_own_read 不认这一行，会把它记成
+  # 1 条「损坏」并告警 —— 条目与删除决策不受影响（见 docs/MIGRATING.md）。
+  printf 'manifest_version=%s\n' "$_SK_OWN_MANIFEST_VERSION"
   while [ "$__i" -lt "${#_SK_OWN_RELS[@]}" ]; do
     printf '%s\t%s\n' "${_SK_OWN_RELS[$__i]}" "${_SK_OWN_SUMS[$__i]}"
     __i=$((__i + 1))
