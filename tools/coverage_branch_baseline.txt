@@ -122,6 +122,7 @@ lib/core/config.sh:conf_unset:3
 lib/core/config.sh:conf_unset:4
 lib/core/config.sh:conf_unset:7
 lib/core/config.sh:conf_unset:8
+lib/core/error.sh:require_bash:1
 lib/core/error.sh:require_cmd:2
 lib/core/error.sh:require_file:2
 lib/core/error.sh:require_root:1
@@ -138,9 +139,10 @@ lib/core/fs.sh:_sk_fs_new_tmp:3
 lib/core/fs.sh:_sk_fs_no_symlink_below:3
 lib/core/fs.sh:_sk_fs_no_symlink_below:8
 lib/core/fs.sh:_sk_fs_own_read:1
-lib/core/fs.sh:_sk_fs_own_read:4
-lib/core/fs.sh:_sk_fs_own_read:5
-lib/core/fs.sh:_sk_fs_own_read:6
+lib/core/fs.sh:_sk_fs_own_read:10
+lib/core/fs.sh:_sk_fs_own_read:11
+lib/core/fs.sh:_sk_fs_own_read:3
+lib/core/fs.sh:_sk_fs_own_read:8
 lib/core/fs.sh:_sk_fs_own_sum:1
 lib/core/fs.sh:_sk_fs_rel_safe:1
 lib/core/fs.sh:fs_atomic_copy:1
@@ -383,7 +385,7 @@ lib/core/prompt.sh:_sk_ask_raw:7
 lib/core/prompt.sh:_sk_ask_raw:8
 lib/core/prompt.sh:_sk_ask_yn_raw:3
 lib/core/prompt.sh:_sk_ask_yn_raw:4
-lib/core/prompt.sh:_sk_read_line:9
+lib/core/prompt.sh:_sk_read_line:8
 lib/core/prompt.sh:ask_choice:2
 lib/core/prompt.sh:ask_yn:2
 lib/core/prompt.sh:confirm:1
@@ -528,6 +530,7 @@ lib/core/svc.sh:svc_reload:2
 lib/core/svc.sh:svc_restart:1
 lib/core/svc.sh:svc_stop:2
 lib/core/trap.sh:_sk_trap_capture:1
+lib/core/trap.sh:_sk_trap_capture:10
 lib/core/trap.sh:_sk_trap_capture:2
 lib/core/trap.sh:_sk_trap_capture:4
 lib/core/trap.sh:_sk_trap_capture:7
@@ -573,9 +576,10 @@ repair.sh:_repair:8
 repair.sh:_repair:9
 repair.sh:_rm:1
 repair.sh:_rm:2
+shellkit:<toplevel>:12
+shellkit:<toplevel>:7
 shellkit:<toplevel>:9
 shellkit:_sk_check_dir:2
-shellkit:_sk_check_dir:3
 shellkit:_sk_copy_legal:1
 shellkit:_sk_copy_legal:2
 shellkit:_sk_copy_legal:3
@@ -773,6 +777,7 @@ shellkit:_sk_skill_install_into:6
 shellkit:_sk_skill_install_into:8
 shellkit:_sk_skill_list:13
 shellkit:_sk_skill_list:2
+shellkit:_sk_skill_list:7
 shellkit:_sk_skill_list:9
 shellkit:_sk_skill_norm_dir:1
 shellkit:_sk_skill_norm_dir:3
@@ -799,7 +804,6 @@ shellkit:_sk_skill_uninstall_from:33
 shellkit:_sk_skill_uninstall_from:35
 shellkit:_sk_skill_uninstall_from:39
 shellkit:_sk_skill_uninstall_from:4
-shellkit:_sk_skill_uninstall_from:41
 shellkit:_sk_skill_uninstall_from:45
 shellkit:_sk_skill_uninstall_from:5
 shellkit:_sk_skill_uninstall_from:8
@@ -871,10 +875,10 @@ shellkit:cmd_docs:3
 shellkit:cmd_docs:5
 shellkit:cmd_doctor:10
 shellkit:cmd_doctor:12
+shellkit:cmd_doctor:22
 shellkit:cmd_doctor:3
 shellkit:cmd_doctor:31
 shellkit:cmd_doctor:35
-shellkit:cmd_doctor:36
 shellkit:cmd_doctor:5
 shellkit:cmd_doctor:9
 shellkit:cmd_install_self:11
