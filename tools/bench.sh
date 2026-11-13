@@ -15,6 +15,7 @@
 #   --root DIR          被测的代码根（默认：脚本所在的仓库；对着代码快照测时用）
 #   --only PATH[,PATH]  只测其中几条路径（逗号分隔）
 #   --list              列出四条路径的名字
+#   --profile           不计时：跑一遍 xtrace，数被测进程内部的热点（命令/文件/source）
 #   -h, --help          显示帮助
 #
 # 测的四条路径：
@@ -71,6 +72,7 @@ TOLERANCE="0.30"
 BASELINE=""
 SUMMARY=""
 ONLY=""
+PROFILE=0
 ALL_PATHS="cli_bootstrap cli_new cli_upgrade test_suite"
 MIN_RUNS=3
 
@@ -84,6 +86,9 @@ SUITE_CMD="${BENCH_SUITE_CMD:-$DEFAULT_SUITE_CMD}"
 __new_dir=""
 __up_dir=""
 __up_tpl=""
+# profile 模式下给被测命令开 xtrace（bash -x）用的开关；平时为空。
+# 不加引号是刻意的：空值展开成零个词（加引号会变成一个空参数）。
+__xtrace=""
 
 usage() {
   cat <<'EOF'
@@ -100,6 +105,7 @@ usage: bash tools/bench.sh [options]
   --root DIR          被测的代码根（默认：脚本所在的仓库）
   --only PATH[,PATH]  只测其中几条路径
   --list              列出四条路径的名字
+  --profile           不计时：跑一遍 xtrace，数被测进程内部的热点
 EOF
 }
 
@@ -194,6 +200,10 @@ while [ $# -gt 0 ]; do
       LIST=1
       shift
       ;;
+    --profile)
+      PROFILE=1
+      shift
+      ;;
     -h | --help)
       usage
       exit 0
@@ -216,6 +226,11 @@ esac
 case "$RETRIES" in
   '' | *[!0-9]*) die_usage "--retries takes a non-negative integer" ;;
 esac
+
+# --profile 数的是内部热点，不产出可比的耗时值 —— 拿它做基线判定没有意义
+if [ "$PROFILE" = "1" ] && { [ "$CHECK" = "1" ] || [ "$WRITE" = "1" ]; }; then
+  die_usage "--profile cannot be combined with --check or --write-baseline"
+fi
 
 if [ -z "$BASELINE" ]; then
   BASELINE="$SELF_ROOT/tools/bench_baseline.txt"
@@ -350,7 +365,9 @@ _run_cli_bootstrap() {
   # 起一个 bash 进程，source lib/bootstrap.sh —— 它按 lib/modules.txt 的顺序
   # source lib/core/*.sh（SHELLKIT_MODULES 置空 = 全部模块）。
   # 与 CLI 的启动路径同口径：CLI 自己也是 set -euo pipefail + source bootstrap。
-  (cd "$ROOT" && SHELLKIT_MODULES='' bash -c 'set -euo pipefail; . "$1/lib/bootstrap.sh"' _ "$ROOT")
+  # $__xtrace 平时为空、profile 模式下是 -x（把被测进程的命令吐给热点统计）
+  # shellcheck disable=SC2086  # 空值要展开成零个词，加引号反而变成空参数
+  (cd "$ROOT" && SHELLKIT_MODULES='' bash $__xtrace -c 'set -euo pipefail; . "$1/lib/bootstrap.sh"' _ "$ROOT")
 }
 
 _prep_cli_new() {
@@ -363,7 +380,8 @@ _prep_cli_new() {
 }
 
 _run_cli_new() {
-  bash "$ROOT/shellkit" new "$__new_dir" --name benchproj --cmd run --yes
+  # shellcheck disable=SC2086  # $__xtrace 空值要展开成零个词（见 _run_cli_bootstrap）
+  bash $__xtrace "$ROOT/shellkit" new "$__new_dir" --name benchproj --cmd run --yes
 }
 
 _prep_cli_upgrade() {
@@ -384,7 +402,8 @@ _prep_cli_upgrade() {
 }
 
 _run_cli_upgrade() {
-  bash "$ROOT/shellkit" upgrade "$__up_dir" --template "$__up_tpl" --yes
+  # shellcheck disable=SC2086  # $__xtrace 空值要展开成零个词（见 _run_cli_bootstrap）
+  bash $__xtrace "$ROOT/shellkit" upgrade "$__up_dir" --template "$__up_tpl" --yes
 }
 
 _prep_test_suite() {
@@ -415,6 +434,174 @@ _path_desc() {
       ;;
     *) printf '%s' '' ;;
   esac
+}
+
+# ---------------------------------------------------------------------------
+# profile 模式：不计时，数被测进程内部的热点
+#
+# 为什么用 xtrace：bash 自带的 set -x 能把被测进程执行过的每条命令吐到
+# stderr —— 不给产品代码插桩、不需要 root、macOS 与 Linux 同一套判据
+# （strace/dtruss 要 root 或被 SIP 挡，跨平台门禁不能建在它上面）。
+# 代价是 xtrace 本身有开销，所以 profile **不产出耗时数字**，只产计数；
+# 耗时仍归 --runs 的干净测量管。两件事分开跑，互不污染。
+#
+# 统计口径：
+#   trace_lines     非空 trace 行数（规模感，不参与判定）
+#   external_total  非内建、非下划线开头的命令词次数（fork 候选，见下）
+#   internal_calls  下划线开头的库内私有函数调用次数（同进程零 fork，单列）
+#   source_count    source / . 的次数 —— 模块加载成本的直接线索
+#   file_refs_total 命令行里「像文件路径」的 token 出现总次数（启发式，见下）
+#   top_commands    fork 候选命令的频次 top 15
+#   repeated_files  出现 ≥2 次的文件 token top 15（重复读盘候选）
+#
+# xtrace 分不清 bash 函数调用与外部命令（都是一行 + name args）：下划线开头
+# 按本仓库约定归 internal_calls（私有函数同进程执行、零 fork），不带下划线的
+# 公共函数（log_info 之类）仍可能留在 top_commands 里 —— 报告是给人复核的
+# 线索，不是精确 fork 计数。
+#
+# 文件 token 是启发式提取：整体落在 [A-Za-z0-9_./-]、且是路径或带常见
+# 扩展名才算 —— 宁可漏报，也不把 "foo];" 这种 shell 语法残渣算成文件。
+# 报告是给人复核的线索，不是精确 syscall 记录。
+#
+# 范围：只统计主进程 + 它自己的命令替换子 shell；被测命令另外 fork 的
+# 独立 bash 进程（如 vendor 副本）不继承 xtrace，不在统计内。
+# test_suite 不做 profile：整套测试的 trace 有几十万行，且「哪条路径有
+# 热点」只有按路径拆开才有意义 —— 跳过并出声。
+# ---------------------------------------------------------------------------
+
+PROFILE_PATHS=()
+PROFILE_TRACES=()
+PROFILE_STATUS=()
+
+# _push_profile PATH TRACE STATUS —— 记一条 profile 结果（TRACE 为空 = 没跑成）
+_push_profile() {
+  PROFILE_PATHS[${#PROFILE_PATHS[@]}]=$1
+  PROFILE_TRACES[${#PROFILE_TRACES[@]}]=$2
+  PROFILE_STATUS[${#PROFILE_STATUS[@]}]=$3
+}
+
+# _profile_one PATH —— 跑一遍带 xtrace 的被测命令，trace 落盘
+#
+# 与计时路径共用同一套 _prep_/_run_（只是给被测 bash 多个 -x），
+# 保证 profile 数的和 --runs 量的是同一条路。
+_profile_one() {
+  local __p=$1 __trace __rc=0
+  __trace="$WORK/trace-$__p.txt"
+  if ! "_prep_$__p" "$__p" prof >"$WORK/prep-$__p-prof.txt" 2>&1; then
+    log "profile $__p: preparation failed"
+    _log_tail "$WORK/prep-$__p-prof.txt" 20
+    _push_profile "$__p" "" failed
+    return 1
+  fi
+  __xtrace="-x"
+  "_run_$__p" "$__p" prof >"$WORK/run-$__p-prof.txt" 2>"$__trace"
+  __rc=$?
+  __xtrace=""
+  if [ "$__rc" -ne 0 ]; then
+    log "profile $__p: run failed (rc=$__rc)"
+    _log_tail "$WORK/run-$__p-prof.txt" 10
+    _push_profile "$__p" "$__trace" failed
+    return 1
+  fi
+  _push_profile "$__p" "$__trace" ok
+  return 0
+}
+
+# _profile_awk PATH TRACE STATUS MODE —— 解析 trace，按 MODE=json|text 输出片段
+#
+# TRACE 不存在按空输入处理（prep 失败的路径也走这里，出全 0 的统一结构，
+# 消费者不用判两种形态）。awk 内做插入排序：BWK awk（macOS）没有 asort。
+_profile_awk() {
+  local __p=$1 __trace=$2 __st=$3 __mode=$4
+  [ -f "$__trace" ] || : >"$__trace"
+  awk -v path="$__p" -v status="$__st" -v mode="$__mode" '
+  BEGIN {
+    n = split("if then else elif fi for while until do done case esac in function select time coproc " \
+              ". : [ [[ ]] alias break builtin caller cd command continue declare dirs disown " \
+              "echo enable eval exec exit export false fc fg getopts hash help history jobs kill let " \
+              "local logout popd printf pushd pwd read readonly return set shift shopt source suspend " \
+              "test times trap true type ulimit umask unalias unset wait", K, " ")
+    for (i = 1; i <= n; i++) B[K[i]] = 1
+    TOP = 15
+  }
+  {
+    line = $0
+    while (substr(line, 1, 1) == "+") line = substr(line, 2)
+    if (substr(line, 1, 1) == " ") line = substr(line, 2)
+    if (line == "") next
+    total++
+    sp = index(line, " ")
+    if (sp == 0) { cmd = line; rest = "" }
+    else { cmd = substr(line, 1, sp - 1); rest = substr(line, sp + 1) }
+    # xtrace 会把保留词加引号显示（左方括号前后各带一个单引号字符）——
+    # 先去掉命令词外侧的单引号再查内建表
+    gsub(/\047/, "", cmd)
+    if (cmd == "") next
+    # 赋值整行跳过（含数组下标赋值与 FOO=bar cmd 前置赋值）：按空格切词会把
+    # 引号赋值里的内容当成下一个命令，那是解析残渣不是被执行的命令。
+    # 代价是 FOO=1 cmd 这种前置赋值行不计数 —— 库代码里几乎没有，
+    # 漏报比把残渣算成 fork 大户强。
+    if (cmd ~ /=/) next
+    # 文件提取对每一行都做（放在内建判定之前）：source 行的目标文件正是
+    # 重复读盘统计的最大头，按命令分类跳过会把它整个漏掉。
+    m = split(rest, W, /[ \t]+/)
+    for (i = 1; i <= m; i++) {
+      t = W[i]
+      gsub(/\047/, "", t)
+      gsub(/"/, "", t)
+      if (t == "" || substr(t, 1, 1) == "-") continue
+      if (t !~ /^[A-Za-z0-9_.\/-]+$/) continue
+      if (t ~ /\// || t ~ /\.(sh|txt|md|json|awk|in|yml|yaml|conf|po|pot|css|js|svg|html|list)$/) {
+        files[t]++
+        file_total++
+      }
+    }
+    if (cmd in B) { if (cmd == "." || cmd == "source") src++; next }
+    # 下划线开头按本仓库约定归为库内私有函数调用：同进程执行、零 fork，
+    # 混进 external 会把 _sk_mod_index 这种每模块都调的函数顶成假的 fork 大户。
+    # 不带下划线的公共函数（log_info 之类）xtrace 分不清，仍会留在
+    # top_commands 里 —— 报告是给人复核的线索，不是精确 fork 计数。
+    if (substr(cmd, 1, 1) == "_") { internal++; next }
+    ext[cmd]++
+    ext_total++
+  }
+  END {
+    ne = 0
+    for (k in ext) E[++ne] = k
+    for (i = 2; i <= ne; i++) {
+      v = E[i]; j = i - 1
+      while (j >= 1 && ext[E[j]] < ext[v]) { E[j + 1] = E[j]; j-- }
+      E[j + 1] = v
+    }
+    nf = 0
+    for (k in files) if (files[k] >= 2) F[++nf] = k
+    for (i = 2; i <= nf; i++) {
+      v = F[i]; j = i - 1
+      while (j >= 1 && files[F[j]] < files[v]) { F[j + 1] = F[j]; j-- }
+      F[j + 1] = v
+    }
+    te = ne; if (te > TOP) te = TOP
+    tf = nf; if (tf > TOP) tf = TOP
+    if (mode == "json") {
+      printf "{\"path\": \"%s\", \"status\": \"%s\", \"trace_lines\": %d, ", path, status, total
+      printf "\"external_total\": %d, \"internal_calls\": %d, \"source_count\": %d, ", ext_total, internal, src
+      printf "\"file_refs_total\": %d, ", file_total
+      printf "\"top_commands\": ["
+      for (i = 1; i <= te; i++) printf "%s{\"cmd\": \"%s\", \"count\": %d}", (i > 1 ? ", " : ""), E[i], ext[E[i]]
+      printf "], \"repeated_files\": ["
+      for (i = 1; i <= tf; i++) printf "%s{\"file\": \"%s\", \"count\": %d}", (i > 1 ? ", " : ""), F[i], files[F[i]]
+      printf "]}"
+    } else {
+      printf "profile %s: status=%s trace_lines=%d external=%d internal=%d source=%d file_refs=%d\n", \
+        path, status, total, ext_total, internal, src, file_total
+      printf "  top commands:\n"
+      if (te == 0) printf "    (none)\n"
+      for (i = 1; i <= te; i++) printf "    %-24s %6d\n", E[i], ext[E[i]]
+      printf "  repeated files (>=2):\n"
+      if (tf == 0) printf "    (none)\n"
+      for (i = 1; i <= tf; i++) printf "    %-44s %6d\n", F[i], files[F[i]]
+    }
+  }' "$__trace"
 }
 
 # ---------------------------------------------------------------------------
@@ -693,6 +880,48 @@ _write_summary() {
 
 _detect_clock
 log "clock: $_CLOCK, runs: $RUNS"
+
+# ---------------------------------------------------------------------------
+# profile 分支：跳过计时，出热点统计后直接退出
+# ---------------------------------------------------------------------------
+if [ "$PROFILE" = "1" ]; then
+  __pf_failed=0
+  for __p in $SELECTED; do
+    if [ "$__p" = "test_suite" ]; then
+      log "profile: skipping test_suite (a whole-suite trace is hundreds of thousands of lines; profile each product path instead)"
+      _push_profile test_suite "" skipped
+      continue
+    fi
+    if ! _profile_one "$__p"; then
+      __pf_failed=1
+    fi
+  done
+  if [ "$JSON" = "1" ]; then
+    printf '{\n'
+    printf '  "schema": "shellkit.bench.profile.v1",\n'
+    printf '  "root": "%s",\n' "$ROOT"
+    printf '  "results": [\n'
+    __i=0
+    while [ "$__i" -lt "${#PROFILE_PATHS[@]}" ]; do
+      __sep=","
+      [ "$__i" -lt "$((${#PROFILE_PATHS[@]} - 1))" ] || __sep=""
+      _profile_awk "${PROFILE_PATHS[$__i]}" "${PROFILE_TRACES[$__i]}" \
+        "${PROFILE_STATUS[$__i]}" json
+      printf '%s\n' "$__sep"
+      __i=$((__i + 1))
+    done
+    printf '  ]\n'
+    printf '}\n'
+  else
+    __i=0
+    while [ "$__i" -lt "${#PROFILE_PATHS[@]}" ]; do
+      _profile_awk "${PROFILE_PATHS[$__i]}" "${PROFILE_TRACES[$__i]}" \
+        "${PROFILE_STATUS[$__i]}" text
+      __i=$((__i + 1))
+    done
+  fi
+  exit "$__pf_failed"
+fi
 
 FAILED=0
 for __p in $SELECTED; do

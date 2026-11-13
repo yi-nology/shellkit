@@ -205,4 +205,56 @@ out=$(bash "$BENCH" --only cli_bootstrap --runs 3 --check --baseline "$d/baselin
 assert_ne "0" "$rc" "a baseline without the measured path must be rejected"
 assert_contains "$out" "has no entry" "the check must say which path is missing"
 
+# CASE: --profile 出内部热点（不计时；结构字段齐全、计数非零）
+#
+# profile 是「按数据决定优化」的前提：数不出热点，批次 A2 的优化就只能拍脑袋。
+# 数值用参数展开从 JSON 抠，不走 "| head" 管道 —— head 命中即退会把上游
+# 打成 SIGPIPE，pipe-safety 门禁盯着这种模式。
+rc=0
+out=$(bash "$BENCH" --profile --only cli_bootstrap --json 2>/dev/null) || rc=$?
+assert_eq "0" "$rc" "profile mode must run cleanly"
+assert_contains "$out" '"schema": "shellkit.bench.profile.v1"' "the profile output must carry its schema"
+assert_contains "$out" '"path": "cli_bootstrap"' "the profile output must name the path"
+assert_contains "$out" '"status": "ok"' "a successful profile must say so"
+
+__src=${out#*\"source_count\": }
+__src=${__src%%,*}
+[ -n "$__src" ] || _fail "profile output must carry source_count"
+# source_count >= 10：modules.txt 里 23 个模块逐个 source + bootstrap 自身（实测 24）
+assert_true test "$__src" -ge 10
+
+__int=${out#*\"internal_calls\": }
+__int=${__int%%,*}
+[ -n "$__int" ] || _fail "profile output must separate internal calls"
+# 私有函数调用（_sk_* 每模块都调）必须单列，不混进 fork 候选 —— 少了这个
+# 字段，_sk_mod_index 会把 bootstrap 顶成「80 次 fork」的假热点
+assert_true test "$__int" -ge 1
+
+__tl=${out#*\"trace_lines\": }
+__tl=${__tl%%,*}
+[ -n "$__tl" ] || _fail "profile output must carry trace_lines"
+# trace 行数非零：数不到命令说明 xtrace 没接上（__xtrace 开关掉了）
+assert_true test "$__tl" -ge 100
+
+# CASE: --profile 与 --check 语义互斥 ⇒ 用法错（profile 不产出可比的耗时值）
+rc=0
+out=$(bash "$BENCH" --profile --check --only cli_bootstrap 2>&1) || rc=$?
+assert_eq "2" "$rc" "--profile must refuse --check"
+assert_contains "$out" "--profile cannot be combined" "the usage error must say why"
+
+# CASE: text 模式（默认）给人读
+rc=0
+out=$(bash "$BENCH" --profile --only cli_bootstrap 2>/dev/null) || rc=$?
+assert_eq "0" "$rc" "text profile must run cleanly"
+assert_contains "$out" "profile cli_bootstrap: status=ok" "the text output must name the path and status"
+assert_contains "$out" "source=" "the text output must carry the source count"
+assert_contains "$out" "top commands:" "the text output must list top commands"
+
+# CASE: test_suite 不做 profile（整套 trace 几十万行，且热点要按路径拆开看），
+# 跳过且不算错误
+rc=0
+out=$(bash "$BENCH" --profile --only test_suite --json 2>/dev/null) || rc=$?
+assert_eq "0" "$rc" "skipping test_suite must not be an error"
+assert_contains "$out" '"status": "skipped"' "the profile must report test_suite as skipped"
+
 exit 0
