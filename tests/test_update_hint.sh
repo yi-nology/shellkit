@@ -101,8 +101,19 @@ assert_contains "$out" "$CUR" "the command's own output must survive"
 assert_not_contains "$out" "9.9.9" "a non-interactive run must not carry the hint"
 
 # CASE: 同样的场景给了真终端 -> 提示必须出现（否则上面那条永远绿，闸门没有判据能力）
+#
+# pty.spawn 在 python <3.10 的 _copy 循环里有缺陷：子进程退出且 stdin EOF 之后
+# fds 被摘空，select([], [], []) 无超时永久阻塞（3.12 起 master EOF 即 return，
+# 不再进空集 select）。子进程的输出在阻塞前已全部刷出，所以有 timeout 就套一层：
+# 拿得到断言需要的输出，也不会把整个套件挂死（macOS 系统 python3 = 3.9.6 实测）。
 if command -v python3 >/dev/null 2>&1; then
-  out=$(python3 -c 'import pty, sys; pty.spawn(sys.argv[1:])' \
+  __pty_prefix=""
+  if command -v timeout >/dev/null 2>&1; then
+    __pty_prefix="timeout 10"
+  elif command -v gtimeout >/dev/null 2>&1; then
+    __pty_prefix="gtimeout 10"
+  fi
+  out=$($__pty_prefix python3 -c 'import pty, sys; pty.spawn(sys.argv[1:])' \
     "$installed/share/shellkit/shellkit" --version 2>&1)
   assert_contains "$out" "9.9.9" "on a real tty the hint must be shown"
 else
