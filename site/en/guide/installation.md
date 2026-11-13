@@ -53,7 +53,7 @@ your machine; the temporary directory is removed when the process exits, and onl
 curl -fsSL https://github.com/yi-nology/shellkit/releases/latest/download/install.sh | PREFIX="$HOME/.local" bash
 
 # pin a version
-curl -fsSL https://github.com/yi-nology/shellkit/releases/latest/download/install.sh | VERSION=0.18.0 bash
+curl -fsSL https://github.com/yi-nology/shellkit/releases/latest/download/install.sh | VERSION=0.19.0 bash
 
 # internal mirror: <base>/v<version>/<asset>
 curl -fsSL https://github.com/yi-nology/shellkit/releases/latest/download/install.sh | SHELLKIT_RELEASE_BASE=https://mirror.example/shellkit bash
@@ -92,7 +92,7 @@ fi
 `update` downloads, verifies sha256, and only then replaces anything. Offline or behind a firewall, hand it a local archive:
 
 ```bash
-shellkit update --from shellkit-0.18.0.tar.gz --sha256 "$SUM"
+shellkit update --from shellkit-0.19.0.tar.gz --sha256 "$SUM"
 ```
 
 ## Uninstall

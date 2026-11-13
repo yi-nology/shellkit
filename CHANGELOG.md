@@ -2,6 +2,20 @@
 本文件由 `tools/release.sh` 在发版时自动追加，已发布的小节不要手改。
 最新的在最前面。每一条对应一个提交 —— 要看「为什么」而不是「改了什么」，读 `docs/MIGRATING.md`。
 
+## 0.19.0 — 2026-11-13
+
+822c451 feat(manifest): #78 —— 三类所有权清单带 schema 版本，认不出的版本明确拒读
+de8af71 feat(api): #79 —— Public API 分级机制：@stability 注解 + 基线列 + 双向棘轮门禁
+a3c662c feat(site): 主页重构 + 全站 GitHub 蓝紫主色 + 概念图解 + og:image + README badges\n\n视觉层（site/.vuepress/styles/index.scss）：\n- 主色从项目绿换成 GitHub 蓝紫：深色 #58a6ff/#1f6feb、浅色 #0969da\n  （白底要深一档才够 4.5:1），紫 #a371f7 作渐变辅色；补 --vp-c-brand-*\n  别名，残余旧 token 一起跟随 —— 否则换主色会留下一处没跟上的绿\n- hero 流光渐变标题（background-clip:text，9s 循环）+ 蓝紫两团慢速\n  漂浮光晕；.vp-hero 必须 z-index:0 自建层叠上下文，否则负 z-index 的\n  光晕被主题给 body 上的不透明背景整团盖掉（写了动画也看不见）\n- 特性卡悬浮发光（蓝紫双层阴影），浅色模式光效一律减弱\n- prefers-reduced-motion：动画全部停在静态帧，内容一个不少\n\n首页激进减重（site/index.md + en 同步）：\n- tagline 一句、卡片细节一行、7 卡收 6 卡成 2×3 网格\n- 删 17 行模块表与许可节，许可并进页脚；en 首页补 footer/footerHtml\n  （此前没有 llms.txt 页脚入口）\n- 装配关系图解置顶：图解先行，文字作补充\n\n概念图解（site/.vuepress/public/diagrams/，图内只放代码 token，中英共用）：\n- assembly / install-chain / quickstart-flow / conventions 四张\n- 插入 guide/{installation,quickstart,conventions} 中英六页\n  （均为手写页，不在 site_sync 投影清单内）\n\nog:image：PIL 生成 1200x633 og.png；config.ts head 加 og:/twitter: meta\n（绝对地址，分享抓取方不在站点内）；README 标题下加 release/CI/license/\nbash 四个 badge（shields.io 已实测 200）。\n\n验证：make site（91 页、site-links 422 内链 ok）、make check rc=0、\n浏览器目检深浅两色首屏与图解（资源 200、控制台零报错）、\n光晕修前修后同区域像素对比（纯背景 -> 抬升，对照区不动）。
+1af20eb chore: 忽略 .superpowers/ 本机工作文档目录（设计稿等，不进分发包与文档门禁）
+d48a86a fix(ci): #79 的新用例在 compat 容器里建不出副本 —— 副本改走不依赖 git 的最小树
+c5dd315 fix(coverage): 把 test_api_stability.sh 加入 coverage 排除名单（它跑门禁探针）
+14d32c0 fix(test): pty 用例在 macOS 系统 python3（3.9.6）下永久挂死 —— 有 timeout 就套一层
+3439b6f chore(coverage): 分支基线按 c5dd315 排除口径重写（#55 棘轮双向对齐）
+9cff82b feat(site): 配色改三态选择器 —— 白 / 黑 / 跟随系统（默认跟随系统）\n\n- 新增 site/.vuepress/useDarkMode.ts 整体替换主题的 @theme/useDarkMode：\n  主题只有两态布尔开关（内部 storage 虽有 auto 值域但 UI 表达不了），\n  这份实现拿到完整三态控制权，保持原契约（setupDarkMode provide +\n  可写 boolean ref + 目标值==系统偏好记 auto 的写入语义）\n- config.ts 加 alias 指向它：VuePress resolveAlias 按键长降序排序，\n  长键必然优先于主题的 @theme 前缀键；colorModeSwitch:false 隐藏内置开关\n- 导航栏 navbar-after 挂 ColorModePicker：三段胶囊（☀白 / ☾黑 / 🖥系统），\n  激活段主色实底；窄屏只留图标；文案随 locale 切换（zh 白/黑/系统，\n  en Light/Dark/System）；图标内联 SVG，不依赖主题内部路径\n- 首帧防闪：head 内联脚本在样式生效前定 data-theme，逻辑与 useDarkMode.ts\n  同源（三态 + 旧键 vuepress-color-scheme 只读迁移，老访客的选择不丢）\n- 选择存 sk-color-mode；跨标签页 storage 事件同步；系统外观翻转时\n  auto 档跟随、显式档压过系统\n\n验证：make site（91 页、site-links ok）+ make check rc=0；浏览器实测\n首次访问=跟随系统（本机 Light 浅色）、点黑变深且刷新持久、点系统回浅色、\n控制台零报错；双语标签与首帧脚本在 zh/en 产物中均核过。
+0c17712 docs(stability): 首批 Stable 候选清单（46 个，待勾选）
+27e03a3 feat(stability): 首批 37 个公开函数晋升 Stable，门禁兜底「Stable 改动必须进 MIGRATING」
+
 ## 0.18.0 — 2026-11-13
 
 d83bd06 perf(registry): 查询走内存快照，不再每次 fork awk（48ms/次 → 0.9ms/次）
