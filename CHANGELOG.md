@@ -2,6 +2,13 @@
 本文件由 `tools/release.sh` 在发版时自动追加，已发布的小节不要手改。
 最新的在最前面。每一条对应一个提交 —— 要看「为什么」而不是「改了什么」，读 `docs/MIGRATING.md`。
 
+## 0.20.0 — 2026-11-14
+
+6169081 feat(bench): --profile 内部热点定位 —— 按数据决定优化的前提（阶段三批次A）
+5ef8604 perf(i18n): 纯 C/POSIX locale 下 _t 不再 fork gettext —— 消掉每路径 39 次无效进程创建（阶段三批次A2）
+51c0379 test(doctor): 字段契约对账 —— doctor --json 与 docs/JSON.md 逐节双向一致（阶段三批次B）
+55b3b81 feat(cli): 补全升级到选项级 + completion --install + upgrade --diff 预览（阶段三批次C+D）
+
 ## 0.19.0 — 2026-11-13
 
 822c451 feat(manifest): #78 —— 三类所有权清单带 schema 版本，认不出的版本明确拒读
