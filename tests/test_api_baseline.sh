@@ -49,6 +49,9 @@ _copy_repo() {
   mkdir -p "$dst/tools" || return 1
   cp "$REPO/tools/api_baseline.sh" "$dst/tools/" || return 1
   cp "$REPO/tools/api_baseline.txt" "$dst/tools/" || return 1
+  # 分级豁免名单也是门禁的输入（issue #79）：缺了它，规则一会把 162 个老函数
+  # 全判成「新函数没声明」，门禁提前 bad=1 → 探针不跑，用例的探针断言就空了
+  cp "$REPO/tools/stability_exempt.txt" "$dst/tools/" || return 1
   return 0
 }
 
@@ -140,14 +143,13 @@ assert_eq "5" "$rc" "the baseline must not be regenerated without a declaration"
 assert_contains "$out" "MIGRATING" "the error must point at docs/MIGRATING.md"
 
 # 写进迁移说明 —— 「会改变结果的行为变化」小节的表格里点名 str_trim
-cat >>"$d/docs/MIGRATING.md" <<'EOF'
-
-### 0.17.0 → 0.18.0：会改变结果的行为变化
-
-| 变化 | 以前 | 现在 | 你会在哪里撞到 |
-|---|---|---|---|
-| `str_trim` 的返回码 | 只有 0 与 2 | 多了一个 9 | 按返回码分支的调用方 |
-EOF
+# 小节的版本必须「新于基线版本」，而基线版本跟着 VERSION 走 —— 写死版本对会在
+# 每次发版后腐化（0.18.0 发版、基线重生成后这里就红过一次），所以按当前
+# VERSION 推导下一版：0.18.0 → 0.19.0。
+__cur=$(tr -d '[:space:]' <"$REPO/VERSION")
+__next=${__cur%.*}.$((${__cur##*.} + 1))
+printf '\n### %s → %s：会改变结果的行为变化\n\n| 变化 | 以前 | 现在 | 你会在哪里撞到 |\n|---|---|---|---|\n| `str_trim` 的返回码 | 只有 0 与 2 | 多了一个 9 | 按返回码分支的调用方 |\n' \
+  "$__cur" "$__next" >>"$d/docs/MIGRATING.md"
 
 rc=0
 out=$(bash "$d/tools/api_baseline.sh" --root "$d" --write-baseline 2>&1) || rc=$?

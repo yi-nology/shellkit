@@ -665,3 +665,9 @@ conf_set TARGET "$1"                                          # 原子写、600�
 工程清单 `.shellkit-manifest` **不在本次变化之列** —— 它早就有 `manifest_version=2`
 与 v1→v2 迁移逻辑（`lib/core/scaffold.sh`），本次是把同一套约定搬到三类所有权清单上。
 
+
+**分级的适用范围（issue #79）**：`@stability` 注解落地之后，本表将**只登记 Stable API
+的行为变化** —— experimental 级的改动在提交信息与 `CHANGELOG.md` 里说明，不构成
+兼容性承诺。当前 162 个公开函数**全部仍是 experimental**（豁免名单
+`tools/stability_exempt.txt` 只许变短），Stable 名单由仓库主人逐个确认后另提提交。
+

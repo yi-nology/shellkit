@@ -22,6 +22,10 @@
 # 实现：变异原语收编在 tools/mutation.sh（与变异 campaign 共用一份实现，
 # 见 tests/test_mutation.sh），这里保留 _meta_* 薄包装 —— 用例、输出与
 # 三条纪律与收编前逐字一致。
+#
+# TEST_TIMEOUT: 900 —— 它要复制整棵树、再把 4 个目标用例各跑一遍（升级/原子写
+# 那两个本身就要几十秒），机器有负载时默认的 300 秒不够：上一轮就是被 timeout
+# 掐死的（没有 FAIL 行、直接 FAILED，看起来像「静默失败」，实际是超时）。
 set -u
 . "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/test_helper.sh"
 

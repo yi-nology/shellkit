@@ -24,9 +24,10 @@ BEGIN {
 
 { nc = 0 }
 
-function emit(fname,   i, l, brief, hidden, np, ne, ns, has_ex, params, exits, sees, ex, t) {
+function emit(fname,   i, l, brief, hidden, np, ne, ns, has_ex, params, exits, sees, ex, t, stab) {
   brief = ""
   hidden = 0
+  stab = ""
   np = 0
   ne = 0
   ns = 0
@@ -39,6 +40,7 @@ function emit(fname,   i, l, brief, hidden, np, ne, ns, has_ex, params, exits, s
     if (l ~ /^@brief /) { brief = substr(l, 8); continue }
     if (l ~ /^@param /) { params[++np] = substr(l, 8); continue }
     if (l ~ /^@exitcode /) { exits[++ne] = substr(l, 11); continue }
+    if (l ~ /^@stability /) { stab = substr(l, 12); continue }
     if (l ~ /^@see /) { sees[++ns] = substr(l, 6); continue }
     if (l ~ /^@example/) { has_ex = 1; continue }
     if (has_ex == 1) {
@@ -60,6 +62,9 @@ function emit(fname,   i, l, brief, hidden, np, ne, ns, has_ex, params, exits, s
 
   printf "### `%s`\n\n", fname
   if (brief != "") printf "%s\n\n", brief
+  if (stab != "") {
+    printf "**稳定性**：%s\n\n", stab
+  }
   if (np > 0) {
     printf "**参数**\n\n"
     for (i = 1; i <= np; i++) printf "- %s\n", params[i]

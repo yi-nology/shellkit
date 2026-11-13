@@ -131,6 +131,7 @@ EOF
 
 _SK_AB_SRC_NAMES=()
 _SK_AB_SRC_CODES=()
+_SK_AB_SRC_STAB=() # 分级：stable | experimental（缺省按 experimental，见 issue #79）
 
 # _sk_ab_scan_source —— 扫 lib/core/*.sh，输出「名字<TAB>承诺返回码」
 # 取法与 tools/check_exitcode_docs.sh 同源：函数定义行匹配 ^name()，
@@ -154,6 +155,7 @@ _sk_ab_scan_source() {
         }
         if (want == 1) {
           codes = ""
+          stab = ""
           n = split(blk, L, "\n")
           for (j = 1; j <= n; j++) {
             if (L[j] ~ /@exitcode[ \t]+/) {
@@ -165,8 +167,14 @@ _sk_ab_scan_source() {
                 codes = (codes == "" ? c : codes "," c)
               }
             }
+            if (L[j] ~ /@stability[ \t]+/) {
+              rest = L[j]
+              sub(/^[^@]*@stability[ \t]+/, "", rest)
+              split(rest, W, /[ \t]+/)
+              stab = W[1]
+            }
           }
-          printf "%s\t%s\n", fname, codes
+          printf "%s\t%s\t%s\n", fname, codes, stab
         }
         want = 0
         next
@@ -328,6 +336,7 @@ _sk_ab_declared_at() {
 # ---------------------------------------------------------------------------
 
 _SK_AB_BASE_NAMES=()
+_SK_AB_BASE_STAB=()
 _SK_AB_BASE_CODES=()
 _SK_AB_BASE_STATUS=()
 _SK_AB_BASE_DECLARED=()
@@ -373,7 +382,19 @@ _sk_ab_load_baseline() {
     probe=${rest%%$'	'*}
     rest=${rest#*$'	'}
     expect=${rest%%$'	'*}
-    reason=${rest#*$'	'}
+    rest=${rest#*$'	'}
+    # 第 8 列是分级；老基线（7 列）没有它 —— 那时 rest 里不再有分隔符，
+    # 按「无分级列」读，门禁会提示重生成，而不是把 reason 当成分级。
+    case "$rest" in
+      *$'	'*)
+        reason=${rest%%$'	'*}
+        stability=${rest#*$'	'}
+        ;;
+      *)
+        reason=$rest
+        stability=""
+        ;;
+    esac
     [ -n "$name" ] || continue
     _SK_AB_BASE_NAMES[${#_SK_AB_BASE_NAMES[@]}]=$name
     _SK_AB_BASE_CODES[${#_SK_AB_BASE_CODES[@]}]=$codes
@@ -382,6 +403,7 @@ _sk_ab_load_baseline() {
     _SK_AB_BASE_PROBE[${#_SK_AB_BASE_PROBE[@]}]=$probe
     _SK_AB_BASE_EXPECT[${#_SK_AB_BASE_EXPECT[@]}]=$expect
     _SK_AB_BASE_REASON[${#_SK_AB_BASE_REASON[@]}]=$reason
+    _SK_AB_BASE_STAB[${#_SK_AB_BASE_STAB[@]}]=$stability
   done <"$BASELINE"
 }
 
@@ -397,6 +419,37 @@ _SK_AB_P_EXPECT=()
 _SK_AB_P_SNIPPET=()
 _SK_AB_S_NAME=()
 _SK_AB_S_REASON=()
+
+_SK_AB_EXEMPT=()
+
+# _sk_ab_load_exempt —— 读分级豁免名单（tools/stability_exempt.txt，issue #79）
+#
+# 名单记录「还没有 @stability 注解的公开函数」。它必须**只许变短**：
+# 老函数逐个审过才摘出去，新函数第一天就要求显式声明（坑 15 的双向棘轮）。
+_sk_ab_load_exempt() {
+  local __f="$ROOT/tools/stability_exempt.txt" __n
+  [ -f "$__f" ] || return 0
+  while IFS= read -r __n || [ -n "$__n" ]; do
+    case "$__n" in
+      '' | '#'*) continue ;;
+    esac
+    _SK_AB_EXEMPT[${#_SK_AB_EXEMPT[@]}]=$__n
+  done <"$__f"
+  return 0
+}
+
+# _sk_ab_exempt_index NAME —— 在豁免名单里吗（在则输出下标并返回 0）
+_sk_ab_exempt_index() {
+  local __i=0 __n=${1:-}
+  while [ "$__i" -lt "${#_SK_AB_EXEMPT[@]}" ]; do
+    if [ "${_SK_AB_EXEMPT[$__i]}" = "$__n" ]; then
+      printf '%s' "$__i"
+      return 0
+    fi
+    __i=$((__i + 1))
+  done
+  return 1
+}
 
 _sk_ab_load_probe_tables() {
   local name expect snippet reason
@@ -820,6 +873,59 @@ _sk_ab_check() {
     i=$((i + 1))
   done
 
+  # --- 分级（issue #79）：注解、基线列、豁免名单三者一致 ---
+  # 规则一（棘轮）：没有 @stability 的公开函数必须在豁免名单里 ——
+  # 新函数第一天就要求显式声明，老函数逐个审过才摘出去。
+  i=0
+  while [ "$i" -lt "${#_SK_AB_SRC_NAMES[@]}" ]; do
+    name=${_SK_AB_SRC_NAMES[$i]}
+    stab=${_SK_AB_SRC_STAB[$i]}
+    case "$stab" in
+      '')
+        if ! _sk_ab_exempt_index "$name" >/dev/null; then
+          _sk_ab_log "公开函数没有声明 @stability，也不在豁免名单里: ${name}（新函数要显式写 @stability stable|experimental）"
+          bad=1
+        fi
+        ;;
+      stable | experimental) ;;
+      *)
+        _sk_ab_log "@stability 的取值只能是 stable 或 experimental: ${name}（写的是 ${stab}）"
+        bad=1
+        ;;
+    esac
+    i=$((i + 1))
+  done
+  # 规则二（双向棘轮，坑 15）：豁免名单里**已经加了注解**的必须移出 ——
+  # 否则将来注解被删，棘轮也看不见（白名单只许记「当前确实没做」的那件事）。
+  i=0
+  while [ "$i" -lt "${#_SK_AB_EXEMPT[@]}" ]; do
+    name=${_SK_AB_EXEMPT[$i]}
+    if sidx=$(_sk_ab_src_index "$name"); then
+      if [ -n "${_SK_AB_SRC_STAB[$sidx]}" ]; then
+        _sk_ab_log "豁免名单里的函数已经声明了 @stability，必须移出名单: $name"
+        bad=1
+      fi
+    else
+      _sk_ab_log "豁免名单里有源码里不存在的函数: $name"
+      bad=1
+    fi
+    i=$((i + 1))
+  done
+  # 规则三（一致性）：基线的分级列必须与源码注解一致；没有这一列就提示重生成。
+  i=0
+  while [ "$i" -lt "${#_SK_AB_BASE_NAMES[@]}" ]; do
+    name=${_SK_AB_BASE_NAMES[$i]}
+    if sidx=$(_sk_ab_src_index "$name"); then
+      want=${_SK_AB_SRC_STAB[$sidx]:-experimental}
+      have=${_SK_AB_BASE_STAB[$i]}
+      if [ "$have" != "$want" ]; then
+        _sk_ab_log "基线的分级与源码注解对不上: ${name}（基线 ${have:-<无分级列>} / 源码 ${want}）—— 跑 bash tools/api_baseline.sh --write-baseline"
+        bad=1
+      fi
+    fi
+    i=$((i + 1))
+  done
+
   # --- 真跑探针（一次起一个 worker，库只加载一次）---
   if [ "$bad" -ne 0 ]; then
     _sk_ab_log "前面的检查已经没过，探针这次不跑（结论不会变）"
@@ -971,6 +1077,8 @@ _sk_ab_write() {
 #   探针            probe=沙箱里真调过 / skip=没调
 #   探针断言        探针断言过的返回码（逗号分隔）；skip 时为 -
 #   不入探针的原因  probe 时为 -
+#   分级            stable=承诺稳定 / experimental=暂不承诺（源码注释 @stability 的投影）
+#                   没写注解的按 experimental 落盘；是否已声明看 tools/stability_exempt.txt
 #
 SK_AB_HEADER
     printf 'baseline-version: %s\n' "$cur_version"
@@ -991,8 +1099,13 @@ EOF
           reason=-
         fi
       fi
-      printf '%s\t%s\t%s\t%s\t%s\t%s\t%s\n' \
-        "$name" "$codes" "$status" "$declared" "$probe" "$expect" "$reason"
+      # 分级取自源码注解；没写 @stability 的按 experimental 落盘（= 暂不承诺）
+      stab=experimental
+      if sidx=$(_sk_ab_src_index "$name"); then
+        [ -n "${_SK_AB_SRC_STAB[$sidx]}" ] && stab=${_SK_AB_SRC_STAB[$sidx]}
+      fi
+      printf '%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\n' \
+        "$name" "$codes" "$status" "$declared" "$probe" "$expect" "$reason" "$stab"
     done <"$sorted"
   } >"$tmp"
   rm -f "$sorted"
@@ -1022,15 +1135,19 @@ if [ ! -f "$MIGRATING" ]; then
   _sk_ab_die "找不到迁移说明: $MIGRATING" 3
 fi
 
-while IFS=$'\t' read -r name codes; do
+while IFS=$'\t' read -r name codes stab; do
   [ -n "$name" ] || continue
   _SK_AB_SRC_NAMES[${#_SK_AB_SRC_NAMES[@]}]=$name
   _SK_AB_SRC_CODES[${#_SK_AB_SRC_CODES[@]}]=$codes
+  # 原样保留：空 = 源码里没有 @stability（棘轮规则要靠它区分「声明过」与「没声明」）
+  # 默认值 experimental 只在落盘与展示时给，不回填这里
+  _SK_AB_SRC_STAB[${#_SK_AB_SRC_STAB[@]}]=${stab}
 done <<EOF
 $(_sk_ab_scan_source)
 EOF
 
 _sk_ab_load_probe_tables
+_sk_ab_load_exempt
 _sk_ab_load_declarations
 
 if [ "$MODE" = "write" ]; then
