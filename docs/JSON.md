@@ -17,15 +17,38 @@ jq '.result.exit_code' report.json
 | 字段 | 类型 | 含义 |
 | --- | --- | --- |
 | `schema` | string | 结构标识，固定 `shellkit.doctor.v1` |
-| `shellkit` | object | `version`：shellkit 版本 |
-| `platform` | object | `os` / `arch`（库口径）、`sysname` / `release` / `machine`（`uname` 口径） |
-| `bash` | object | `version`：`BASH_VERSION`；`satisfied`：是否满足 3.2 基线 |
+| `shellkit` | object | shellkit 自身信息，见下 |
+| `platform` | object | 平台信息，见下 |
+| `bash` | object | bash 基线判定，见下 |
 | `modules` | object | 模块清单，见下 |
 | `dependencies` | array | 关键依赖，见下 |
-| `vendor` | object | `state`：`none` / `ok` / `drift` / `notdir` / `unknown`；`detail`：补充说明 |
+| `vendor` | object | vendor 副本状态，见下 |
 | `checks` | array | 逐行检查结果，见下 |
 | `result` | object | 汇总判定，见下 |
 | `last_error` | string | 最近一次失败的上下文（没有则空串） |
+
+### `shellkit`
+
+| 字段 | 类型 | 含义 |
+| --- | --- | --- |
+| `version` | string | shellkit 版本（与 `VERSION` 一致） |
+
+### `platform`
+
+| 字段 | 类型 | 含义 |
+| --- | --- | --- |
+| `os` | string | 库口径的 OS（`SK_OS`） |
+| `arch` | string | 库口径的架构（`SK_ARCH`） |
+| `sysname` | string | `uname -s` 口径 |
+| `release` | string | `uname -r` 口径 |
+| `machine` | string | `uname -m` 口径 |
+
+### `bash`
+
+| 字段 | 类型 | 含义 |
+| --- | --- | --- |
+| `version` | string | `BASH_VERSION` |
+| `satisfied` | boolean | 是否满足 3.2 基线 |
 
 ### `modules`
 
@@ -42,7 +65,7 @@ jq '.result.exit_code' report.json
 「清单上写了几个」和「现在真能加载几个」。只报前者，用户看到 23 个模块却起不来，
 还得自己猜是哪一个坏了。
 
-### `dependencies` 与 `checks`
+### `dependencies`
 
 `dependencies` 是关键依赖，每项四个字段：
 
@@ -57,8 +80,24 @@ jq '.result.exit_code' report.json
 两种混在一起报，用户就不知道还能不能用 —— 这也是「按需加载的模块缺依赖」
 与「真的缺」必须分开的理由。
 
-`checks` 是逐行检查结果：`section`（`environment` / `library` / `vendor`）、
-`status`、`name`、`detail`。文本形态里的一行，在 JSON 里就是这里的一项。
+### `checks`
+
+`checks` 是逐行检查结果，文本形态里的一行在 JSON 里就是这里的一项。
+每项四个字段：
+
+| 字段 | 类型 | 含义 |
+| --- | --- | --- |
+| `section` | string | 小节（`environment` / `library` / `vendor`） |
+| `status` | string | `OK` / `INFO` / `WARN` / `FAIL` |
+| `name` | string | 检查项名 |
+| `detail` | string | 补充说明（可能已脱敏） |
+
+### `vendor`
+
+| 字段 | 类型 | 含义 |
+| --- | --- | --- |
+| `state` | string | `none` / `ok` / `drift` / `notdir` / `unknown` |
+| `detail` | string | 补充说明（没有 vendor 副本时是原因） |
 
 ### `result`
 

@@ -209,6 +209,72 @@ assert_eq 5 "$rc" "a library that cannot be loaded exits 5"
 assert_eq "True" "$(jget "$work/degraded.json" result.verify_failed)" "the degraded report flags the failure"
 assert_eq "shellkit.doctor.v1" "$(jget "$work/degraded.json" schema)" "the degraded report has the same schema"
 
+# CASE: 字段契约 —— doctor --json 的字段集合与 docs/JSON.md 逐节双向一致
+#
+# JSON.md 开头就写着「字段名是契约」，但字段增删没有门禁对照文档 —— 这条把
+# 「文档 = 代码」变成判据：代码加了字段没写文档、文档写了字段代码里没了，都红。
+# 只对字段名（节.字段），不对值（detail 内容因机器而异）。
+# 走 python3 层（与 jget 同哲学：有解析器才跑），json.load 不耦合输出格式。
+# 脚本自带解析下限：字段数掉到 25 以下只可能是解析器坏了 —— 那时
+# 「两边都空」会假绿，下限把它变成 rc=2 的解析失败。
+if command -v python3 >/dev/null 2>&1; then
+  rc=0
+  out=$(
+    python3 - "$jout" "$TEST_ROOT/docs/JSON.md" <<'PY' 2>&1
+import json, re, sys
+
+report, md = sys.argv[1], sys.argv[2]
+
+# 实际输出的字段树：顶层字段归空节，顶层对象/对象数组的子键归该键的节。
+# doctor 的对象只有一层 —— 结构加深时这里要跟着走（下限会先兜住解析漂移）。
+doc = json.load(open(report, encoding="utf-8"))
+actual = set()
+for key, val in doc.items():
+    actual.add(("", key))
+    if isinstance(val, dict):
+        for sub in val:
+            actual.add((key, sub))
+    elif isinstance(val, list) and val and isinstance(val[0], dict):
+        for sub in val[0]:
+            actual.add((key, sub))
+
+# 文档的字段树：### 节标题分组（「### 顶层字段」归空节），只认第一列是
+# 反引号字段名的表格行 —— 退出码表第一列是数字，天然不匹配；没有反引号
+# 标题的节（脱敏/降级形态…）没有字段表，整节跳过。
+section = ""
+documented = set()
+for line in open(md, encoding="utf-8").read().splitlines():
+    if line.startswith("### "):
+        if "顶层字段" in line:
+            section = ""
+        else:
+            m = re.match(r"^### \`([^\`]+)\`", line)
+            section = m.group(1) if m else None
+        continue
+    if section is None:
+        continue
+    m = re.match(r"^\| \`([a-z_][a-z0-9_]*)\` \|", line)
+    if m:
+        documented.add((section, m.group(1)))
+
+if len(documented) < 25 or len(actual) < 25:
+    print("parse-failure: documented=%d actual=%d" % (len(documented), len(actual)))
+    sys.exit(2)
+
+problems = []
+for sec, fld in sorted(actual - documented):
+    problems.append("output field not documented: %s%s" % (sec + "." if sec else "", fld))
+for sec, fld in sorted(documented - actual):
+    problems.append("documented but absent in output: %s%s" % (sec + "." if sec else "", fld))
+if problems:
+    print("\n".join(problems))
+    sys.exit(1)
+sys.exit(0)
+PY
+  ) || rc=$?
+  [ "$rc" -eq 0 ] || _fail "doctor --json and docs/JSON.md disagree on fields (rc=$rc): $out"
+fi
+
 # CASE: 用法错 —— 退出 2（--json 也要认得这个错）
 run_doctor bash "$TEST_ROOT/shellkit" doctor --json --bogus >/dev/null 2>&1 && rc=0 || rc=$?
 assert_eq 2 "$rc" "an unknown option is a usage error"
