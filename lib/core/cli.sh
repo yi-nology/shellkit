@@ -117,6 +117,37 @@ cli_usage_global() {
   return 0
 }
 
+# _sk_cli_opts_of USAGE —— 从 usage 字符串提取选项，空格分隔输出
+#
+# usage 是命令选项的唯一真相源（cli_cmd 第三参）—— 补全不再另立一份选项
+# 清单：新加 cli_cmd 或改 usage，补全自动跟上（模块清单曾经两处各写一份、
+# 迟早漂移的教训在这里同样适用）。
+#
+# 逐个剥 [ ... ] 组、组内取第一个词：不能按空格分词再匹配 ——
+# [--dir DIR] 这种「选项 + 占位符」会被拆成 [--dir 与 DIR] 两个残词，
+# 一个都匹配不上（doctor 的 --dir 就这么丢过）。
+# 只收 - 开头的组：[bash|zsh] 这类位置参数不是选项；
+# [--name NAME] 取 --name —— NAME 是占位符，进了补全就是污染。
+# @exitcode 0 总是成功（没有选项时输出空串）
+_sk_cli_opts_of() {
+  local __rest=${1:-} __grp __out=""
+  while :; do
+    case "$__rest" in
+      *\[*\]*)
+        __rest=${__rest#*\[}
+        __grp=${__rest%%\]*}
+        __rest=${__rest#*\]}
+        __grp=${__grp%% *}
+        case "$__grp" in
+          --?* | -?) __out="${__out} $__grp" ;;
+        esac
+        ;;
+      *) break ;;
+    esac
+  done
+  printf '%s' "${__out# }"
+}
+
 # cli_completion_script [bash|zsh] —— 生成补全脚本
 #
 # 子命令名取自注册表，所以新加一个 cli_cmd，补全里自动就有了 ——
@@ -126,6 +157,7 @@ cli_usage_global() {
 # @exitcode 2 不认识的 shell
 cli_completion_script() {
   local __shell=${1:-bash} __i=0 __words="" __name __prog=${SK_PROG:-shellkit}
+  local __cases="" __opts=""
   case "$__shell" in
     bash | zsh) ;;
     *)
@@ -138,28 +170,66 @@ cli_completion_script() {
     __words="$__words $__name"
     __i=$((__i + 1))
   done
+  # 命令级选项：生成时从各命令的 usage 提取，case 分支静态展开进补全脚本，
+  # 运行时零解析开销。bash 与 zsh 的数组语法不同，case 分支两套格式。
+  __i=0
+  while [ "$__i" -lt "${#SK_CLI_NAMES[@]}" ]; do
+    __name=${SK_CLI_NAMES[$__i]}
+    __opts=$(_sk_cli_opts_of "${SK_CLI_USAGES[$__i]}")
+    __cases="${__cases}    $__name) __opts=\"$__opts\" ;;"$'\n'
+    __i=$((__i + 1))
+  done
   if [ "$__shell" = "bash" ]; then
     cat <<EOF
 # $__prog completion for bash
-# 由 cli_completion_script 生成；新增子命令后重新生成即可。
-# 下面两行的美元符号在源码里是转义过的：heredoc 不转义就会在生成时把数组和命令替换掉。
+# 由 cli_completion_script 生成；新增子命令或改 usage 后重新生成即可。
+# 下面的美元符号在源码里是转义过的：heredoc 不转义就会在生成时把数组和命令替换掉。
 _${__prog}_completions() {
-  local __cur
+  local __cur __cmd __opts=""
   __cur="\${COMP_WORDS[COMP_CWORD]}"
-  COMPREPLY=(\$(compgen -W "$__words" -- "\$__cur"))
+  # 第一层补命令名；第二层起补该命令 usage 里的选项（只补 - 开头的词，
+  # 位置参数不补 —— bash 3.2 没有 compopt，回落不了文件补全）。
+  if [ "\$COMP_CWORD" -le 1 ]; then
+    COMPREPLY=(\$(compgen -W "$__words" -- "\$__cur"))
+    return 0
+  fi
+  __cmd="\${COMP_WORDS[1]}"
+  case "\$__cmd" in
+${__cases}  esac
+  case "\$__cur" in
+    -*) COMPREPLY=(\$(compgen -W "\$__opts --help" -- "\$__cur")) ;;
+    *) COMPREPLY=() ;;
+  esac
   return 0
 }
 complete -F _${__prog}_completions $__prog
 EOF
   else
+    __i=0
+    __cases=""
+    while [ "$__i" -lt "${#SK_CLI_NAMES[@]}" ]; do
+      __name=${SK_CLI_NAMES[$__i]}
+      __opts=$(_sk_cli_opts_of "${SK_CLI_USAGES[$__i]}")
+      # zsh 侧 case 分支是数组赋值（与 bash 的字符串赋值分开生成）
+      __cases="${__cases}    $__name) __opts=( $__opts ) ;;"$'\n'
+      __i=$((__i + 1))
+    done
     cat <<EOF
 #compdef $__prog
 # $__prog completion for zsh
-# 由 cli_completion_script 生成；新增子命令后重新生成即可。
+# 由 cli_completion_script 生成；新增子命令或改 usage 后重新生成即可。
 _${__prog}() {
-  local -a __commands
+  local -a __commands __opts
   __commands=($__words)
-  _describe 'command' __commands
+  if (( CURRENT == 2 )); then
+    _describe 'command' __commands
+    return
+  fi
+  __opts=()
+  case "\${words[2]}" in
+${__cases}  esac
+  __opts+=(--help)
+  _describe 'option' __opts
 }
 compdef _${__prog} $__prog
 EOF

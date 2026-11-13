@@ -147,4 +147,32 @@ assert_contains "$(cat "$p6/.shellkit-manifest")" "template_version=" "the manif
 assert_contains "$(cat "$p6/README.md")" "INTERRUPT LOCAL EDIT" "an interrupted upgrade must not lose the local edit"
 assert_exit_code 0 "$p6/bin/tool" --help
 
+# ---------------------------------------------------------------- --check 差异预览
+# 批次D：--check 的后果可见性 —— 会动的文件给 unified diff（patch 原样输出），
+# --diff 单独用是用法错（不悄悄把它当成 --check）。全部只读，不写盘 ——
+# 没有写盘就没有基线推进问题，无需连升两次。
+
+p7=$(tmpdir) || _fail "cannot create tmpdir"
+tpl2="$work/tpl-diff"
+cp -R "$tpl" "$tpl2" || _fail "cannot copy the template"
+"$TEST_ROOT/shellkit" new --name tool "$p7" --cmd run --yes >/dev/null 2>&1 || _fail "new (p7) failed"
+printf '\n# diff preview: template changed\n' >>"$tpl2/lib/app.sh"
+
+# CASE: --check --diff 对会更新的文件输出 unified diff
+out=$("$TEST_ROOT/shellkit" upgrade "$p7" --template "$tpl2" --check --diff 2>&1)
+assert_contains "$out" "would update: lib/app.sh" "the file to be updated is named"
+assert_contains "$out" "@@" "the diff carries hunk headers"
+assert_contains "$out" "+++ " "the diff carries the new-file marker"
+assert_contains "$out" "diff preview: template changed" "the diff shows the actual added line"
+
+# CASE: --diff 不带 --check ⇒ 用法错（不悄悄把它当成 --check）
+rc=0
+"$TEST_ROOT/shellkit" upgrade "$p7" --template "$tpl2" --diff >/dev/null 2>&1 || rc=$?
+assert_eq "2" "$rc" "--diff without --check is a usage error"
+
+# CASE: 不带 --diff 的 check 输出逐字不变（没有 diff）
+out=$("$TEST_ROOT/shellkit" upgrade "$p7" --template "$tpl2" --check 2>&1)
+assert_contains "$out" "would update: lib/app.sh" "plain check still names the file"
+assert_not_contains "$out" "@@" "plain check does not print diffs"
+
 exit 0

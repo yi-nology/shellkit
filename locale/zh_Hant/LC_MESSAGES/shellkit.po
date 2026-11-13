@@ -4,7 +4,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: shellkit\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-11-13 08:25+0800\n"
+"POT-Creation-Date: 2026-11-14 02:52+0800\n"
 "PO-Revision-Date: 2026-11-08 00:00+0800\n"
 "Last-Translator: shellkit contributors\n"
 "Language-Team: shellkit contributors\n"
@@ -454,8 +454,8 @@ msgstr "重新產生 API 參考"
 msgid "generate man pages"
 msgstr "產生 man 手册頁"
 
-msgid "print a shell completion script"
-msgstr "輸出 shell 補全腳本"
+msgid "print or install a shell completion script"
+msgstr "列印或安裝 shell 補全腳本"
 
 msgid "installation"
 msgstr "安裝"
@@ -605,6 +605,9 @@ msgstr "下一步"
 msgid "the upgrade journal is damaged; entries were ignored"
 msgstr "升級日誌已損壞；部分條目被忽略"
 
+msgid "--diff requires --check"
+msgstr "--diff 必須與 --check 一起用"
+
 msgid "target directory does not exist"
 msgstr "目標目錄不存在"
 
@@ -678,6 +681,21 @@ msgstr "同步程式庫副本失敗"
 
 msgid "upgrade finished"
 msgstr "升級完成"
+
+msgid "HOME is not set; cannot install completion"
+msgstr "沒有設定 HOME，無法安裝補全"
+
+msgid "invalid program name"
+msgstr "非法的程式名"
+
+msgid "cannot write the completion file"
+msgstr "無法寫入補全檔案"
+
+msgid "restart your shell or source that file to activate completion"
+msgstr "重新啟動 shell 或 source 該檔案以啟用補全"
+
+msgid "add its directory to fpath and run compinit to activate completion"
+msgstr "把所在目錄加入 fpath 並執行 compinit 以啟用補全"
 
 msgid "the library could not be loaded"
 msgstr "程式庫無法載入"
@@ -1025,6 +1043,9 @@ msgstr "已開啟強制模式"
 
 msgid "finished"
 msgstr "完成"
+
+#~ msgid "print a shell completion script"
+#~ msgstr "輸出 shell 補全腳本"
 
 #~ msgid "run without --check to update"
 #~ msgstr "去掉 --check 重跑即可更新"

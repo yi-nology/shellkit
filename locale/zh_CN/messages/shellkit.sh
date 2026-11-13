@@ -149,7 +149,7 @@ _sk_msg_lookup_shellkit() {
     'documentation') printf '%s' '文档' ;;
     'regenerate the API reference') printf '%s' '重新生成 API 参考' ;;
     'generate man pages') printf '%s' '生成 man 手册页' ;;
-    'print a shell completion script') printf '%s' '输出 shell 补全脚本' ;;
+    'print or install a shell completion script') printf '%s' '打印或安装 shell 补全脚本' ;;
     'installation') printf '%s' '安装' ;;
     'install shellkit into PATH') printf '%s' '把 shellkit 装进 PATH' ;;
     'remove an installed shellkit') printf '%s' '卸载已安装的 shellkit' ;;
@@ -197,6 +197,7 @@ _sk_msg_lookup_shellkit() {
     'project created') printf '%s' '工程已生成' ;;
     'next steps') printf '%s' '下一步' ;;
     'the upgrade journal is damaged; entries were ignored') printf '%s' '升级日志已损坏；部分条目被忽略' ;;
+    '--diff requires --check') printf '%s' '--diff 必须与 --check 一起用' ;;
     'target directory does not exist') printf '%s' '目标目录不存在' ;;
     'it does not look like a shellkit-generated project') printf '%s' '看起来不是 shellkit 生成的工程' ;;
     'the manifest does not record a project name') printf '%s' 'manifest 里没有记录工程名' ;;
@@ -221,6 +222,11 @@ _sk_msg_lookup_shellkit() {
     'already running from the vendored copy') printf '%s' '已经在用 vendor 副本本身运行' ;;
     'failed to sync the vendored library') printf '%s' '同步库副本失败' ;;
     'upgrade finished') printf '%s' '升级完成' ;;
+    'HOME is not set; cannot install completion') printf '%s' '没有设置 HOME，无法安装补全' ;;
+    'invalid program name') printf '%s' '非法的程序名' ;;
+    'cannot write the completion file') printf '%s' '无法写入补全文件' ;;
+    'restart your shell or source that file to activate completion') printf '%s' '重启 shell 或 source 该文件以启用补全' ;;
+    'add its directory to fpath and run compinit to activate completion') printf '%s' '把所在目录加入 fpath 并运行 compinit 以启用补全' ;;
     'the library could not be loaded') printf '%s' '库无法加载' ;;
     'library file is missing') printf '%s' '库文件缺失' ;;
     'module files are missing') printf '%s' '模块文件缺失' ;;

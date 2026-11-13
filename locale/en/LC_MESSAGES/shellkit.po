@@ -4,7 +4,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: shellkit\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-11-13 08:25+0800\n"
+"POT-Creation-Date: 2026-11-14 02:52+0800\n"
 "PO-Revision-Date: 2026-11-08 00:00+0800\n"
 "Last-Translator: shellkit contributors\n"
 "Language-Team: shellkit contributors\n"
@@ -454,7 +454,7 @@ msgstr ""
 msgid "generate man pages"
 msgstr ""
 
-msgid "print a shell completion script"
+msgid "print or install a shell completion script"
 msgstr ""
 
 msgid "installation"
@@ -603,6 +603,9 @@ msgstr ""
 msgid "the upgrade journal is damaged; entries were ignored"
 msgstr ""
 
+msgid "--diff requires --check"
+msgstr ""
+
 msgid "target directory does not exist"
 msgstr ""
 
@@ -675,6 +678,21 @@ msgid "failed to sync the vendored library"
 msgstr ""
 
 msgid "upgrade finished"
+msgstr ""
+
+msgid "HOME is not set; cannot install completion"
+msgstr ""
+
+msgid "invalid program name"
+msgstr ""
+
+msgid "cannot write the completion file"
+msgstr ""
+
+msgid "restart your shell or source that file to activate completion"
+msgstr ""
+
+msgid "add its directory to fpath and run compinit to activate completion"
 msgstr ""
 
 msgid "the library could not be loaded"

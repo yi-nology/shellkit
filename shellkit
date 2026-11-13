@@ -122,7 +122,7 @@ if [ "$SK_BOOTSTRAP_OK" -eq 1 ]; then
   cli_group "$(_t 'project generation')"
   cli_cmd new "$(_t 'create a new project skeleton')" "new <dir> [--name NAME] [--cmd NAME]... [--template DIR] [--set K=V] [--yes]"
   cli_cmd demo "$(_t 'generate a demo project and walk through it')" "demo [DIR] [--no-test]"
-  cli_cmd upgrade "$(_t 'update a generated project to the current template')" "upgrade <dir> [--check] [--force]"
+  cli_cmd upgrade "$(_t 'update a generated project to the current template')" "upgrade <dir> [--check] [--diff] [--force]"
   cli_group "$(_t 'environment')"
   cli_cmd doctor "$(_t 'check the runtime environment')" "doctor [--dir DIR] [--json]"
   cli_cmd list "$(_t 'list templates and library modules')" "list"
@@ -131,7 +131,7 @@ if [ "$SK_BOOTSTRAP_OK" -eq 1 ]; then
   cli_group "$(_t 'documentation')"
   cli_cmd docs "$(_t 'regenerate the API reference')" "docs [--check]"
   cli_cmd man "$(_t 'generate man pages')" "man [--out DIR]"
-  cli_cmd completion "$(_t 'print a shell completion script')" "completion [bash|zsh]"
+  cli_cmd completion "$(_t 'print or install a shell completion script')" "completion [bash|zsh] [--install]"
   cli_group "$(_t 'installation')"
   cli_cmd install-self "$(_t 'install shellkit into PATH')" "install-self [--prefix DIR] [--force]"
   cli_cmd uninstall-self "$(_t 'remove an installed shellkit')" "uninstall-self [--prefix DIR]"
@@ -1424,7 +1424,7 @@ _sk_upgrade_journal_clear() {
 }
 
 cmd_upgrade() {
-  local __dir="" __tpl="$SK_TPL_DIR" __check=0 __force=0
+  local __dir="" __tpl="$SK_TPL_DIR" __check=0 __force=0 __diff=0
   local __name __rel __old __cur __new __tmp __cmds_csv __vdir __act
   local __dirabs="" __target=""
   local __updated=0 __skipped=0 __added=0 __vsync=0
@@ -1439,6 +1439,9 @@ cmd_upgrade() {
         ;;
       --check)
         __check=1
+        ;;
+      --diff)
+        __diff=1
         ;;
       --force)
         __force=1
@@ -1473,6 +1476,13 @@ cmd_upgrade() {
     esac
     shift
   done
+
+  # --diff 只在 --check 下有意义（真升级直接改了，diff 无从谈起）——
+  # 单独用是用法错，不悄悄把它当成 --check。
+  if [ "$__diff" = "1" ] && [ "$__check" != "1" ]; then
+    log_error "$(_t '--diff requires --check')"
+    return "$SK_USAGE"
+  fi
 
   if [ -z "$__dir" ]; then
     log_error "$(_t 'target directory is required')"
@@ -1776,6 +1786,12 @@ EOF
         log_info "$(_t 'would add'): $__rel"
       else
         log_info "$(_t 'would update'): $__rel"
+        if [ "$__diff" = "1" ]; then
+          # unified diff：工程现状 vs 新模板渲染。diff 有差异才退出 1，
+          # 这里就是要它有差异 —— || true 兜住；输出保持 patch 原样
+          # （不加 log 前缀，才能直接喂给 diff/patch 工具读）。
+          diff -u "$__dir/$__rel" "$__tmp/$__rel" >&2 || true
+        fi
         __updated=$((__updated + 1))
       fi
       __i=$((__i + 1))
@@ -1862,12 +1878,15 @@ EOF
 # ---------- completion ----------
 
 cmd_completion() {
-  local __shell="bash"
+  local __shell="bash" __install=0 __dest="" __prog="" __content=""
   while [ "$#" -gt 0 ]; do
     case "$1" in
       -h | --help)
         cli_usage_cmd completion
         return "$SK_OK"
+        ;;
+      --install)
+        __install=1
         ;;
       bash | zsh)
         __shell=$1
@@ -1879,8 +1898,44 @@ cmd_completion() {
     esac
     shift
   done
-  cli_completion_script "$__shell"
-  return $?
+  if [ "$__install" != "1" ]; then
+    cli_completion_script "$__shell"
+    return $?
+  fi
+  # --install：写用户级安装位置（不需要 root），路径与模板 make completion
+  # 的提示一致；生成物走 fs_atomic_write（临时文件 + rename，不留半截文件）。
+  # stdout 只给路径（脚本可消费），生效提示走 stderr。
+  if [ -z "${HOME:-}" ]; then
+    log_error "$(_t 'HOME is not set; cannot install completion')"
+    return "$SK_PRECOND"
+  fi
+  __prog=${SK_PROG:-shellkit}
+  # SK_PROG 可能来自工程入口（bin/<name> 把清单里的项目名设进来）——
+  # 带 ../ 或路径分隔就能把补全文件写到 completions 目录之外（坑7：
+  # 清单里的名字会变成路径）。check_security 的 path.write 认这几种守卫，
+  # 这里用 _sk_valid_name 挡住名字注入（升级校验清单项目名用的同一个）。
+  if ! _sk_valid_name "$__prog"; then
+    log_error "$(_t 'invalid program name'): $__prog"
+    return "$SK_USAGE"
+  fi
+  case "$__shell" in
+    bash) __dest="${XDG_DATA_HOME:-$HOME/.local/share}/bash-completion/completions/$__prog" ;;
+    zsh) __dest="${ZDOTDIR:-$HOME}/.zsh/completions/_$__prog" ;;
+  esac
+  if ! __content=$(cli_completion_script "$__shell"); then
+    return $?
+  fi
+  if ! fs_atomic_write "$__dest" "$__content" 644; then
+    log_error "$(_t 'cannot write the completion file'): $__dest"
+    return "$SK_ERR"
+  fi
+  printf '%s\n' "$__dest"
+  if [ "$__shell" = "bash" ]; then
+    log_info "$(_t 'restart your shell or source that file to activate completion')"
+  else
+    log_info "$(_t 'add its directory to fpath and run compinit to activate completion')"
+  fi
+  return 0
 }
 
 # ---------- doctor ----------

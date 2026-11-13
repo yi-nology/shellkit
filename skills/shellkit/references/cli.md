@@ -8,7 +8,7 @@
 | --- | --- | --- |
 | `shellkit new` | `new <dir> [--name NAME] [--cmd NAME]... [--template DIR] [--set K=V] [--yes]` | create a new project skeleton |
 | `shellkit demo` | `demo [DIR] [--no-test]` | generate a demo project and walk through it |
-| `shellkit upgrade` | `upgrade <dir> [--check] [--force]` | update a generated project to the current template |
+| `shellkit upgrade` | `upgrade <dir> [--check] [--diff] [--force]` | update a generated project to the current template |
 
 ## environment
 
@@ -29,7 +29,7 @@
 | --- | --- | --- |
 | `shellkit docs` | `docs [--check]` | regenerate the API reference |
 | `shellkit man` | `man [--out DIR]` | generate man pages |
-| `shellkit completion` | `completion [bash|zsh]` | print a shell completion script |
+| `shellkit completion` | `completion [bash|zsh] [--install]` | print or install a shell completion script |
 
 ## installation
 
