@@ -8,20 +8,29 @@
 #   4. 基线里的分级与源码注解对不上 ⇒ 红（重生成基线）
 # 外加：shdoc 把 @stability 渲染成「稳定性」小节。
 #
-# 副本从 git archive HEAD 取，门禁自己的三个文件从工作树拷进副本 ——
-# 本用例要在**未提交**的改动上也能自证（与 tests/test_api_baseline.sh 同一个套路）。
+# 副本是「门禁需要的最小树」（lib/ + MIGRATING + VERSION，门禁文件从工作树拷），
+# **不依赖 git** —— compat 容器里没有 git、或 git 不认这个 checkout 的属主，
+# 依赖它就会红在「建不出副本」上（CI run 43374301252 的教训）；
+# 门禁文件从工作树拷，本用例在未提交的改动上也能自证。
 set -u
 . "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/test_helper.sh"
 
 REPO="$TEST_ROOT"
 
-# _copy_repo DST —— 仓库副本 + 工作树里的门禁文件
+# _copy_repo DST —— 门禁需要的最小副本（**不依赖 git**）
+#
+# 为什么不用 git archive：compat 容器里要么没有 git，要么 git 不认这个 checkout
+# 的属主（dubious ownership）—— 两种都会让 archive 走空，用例就红在「建不出
+# 副本」上（CI run 43374301252 就是这么红的）。门禁实际只读这几处：
+# lib/（扫描 + 探针加载）、docs/MIGRATING.md、VERSION，加上 tools/ 下的门禁文件
+# （从工作树拷，让用例在未提交的改动上也能自证）。
 _copy_repo() {
   local dst=$1
   mkdir -p "$dst" || return 1
-  command -v git >/dev/null 2>&1 || return 1
-  git -C "$REPO" rev-parse --git-dir >/dev/null 2>&1 || return 1
-  git -C "$REPO" -c safe.directory="$REPO" archive HEAD 2>/dev/null | tar -x -C "$dst" || return 1
+  cp -R "$REPO/lib" "$dst/" || return 1
+  mkdir -p "$dst/docs" || return 1
+  cp "$REPO/docs/MIGRATING.md" "$dst/docs/" || return 1
+  cp "$REPO/VERSION" "$dst/" || return 1
   mkdir -p "$dst/tools" || return 1
   cp "$REPO/tools/api_baseline.sh" "$REPO/tools/api_baseline.txt" \
     "$REPO/tools/stability_exempt.txt" "$dst/tools/" || return 1
