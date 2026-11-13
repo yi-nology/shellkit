@@ -22,3 +22,7 @@ id_rsa
 id_dsa
 id_ecdsa
 id_ed25519
+
+# 本机工作文档（设计稿、批次清单），不进分发包也不进文档门禁
+.superpowers/
+
