@@ -47,6 +47,36 @@ out=$(PATH="$_fakebin:$PATH" bash -c '. "$1/lib/bootstrap.sh"; _tn "one item" "m
 assert_eq "T[one item]" "$out" "_tn sends the singular form through gettext"
 
 # ---------------------------------------------------------------------------
+# 纯 C/POSIX locale 下 _t 不该 fork gettext：POSIX 规定 C 下 gettext 忽略
+# LANGUAGE、直接回 msgid —— fork 它只为拿回同一个字符串（实测 39 次 / 126ms，
+# 占 cli_new 耗时两成）。用 PATH 前置的假 gettext 数调用：
+#   C       短路生效 —— 输出必须是 msgid 本身（假 gettext 被调会输出 T[...]）
+#   C.UTF-8 不在短路之列（它会读 LANGUAGE）—— 必须照常走 gettext
+#   zh_CN   非 C 照常走 gettext —— 短路不许误伤真译文路径
+# 三条合起来：短路删掉则第 1 条红；短路写成通配（C*）误伤 C.UTF-8 则第 2 条红。
+# ---------------------------------------------------------------------------
+_ci=$(tmpdir)
+_cibin="$_ci/fakebin"
+mkdir -p "$_cibin"
+{
+  printf '#!/bin/sh\n'
+  printf '%s\n' 'printf "T[%s]" "$1"'
+} >"$_cibin/gettext"
+chmod +x "$_cibin/gettext"
+
+out=$(PATH="$_cibin:$PATH" SHELLKIT_LANG='' LC_ALL=C LANG=C \
+  bash -c '. "$1/lib/bootstrap.sh"; _t "Usage"' _ "$TEST_ROOT")
+assert_eq "Usage" "$out" "under a pure C locale _t must return the msgid without calling gettext"
+
+out=$(PATH="$_cibin:$PATH" SHELLKIT_LANG='' LC_ALL=C.UTF-8 LANG=C.UTF-8 \
+  bash -c '. "$1/lib/bootstrap.sh"; _t "Usage"' _ "$TEST_ROOT")
+assert_eq "T[Usage]" "$out" "C.UTF-8 reads LANGUAGE so gettext must still run"
+
+out=$(PATH="$_cibin:$PATH" SHELLKIT_LANG='' LC_ALL=zh_CN.UTF-8 LANG=zh_CN.UTF-8 \
+  bash -c '. "$1/lib/bootstrap.sh"; _t "Usage"' _ "$TEST_ROOT")
+assert_eq "T[Usage]" "$out" "a non-C locale must still go through gettext"
+
+# ---------------------------------------------------------------------------
 # 不设任何新环境变量时，_t 的输出必须与改动前逐字一致。
 #
 # 改动前的 _t 就是「裸跑 gettext」（域名取 TEXTDOMAIN，目录取 TEXTDOMAINDIR）。

@@ -165,6 +165,21 @@ _t() {
     [ "$__dom" = "${TEXTDOMAIN:-shellkit}" ] &&
     [ "$__dirs" = "${TEXTDOMAINDIR:-$SHELLKIT_HOME/locale}" ]; then
     if [ -n "${SK_GETTEXT:-}" ]; then
+      # 纯 C/POSIX locale 下 gettext 不查译文（POSIX 规定 C 下忽略 LANGUAGE，
+      # GNU gettext 对 C/POSIX 直接返回 msgid）—— fork 它只为拿回同一个字符串：
+      # cli_new / cli_upgrade 各有 39 次这种无效 fork（实测 39 次 126ms，
+      # 占 new 耗时两成）。提前原样返回与「fork 后拿回 msgid」逐字等价。
+      # 只认完整值 C/POSIX：C.UTF-8 会读 LANGUAGE、可能真有译文，不在此列；
+      # 判定用 gettext 读的同一组变量（LC_ALL > LC_MESSAGES > LANG），
+      # 且只在标准单 msgid 形态（$# = 1）下短路 —— 多参数走原路，行为不变。
+      case "${LC_ALL:-${LC_MESSAGES:-${LANG:-}}}" in
+        C | POSIX)
+          if [ "$#" -eq 1 ]; then
+            printf '%s' "$__msg"
+            return 0
+          fi
+          ;;
+      esac
       case "$__msg" in
         -*) "$SK_GETTEXT" -- "$@" ;;
         *) "$SK_GETTEXT" "$@" ;;
