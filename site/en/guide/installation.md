@@ -20,6 +20,8 @@ The script itself never writes a file into the target directory. It only does fo
 **The install logic exists exactly once**, inside `install-self`. The bootstrap script merely downloads it --
 otherwise "one-click install" and "manual install" would eventually produce two different layouts.
 
+<ShotFigure src="/diagrams/install-chain.svg" caption="The five-step trust chain: a sha256 mismatch exits 5 and not one byte lands on disk" />
+
 The URL is a release asset, never `raw.githubusercontent.com`. The latter gets reset on some networks,
 and the repository path is fixed anyway, so neither the website nor the README uses raw.
 

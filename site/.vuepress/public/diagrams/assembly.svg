@@ -1,0 +1,56 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1000 420" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" role="img" aria-label="shellkit repository vendored into your project; CLI for daily work">
+  <defs>
+    <marker id="ah-blue" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0 0 L10 5 L0 10 z" fill="#58a6ff"/>
+    </marker>
+    <marker id="ah-purple" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0 0 L10 5 L0 10 z" fill="#a371f7"/>
+    </marker>
+    <marker id="ah-mute" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0 0 L10 5 L0 10 z" fill="#7d8894"/>
+    </marker>
+  </defs>
+
+  <rect x="0" y="0" width="1000" height="420" rx="14" fill="#161b22" stroke="#2f3a48"/>
+
+  <!-- 左：shellkit 仓库（唯一真相源） -->
+  <rect x="40" y="46" width="300" height="234" rx="10" fill="#1c2430" stroke="#58a6ff" stroke-width="1.5"/>
+  <text x="60" y="80" font-size="18" font-weight="700" fill="#58a6ff">shellkit repo</text>
+  <text x="60" y="116" font-size="15" fill="#e6edf3">lib/core/*.sh</text>
+  <text x="60" y="144" font-size="15" fill="#e6edf3">lib/bootstrap.sh</text>
+  <text x="60" y="172" font-size="15" fill="#e6edf3">templates/  tools/  tests/</text>
+  <text x="60" y="206" font-size="13" fill="#9aa6b2">single source of truth</text>
+  <text x="60" y="232" font-size="13" fill="#9aa6b2">23 modules, one topic each</text>
+  <text x="60" y="258" font-size="13" fill="#9aa6b2">one entry: lib/modules.txt</text>
+
+  <!-- 中：两条箭头 -->
+  <line x1="348" y1="130" x2="546" y2="130" stroke="#58a6ff" stroke-width="2" marker-end="url(#ah-blue)"/>
+  <text x="448" y="118" font-size="14" text-anchor="middle" fill="#79c0ff">shellkit new</text>
+  <line x1="348" y1="204" x2="546" y2="204" stroke="#58a6ff" stroke-width="2" marker-end="url(#ah-blue)"/>
+  <text x="448" y="192" font-size="14" text-anchor="middle" fill="#79c0ff">shellkit upgrade</text>
+
+  <!-- 右：用户工程 -->
+  <rect x="560" y="46" width="400" height="234" rx="10" fill="#1c2430" stroke="#a371f7" stroke-width="1.5"/>
+  <text x="580" y="80" font-size="18" font-weight="700" fill="#a371f7">your project</text>
+  <text x="580" y="116" font-size="15" fill="#e6edf3">bin/&lt;cmd&gt;          entry point</text>
+  <text x="580" y="144" font-size="15" fill="#e6edf3">lib/app.sh          assembly</text>
+  <text x="580" y="172" font-size="15" fill="#e6edf3">commands/*.sh       one per subcmd</text>
+  <text x="580" y="200" font-size="15" fill="#e6edf3">vendor/shellkit/    the library</text>
+  <text x="580" y="228" font-size="15" fill="#e6edf3">tests/ + Makefile</text>
+  <text x="580" y="262" font-size="15" fill="#3fb950">make test   &#10003; passes on the spot</text>
+
+  <!-- 底：日常 CLI 横切两侧 -->
+  <rect x="40" y="322" width="920" height="66" rx="10" fill="#151b23" stroke="#232c38"/>
+  <text x="60" y="362" font-size="15" fill="#9aa6b2">daily:</text>
+  <text x="130" y="362" font-size="15" fill="#79c0ff">shellkit doctor</text>
+  <text x="300" y="362" font-size="15" fill="#79c0ff">docs</text>
+  <text x="370" y="362" font-size="15" fill="#79c0ff">skill</text>
+  <text x="450" y="362" font-size="15" fill="#79c0ff">demo</text>
+  <text x="530" y="362" font-size="15" fill="#79c0ff">new</text>
+  <text x="600" y="362" font-size="15" fill="#79c0ff">upgrade</text>
+  <text x="710" y="362" font-size="15" fill="#79c0ff">vendor</text>
+  <text x="795" y="362" font-size="15" fill="#9aa6b2">... 13 subcommands</text>
+
+  <line x1="190" y1="320" x2="190" y2="286" stroke="#7d8894" stroke-width="1.5" marker-end="url(#ah-mute)"/>
+  <line x1="760" y1="320" x2="760" y2="286" stroke="#7d8894" stroke-width="1.5" marker-end="url(#ah-mute)"/>
+</svg>

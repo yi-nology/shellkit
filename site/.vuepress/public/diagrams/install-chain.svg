@@ -1,0 +1,58 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1000 310" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" role="img" aria-label="install chain: fetch release, download, verify sha256, install-self; mismatch exits 5">
+  <defs>
+    <marker id="ah-b" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0 0 L10 5 L0 10 z" fill="#58a6ff"/>
+    </marker>
+    <marker id="ah-r" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0 0 L10 5 L0 10 z" fill="#f85149"/>
+    </marker>
+    <marker id="ah-g" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0 0 L10 5 L0 10 z" fill="#3fb950"/>
+    </marker>
+  </defs>
+
+  <rect x="0" y="0" width="1000" height="310" rx="14" fill="#161b22" stroke="#2f3a48"/>
+
+  <!-- 五个节点 -->
+  <g stroke-width="1.5">
+    <rect x="24"  y="66" width="172" height="96" rx="10" fill="#1c2430" stroke="#58a6ff"/>
+    <rect x="226" y="66" width="172" height="96" rx="10" fill="#1c2430" stroke="#58a6ff"/>
+    <rect x="428" y="66" width="172" height="96" rx="10" fill="#1c2430" stroke="#58a6ff"/>
+    <rect x="630" y="66" width="172" height="96" rx="10" fill="#1c2430" stroke="#58a6ff"/>
+    <rect x="832" y="66" width="144" height="96" rx="10" fill="#1c2430" stroke="#3fb950"/>
+  </g>
+
+  <text x="40"  y="100" font-size="14" font-weight="700" fill="#79c0ff">1. fetch</text>
+  <text x="40"  y="126" font-size="12" fill="#e6edf3">releases/latest</text>
+  <text x="40"  y="148" font-size="12" fill="#9aa6b2">download install.sh</text>
+
+  <text x="242" y="100" font-size="14" font-weight="700" fill="#79c0ff">2. download</text>
+  <text x="242" y="126" font-size="12" fill="#e6edf3">shellkit-X.Y.Z.tar.gz</text>
+  <text x="242" y="148" font-size="12" fill="#e6edf3">+ SHA256SUMS</text>
+
+  <text x="444" y="100" font-size="14" font-weight="700" fill="#79c0ff">3. verify</text>
+  <text x="444" y="126" font-size="12" fill="#e6edf3">sha256sum -c</text>
+  <text x="444" y="148" font-size="12" fill="#9aa6b2">byte for byte</text>
+
+  <text x="646" y="100" font-size="14" font-weight="700" fill="#79c0ff">4. install</text>
+  <text x="646" y="126" font-size="12" fill="#e6edf3">shellkit install-self</text>
+  <text x="646" y="148" font-size="12" fill="#9aa6b2">one install path</text>
+
+  <text x="848" y="100" font-size="14" font-weight="700" fill="#3fb950">5. done</text>
+  <text x="848" y="126" font-size="12" fill="#e6edf3">/usr/local</text>
+  <text x="848" y="148" font-size="12" fill="#9aa6b2">or ~/.local</text>
+
+  <!-- 水平箭头 + 通过标注 -->
+  <line x1="198" y1="114" x2="222" y2="114" stroke="#58a6ff" stroke-width="2" marker-end="url(#ah-b)"/>
+  <line x1="400" y1="114" x2="424" y2="114" stroke="#58a6ff" stroke-width="2" marker-end="url(#ah-b)"/>
+  <line x1="602" y1="114" x2="626" y2="114" stroke="#3fb950" stroke-width="2" marker-end="url(#ah-g)"/>
+  <text x="614" y="98" font-size="12" text-anchor="middle" fill="#3fb950">match &#10003;</text>
+  <line x1="804" y1="114" x2="828" y2="114" stroke="#58a6ff" stroke-width="2" marker-end="url(#ah-b)"/>
+
+  <!-- 校验失败分支 -->
+  <line x1="514" y1="164" x2="514" y2="216" stroke="#f85149" stroke-width="2" marker-end="url(#ah-r)"/>
+  <text x="526" y="196" font-size="12" fill="#f85149">mismatch</text>
+  <rect x="384" y="222" width="260" height="64" rx="10" fill="#24161a" stroke="#f85149" stroke-width="1.5"/>
+  <text x="404" y="250" font-size="14" font-weight="700" fill="#ff7b72">exit 5</text>
+  <text x="404" y="274" font-size="12" fill="#e6edf3">not one byte lands on disk</text>
+</svg>

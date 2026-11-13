@@ -3,6 +3,8 @@
 These are not style preferences. Each one has a concrete failure mode, and violating it makes the script fail in
 an obscure place that does not look like the script's fault ("the config value I read has `[INFO]` stuck to it").
 
+<ShotFigure src="/diagrams/conventions.svg" caption="Data channel, out-parameters, atomic writes, exit codes: the four most violated rules; rule 3 (precedence) is in the text below" />
+
 ## 1. stdout carries data only; logs always go to stderr
 
 ```bash

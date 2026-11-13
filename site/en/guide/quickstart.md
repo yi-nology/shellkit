@@ -24,6 +24,8 @@ cd shellkit
 cd /tmp/shellkit-demo && make test
 ```
 
+<ShotFigure src="/diagrams/quickstart-flow.svg" caption="Three steps: doctor checks the environment, new generates the project, make test passes on the spot" />
+
 `doctor` runs three kinds of checks: **the environment** (which tools are missing), **library integrity**
 (are the module files all there, and is any of them broken) and **vendor drift** (does the copy inside your project
 still match the bundled one byte for byte).

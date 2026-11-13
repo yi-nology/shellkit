@@ -1,5 +1,10 @@
 # shellkit
 
+[![release](https://img.shields.io/github/v/release/yi-nology/shellkit?style=flat-square&color=1f6feb)](https://github.com/yi-nology/shellkit/releases/latest)
+[![CI](https://img.shields.io/github/actions/workflow/status/yi-nology/shellkit/ci.yml?branch=main&style=flat-square&label=CI)](https://github.com/yi-nology/shellkit/actions/workflows/ci.yml)
+[![license](https://img.shields.io/badge/license-MIT-1f6feb?style=flat-square)](LICENSE)
+[![bash](https://img.shields.io/badge/bash-3.2%2B-1f6feb?style=flat-square)](docs/BASH32.md)
+
 写运维 shell 的起点：一个**约束清晰的 Bash 库**、一个**脚手架生成器**、一套 **CLI 框架**。
 目标不是"功能多"，而是**让写出来的脚本又准又一致** —— 日志不会污染 `$(...)`、
 失败有固定退出码、同一条命令跑一百遍和跑一遍结果一样。

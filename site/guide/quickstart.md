@@ -23,6 +23,8 @@ cd shellkit
 cd /tmp/shellkit-demo && make test
 ```
 
+<ShotFigure src="/diagrams/quickstart-flow.svg" caption="三步：doctor 看环境 → new 生成工程 → make test 当场过" />
+
 `doctor` 做三类检查：**环境**（缺什么工具）、**库完整性**（模块文件齐不齐、有没有坏）、
 **vendor 漂移**（工程里那份副本与自带的是否逐字节一致）。
 

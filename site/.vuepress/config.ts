@@ -48,6 +48,14 @@ export default defineUserConfig({
     ['meta', { name: 'author', content: 'yi-nology' }],
     ['meta', { property: 'og:type', content: 'website' }],
     ['meta', { property: 'og:site_name', content: 'shellkit' }],
+    // og:image 用绝对地址：分享到 IM/社交平台时抓取方不在站点内，相对路径是坏的。
+    // 中英两站共用一张（图里是品牌名 + 代码 token，没有会过期的散文）。
+    ['meta', { property: 'og:title', content: 'shellkit — 写运维 shell 的起点' }],
+    ['meta', { property: 'og:description', content: '约束清晰的 Bash 库、脚手架生成器与 CLI 框架。基线 Bash 3.2+，stdout 只给数据，日志一律 stderr。' }],
+    ['meta', { property: 'og:image', content: SITE_BASE + '/og.png' }],
+    ['meta', { name: 'twitter:card', content: 'summary_large_image' }],
+    ['meta', { name: 'twitter:title', content: 'shellkit — 写运维 shell 的起点' }],
+    ['meta', { name: 'twitter:image', content: SITE_BASE + '/og.png' }],
   ],
 
   locales: {

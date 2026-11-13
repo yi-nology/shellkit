@@ -2,7 +2,8 @@
 // shellkit 文档站的视觉层。
 //
 // 原则：内容是主角，界面是背景。所以这一层只做三件事 ——
-//   1. 调色板：把主题默认的紫换成项目自己的绿，并把深色调到不刺眼的低饱和度；
+//   1. 调色板：全站主色是 GitHub 蓝 #58a6ff（浅色 #0969da），紫 #a371f7 只作
+//      渐变辅色；深色底 #0d1117 是不刺眼的低饱和度灰黑，不是纯黑；
 //   2. 层级：标题、正文、代码、表格、引用各有明确的视觉区别，而不是全都靠颜色；
 //   3. 密度：行高、字距、留白按长时间阅读调，而不是按「塞满一屏」调。
 //
@@ -22,18 +23,36 @@
   // 正文窄一点、行长短一点，读起来不跳行
   --content-width: 860px;
 
-  // 浅色：绿但压暗，保证正文里的链接有足够对比度
-  --vp-c-accent: #1a7f37;
-  --vp-c-accent-bg: #1a7f37;
-  --vp-c-accent-hover: #155e29;
-  --vp-c-accent-soft: rgba(26, 127, 55, 0.12);
+  // 浅色：GitHub 蓝。白底上 #58a6ff 对比不够（正文链接要 4.5:1），
+  // 所以浅色用深一档的 #0969da，hover 再深；亮蓝只留给深色模式。
+  --vp-c-accent: #0969da;
+  --vp-c-accent-bg: #0969da;
+  --vp-c-accent-hover: #0550ae;
+  --vp-c-accent-soft: rgba(9, 105, 218, 0.1);
+  // 渐变辅色（紫）：hero 流光、卡片发光、图解里和蓝配对用
+  --vp-c-accent-2: #a371f7;
+
+  // 旧 token 别名：主题与自有组件里还有零星 --vp-c-brand- 开头的用法
+  // （比如 sk-footer-link）。不给别名，换主色时它会停在主题默认绿上，
+  // 属于「以为改了，其实有一处没跟上」。
+  --vp-c-brand-1: var(--vp-c-accent);
+  --vp-c-brand-2: var(--vp-c-accent-hover);
+  --vp-c-brand-soft: var(--vp-c-accent-soft);
+  --vp-c-brand-3: var(--vp-c-accent-2);
 }
 
 [data-theme='dark'] {
-  --vp-c-accent: #56d364;
-  --vp-c-accent-bg: #2ea043;
-  --vp-c-accent-hover: #6ee77a;
-  --vp-c-accent-soft: rgba(86, 211, 100, 0.14);
+  // 深色：GitHub 蓝直接当正文色，#0d1117 上对比度约 7:1
+  --vp-c-accent: #58a6ff;
+  --vp-c-accent-bg: #1f6feb;
+  --vp-c-accent-hover: #79c0ff;
+  --vp-c-accent-soft: rgba(88, 166, 255, 0.14);
+  --vp-c-accent-2: #a371f7;
+
+  --vp-c-brand-1: var(--vp-c-accent);
+  --vp-c-brand-2: var(--vp-c-accent-hover);
+  --vp-c-brand-soft: var(--vp-c-accent-soft);
+  --vp-c-brand-3: var(--vp-c-accent-2);
 
   // 背景不用纯黑：纯黑让代码块的对比显得刺眼
   --vp-c-bg: #0d1117;
@@ -228,15 +247,88 @@ div[class*='language-'] {
 
 // ---------- 首页 hero ----------
 
+// .vp-hero 只在首页出现（内页没有 hero），所以光晕不会漏到指南页。
 .vp-hero {
-  padding: 3.2rem 0 2.4rem;
+  position: relative;
+  // 必须显式开一个层叠上下文：光晕是 z-index:-1 的子元素，
+  // 而这个主题给 html 和 body 都上了不透明背景 —— 没有上下文时,
+  // 负 z-index 子元素会画在 body 背景「下面」，光晕整团被盖住
+  // （表现为「CSS 写了、动画也有，页面上就是看不见」）。
+  // z-index:0 把负 z-index 收进 hero 自己的上下文里,
+  // 于是它画在 body 背景之上、hero 文字之下。
+  z-index: 0;
+  // 光晕不许溢出到特性卡片区
+  overflow: hidden;
+  padding: 3.6rem 0 2.8rem;
 }
 
+// 两团慢速漂浮的光晕：蓝在左上、紫在右下。
+// 用 ::before/::after 而不是往 DOM 里插节点 —— 主题的 hero 是固定模板，
+// 插不进自定义节点；伪元素 + z-index:-1 会画在页面底色之上、hero 文字之下。
+// 半径刻意给大（34rem）并配合 70% 处透明的 radial-gradient，边缘才不会看出圆圈。
+.vp-hero::before,
+.vp-hero::after {
+  content: '';
+  position: absolute;
+  z-index: -1;
+  width: 34rem;
+  height: 34rem;
+  border-radius: 50%;
+  pointer-events: none;
+}
+
+// alpha 与衰减半径按「截图上看得见」调过一版：closest-side 的 70% 只有
+// 34rem 的 0.7×半宽 ≈ 190px，0.26 的峰值在截图上只是勉强可见。
+// 现在峰值 0.36、衰减放到 85%，中心区域在 #0d1117 上能读出明显的蓝紫氛围。
+.vp-hero::before {
+  top: -9rem;
+  left: 2rem;
+  background: radial-gradient(
+    closest-side,
+    rgba(88, 166, 255, 0.36),
+    rgba(88, 166, 255, 0) 85%
+  );
+  animation: sk-glow-a 22s ease-in-out infinite alternate;
+}
+
+.vp-hero::after {
+  top: 2rem;
+  right: 0;
+  background: radial-gradient(
+    closest-side,
+    rgba(163, 113, 247, 0.3),
+    rgba(163, 113, 247, 0) 85%
+  );
+  animation: sk-glow-b 26s ease-in-out infinite alternate;
+}
+
+// 流光渐变标题：background-clip:text 把渐变裁进字里，background-size 放大到
+// 300% 后平移 background-position 就成了「光在字上流」。
+// 标题里的锚点链接不吃渐变（-webkit-text-fill-color 是继承的），单独给回实色，
+// 否则 hover 时锚点隐形。
 .vp-hero h1 {
   font-size: 2.6rem;
   font-weight: 700;
   letter-spacing: -0.03em;
   line-height: 1.2;
+  background-image: linear-gradient(
+    110deg,
+    #58a6ff,
+    #a371f7,
+    #79c0ff,
+    #58a6ff
+  );
+  background-size: 300% 100%;
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  -webkit-text-fill-color: transparent;
+  animation: sk-shimmer 9s linear infinite;
+}
+
+.vp-hero h1 .header-anchor {
+  color: var(--vp-c-text-subtle);
+  -webkit-text-fill-color: var(--vp-c-text-subtle);
 }
 
 .vp-hero-description {
@@ -298,10 +390,14 @@ div[class*='language-'] {
   transition: border-color 0.2s, background-color 0.2s, transform 0.2s;
 }
 
+// 悬浮发光：蓝在前、紫在后的双层阴影，比单色阴影多一层「边缘渗光」的层次。
+// transform 位移由上方 transition 一起带动。
 .vp-feature:hover {
   border-color: var(--vp-c-accent);
   background: var(--vp-c-bg-alt);
   transform: translateY(-2px);
+  box-shadow: 0 6px 24px -6px rgba(88, 166, 255, 0.35),
+    0 2px 10px -4px rgba(163, 113, 247, 0.3);
 }
 
 .vp-feature h2 {
@@ -316,6 +412,38 @@ div[class*='language-'] {
   line-height: 1.65;
   color: var(--vp-c-text-mute);
   margin: 0;
+}
+
+// ---------- 动画关键帧 ----------
+
+// 流光：背景尺寸是元素的 300%，位置从 0 平移到 100%（300% 指背景图坐标系），
+// 循环回到 0 时首尾都是同一段渐变，接缝看不出来。
+@keyframes sk-shimmer {
+  from {
+    background-position: 0% 50%;
+  }
+  to {
+    background-position: 300% 50%;
+  }
+}
+
+// 光晕漂浮：位移 + 缩放都很小、周期很长，感觉是「在呼吸」而不是「在动」。
+@keyframes sk-glow-a {
+  from {
+    transform: translate3d(0, 0, 0) scale(1);
+  }
+  to {
+    transform: translate3d(3rem, 2rem, 0) scale(1.12);
+  }
+}
+
+@keyframes sk-glow-b {
+  from {
+    transform: translate3d(0, 0, 0) scale(1.05);
+  }
+  to {
+    transform: translate3d(-2.5rem, 2.5rem, 0) scale(0.95);
+  }
 }
 
 // ---------- 终端截图 ----------
@@ -341,6 +469,31 @@ div[class*='language-'] {
   }
 }
 
+// ---------- 浅色模式：光效一律减弱 ----------
+
+// 深色上 0.26 的光斑是「氛围」，浅色白底上同一浓度是「脏印」。
+// html:not([data-theme=dark]) 同时覆盖「显式 light」与「还没初始化」两种状态。
+html:not([data-theme='dark']) .vp-hero::before {
+  background: radial-gradient(
+    closest-side,
+    rgba(88, 166, 255, 0.22),
+    rgba(88, 166, 255, 0) 85%
+  );
+}
+
+html:not([data-theme='dark']) .vp-hero::after {
+  background: radial-gradient(
+    closest-side,
+    rgba(163, 113, 247, 0.17),
+    rgba(163, 113, 247, 0) 85%
+  );
+}
+
+html:not([data-theme='dark']) .vp-feature:hover {
+  box-shadow: 0 6px 24px -8px rgba(9, 105, 218, 0.25),
+    0 2px 10px -6px rgba(163, 113, 247, 0.18);
+}
+
 // ---------- 搜索与主题切换按钮 ----------
 
 .search-box,
@@ -358,6 +511,28 @@ div[class*='language-'] {
 
 ::selection {
   background: var(--vp-c-accent-soft);
+}
+
+// ---------- 减少动态效果 ----------
+
+// 系统开了「减少动态效果」就把动画停在第一帧：渐变仍是可见的静态渐变，
+// 光晕停在起始位置 —— 内容一个不少，动效一个不剩。
+@media (prefers-reduced-motion: reduce) {
+  .vp-hero h1,
+  .vp-hero::before,
+  .vp-hero::after {
+    animation: none !important;
+  }
+
+  .vp-feature,
+  .vp-hero-action-button,
+  a {
+    transition: none !important;
+  }
+
+  .vp-feature:hover {
+    transform: none;
+  }
 }
 
 // ---------- 打印：导航、侧栏都去掉 ----------

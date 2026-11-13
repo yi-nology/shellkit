@@ -20,6 +20,8 @@ curl -fsSL https://github.com/yi-nology/shellkit/releases/latest/download/instal
 **安装逻辑只有一份**，就在 `install-self` 里。安装脚本只是把它下载下来而已 —— 否则
 「一键装」和「手动装」迟早会装出两种布局。
 
+<ShotFigure src="/diagrams/install-chain.svg" caption="五步信任链：sha256 对不上就 exit 5，一个字节都不落地" />
+
 地址用的是 release 资产，不是 `raw.githubusercontent.com`。后者在部分网络会被重置，
 而仓库地址又是固定的，所以网页和 README 都不用 raw。
 
