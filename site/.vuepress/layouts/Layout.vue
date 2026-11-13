@@ -8,12 +8,19 @@
 // 所以这里包一层主题自带的 Layout，把入口塞进 page-bottom 插槽：
 // 正文列的底部就是每页都有的页脚位置。
 import Parent from '@vuepress/theme-default/layouts/Layout.vue'
+import ColorModePicker from '../components/ColorModePicker.vue'
 
 const LLMS_URL = 'https://yi-nology.github.io/shellkit/llms.txt'
 </script>
 
 <template>
   <Parent>
+    <!-- 导航栏右侧：三段配色选择（白 / 黑 / 跟随系统），
+         顶掉主题内置的两态开关（config 里 colorModeSwitch: false） -->
+    <template #navbar-after>
+      <ColorModePicker />
+    </template>
+
     <template #page-bottom>
       <footer class="sk-footer">
         <a class="sk-footer-link" :href="LLMS_URL" target="_blank" rel="noopener noreferrer">

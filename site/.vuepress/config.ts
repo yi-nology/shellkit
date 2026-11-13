@@ -2,6 +2,7 @@ import { viteBundler } from '@vuepress/bundler-vite'
 import { defaultTheme } from '@vuepress/theme-default'
 import { searchPlugin } from '@vuepress/plugin-search'
 import { defineUserConfig } from 'vuepress'
+import { fileURLToPath } from 'node:url'
 
 const REPO = 'https://github.com/yi-nology/shellkit'
 
@@ -42,6 +43,12 @@ export default defineUserConfig({
   description: '约束清晰的 Bash 库、脚手架生成器与 CLI 框架。基线 Bash 3.2+，stdout 只给数据，日志一律 stderr。',
   base: '/shellkit/',
 
+  // 三态配色（白 / 黑 / 跟随系统）：把主题的两态 useDarkMode 整体换成我们的一份。
+  // VuePress 的 resolveAlias 按键长降序排序，长键必然优先于主题的 '@theme' 前缀键。
+  alias: {
+    '@theme/useDarkMode': fileURLToPath(new URL('./useDarkMode.ts', import.meta.url)),
+  },
+
   head: [
     ['link', { rel: 'icon', href: '/shellkit/favicon.svg', type: 'image/svg+xml' }],
     ['meta', { name: 'theme-color', content: '#0d1117' }],
@@ -56,6 +63,20 @@ export default defineUserConfig({
     ['meta', { name: 'twitter:card', content: 'summary_large_image' }],
     ['meta', { name: 'twitter:title', content: 'shellkit — 写运维 shell 的起点' }],
     ['meta', { name: 'twitter:image', content: SITE_BASE + '/og.png' }],
+    // 首帧前定 data-theme：主题按 [data-theme] 上色，不定就会闪一下错误底色。
+    // 逻辑与 .vuepress/useDarkMode.ts 同源：三态 + 旧键 vuepress-color-scheme 迁移。
+    [
+      'script',
+      {
+        innerHTML:
+          "(function(){try{var m=localStorage.getItem('sk-color-mode');" +
+          "if(m!=='light'&&m!=='dark'&&m!=='auto'){m=localStorage.getItem('vuepress-color-scheme')}" +
+          "if(m!=='light'&&m!=='dark'&&m!=='auto'){m='auto'}" +
+          "var dark=m==='auto'?window.matchMedia('(prefers-color-scheme: dark)').matches:m==='dark';" +
+          "document.documentElement.setAttribute('data-theme',dark?'dark':'light')}" +
+          "catch(e){document.documentElement.setAttribute('data-theme','dark')}})()",
+      },
+    ],
   ],
 
   locales: {
@@ -75,8 +96,10 @@ export default defineUserConfig({
 
   theme: defaultTheme({
     logo: '/logo.svg',
+    // 内置两态开关藏起来：导航栏用我们自己的三段选择器（navbar-after 挂载）。
+    // 配色默认值改由 useDarkMode.ts 决定 —— 首次访问跟随系统。
     colorMode: 'dark',
-    colorModeSwitch: true,
+    colorModeSwitch: false,
     lastUpdated: true,
     contributors: false,
     editLink: false,
