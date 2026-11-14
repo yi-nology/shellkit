@@ -9,7 +9,7 @@ SOURCES := shellkit install.sh repair.sh demo.sh lib/bootstrap.sh $(wildcard lib
 TEMPLATES := $(shell find templates -type f)
 SHOTS := $(wildcard docs/shots/*.shot)
 
-.PHONY: help test syntax lint lint-templates fmt messages messages-check docs docs-check versions-check check-docs cookbook-check shots examples check install release release-dry site-deps site-sync site site-serve local-names-check module-count-check pipe-safety-check dup-functions-check mutation security-check api-baseline-check bench ident-boundary-check
+.PHONY: help test syntax lint lint-templates fmt messages messages-check docs docs-check versions-check check-docs cookbook-check shots examples check install release release-dry site-deps site-sync site site-serve local-names-check module-count-check pipe-safety-check dup-functions-check mutation security-check api-baseline-check bench coverage coverage-branch ident-boundary-check
 
 help:
 	@printf '%s\n' \
@@ -33,6 +33,7 @@ help:
 	  'make check       依次跑 syntax / test / lint / module-order-check / check-exitcode-docs / local-names-check / module-count-check / pipe-safety-check / docs-check / versions-check / check-docs / cookbook-check / messages-check / examples / fmt' \
 	  'make bats-check  跑 bats 用例（tests/bats，每个 @test 一个独立进程）' \
 	  'make coverage    公开函数级覆盖率（带白名单棘轮，不进 check）' \
+	  'make coverage-branch  分支级覆盖率（if/case/|| 各臂棘轮 + P0 守卫分支，不进 check）' \
 	  'make mutation    变异测试：升级路径守卫用例的判据能力（不进 check）' \
   'make security-check  安全边界的机器判据（路径/软链/权限/脱敏/锁/原子写）' \
   'make api-baseline-check  公开 API 行为基线（返回码或函数集变了就红）' \
@@ -113,6 +114,11 @@ bats-check:
 # 不进 check —— 它要把整套测试跑两遍，太慢；想收紧覆盖率就调 --min。
 coverage:
 	@bash tools/coverage.sh --min 40
+
+# 分支级棘轮：四条关键路径与 release gate 的 if/case/|| 分支臂。
+# 与函数级分开跑：两种插桩各跑一遍全套件，合成一条命令会让失败归因变糊。
+coverage-branch:
+	@bash tools/coverage.sh --branch
 
 # 变异测试：把语义变异种进升级路径的守卫区，验证守卫用例必须 100% 杀灭
 # （位点区间锚在 _sk_upgrade_* 函数上，封顶 12 个保证跑得完）。
