@@ -5,13 +5,22 @@
 # tag 一推就发布是不行的：ci.yml 与 release.yml 之间没有任何依赖关系，
 # CI 没跑、跑了但失败、或者还在跑，tag 照样能发布（issue #42）。
 # GitHub 的一个事实：**从 tag 触发的工作流不会自动等另一个工作流**，
-# 所以发布之前在这里主动查询同一 SHA 的 check-runs —— 查不到、没结论、
-# 结论不是 success，一律不放行。
+# 所以发布之前在这里主动查询同一 SHA 的 check-runs。
+#
+# 必需检查分三种状态判（issue #85）——以前把「检查尚未注册」与「检查已
+# 失败」混为一谈：push / tag 后立刻跑门禁是常态，CI 的 check-run 还没
+# 注册到该 SHA 上，查不到就记 [FAIL] 属于竞态假红，重跑才过。
+#   - 已完成（status=completed）⇒ 按 conclusion 判：success 放行，其余不放行；
+#   - 进行中 / 尚未注册（status 未完成，或该 SHA 上根本查不到）⇒ 在超时
+#     窗口内轮询等待 ——「还没注册」与「永不运行」在窗口内分不出来，等是
+#     唯一不冤枉任何一方的做法；
+#   - 超时后仍缺席 ⇒ 才判失败并说明原因（点名是谁、指路查 ci.yml 是否
+#     在这个 SHA 上跑过、job 名是否与必需清单一致）。
 #
 #   bash tools/release_gate.sh <commit-sha> [--timeout SEC] [--interval SEC] [--once]
 #
-# 退出码：0 全部必需检查成功 / 1 有失败或缺席（fail-closed）/ 2 用法错 /
-#         3 等到超时还没有结论
+# 退出码：0 全部必需检查成功 / 1 有失败，或超时后仍缺席（fail-closed）/
+#         2 用法错 / 3 等到超时还没有结论（进行中或尚未注册）
 #
 # 必需检查清单是 ci.yml 的六个 job（矩阵 job 按 name 逐个点名）。
 # SHELLKIT_GATE_CHECKS="a|b|c"（| 分隔）可整体覆盖 —— 供测试与应急使用。
@@ -96,8 +105,9 @@ if ! command -v gh >/dev/null 2>&1; then
 fi
 
 # _gate_one NAME —— 查一个必需检查的结论，输出三种词之一：
-#   MISSING（该 SHA 上根本没有这个名字的检查）/ PENDING（还没跑完）/
-#   SUCCESS / FAILED:<conclusion>
+#   MISSING（该 SHA 上还没有这个名字的检查 —— 可能尚未注册，也可能永不运行）
+#   PENDING（还没跑完）/ SUCCESS / FAILED:<conclusion>
+# MISSING 不在这里定生死：主循环把它当「未注册」处理（issue #85）。
 _gate_one() {
   local __name=$1 __out
   __out=$(gh api -X GET "repos/$GATE_REPO/commits/$SHA/check-runs" \
@@ -156,13 +166,19 @@ while :; do
     printf '%s\t%s\n' "$__v" "$__name"
   done >"${TMPDIR:-/tmp}/release-gate-results.$$"
 
-  # 子 shell 计数器出不来，用结果文件重新统计
-  __pending=0 __failed=0 __passed=0
-  __first_bad=""
+  # 子 shell 计数器出不来，用结果文件重新统计。
+  # missing 与 pending 是两类「还没有结论」：前者是检查尚未注册，
+  # 窗口内等、超时才判失败（issue #85）；后者照旧等。
+  __pending=0 __failed=0 __passed=0 __missing=0
+  __first_bad="" __first_missing=""
   while IFS=$'\t' read -r __v __name; do
     case "$__v" in
       ok) __passed=$((__passed + 1)) ;;
       pending) __pending=$((__pending + 1)) ;;
+      missing)
+        __missing=$((__missing + 1))
+        [ -n "$__first_missing" ] || __first_missing="$__name"
+        ;;
       *)
         __failed=$((__failed + 1))
         [ -n "$__first_bad" ] || __first_bad="$__name ($__v)"
@@ -173,7 +189,7 @@ while :; do
     case "$__v" in
       ok) _say "  [ OK ] $__name" ;;
       pending) _say "  [....] $__name (pending)" ;;
-      missing) _say "  [FAIL] $__name (missing — has ci.yml run on this SHA?)" ;;
+      missing) _say "  [....] $__name (missing — not yet registered, will keep waiting)" ;;
       query) _say "  [FAIL] $__name (query failed)" ;;
       fail) _say "  [FAIL] $__name" ;;
     esac
@@ -181,19 +197,24 @@ while :; do
   rm -f "${TMPDIR:-/tmp}/release-gate-results.$$"
 
   if [ "$__failed" -gt 0 ]; then
-    _say "verdict: NOT PASSED — $__failed required check(s) failed or missing (first: $__first_bad)"
+    _say "verdict: NOT PASSED — $__failed required check(s) failed (first: $__first_bad)"
     exit 1
   fi
-  if [ "$__pending" -eq 0 ]; then
+  if [ "$__pending" -eq 0 ] && [ "$__missing" -eq 0 ]; then
     _say "verdict: PASSED — all $__passed required checks succeeded"
     exit 0
   fi
-  _say "verdict: $__pending pending, $__passed passed so far"
+  _say "verdict: $__pending pending, $__missing not yet registered, $__passed passed so far"
   if [ "$ONCE" = "1" ]; then
     _say "stopping after one round (--once)"
     exit 3
   fi
   if [ "$__waited" -ge "$TIMEOUT" ]; then
+    if [ "$__missing" -gt 0 ]; then
+      _say "verdict: NOT PASSED — $__missing required check(s) never registered within the ${TIMEOUT}s window (first: $__first_missing)"
+      _say "         ci.yml may not have run on this SHA, or the job name does not match the required list"
+      exit 1
+    fi
     _say "timed out after ${TIMEOUT}s with checks still pending — refusing to publish"
     exit 3
   fi

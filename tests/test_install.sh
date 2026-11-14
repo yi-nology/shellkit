@@ -98,8 +98,19 @@ assert_eq "9.9.9" "$("$prefix/bin/shellkit" --version)" "updated binary runs"
 
 assert_contains "$("$sk" update --from "$fake" --prefix "$prefix" 2>&1)" "up to date" \
   "same version is a no-op"
+
+# 同版本不带 force：提前返回，用户改过的自有文件保持原样
+printf '# drift\n' >>"$dest/lib/core/log.sh"
+assert_contains "$(cat "$dest/lib/core/log.sh")" "drift" "the early return must not touch local edits"
+
+# update --force 端到端（issue #84）：force 必须传给 install-self ——
+# 真正重装并覆盖用户改过的自有文件。以前 __force 只用来跳过同版本的
+# 提前返回，真正安装仍按默认策略保留本地修改，「强制」语义只走了一半。
 assert_exit_code 0 "$sk" update --force --from "$fake" --prefix "$prefix"
-assert_exit_code 5 "$sk" update --from "$fake" --sha256 00 --prefix "$prefix"
+if grep -q 'drift' "$dest/lib/core/log.sh"; then
+  _fail "update --force must reach install-self and overwrite the local edit"
+fi
+assert_exit_code 0 "$sk" update --from "$fake" --prefix "$prefix"
 assert_exit_code 3 "$sk" update --from "$work/absent.tar.gz" --prefix "$prefix"
 assert_exit_code 3 "$sk" update --from "$fake" --prefix "$work/empty"
 assert_exit_code 2 "$sk" update --bogus

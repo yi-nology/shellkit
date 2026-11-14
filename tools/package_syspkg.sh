@@ -329,6 +329,14 @@ URL: https://github.com/yi-nology/shellkit
 BuildArch: noarch
 Requires: bash
 
+# 发行版 rpm-build 的 brp-mangle-shebangs（Rocky/Fedora 系自带）会把
+# #!/usr/bin/env bash 改写成 #!/usr/bin/bash——装出来的树就不再与 tarball
+# 逐字节一致，直接撞 verify 的 single-source-of-truth 判据（本包 CI 实测
+# ubuntu 的 rpm 不带该 brp 脚本故不改写，同一份包两种裁决）。
+# 本包是纯 shell 载荷：os_install_post 链上没有适用项（无 ELF/无 man/无
+# python 字节码），整条禁掉只保 shebang 原样，不改变包内容与依赖。
+%global __os_install_post %{nil}
+
 %description
 shellkit ships a tested bash library (log, config, fs, net, retry, lock, cli, i18n)
 and a generator that scaffolds testable ops scripts. Everything lives under
