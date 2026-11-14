@@ -665,6 +665,28 @@ conf_set TARGET "$1"                                          # 原子写、600�
 工程清单 `.shellkit-manifest` **不在本次变化之列** —— 它早就有 `manifest_version=2`
 与 v1→v2 迁移逻辑（`lib/core/scaffold.sh`），本次是把同一套约定搬到三类所有权清单上。
 
+### 0.20.0 → 0.21.0：会改变结果的行为变化
+
+这一版是第七轮评审的两批收口：P0 删除边界（#81）与八单批报（#81-#86、#88 落地，
+#87 落地资产不可变部分）。以下操作会算出**不一样但更安全**的结果：
+
+| 变化 | 以前 | 现在 | 你会在哪里撞到 |
+|---|---|---|---|
+| 上游删掉一个文件时的删除判据（`vendor` / `install-self` 同路径） | 只要清单里有、路径字符串合法就 `rm` —— 用户改过的文件被当成「我们的旧文件」一并删掉（无告警，退出码 0） | 删除走统一安全接口 `_sk_fs_safe_remove_owned ROOT REL [EXPECTED_SHA256]`：内容与安装基线一致才删；**用户改过的保留、告警（`modified locally, left alone`）、基线不推进**；`--force` 才按清理语义删 | 副本里有自己改过的「上游已删文件」的人：文件还在，同步输出多一条告警 |
+| 删除的路径边界（三个删除入口） | 只查字符串形态的 `../`；清单路径的**父目录被换成符号链接**时，`rm` 顺着链接删到根之外（评审轮实测复现） | 父路径逐级必须是真目录（指向根内的软链也拒绝，告警 `refusing to remove through a symlink`）；目标是软链 / 目录一律保留（`the target is a symlink, left alone` / `not a regular file, left alone`）；删不掉报明确错误 | 用软链把安装目录里某个子目录指到别处的人：卸载 / 同步会拒绝穿过它删除并告警，根外文件不受影响 |
+| `uninstall-self` 的清单删除 | 内联 `case` 查 `../` 后裸 `rm -f` —— 父目录是软链时删掉的是**根外的文件**（残留软链照旧报 leftover，退出码 1） | 统一走安全接口：越界路径保留并告警；根外文件一个字节不少（leftover 告警与退出码 1 不变） | 卸载时把安装目录子目录换成了软链的人 |
+| `skill uninstall` 的删除 | 自己算哈希再 `rm` —— 哈希对得上就删，父级软链不查 | 同一个安全接口，**路径校验排在哈希之前**；哈希口径本身不变 | —— |
+| `install-self` 并发 | 同一 prefix 的两个安装共用 `.new/.old` 残骸名，互相删对方的阶段目录（竞态损坏） | 按 prefix 抢互斥锁（`pfx-` 命名空间），拿不到锁明确报错、退出码 3，不再并发硬闯 | 脚本里并发触发安装 / 更新的人：第二个实例失败而不是互相踩 |
+| 换名恢复的完整性判据 | 只看 `lib/bootstrap.sh` 在不在 —— 半份副本被判「完整」而不恢复 | 与 repair 同一套五条判据（bootstrap + modules.txt + 清单点名模块 + VERSION + 可执行 CLI）：主副本完整不动；不完整且旧副本可启动则恢复；**两份都坏时什么都不删**、报错指路重装 | 升级中断后副本缺了 bootstrap 以外文件的人：现在会真的恢复好副本 |
+| `update --force` | `--force` 只跳过「同版本提前返回」，真正安装时仍按默认保留本地修改 | `--force` 端到端透传给新副本的 `install-self --force` —— 强制语义覆盖安装段 | 对被本地改过的安装执行 `update --force` 的人：本地改动会被覆盖（这正是 force 的含义） |
+| skill 安装的提交方式 | 逐文件原子写，中途失败留下新旧混装的半份 skill | 整组事务：阶段目录（带 pid，互不踩踏）+ 提交前逐条校验 + 两次 rename 整体换上；中断由下次安装恢复 | 装 skill 时被杀 / 磁盘满的人：不再有半份副本 |
+| release 门禁对「检查未注册」的判定 | `total_count == 0`（MISSING）当场记 `[FAIL]` —— push 后立刻跑门禁会撞 check-run 注册竞态假红 | 三态：已完成按 conclusion 判；进行中 / 未注册在超时窗口内轮询等待；超时仍缺席才判红并说明原因 | 很早跑 `tools/release_gate.sh` 的人：不再随机红，真缺检查仍会红 |
+| 发布资产上传 | `gh release upload --clobber` —— 重跑流水线可静默覆盖同 tag 资产 | 不可变上传（`tools/release_assets.sh`）：不存在才传、同摘要跳过、异摘要拒绝并退出 1 指路人工处理 | 重跑 release 流水线的人：同版本资产不再被悄悄换掉 |
+
+只加不改的部分：公开 API 与既有函数的返回码一律未动（`_sk_fs_safe_remove_owned`
+是 CLI 内部私有实现，不进 lib、不进 API 基线）；原生矩阵容器（debian / rockylinux /
+openeuler 的包安装冒烟，#88）只加 CI 不改行为；新增告警 msgid 均有 zh_CN / zh_Hant
+译文；`docs/SECURITY.md` 路径边界补了删除规则与机器判据。
 
 **分级的适用范围（issue #79）**：`@stability` 注解落地之后，本表将**只登记 Stable API
 的行为变化** —— experimental 级的改动在提交信息与 `CHANGELOG.md` 里说明，不构成

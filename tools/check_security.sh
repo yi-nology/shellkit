@@ -221,7 +221,7 @@ _check_path_symlink() {
       printf 'check_security: %s: %s\n' "$1" "$2" >&2
       __rc=1
     }
-    _lib "log fs str i18n error trap" || exit 1
+    _lib "log fs str i18n error trap os" || exit 1
     __t=$(mktemp -d "${TMPDIR:-/tmp}/shellkit-sec.XXXXXX") || exit 1
     # 清理用 find -delete 而不是 rm -rf：有些机器上的 rm 是回收站包装器，
     # 一次 rm 要 1–9 秒（lib/core/trap.sh 里记过这个现象）。
@@ -255,6 +255,26 @@ _check_path_symlink() {
     fi
     if ! _sk_fs_no_symlink_below "$__root" "real"; then
       _fail "path.symlink" "_sk_fs_no_symlink_below 误拒了真目录"
+    fi
+    # 5. 统一删除接口：助手定义在 shellkit CLI 里（刻意不进 lib —— 三个调用方
+    # 都在 CLI），lib 加载不到它，所以抽出函数体在本子 shell 里验行为。
+    # 抽取失败（函数被改名 / 挪走）本身就是红灯。
+    eval "$(sed -n '/^_sk_fs_safe_remove_owned()/,/^}/p' "$ROOT/shellkit")"
+    if ! command -v _sk_fs_safe_remove_owned >/dev/null 2>&1; then
+      _fail "path.symlink" "shellkit 里的 _sk_fs_safe_remove_owned 抽取失败"
+    fi
+    # 6. 父级软链指向根外时必须拒绝，且根外文件一个字节不少
+    printf 'x\n' >"$__t/outside/keepme"
+    if _sk_fs_safe_remove_owned "$__root" "link/keepme"; then
+      _fail "path.symlink" "_sk_fs_safe_remove_owned 放行了父级软链指向根外的删除"
+    fi
+    if [ ! -f "$__t/outside/keepme" ]; then
+      _fail "path.symlink" "_sk_fs_safe_remove_owned 把根外的文件删掉了"
+    fi
+    # 6. 根内的普通文件照常删 —— 接口没有矫枉过正
+    printf 'x\n' >"$__root/real/ok"
+    if ! _sk_fs_safe_remove_owned "$__root" "real/ok"; then
+      _fail "path.symlink" "_sk_fs_safe_remove_owned 误拒了根内的正常删除"
     fi
     exit "$__rc"
   ) || _fail_check
