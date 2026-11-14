@@ -75,14 +75,19 @@ assert_eq "0" "$rc" "two healthy checks must pass the gate"
 assert_contains "$out" "required checks: 2" "the empty list item must be skipped in the count"
 
 # ---------- CASE: completion --install 目标目录不可写 ⇒ 原子写失败要报错 ----------
-ro="$work/ro"
-mkdir -p "$ro/bash-completion/completions"
-chmod 555 "$ro" "$ro/bash-completion" "$ro/bash-completion/completions"
-rc=0
-err=$(XDG_DATA_HOME="$ro" "$sk" completion bash --install 2>&1) || rc=$?
-chmod 755 "$ro" "$ro/bash-completion" "$ro/bash-completion/completions"
-assert_ne "0" "$rc" "an unwritable completion destination must fail"
-assert_contains "$err" "cannot write the completion file" "the failure must say what could not be written"
+# 容器 CI 以 root 跑：chmod 拦不住 uid 0（issue #76），root 下直接 NA。
+if fault_perm_usable; then
+  ro="$work/ro"
+  mkdir -p "$ro/bash-completion/completions"
+  chmod 555 "$ro" "$ro/bash-completion" "$ro/bash-completion/completions"
+  rc=0
+  err=$(XDG_DATA_HOME="$ro" "$sk" completion bash --install 2>&1) || rc=$?
+  chmod 755 "$ro" "$ro/bash-completion" "$ro/bash-completion/completions"
+  assert_ne "0" "$rc" "an unwritable completion destination must fail"
+  assert_contains "$err" "cannot write the completion file" "the failure must say what could not be written"
+else
+  printf '%s\n' 'NA completion-unwritable: running as root, chmod cannot deny uid 0 (issue #76)'
+fi
 
 # ---------- CASE: upgrade 未知选项 ----------
 rc=0
@@ -141,19 +146,23 @@ assert_missing "$k2/.shellkit-skill-new.4194303" "the dead-pid stage must be rec
 # ---------- CASE: skill 安装 —— 残骸清理失败必须吞掉错误继续（rm || true 的失败臂） ----------
 # 父目录只读时 rm -rf 必然失败：清理是尽力而为，安装随后在建阶段目录时
 # 明确失败（而不是被清理错误带偏）。
-k3="$work/k3"
-mkdir -p "$k3/shellkit" "$k3/.shellkit-skill-old.123456" "$k3/.shellkit-skill-new.4194303" \
-  "$k3/.shellkit-skill-new.not-a-pid"
-printf 'stale\n' >"$k3/.shellkit-skill-old.123456/junk"
-chmod 555 "$k3"
-rc=0
-"$sk" skill install --dir "$k3" >/dev/null 2>&1 || rc=$?
-chmod 755 "$k3"
-assert_ne "0" "$rc" "install must fail when the stage directory cannot be created"
-# 只读目录下 rm -rf 能删掉残骸的**内容**、但删不掉残骸目录本身（父目录不可写）
-assert_exists "$k3/.shellkit-skill-old.123456" "a failed cleanup must leave the remnant directory in place"
-assert_exists "$k3/.shellkit-skill-new.4194303" "the dead-pid stage must survive a failed cleanup too"
-assert_exists "$k3/.shellkit-skill-new.not-a-pid" "the non-pid-named stage must survive a failed cleanup too"
+if fault_perm_usable; then
+  k3="$work/k3"
+  mkdir -p "$k3/shellkit" "$k3/.shellkit-skill-old.123456" "$k3/.shellkit-skill-new.4194303" \
+    "$k3/.shellkit-skill-new.not-a-pid"
+  printf 'stale\n' >"$k3/.shellkit-skill-old.123456/junk"
+  chmod 555 "$k3"
+  rc=0
+  "$sk" skill install --dir "$k3" >/dev/null 2>&1 || rc=$?
+  chmod 755 "$k3"
+  assert_ne "0" "$rc" "install must fail when the stage directory cannot be created"
+  # 只读目录下 rm -rf 能删掉残骸的**内容**、但删不掉残骸目录本身（父目录不可写）
+  assert_exists "$k3/.shellkit-skill-old.123456" "a failed cleanup must leave the remnant directory in place"
+  assert_exists "$k3/.shellkit-skill-new.4194303" "the dead-pid stage must survive a failed cleanup too"
+  assert_exists "$k3/.shellkit-skill-new.not-a-pid" "the non-pid-named stage must survive a failed cleanup too"
+else
+  printf '%s\n' 'NA skill-remnant-cleanup: running as root, chmod cannot deny uid 0 (issue #76)'
+fi
 
 # ---------- CASE: skill 安装 —— 磁盘内容与基线一致 ⇒ 走升级通道覆盖（基线=磁盘） ----------
 k4="$work/k4"
@@ -195,16 +204,20 @@ assert_eq "0" "$rc" "an uninstall with a dotfile left must still finish"
 assert_exists "$u1a/shellkit/references" "the directory with a dotfile must stay (rmdir failed honestly)"
 
 # ---------- CASE: skill 卸载 —— 父目录不可写 ⇒ dstabs 的 rmdir 失败不许谎报成功删除目录 ----------
-u1b="$work/u1b"
-rc=0
-"$sk" skill install --dir "$u1b" >/dev/null 2>&1 || rc=$?
-assert_eq "0" "$rc" "the first install must succeed"
-chmod 555 "$u1b"
-rc=0
-"$sk" skill uninstall --dir "$u1b" >/dev/null 2>&1 || rc=$?
-chmod 755 "$u1b"
-assert_eq "0" "$rc" "the uninstall itself must succeed (files inside are removable)"
-assert_exists "$u1b/shellkit" "the un-removable directory must stay instead of lying"
+if fault_perm_usable; then
+  u1b="$work/u1b"
+  rc=0
+  "$sk" skill install --dir "$u1b" >/dev/null 2>&1 || rc=$?
+  assert_eq "0" "$rc" "the first install must succeed"
+  chmod 555 "$u1b"
+  rc=0
+  "$sk" skill uninstall --dir "$u1b" >/dev/null 2>&1 || rc=$?
+  chmod 755 "$u1b"
+  assert_eq "0" "$rc" "the uninstall itself must succeed (files inside are removable)"
+  assert_exists "$u1b/shellkit" "the un-removable directory must stay instead of lying"
+else
+  printf '%s\n' 'NA skill-uninstall-rmdir: running as root, chmod cannot deny uid 0 (issue #76)'
+fi
 
 # ---------- CASE: skill 卸载（退化判据）—— 包不可用 ⇒ 明说无法验证、一个文件都不删 ----------
 d5="$work/d5"
