@@ -467,6 +467,7 @@ _sk_own_sync() {
   # 暂存目录叫 .shellkit-new，用户在报错里看到它只会更糊涂。
   local __destroot=${7:-$__stage}
   local __rel __srcf __dstf __cur __new __base __act __txt __ownf __tree __expect
+  local __rc __j __dup
   local __srcsums __dstsums __table __keep __n_w=0 __n_s=0 __n_k=0 __n_del=0
   local __i=0
 
@@ -495,6 +496,13 @@ _sk_own_sync() {
   __ownf="$__stage/$__manifest"
   _sk_fs_own_read "$__ownf"
 
+  # _SK_OWN_NEW_* 在删除循环**之前**初始化（shellkit#91）：下面 rc=1
+  #（拒绝删除=保留）的分支要把「相对路径 + 旧基线」冻结登记进来——
+  # 初始化若还留在决策循环前，这里的登记会被清空，基线随旧清单作废。
+  _SK_OWN_NEW_RELS=()
+  _SK_OWN_NEW_SUMS=()
+  _SK_OWN_KEEP=()
+
   # 上游删掉的文件：副本里也删掉 —— 但只删「还是我们装的原文」的（issue #81）：
   # 这条循环以前是无条件 rm -f，用户改过的文件会被静默删掉（无告警、退出码 0），
   # 与「用户修改默认保留」契约冲突。删除统一走 _sk_fs_safe_remove_owned：
@@ -509,8 +517,27 @@ _sk_own_sync() {
       else
         __expect=${_SK_OWN_SUMS[$__i]}
       fi
-      if _sk_fs_safe_remove_owned "$__stage" "$__rel" "$__expect"; then
+      _sk_fs_safe_remove_owned "$__stage" "$__rel" "$__expect"
+      __rc=$?
+      if [ "$__rc" -eq 0 ]; then
         __n_del=$((__n_del + 1))
+      elif [ "$__rc" -eq 1 ] && _sk_fs_rel_safe "$__rel"; then
+        # 拒绝删除（用户改过/软链等，#81 契约：保留）⇒ **基线冻结登记**
+        # （shellkit#91）：登记 rel + 旧基线进 _SK_OWN_NEW_*，并进 KEEP
+        # 挺过整树替换（决策循环 K 分支同款机制）。不登记的后果：基线随
+        # 旧清单作废 ⇒ 上游日后加回同路径时决策循环 __base 为空、
+        # __act 停在 W ⇒ 用户编辑被上游内容静默覆盖、新清单记上游指纹。
+        # 冻结=登记**旧基线**而非用户内容指纹——推进就把用户的编辑记成
+        # 「我们装的原文」了，下一轮同步照样静默覆盖。
+        _SK_OWN_NEW_RELS[${#_SK_OWN_NEW_RELS[@]}]=$__rel
+        _SK_OWN_NEW_SUMS[${#_SK_OWN_NEW_SUMS[@]}]=${_SK_OWN_SUMS[$__i]}
+        fs_ensure_dir "$__keep/$(dirname "$__rel")" 755 || return 1
+        if [ -L "$__stage/$__rel" ]; then
+          cp -P "$__stage/$__rel" "$__keep/$__rel" 2>/dev/null || true
+        elif [ -f "$__stage/$__rel" ]; then
+          cp -f "$__stage/$__rel" "$__keep/$__rel" 2>/dev/null || true
+        fi
+        _SK_OWN_KEEP[${#_SK_OWN_KEEP[@]}]=$__rel
       fi
     fi
     __i=$((__i + 1))
@@ -533,9 +560,8 @@ _sk_own_sync() {
     { print $1 "\t" (($1 in src) ? src[$1] : "-") "\t" (($1 in dst) ? dst[$1] : "-") }
   ' "$__srcsums" "$__dstsums" "$__rels" >"$__table"
 
-  _SK_OWN_NEW_RELS=()
-  _SK_OWN_NEW_SUMS=()
-  _SK_OWN_KEEP=()
+  # _SK_OWN_NEW_* 已在删除循环前初始化（shellkit#91，rc=1 分支往里登记），
+  # 此处不再清空。
   while IFS=$'\t' read -r __rel __new __cur; do
     [ -n "$__rel" ] || continue
     # 这两个是安装过程自己生成的，不是「装过去」的文件
@@ -543,6 +569,19 @@ _sk_own_sync() {
       MANIFEST | */MANIFEST | .shellkit-install-manifest | .shellkit-vendor-manifest) continue ;;
     esac
     _sk_fs_rel_safe "$__rel" || continue
+    # shellkit#91：删除循环 rc=1 分支已冻结登记的 rel 不重登记（两集合
+    # 现不相交——table 只由新 rels 生成、删除循环只收不在新 rels 的——
+    # 此查重是防未来相交时后登记者覆盖冻结基线的防御闸）。
+    __dup=0
+    __j=0
+    while [ "$__j" -lt "${#_SK_OWN_NEW_RELS[@]}" ]; do
+      if [ "${_SK_OWN_NEW_RELS[$__j]}" = "$__rel" ]; then
+        __dup=1
+        break
+      fi
+      __j=$((__j + 1))
+    done
+    [ "$__dup" = "1" ] && continue
     __srcf="$__src/$__rel"
     [ -f "$__srcf" ] || continue
     __dstf="$__stage/$__rel"
