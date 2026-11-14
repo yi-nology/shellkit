@@ -269,6 +269,14 @@ jobs:
       - name: measure
         run: bash tools/bench.sh --summary bench-summary.md
 
+      # 计数基线检查（路线图 v0.23.0「升级热点有可比较的指标」）：xtrace 计数
+      # 由代码路径决定、跨机器可比 —— 比计时稳定得多。基线 tools/bench_profile_baseline.txt
+      # 在与 runner 同代的容器里用 --profile --write-baseline 生成。
+      # 与计时基准同一 job：continue-on-error，出报告不阻断。
+      - name: profile baseline check
+        if: always()
+        run: bash tools/bench.sh --profile --check
+
       - name: report
         if: always()
         run: cat bench-summary.md >> "$GITHUB_STEP_SUMMARY"

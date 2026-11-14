@@ -47,6 +47,7 @@
 #   0  全部路径测成功（--check 时：全部落在基线的浮动范围内）
 #   1  有路径测失败 / 环境准备失败（--check 时：超出基线的浮动范围）
 #   2  用法错
+#   3  --profile --check 找不到计数基线文件
 #
 # stdout 只给数据，日志一律 stderr。
 set -uo pipefail
@@ -69,6 +70,8 @@ CHECK=0
 WRITE=0
 LIST=0
 TOLERANCE="0.30"
+# profile 计数基线用更紧的默认带：计数由代码路径决定，机器噪音远小于计时
+PTOLERANCE="0.10"
 BASELINE=""
 SUMMARY=""
 ONLY=""
@@ -106,6 +109,8 @@ usage: bash tools/bench.sh [options]
   --only PATH[,PATH]  只测其中几条路径
   --list              列出四条路径的名字
   --profile           不计时：跑一遍 xtrace，数被测进程内部的热点
+                      与 --write-baseline / --check 组合时读写计数基线
+                      tools/bench_profile_baseline.txt（与计时基线分开）
 EOF
 }
 
@@ -172,10 +177,12 @@ while [ $# -gt 0 ]; do
     --tolerance)
       [ $# -ge 2 ] || die_usage "--tolerance needs a value"
       TOLERANCE=$2
+      PTOLERANCE=$2
       shift 2
       ;;
     --tolerance=*)
       TOLERANCE=${1#*=}
+      PTOLERANCE=${1#*=}
       shift
       ;;
     --root)
@@ -227,13 +234,14 @@ case "$RETRIES" in
   '' | *[!0-9]*) die_usage "--retries takes a non-negative integer" ;;
 esac
 
-# --profile 数的是内部热点，不产出可比的耗时值 —— 拿它做基线判定没有意义
-if [ "$PROFILE" = "1" ] && { [ "$CHECK" = "1" ] || [ "$WRITE" = "1" ]; }; then
-  die_usage "--profile cannot be combined with --check or --write-baseline"
-fi
-
+# 两套基线、两种口径：计时基线量秒（机器噪音大、带宽 0.30），profile 基线数
+# xtrace 计数（代码路径决定、跨机器可比、带宽 PTOLERANCE）。按模式各用各的文件。
 if [ -z "$BASELINE" ]; then
-  BASELINE="$SELF_ROOT/tools/bench_baseline.txt"
+  if [ "$PROFILE" = "1" ]; then
+    BASELINE="$SELF_ROOT/tools/bench_profile_baseline.txt"
+  else
+    BASELINE="$SELF_ROOT/tools/bench_baseline.txt"
+  fi
 fi
 
 # 被测的代码根必须真的是一棵 shellkit 树
@@ -896,6 +904,134 @@ if [ "$PROFILE" = "1" ]; then
       __pf_failed=1
     fi
   done
+  # ---- 计数基线：写入 / 比对（与计时基线分开的另一套口径）----
+  # 结果先归一成「路径 + metric=value 串」两张平行表，写与查共用。
+  if [ "$WRITE" = "1" ] || [ "$CHECK" = "1" ]; then
+    if [ "$__pf_failed" -ne 0 ]; then
+      log "profile: some paths did not run cleanly — refusing to read or write a baseline"
+      exit 1
+    fi
+    __cur_p=()
+    __cur_v=()
+    __i=0
+    while [ "$__i" -lt "${#PROFILE_PATHS[@]}" ]; do
+      __p=${PROFILE_PATHS[$__i]}
+      __tr=${PROFILE_TRACES[$__i]}
+      __st=${PROFILE_STATUS[$__i]}
+      if [ "$__st" = "skipped" ]; then
+        # 设计内的跳过（test_suite 整套 trace 不做 profile）——不算失败
+        __i=$((__i + 1))
+        continue
+      fi
+      if [ "$__st" != "ok" ] || [ ! -f "$__tr" ]; then
+        log "profile: $__p has no usable trace (status=$__st)"
+        exit 1
+      fi
+      __line=$(_profile_awk "$__p" "$__tr" "$__st" text)
+      __line=${__line%%$'\n'*}
+      __rest=${__line#*status=ok }
+      __row=""
+      for __kv in $__rest; do
+        case "$__kv" in
+          *=*) __row="${__row:+$__row }$__kv" ;;
+        esac
+      done
+      __cur_p[${#__cur_p[@]}]=$__p
+      __cur_v[${#__cur_v[@]}]=$__row
+      __i=$((__i + 1))
+    done
+
+    if [ "$WRITE" = "1" ]; then
+      if [ "${#__cur_p[@]}" -eq 0 ]; then
+        log "profile: no path produced a trace — refusing to write an empty baseline"
+        exit 1
+      fi
+      __tmp="$BASELINE.tmp.$$"
+      {
+        printf '%s\n' '# shellkit profile 计数基线 —— 由 bash tools/bench.sh --profile --write-baseline 生成'
+        printf '%s\n' '# 口径：xtrace 计数（不计时）。计数由代码路径决定、跨机器可比，但受 bash 版本与'
+        printf '%s\n' '# 环境微扰 —— 判定用 --tolerance 带（profile 模式默认 ±10%）。每行：路径 TAB metric=value ...'
+        __i=0
+        while [ "$__i" -lt "${#__cur_p[@]}" ]; do
+          printf '%s\t%s\n' "${__cur_p[$__i]}" "${__cur_v[$__i]}"
+          __i=$((__i + 1))
+        done
+      } >"$__tmp" || {
+        log "cannot write $__tmp"
+        exit 1
+      }
+      mv -f "$__tmp" "$BASELINE" || {
+        log "cannot replace $BASELINE"
+        exit 1
+      }
+      log "wrote profile baseline: $BASELINE (${#__cur_p[@]} path(s))"
+      exit 0
+    fi
+
+    # CHECK：逐路径逐指标比对；基线缺路径、当前缺指标都算基线过期。
+    if [ ! -f "$BASELINE" ]; then
+      log "profile baseline not found: $BASELINE (generate with --profile --write-baseline)"
+      exit 3
+    fi
+    __bad=0
+    __seen=""
+    while IFS=$'\t' read -r __bp __bv || [ -n "$__bp" ]; do
+      case "$__bp" in
+        '' | \#*) continue ;;
+      esac
+      __seen="$__seen $__bp"
+      __cur=""
+      __i=0
+      while [ "$__i" -lt "${#__cur_p[@]}" ]; do
+        if [ "${__cur_p[$__i]}" = "$__bp" ]; then
+          __cur=${__cur_v[$__i]}
+        fi
+        __i=$((__i + 1))
+      done
+      if [ -z "$__cur" ]; then
+        log "profile check: $__bp is in the baseline but did not run"
+        __bad=1
+        continue
+      fi
+      for __kv in $__bv; do
+        __k=${__kv%%=*}
+        __b=${__kv#*=}
+        __c=""
+        for __ck in $__cur; do
+          if [ "${__ck%%=*}" = "$__k" ]; then
+            __c=${__ck#*=}
+          fi
+        done
+        if [ -z "$__c" ]; then
+          log "profile check: $__bp: metric $__k missing in the current run"
+          __bad=1
+          continue
+        fi
+        __lim=$(awk -v b="$__b" -v t="$PTOLERANCE" 'BEGIN { d = (b < 0 ? -b : b) * t; printf "%.6f", d }')
+        __diff=$(awk -v c="$__c" -v b="$__b" 'BEGIN { d = c - b; if (d < 0) d = -d; printf "%.6f", d }')
+        if ! awk -v d="$__diff" -v l="$__lim" 'BEGIN { exit !(d <= l) }'; then
+          log "profile check: $__bp: $__k = $__c, baseline $__b (tolerance ±$PTOLERANCE)"
+          __bad=1
+        fi
+      done
+    done <"$BASELINE"
+    for __p in ${__cur_p[@]+"${__cur_p[@]}"}; do
+      case " $__seen " in
+        *" $__p "*) ;;
+        *)
+          log "profile check: $__p ran but is not in the baseline (rerun --write-baseline)"
+          __bad=1
+          ;;
+      esac
+    done
+    if [ "$__bad" -ne 0 ]; then
+      log "profile check: FAILED (baseline: $BASELINE)"
+      exit 1
+    fi
+    log "profile check: ok (${#__cur_p[@]} path(s) within ±$PTOLERANCE)"
+    exit 0
+  fi
+
   if [ "$JSON" = "1" ]; then
     printf '{\n'
     printf '  "schema": "shellkit.bench.profile.v1",\n'

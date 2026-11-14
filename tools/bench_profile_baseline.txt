@@ -1,0 +1,6 @@
+# shellkit profile 计数基线 —— 由 bash tools/bench.sh --profile --write-baseline 生成
+# 口径：xtrace 计数（不计时）。计数由代码路径决定、跨机器可比，但受 bash 版本与
+# 环境微扰 —— 判定用 --tolerance 带（profile 模式默认 ±10%）。每行：路径 TAB metric=value ...
+cli_bootstrap	trace_lines=2029 external=4 internal=84 source=24 file_refs=51
+cli_new	trace_lines=19095 external=325 internal=1379 source=24 file_refs=5537
+cli_upgrade	trace_lines=28772 external=337 internal=1243 source=24 file_refs=11745
