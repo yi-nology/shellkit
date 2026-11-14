@@ -745,23 +745,75 @@ _sk_proj_lock_acquire() {
   lock_acquire "$__name" 0
 }
 
+# _sk_copy_complete DIR [LEVEL] —— 这份目录是不是一份完整的、起得来的 shellkit 副本
+#
+# 与 repair.sh 的 _complete 同一套判据（issue #83）—— 那边改了这边要跟着改：
+#   1) lib/bootstrap.sh 在
+#   2) lib/modules.txt 在且可读
+#   3) 清单里列出的每个模块 lib/core/<name>.sh 都在
+#   4) VERSION 在且可读
+#   5) CLI（副本根上的 shellkit）在且可执行
+# 只看 lib/bootstrap.sh 太宽：bootstrap 按 modules.txt 的顺序 source，
+# 缺了清单或任何模块它照样起不来 —— 那样的半份副本不能当「完整」用。
+# 目标本身是符号链接也判不完整：跟着链接看内容，会把外面的东西当成本地的。
+#
+# LEVEL=bootable 是恢复源专用档：去掉第 4 条。被恢复的旧副本只要能启动
+# 就够了 —— 缺 VERSION 不挡启动（bootstrap 退化成 dev），紧随其后的同步
+# 会把 VERSION 从源补回；用户删过 VERSION 的副本不该被判「不可恢复」。
+_sk_copy_complete() {
+  local __d=${1:-} __level=${2:-strict} __line __mod
+  [ -n "$__d" ] || return 1
+  [ -L "$__d" ] && return 1
+  [ -f "$__d/lib/bootstrap.sh" ] || return 1
+  [ -r "$__d/lib/modules.txt" ] || return 1
+  if [ "$__level" != "bootable" ]; then
+    [ -r "$__d/VERSION" ] || return 1
+  fi
+  [ -f "$__d/shellkit" ] && [ -x "$__d/shellkit" ] || return 1
+  while IFS= read -r __line || [ -n "$__line" ]; do
+    __line=${__line%%#*}
+    case "$__line" in
+      *[![:space:]]*) ;;
+      *) continue ;;
+    esac
+    __mod=${__line%%[[:space:]]*}
+    [ -n "$__mod" ] || continue
+    if [ ! -f "$__d/lib/core/$__mod.sh" ]; then
+      return 1
+    fi
+  done <"$__d/lib/modules.txt"
+  return 0
+}
+
 # _sk_dir_swap_recover DEST OLD WARNMSG —— 恢复一次被打断的整体换名
 #
-# 两次 rename 之间被杀（SIGKILL / 断电）时 DEST 不见了，而 OLD 是唯一
-# 完整的旧副本 —— 先把它挪回去，不先恢复的话，随后的残骸清理会把唯一的
-# 好副本删掉。判据：OLD 在而 DEST 起不来（缺 lib/bootstrap.sh）。
-# WARNMSG 由调用方拼好传入：vendor 与 install-self 的措辞各自不同，
+# 两次 rename 之间被杀（SIGKILL / 断电）时 DEST 不见了，而 OLD 是唯一的
+# 旧副本 —— 先把它挪回去，不先恢复的话，随后的残骸清理会把唯一的好副本
+# 删掉。WARNMSG 由调用方拼好传入：vendor 与 install-self 的措辞各自不同，
 # 恢复动作只有这一个实现（issue #43）。
-# @exitcode 0 无需恢复或恢复完成；1 恢复失败
+#
+# 「主副本是否损坏」的判据是 _sk_copy_complete（issue #83）—— 以前只看
+# lib/bootstrap.sh 在不在，缺的是 modules.txt / 清单点名的模块 / VERSION /
+# CLI 的半份副本会被判「完整」而不恢复旧副本。三种局面：
+#   - DEST 完整（strict）⇒ 不动（正常状态，残骸清理交给调用方）；
+#   - DEST 不完整而 OLD 能启动（bootable）⇒ 用 OLD 恢复；
+#   - DEST 不完整且 OLD 也起不来 ⇒ 什么都不删，明说要重装 —— 把唯一可能
+#     还好的副本删掉是最坏结局，与 repair 的状态机同口径。
+# @exitcode 0 无需恢复或恢复完成；1 恢复失败（两份都坏，原样保留）
 _sk_dir_swap_recover() {
   local __dest=$1 __old=$2 __warn=${3:-}
   if [ -e "$__old" ] || [ -L "$__old" ]; then
-    if [ ! -f "$__dest/lib/bootstrap.sh" ]; then
-      if [ -n "$__warn" ]; then
-        log_warn "$__warn"
+    if ! _sk_copy_complete "$__dest"; then
+      if _sk_copy_complete "$__old" bootable; then
+        if [ -n "$__warn" ]; then
+          log_warn "$__warn"
+        fi
+        rm -rf "$__dest" 2>/dev/null || true
+        mv "$__old" "$__dest" || return 1
+      else
+        log_error "$(_t 'both copies are broken, nothing was removed, reinstall shellkit'): $__dest $__old"
+        return 1
       fi
-      rm -rf "$__dest" 2>/dev/null || true
-      mv "$__old" "$__dest" || return 1
     fi
   fi
   return 0

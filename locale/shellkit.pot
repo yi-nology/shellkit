@@ -8,7 +8,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: shellkit 0.20.0\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-11-14 13:47+0800\n"
+"POT-Creation-Date: 2026-11-14 13:58+0800\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language-Team: LANGUAGE <LL@li.org>\n"
@@ -494,6 +494,9 @@ msgid "not a regular file, left alone"
 msgstr ""
 
 msgid "modified locally, left alone"
+msgstr ""
+
+msgid "both copies are broken, nothing was removed, reinstall shellkit"
 msgstr ""
 
 msgid "syncing"

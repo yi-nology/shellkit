@@ -162,6 +162,7 @@ _sk_msg_lookup_shellkit() {
     'the target is a symlink, left alone') printf '%s' '目標是符號連結，保持原樣' ;;
     'not a regular file, left alone') printf '%s' '不是普通檔案，保留不動' ;;
     'modified locally, left alone') printf '%s' '本地已修改，保持原樣' ;;
+    'both copies are broken, nothing was removed, reinstall shellkit') printf '%s' '兩份副本都不完整；什麼都沒刪，請重裝 shellkit' ;;
     'syncing') printf '%s' '正在同步' ;;
     'the vendor directory is a symlink, refusing to install') printf '%s' 'vendor 目錄是符號連結，拒絕安裝' ;;
     'the vendored library is a symlink, refusing to install') printf '%s' 'vendor 出來的庫是符號連結，拒絕安裝' ;;

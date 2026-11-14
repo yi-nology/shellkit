@@ -4,7 +4,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: shellkit\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-11-14 13:47+0800\n"
+"POT-Creation-Date: 2026-11-14 13:58+0800\n"
 "PO-Revision-Date: 2026-11-08 00:00+0800\n"
 "Last-Translator: shellkit contributors\n"
 "Language-Team: shellkit contributors\n"
@@ -492,6 +492,9 @@ msgstr "不是普通文件，保留不动"
 
 msgid "modified locally, left alone"
 msgstr "本地已修改，保持原样"
+
+msgid "both copies are broken, nothing was removed, reinstall shellkit"
+msgstr "两份副本都不完整；什么都没删，请重装 shellkit"
 
 msgid "syncing"
 msgstr "正在同步"
