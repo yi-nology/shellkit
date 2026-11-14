@@ -37,7 +37,7 @@
 | --- | --- | --- |
 | `shellkit install-self` | `install-self [--prefix DIR] [--force]` | install shellkit into PATH |
 | `shellkit uninstall-self` | `uninstall-self [--prefix DIR]` | remove an installed shellkit |
-| `shellkit update` | `update [--check] [--from FILE] [--sha256 SUM] [--prefix DIR]` | update an installed shellkit |
+| `shellkit update` | `update [--check] [--force] [--from FILE] [--sha256 SUM] [--prefix DIR]` | update an installed shellkit |
 
 ## AI clients
 

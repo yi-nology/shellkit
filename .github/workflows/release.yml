@@ -156,9 +156,11 @@ jobs:
           if gh release view "$tag" >/dev/null 2>&1; then
             # 同一个 tag 被推了两次（比如先推轻量 tag、后来补推 annotated tag）时，
             # 直接发布会以「release 已存在」失败，把整条流水线染红 —— 而产物其实
-            # 一模一样。这里改成刷新资产，幂等。
-            echo "release $tag already exists; refreshing its assets"
-            gh release upload "$tag" "${assets[@]}" --clobber
+            # 一模一样。这里走不可变上传（issue #87）：同摘要跳过、异摘要拒绝
+            # 覆盖并要求人工处理 —— 以前 --clobber 会静默替换同一版本的
+            # 下载内容，防不了发布账号被攻破后的整体替换。
+            echo "release $tag already exists; enforcing asset immutability"
+            bash tools/release_assets.sh "$tag" "${assets[@]}"
           else
             gh release create "$tag" "${assets[@]}" \
               --title "shellkit $(cat VERSION)" \
@@ -218,5 +220,6 @@ jobs:
         run: |
           set -euo pipefail
           ver=$(cat VERSION)
-          gh release upload "$GITHUB_REF_NAME" \
-            "dist/shellkit-$ver.deb" "dist/shellkit-$ver.rpm" --clobber
+          # 不可变上传（issue #87）：同摘要跳过、异摘要拒绝覆盖并要求人工处理
+          bash tools/release_assets.sh "$GITHUB_REF_NAME" \
+            "dist/shellkit-$ver.deb" "dist/shellkit-$ver.rpm"

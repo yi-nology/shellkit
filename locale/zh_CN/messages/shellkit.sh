@@ -157,8 +157,12 @@ _sk_msg_lookup_shellkit() {
     'AI clients') printf '%s' 'AI 客户端' ;;
     'install the AI skill into an AI client') printf '%s' '把 AI skill 装进 AI 客户端' ;;
     'usage') printf '%s' '用法' ;;
+    'skipped a path outside the install directory') printf '%s' '跳过了安装目录之外的路径：' ;;
+    'refusing to remove through a symlink') printf '%s' '拒绝顺着符号链接删除' ;;
     'the target is a symlink, left alone') printf '%s' '目标是符号链接，保持原样' ;;
+    'not a regular file, left alone') printf '%s' '不是普通文件，保留不动' ;;
     'modified locally, left alone') printf '%s' '本地已修改，保持原样' ;;
+    'both copies are broken, nothing was removed, reinstall shellkit') printf '%s' '两份副本都不完整；什么都没删，请重装 shellkit' ;;
     'syncing') printf '%s' '正在同步' ;;
     'the vendor directory is a symlink, refusing to install') printf '%s' 'vendor 目录是符号链接，拒绝安装' ;;
     'the vendored library is a symlink, refusing to install') printf '%s' 'vendor 出来的库是符号链接，拒绝安装' ;;
@@ -288,9 +292,12 @@ _sk_msg_lookup_shellkit() {
     'remembered the client in') printf '%s' '客户端已记入' ;;
     'the skill package is incomplete') printf '%s' 'skill 包不完整' ;;
     'the target exists and is not a directory') printf '%s' '目标已存在且不是目录' ;;
+    'recovering the skill copy after an interrupted install') printf '%s' '恢复被打断的 skill 安装：正在从旧副本还原' ;;
     'refusing to write through a symlink') printf '%s' '拒绝顺着符号链接写入' ;;
     'the skill is up to date') printf '%s' 'skill 已是最新' ;;
-    'skipped a path outside the install directory') printf '%s' '跳过了安装目录之外的路径：' ;;
+    'the staged skill copy failed verification') printf '%s' '阶段目录里的 skill 副本校验不过' ;;
+    'the staged skill copy could not be committed') printf '%s' '阶段目录里的 skill 副本无法提交' ;;
+    'skill install failed mid-commit; the previous copy was restored') printf '%s' 'skill 安装在提交途中失败；已恢复原来的副本' ;;
     'cannot verify which files were installed by shellkit; nothing was removed') printf '%s' '无法分辨哪些文件是 shellkit 装的；什么都没有删除' ;;
     'the directory is not empty, left in place') printf '%s' '目录非空，原样保留' ;;
     'known AI clients') printf '%s' '已知 AI 客户端' ;;

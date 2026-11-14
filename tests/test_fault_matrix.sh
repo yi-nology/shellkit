@@ -223,7 +223,9 @@ if fault_perm_usable; then
   client3=$(cd "$d/3" && pwd -P)
   fault_reset
   fault_scope "$client3"
-  fault_perm_deny "$client3/shellkit/SKILL.md" write
+  # 写目标在阶段目录里（整组事务提交，issue #86），目录名带 pid 点不到名 ——
+  # 用 glob 点：第一次对 SKILL.md 的 mktemp（写前时机）被拒绝
+  fault_perm_deny "$client3/.shellkit-skill-new.*/SKILL.md" write
   rc=0
   fault_run "$SK" skill install --dir "$d/3" --force >"$d/perm.log" 2>&1 || rc=$?
   assert_ne "0" "$rc" "the injected permission denial must make the install fail"

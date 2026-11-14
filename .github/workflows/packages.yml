@@ -7,6 +7,12 @@ name: packages
 #   - release.yml 里另有一个 continue-on-error 的可选 job，在**已发布**的 tarball
 #     上重跑同一套脚本 —— 挂了不挡 release（验收明写）；
 #   - 刻意不进 tools/release_gate.sh 的必需检查清单：它不是主线发版必须物。
+#
+# 原生发行版矩阵（issue #88）：deb/rpm 的冒烟以前都在 Ubuntu runner 上做 ——
+# 与目标发行版的 systemd 布局、依赖解析、安装路径不完全一致。这里在
+# debian / rockylinux / openEuler 的原生容器里跑同一套 package_smoke
+# （容器内直接是 root，_sudo 不需要 sudo）：判据不变 —— 包管理器安装后
+# 二进制可执行、文件落位正确（与 tarball 逐字节一致）、卸载干净。
 on:
   push:
     branches:
@@ -64,6 +70,51 @@ jobs:
           set -euo pipefail
           ver=$(cat VERSION)
           bash tools/package_smoke.sh --tarball "dist/shellkit-$ver.tar.gz" "dist/shellkit-$ver.rpm"
+
+  # 原生发行版冒烟（issue #88）：矩阵容器 = 目标发行版本身。
+  # debian 自带 dpkg-deb；两个 rpm 系要先装 rpm-build（基础镜像不含 rpmbuild）。
+  native:
+    name: native smoke on ${{ matrix.image }} (${{ matrix.pkg }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - image: debian:stable
+            pkg: deb
+            setup: ""
+          - image: rockylinux:9
+            pkg: rpm
+            setup: dnf install -y rpm-build
+          - image: openeuler/openeuler:24.03-lts
+            pkg: rpm
+            setup: dnf install -y rpm-build
+    container:
+      image: ${{ matrix.image }}
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+
+      - name: install build tools
+        if: matrix.setup != ''
+        run: |
+          ${{ matrix.setup }}
+          command -v rpmbuild
+
+      - name: build the tarball (single source of truth)
+        run: bash tools/package_tarball.sh
+
+      - name: build the package
+        run: |
+          set -euo pipefail
+          ver=$(cat VERSION)
+          bash tools/package_syspkg.sh --tarball "dist/shellkit-$ver.tar.gz" --out dist "${{ matrix.pkg }}"
+
+      - name: "smoke: install, run, remove (${{ matrix.pkg }})"
+        run: |
+          set -euo pipefail
+          ver=$(cat VERSION)
+          bash tools/package_smoke.sh --tarball "dist/shellkit-$ver.tar.gz" \
+            "dist/shellkit-$ver.${{ matrix.pkg }}"
 
   # 签名工具链往返（issue #66）：CI 里没有真私钥（真私钥只在 release 的 secret 里），
   # 所以用一把**临时密钥**跑完整链路：生成 → sign_release.sh 签 → minisign 验 →
