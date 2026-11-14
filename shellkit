@@ -721,6 +721,19 @@ _sk_proj_lock_name() {
   printf 'proj-%s' "${__crc%% *}"
 }
 
+# _sk_prefix_lock_name PREFIX —— 由安装 prefix 算出锁名：同一个 prefix 一把锁。
+# 与 _sk_proj_lock_name 同一套哈希，但名字空间分开（proj- / pfx-）：
+# 工程的 vendor 同步与系统的安装是两件事，两把锁互不顶掉。
+# 调用方先 fs_ensure_dir 把 prefix 建出来再取锁名 —— prefix 存在与否
+# 会改变 pwd -P 的解析结果（macOS 的 /var vs /private/var），必须让
+# 「要不要解析」在并发下是确定的：都解析，或都拿原始路径。
+_sk_prefix_lock_name() {
+  local __p="" __crc=""
+  __p=$(cd "$1" 2>/dev/null && pwd -P) || __p=$1
+  __crc=$(printf '%s' "$__p" | cksum) || return 1
+  printf 'pfx-%s' "${__crc%% *}"
+}
+
 # _sk_proj_lock_acquire NAME —— 拿工程锁；本进程已经持有就不再抢。
 # mkdir 锁不可重入：upgrade 全程持锁、末尾调 vendor 会再走到这里，
 # 抢自己就会死锁。锁的回收由 lock 模块的 trap 兜底（进程退出即释放）。
@@ -4125,7 +4138,7 @@ _sk_tree_version() {
 }
 
 cmd_install_self() {
-  local __prefix="/usr/local" __dest __bin __stage __old __rbin __force=0 __d __rels
+  local __prefix="/usr/local" __dest __bin __stage __old __rbin __force=0 __d __rels __plock
   while [ "$#" -gt 0 ]; do
     case "$1" in
       --prefix)
@@ -4175,6 +4188,15 @@ cmd_install_self() {
     log_info "$(_t 'try a writable prefix'): --prefix ~/.local"
     return "$SK_PRECOND"
   fi
+
+  # Prefix Lock（issue #82）：.new / .old 残骸名是全 prefix 共享的固定名字，
+  # 两个进程同时走「恢复 → 铺 stage → 换名」会互相 rm -rf 对方的阶段目录，
+  # 留下半份副本或让恢复逻辑误判。按 prefix 抢锁，拿不到就明确报错，
+  # 绝不并发硬闯；锁挂在清理栈上，进程退出即释放（忘 release 也不会死锁）。
+  # update --prefix 的安装段也汇入这把锁：它最终调的就是这里的 install-self，
+  # 中断恢复（下一句）同样在持锁段内 —— 三条路径（安装 / 更新 / 恢复）全串行。
+  __plock=$(_sk_prefix_lock_name "$__prefix") || return "$SK_ERR"
+  _sk_proj_lock_acquire "$__plock" || return $?
 
   # 安装不是就地改：整份副本先铺进 stage，再用两次 rename 整体换上去 ——
   # 与 _sk_vendor_install 同一套做法（写文件必原子）。就地逐棵树「先删后拷」
@@ -4371,6 +4393,11 @@ cmd_uninstall_self() {
 
 # _sk_update_run PREFIX FROM SUM CHECK FORCE TMP
 #   装在 TMP 里的临时目录由调用方负责清理，所以这里只管逻辑，不管收尾。
+#
+#   并发互斥（issue #82）：更新真正的写动作只有「安装」这一段，它最终调的
+#   是新副本的 install-self —— 那边按 prefix 持 Prefix Lock，拿不到就报错。
+#   这里刻意不抢锁：update 持着锁再调子进程 install-self，子进程按 pid 判
+#   持有者，等来的是死锁。下载与解包都落在各自的 mktemp 目录里，并发无害。
 _sk_update_run() {
   local __prefix=$1 __from=$2 __sum=$3 __check=$4 __force=$5 __tmp=$6
   local __dest __ver="" __tgz="" __sumfile="" __src="" __cur="" __tag=""
