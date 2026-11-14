@@ -688,6 +688,21 @@ conf_set TARGET "$1"                                          # 原子写、600�
 openeuler 的包安装冒烟，#88）只加 CI 不改行为；新增告警 msgid 均有 zh_CN / zh_Hant
 译文；`docs/SECURITY.md` 路径边界补了删除规则与机器判据。
 
+### 0.21.0 → 0.22.0：会改变结果的行为变化
+
+这一版正式启用 Minisign 签名（供应链可信发布，路线图 v0.22.0）。
+资产不可变上传已在上一批落地（#87），本批把信任锚真正立起来：
+
+| 变化 | 以前 | 现在 | 你会在哪里撞到 |
+|---|---|---|---|
+| release 资产 | 无 `.minisig` —— SHA256SUMS 与 tarball 同通道下载，防不了整体替换 | 发布时用 secret 里的私钥对 SHA256SUMS、tarball、skill 包、install.sh 逐个签名，附 `.minisig` 与 `shellkit.minisign.pub` | 下载校验的人：多一类资产；验签步骤见 docs/TRUST.md |
+| 发布流程的钉入校验 | 无 —— 文档里钉的公钥可以与实际签名钥漂移而无人发觉 | `tools/check_trust_pin.sh` 进 release 流水线：TRUST.md「当前公钥」与本次签名公钥不一致就中止发布，并指名两端 | 换了签名钥匙却忘了更新 TRUST.md 的人：发布会红 |
+| 本地构建产物 | `dist/` 与 `*.minisig` 不在忽略清单里，可能被误提交 | `.gitignore` 忽略（私钥 `*.key` 原本就忽略） | 本地跑过打包 / 签名的人：`git status` 干净 |
+
+只加不改的部分：`install.sh` 的可选验签机制、`tools/sign_release.sh` 的无钥跳过
+语义（没配私钥照旧 0 退出、绝不伪造签名产物）、公钥三个核对渠道的口径都不变 ——
+本批只是把「钥匙与钉入」从待办变成事实。首次带签名的资产随下一个 tag 发布。
+
 **分级的适用范围（issue #79）**：`@stability` 注解落地之后，本表将**只登记 Stable API
 的行为变化** —— experimental 级的改动在提交信息与 `CHANGELOG.md` 里说明，不构成
 兼容性承诺。当前 162 个公开函数中 **37 个已晋升 Stable**（名单与准入标准见
