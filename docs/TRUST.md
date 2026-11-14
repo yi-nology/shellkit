@@ -89,10 +89,13 @@ cd "shellkit-$ver" || exit 1
 ### 当前公钥
 
 ```text
-状态：发布私钥尚未生成/配置。维护者完成下面「三步」后，把公钥 base64 钉在这里；
-在此之前 release 资产没有 .minisig，install.sh 远端安装会提示 signature
-verification skipped（这是当前的真实状态，不是故障）。
+RWQSCu8f5lvakshhMkZ2zgn+hbB0s0EJ2Wpx+rUgfHw7MmcQ5gcmPBao
 ```
+
+- 对应私钥存于仓库 secret `SHELLKIT_MINISIGN_KEY`（只有维护者能读）；公钥同时存于
+  `SHELLKIT_MINISIGN_PUBKEY` 供 release 流程发布 `shellkit.minisign.pub`。
+- 轮换钥匙后本节按新钥更新，旧版本用历史 tag 里的本文件核对（见上文「轮换」）。
+- 本地生成于 2026-11-14；私钥本地副本已删除。
 
 ## 维护者要做的三步（私钥只有你有）
 

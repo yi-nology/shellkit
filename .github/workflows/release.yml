@@ -135,6 +135,17 @@ jobs:
           SHELLKIT_MINISIGN_PUBKEY: ${{ secrets.SHELLKIT_MINISIGN_PUBKEY }}
         run: bash tools/sign_release.sh --dist dist
 
+      # 公钥钉入一致性（路线图 v0.22.0）：TRUST.md「当前公钥」钉的 base64 必须与
+      # 本次签名用的公钥一致 —— 钉的是跨渠道核对的锚点，漂移了用户按文档验签必失败。
+      # 没配私钥时上一步跳过、公钥文件不存在，这一步也跟着跳过（与签名步骤同口径）。
+      - name: verify pinned public key (TRUST.md)
+        run: |
+          if [ -f dist/shellkit.minisign.pub ]; then
+            bash tools/check_trust_pin.sh --pub dist/shellkit.minisign.pub
+          else
+            echo "unsigned release (no key configured); pin check skipped"
+          fi
+
       - name: publish
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}

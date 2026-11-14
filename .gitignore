@@ -18,6 +18,9 @@ site/node_modules/
 !.env.example
 *.pem
 *.key
+# 构建与签名产物：只进 release 资产，绝不进版本库（sign_release / package_tarball 本地跑出来的东西）
+dist/
+*.minisig
 id_rsa
 id_dsa
 id_ecdsa
