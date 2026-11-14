@@ -135,7 +135,7 @@ if [ "$SK_BOOTSTRAP_OK" -eq 1 ]; then
   cli_group "$(_t 'installation')"
   cli_cmd install-self "$(_t 'install shellkit into PATH')" "install-self [--prefix DIR] [--force]"
   cli_cmd uninstall-self "$(_t 'remove an installed shellkit')" "uninstall-self [--prefix DIR]"
-  cli_cmd update "$(_t 'update an installed shellkit')" "update [--check] [--from FILE] [--sha256 SUM] [--prefix DIR]"
+  cli_cmd update "$(_t 'update an installed shellkit')" "update [--check] [--force] [--from FILE] [--sha256 SUM] [--prefix DIR]"
   cli_group "$(_t 'AI clients')"
   cli_cmd skill "$(_t 'install the AI skill into an AI client')" "skill <list|install|uninstall|print> [--client NAME] [--dir DIR] [--force]"
 fi
@@ -4446,13 +4446,17 @@ cmd_uninstall_self() {
 # _sk_update_run PREFIX FROM SUM CHECK FORCE TMP
 #   装在 TMP 里的临时目录由调用方负责清理，所以这里只管逻辑，不管收尾。
 #
+#   --force 的作用范围（issue #84）：既跳过「已装同版本」的提前返回，也
+#   端到端透传给 install-self —— 覆盖用户改过的自有文件。以前只做了前一半，
+#   「强制更新覆盖本地修改」与用户预期不符。
+#
 #   并发互斥（issue #82）：更新真正的写动作只有「安装」这一段，它最终调的
 #   是新副本的 install-self —— 那边按 prefix 持 Prefix Lock，拿不到就报错。
 #   这里刻意不抢锁：update 持着锁再调子进程 install-self，子进程按 pid 判
 #   持有者，等来的是死锁。下载与解包都落在各自的 mktemp 目录里，并发无害。
 _sk_update_run() {
   local __prefix=$1 __from=$2 __sum=$3 __check=$4 __force=$5 __tmp=$6
-  local __dest __ver="" __tgz="" __sumfile="" __src="" __cur="" __tag=""
+  local __dest __ver="" __tgz="" __sumfile="" __src="" __cur="" __tag="" __iargs
 
   __dest="$(_sk_install_dest "$__prefix")"
   if [ -f "$__dest/VERSION" ]; then
@@ -4545,8 +4549,14 @@ _sk_update_run() {
   fi
 
   log_section "$(_t 'updating'): $__cur -> $__ver"
-  # 用新版本自己的 install-self 来装：安装逻辑只有一份，不会与 install-self 漂移
-  if ! bash "$__src/shellkit" install-self --prefix "$__prefix"; then
+  # 用新版本自己的 install-self 来装：安装逻辑只有一份，不会与 install-self 漂移。
+  # --force 端到端透传（issue #84）：force 不仅要跳过同版本的提前返回，也要让
+  # 安装段覆盖用户改过的自有文件 —— 否则「强制」只走了一半。
+  __iargs=()
+  if [ "$__force" = "1" ]; then
+    __iargs[${#__iargs[@]}]="--force"
+  fi
+  if ! bash "$__src/shellkit" install-self --prefix "$__prefix" ${__iargs[@]+"${__iargs[@]}"}; then
     log_error "$(_t 'update failed'): $__ver"
     return "$SK_ERR"
   fi
