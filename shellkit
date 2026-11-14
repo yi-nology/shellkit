@@ -376,6 +376,68 @@ _sk_own_in_tree() {
   return 1
 }
 
+# _sk_fs_safe_remove_owned ROOT REL [EXPECTED_SHA256] —— 清单驱动删除的唯一入口
+#
+# 三个删除入口（_sk_own_sync 的上游删除循环、cmd_uninstall_self、
+# _sk_skill_uninstall_from）共用这一个实现（issue #81）。
+# _sk_fs_rel_safe 只保证 REL 字符串不含 .. —— 拼出来的路径照样可能顺着
+# **父级**软链删到根之外：安装目录里某一级目录被换成指向外部的符号链接，
+# rm 会跟着链接走出去（评审轮独立实验复现过数据丢失）。所以删除前过四道关：
+#   1. REL 合法：非绝对路径、不含 .. 组件（_sk_fs_rel_safe）；
+#   2. 父路径逐级真目录：REL 的每一级已存在的父目录都必须是真目录，软链一律
+#      拒绝 —— 指向根之内的也拒绝，与写入路径 _sk_fs_no_symlink_below 同判据；
+#   3. 目标类型：软链不删（位置被换成本身就可疑，与写入路径「软链放过它」
+#      同口径）；目录等其他类型不删并明说；
+#   4. 内容基线：传了 EXPECTED_SHA256 就比对 —— 对不上 = 用户改过 =
+#      保留并告警（「用户修改默认保留」契约）。不传 = 清理语义
+#      （cmd_uninstall_self 的全量清理、--force 的同步删除），跳过比对。
+# 判据任一不过都保留并告警、返回 1；调用方把「拒绝删除」当「保留项」记账，
+# 绝不当致命错误 —— 一次卸载不因一个删不掉的文件卡死。
+# @exitcode 0 已删除（或目标本来就不在）
+# @exitcode 1 拒绝删除（原因已告警），目标原样保留
+_sk_fs_safe_remove_owned() {
+  local __root=${1:-} __rel=${2:-} __expect=${3:-} __tgt __parents __cur
+  if [ -z "$__root" ] || [ ! -d "$__root" ]; then
+    log_warn "$(_t 'skipped a path outside the install directory'): ${__rel:-}"
+    return 1
+  fi
+  if ! _sk_fs_rel_safe "$__rel"; then
+    log_warn "$(_t 'skipped a path outside the install directory'): $__rel"
+    return 1
+  fi
+  # 父路径逐级真目录：只走 REL 的父目录链（目标本身可以是文件，所以不能把
+  # REL 整个喂给 _sk_fs_no_symlink_below —— 它要求每一级已存在的都是目录）。
+  case "$__rel" in
+    */*) __parents=${__rel%/*} ;;
+    *) __parents="" ;;
+  esac
+  if [ -n "$__parents" ] && ! _sk_fs_no_symlink_below "$__root" "$__parents"; then
+    log_warn "$(_t 'refusing to remove through a symlink'): $__rel ($(_sk_err_path_info "$__root/$__rel"))"
+    return 1
+  fi
+  __tgt="$__root/$__rel"
+  if [ -L "$__tgt" ]; then
+    log_warn "$(_t 'the target is a symlink, left alone'): $__rel"
+    return 1
+  fi
+  if [ -d "$__tgt" ]; then
+    log_warn "$(_t 'not a regular file, left alone'): $__rel"
+    return 1
+  fi
+  if [ ! -f "$__tgt" ]; then
+    # 目标本来就不在：没有可删的东西，算删除成功（上游删了、用户也删了）
+    return 0
+  fi
+  if [ -n "$__expect" ]; then
+    __cur=$(os_sha256 "$__tgt" 2>/dev/null) || __cur=""
+    if [ -z "$__cur" ] || [ "$__cur" != "$__expect" ]; then
+      log_warn "$(_t 'modified locally, left alone'): $__rel ($(_sk_err_path_info "$__tgt"))"
+      return 1
+    fi
+  fi
+  rm -f "$__tgt"
+}
+
 # _sk_own_sync SRC STAGE MANIFEST RELS_FILE TREES [FORCE] —— 按所有权清单同步文件
 #
 # SRC 是新版本的家；STAGE 是正在铺的副本根 —— 调用方已经先把旧副本的内容
@@ -404,7 +466,7 @@ _sk_own_sync() {
   # DESTROOT 是「这件事最后落在哪」—— 报错时报它，不报暂存目录：
   # 暂存目录叫 .shellkit-new，用户在报错里看到它只会更糊涂。
   local __destroot=${7:-$__stage}
-  local __rel __srcf __dstf __cur __new __base __act __txt __ownf __tree
+  local __rel __srcf __dstf __cur __new __base __act __txt __ownf __tree __expect
   local __srcsums __dstsums __table __keep __n_w=0 __n_s=0 __n_k=0 __n_del=0
   local __i=0
 
@@ -433,14 +495,23 @@ _sk_own_sync() {
   __ownf="$__stage/$__manifest"
   _sk_fs_own_read "$__ownf"
 
-  # 上游删掉的文件：副本里也删掉。清单里的相对路径先过合法性校验 ——
-  # 清单是磁盘上的文件，用户可以改，拿它拼路径就能写到副本之外。
+  # 上游删掉的文件：副本里也删掉 —— 但只删「还是我们装的原文」的（issue #81）：
+  # 这条循环以前是无条件 rm -f，用户改过的文件会被静默删掉（无告警、退出码 0），
+  # 与「用户修改默认保留」契约冲突。删除统一走 _sk_fs_safe_remove_owned：
+  # 相对路径、父目录边界、目标类型、内容基线都在那边判；
+  # --force 才按清理语义跳过内容比对。
   __i=0
   while [ "$__i" -lt "${#_SK_OWN_RELS[@]}" ]; do
     __rel=${_SK_OWN_RELS[$__i]}
-    if _sk_fs_rel_safe "$__rel" && ! _sk_own_has_rel "$__rels" "$__rel"; then
-      rm -f "$__stage/$__rel" 2>/dev/null || true
-      __n_del=$((__n_del + 1))
+    if ! _sk_own_has_rel "$__rels" "$__rel"; then
+      if [ "$__force" = "1" ]; then
+        __expect=""
+      else
+        __expect=${_SK_OWN_SUMS[$__i]}
+      fi
+      if _sk_fs_safe_remove_owned "$__stage" "$__rel" "$__expect"; then
+        __n_del=$((__n_del + 1))
+      fi
     fi
     __i=$((__i + 1))
   done
@@ -3570,7 +3641,7 @@ EOF
 # 对得上才删 —— 宁可留下，不可误删。
 #   0 = 卸完了（可能有保留项，输出里列出）；1 = 没卸成
 _sk_skill_uninstall_from() {
-  local __dir=$1 __dst __dstabs __dirabs __src __rel __cur __sum __f __i=0 __sfile
+  local __dir=$1 __dst __dstabs __dirabs __src __rel __sum __f __i=0 __sfile
   local __n_rm=0 __n_keep=0 __empty=1 __txt __manifest
   __dst="$__dir/shellkit"
   [ -e "$__dst" ] || return 0
@@ -3602,12 +3673,12 @@ _sk_skill_uninstall_from() {
         log_warn "$(_t 'the target is a symlink, left alone'): $__rel"
         __n_keep=$((__n_keep + 1))
       elif [ -f "$__dstabs/$__rel" ]; then
-        __cur=$(os_sha256 "$__dstabs/$__rel" 2>/dev/null) || __cur=""
-        if [ -n "$__cur" ] && [ "$__cur" = "$__sum" ]; then
-          rm -f "$__dstabs/$__rel" || return 1
+        # 删除统一走 _sk_fs_safe_remove_owned（issue #81）：内容基线与相对路径
+        # 之外，父目录边界也在这边判 —— references 被换成指向外部的软链时，
+        # rm 会顺着它把别人的文件删掉。拒绝删除 = 保留项，不是致命错误。
+        if _sk_fs_safe_remove_owned "$__dstabs" "$__rel" "$__sum"; then
           __n_rm=$((__n_rm + 1))
         else
-          log_warn "$(_t 'modified locally, left alone'): $__rel"
           __n_keep=$((__n_keep + 1))
         fi
       fi
@@ -3634,13 +3705,13 @@ _sk_skill_uninstall_from() {
         continue
       fi
       [ -f "$__dstabs/$__rel" ] || continue
-      __cur=$(os_sha256 "$__dstabs/$__rel" 2>/dev/null) || __cur=""
       __sum=$(os_sha256 "$__sfile" 2>/dev/null) || __sum=""
-      if [ -n "$__cur" ] && [ -n "$__sum" ] && [ "$__cur" = "$__sum" ]; then
-        rm -f "$__dstabs/$__rel" || return 1
+      # 对照包的指纹算不出来 = 无法证明「这是我们的原文」—— 宁可留下
+      [ -n "$__sum" ] || continue
+      # 删除统一走 _sk_fs_safe_remove_owned（issue #81）：父目录边界在那边判
+      if _sk_fs_safe_remove_owned "$__dstabs" "$__rel" "$__sum"; then
         __n_rm=$((__n_rm + 1))
       else
-        log_warn "$(_t 'modified locally, left alone'): $__rel"
         __n_keep=$((__n_keep + 1))
       fi
     done <<EOF
@@ -4241,16 +4312,19 @@ cmd_uninstall_self() {
     case "$__line" in
       '' | '#'*) continue ;;
     esac
-    # 清单是文件，不是可信输入：绝不允许 ../ 把删除动作带出安装目录
-    case "$__line" in
-      /* | ../* | */../*)
-        log_warn "$(_t 'skipped a path outside the install directory'): $__line"
-        continue
-        ;;
-    esac
+    # 清单是文件，不是可信输入：相对路径先过合法性校验 —— ../ 这类名字
+    # 本来就不是我们装的，跳过即可（不算失败）；合法路径的删除统一走
+    # _sk_fs_safe_remove_owned（issue #81）：父目录边界在那边判 —— 以前只过滤
+    # .. 字符串，拦不住「清单里某级父目录被换成指向外部的软链」的删除
+    # （rm 会跟着链接走出去）。卸载是清理语义：不传基线、跳过内容比对，
+    # 清单里列的都删。
+    if ! _sk_fs_rel_safe "$__line"; then
+      log_warn "$(_t 'skipped a path outside the install directory'): $__line"
+      continue
+    fi
     __path="$__dest/$__line"
     if [ -e "$__path" ] || [ -L "$__path" ]; then
-      if rm -f "$__path"; then
+      if _sk_fs_safe_remove_owned "$__dest" "$__line"; then
         __n=$((__n + 1))
       else
         log_warn "$(_t 'failed to remove'): $__path"

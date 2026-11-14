@@ -4,7 +4,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: shellkit\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-11-14 02:52+0800\n"
+"POT-Creation-Date: 2026-11-14 13:47+0800\n"
 "PO-Revision-Date: 2026-11-08 00:00+0800\n"
 "Last-Translator: shellkit contributors\n"
 "Language-Team: shellkit contributors\n"
@@ -478,8 +478,17 @@ msgstr "把 AI skill 裝進 AI 客戶端"
 msgid "usage"
 msgstr "用法"
 
+msgid "skipped a path outside the install directory"
+msgstr "跳過了安裝目錄之外的路徑："
+
+msgid "refusing to remove through a symlink"
+msgstr "拒絕順著符號連結刪除"
+
 msgid "the target is a symlink, left alone"
 msgstr "目標是符號連結，保持原樣"
+
+msgid "not a regular file, left alone"
+msgstr "不是普通檔案，保留不動"
 
 msgid "modified locally, left alone"
 msgstr "本地已修改，保持原樣"
@@ -885,9 +894,6 @@ msgstr "拒絕順著符號連結寫入"
 
 msgid "the skill is up to date"
 msgstr "skill 已是最新"
-
-msgid "skipped a path outside the install directory"
-msgstr "跳過了安裝目錄之外的路徑："
 
 msgid ""
 "cannot verify which files were installed by shellkit; nothing was removed"

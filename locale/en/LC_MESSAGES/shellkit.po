@@ -4,7 +4,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: shellkit\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-11-14 02:52+0800\n"
+"POT-Creation-Date: 2026-11-14 13:47+0800\n"
 "PO-Revision-Date: 2026-11-08 00:00+0800\n"
 "Last-Translator: shellkit contributors\n"
 "Language-Team: shellkit contributors\n"
@@ -478,7 +478,16 @@ msgstr ""
 msgid "usage"
 msgstr ""
 
+msgid "skipped a path outside the install directory"
+msgstr ""
+
+msgid "refusing to remove through a symlink"
+msgstr ""
+
 msgid "the target is a symlink, left alone"
+msgstr ""
+
+msgid "not a regular file, left alone"
 msgstr ""
 
 msgid "modified locally, left alone"
@@ -882,9 +891,6 @@ msgid "refusing to write through a symlink"
 msgstr ""
 
 msgid "the skill is up to date"
-msgstr ""
-
-msgid "skipped a path outside the install directory"
 msgstr ""
 
 msgid ""
