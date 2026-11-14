@@ -292,8 +292,12 @@ _sk_msg_lookup_shellkit() {
     'remembered the client in') printf '%s' '用戶端已記入' ;;
     'the skill package is incomplete') printf '%s' 'skill 包不完整' ;;
     'the target exists and is not a directory') printf '%s' '目標已存在且不是目錄' ;;
+    'recovering the skill copy after an interrupted install') printf '%s' '恢復被打斷的 skill 安裝：正在從舊副本還原' ;;
     'refusing to write through a symlink') printf '%s' '拒絕順著符號連結寫入' ;;
     'the skill is up to date') printf '%s' 'skill 已是最新' ;;
+    'the staged skill copy failed verification') printf '%s' '階段目錄裡的 skill 副本校驗不過' ;;
+    'the staged skill copy could not be committed') printf '%s' '階段目錄裡的 skill 副本無法提交' ;;
+    'skill install failed mid-commit; the previous copy was restored') printf '%s' 'skill 安裝在提交途中失敗；已恢復原來的副本' ;;
     'cannot verify which files were installed by shellkit; nothing was removed') printf '%s' '無法分辨哪些檔案是 shellkit 裝的；什麼都沒有刪除' ;;
     'the directory is not empty, left in place') printf '%s' '目錄非空，原樣保留' ;;
     'known AI clients') printf '%s' '已知 AI 客戶端' ;;

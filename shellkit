@@ -3544,10 +3544,17 @@ _sk_skill_version() {
 # 用户改过吗」：基线对得上就更新，对不上就保留 —— 用户的编辑不静默丢。
 # 边界：目标根之下每一级已存在的目录都必须是真目录 —— references 预置一个
 # 指向别处的软链，跟着它写就会把文件写到目标根之外（软链无论指向哪里都拒绝）。
+#
+# 整组事务（issue #86）：单文件原子写 ≠ 整组原子 —— 以前每个文件各自
+# fs_atomic_copy 直接落进目标，装到一半被打断（磁盘满 / SIGKILL）会留下
+# 半新半旧的 skill，而清单还是旧的，下次安装会把新内容误判成「用户改过」。
+# 现在与 vendor / install 同套路：要写的先铺进阶段目录 .shellkit-skill-new，
+# 校验通过后两次 rename 整体换上；提交前任何失败都伤不到现有副本，
+# 提交途中被打断由下次安装先恢复（.shellkit-skill-old 是唯一完整副本）。
 _sk_skill_install_into() {
   local __dir=$1 __force=${2:-0} __src __dst __dirabs __dstabs __f __rel __i=0 __sfile
   local __new __base __cur __act __n_upd=0 __n_same=0 __n_keep=0
-  local __txt __manifest
+  local __txt __manifest __stage __old
   __src=$(_sk_skill_src) || return 1
   if [ ! -f "$__src/SKILL.md" ]; then
     log_warn "$(_t 'the skill package is incomplete'): $__src"
@@ -3568,6 +3575,20 @@ _sk_skill_install_into() {
   fs_ensure_dir "$__dir" "" || return 1
   __dirabs=$(cd "$__dir" 2>/dev/null && pwd -P) || return 1
   __dstabs="$__dirabs/shellkit"
+  __stage="$__dirabs/.shellkit-skill-new"
+  __old="$__dirabs/.shellkit-skill-old"
+
+  # 中断恢复（issue #86）：提交是两次 rename，唯一撕破的状态是「旧的挪走了、
+  # 新的还没挪进来」—— 此时 dst 不见了而 .old 是唯一完整副本，先挪回去。
+  # dst 在而 .old 也在 ⇒ 提交已完成，.old 只是残骸；两种局面都收掉残骸。
+  if [ -e "$__old" ] || [ -L "$__old" ]; then
+    if [ ! -e "$__dstabs" ]; then
+      log_warn "$(_t 'recovering the skill copy after an interrupted install'): $__old"
+      mv "$__old" "$__dstabs" || return 1
+    fi
+    rm -rf "$__old" 2>/dev/null || true
+  fi
+  rm -rf "$__stage" 2>/dev/null || true
   # 边界校验：shellkit 与 shellkit/references 每一级已存在的都必须是真目录。
   # 这里挡住的就是「预置软链写到目标根之外」的洞 —— 无论链接指向根内还是根外。
   if ! _sk_fs_no_symlink_below "$__dirabs" "shellkit/references"; then
@@ -3632,7 +3653,7 @@ VERSION
 $(cd "$__src/references" 2>/dev/null && for __f in *; do printf 'references/%s\n' "$__f"; done || true)
 EOF
 
-  # ---------- 阶段二：落盘（原子替换）与清单重写 ----------
+  # ---------- 阶段二：记账（目标还是原样，一个字节没动）----------
   _SK_OWN_RELS=()
   _SK_OWN_SUMS=()
   __i=0
@@ -3641,25 +3662,6 @@ EOF
     __act=${_SK_SKILL_ACT[$__i]}
     case "$__act" in
       W)
-        if [ "$__rel" = "SKILL.md" ] || [ "$__rel" = "VERSION" ]; then
-          fs_ensure_dir "$__dstabs" 755 || return 1
-        else
-          fs_ensure_dir "$__dstabs/references" 755 || return 1
-        fi
-        # 逐字节搬，且是原子替换：rename 换掉的是软链本身，不会顺着链接写到别处
-        case "$__rel" in
-          VERSION)
-            if [ -f "$__src/VERSION" ]; then
-              __sfile="$__src/VERSION"
-            else
-              __sfile="$SELF_DIR/VERSION"
-            fi
-            ;;
-          *) __sfile="$__src/$__rel" ;;
-        esac
-        if ! fs_atomic_copy "$__sfile" "$__dstabs/$__rel" 644; then
-          return 1
-        fi
         _SK_OWN_RELS[${#_SK_OWN_RELS[@]}]=$__rel
         _SK_OWN_SUMS[${#_SK_OWN_SUMS[@]}]=${_SK_SKILL_SUM[$__i]}
         __n_upd=$((__n_upd + 1))
@@ -3682,17 +3684,104 @@ EOF
     __i=$((__i + 1))
   done
 
-  # 清单落盘：所有权与基线以这一轮结束时的状态为准
-  __txt=$(_sk_fs_own_render)
-  if [ -n "$__txt" ]; then
-    fs_atomic_write "$__manifest" "$__txt" 644 || return 1
-  else
-    rm -f "$__manifest" 2>/dev/null || true
+  if [ "$__n_upd" -eq 0 ]; then
+    # 没有要写的文件：只有清单基线在动（K 的保留项）—— 原地原子重写清单
+    __txt=$(_sk_fs_own_render)
+    if [ -n "$__txt" ]; then
+      fs_atomic_write "$__manifest" "$__txt" 644 || return 1
+    else
+      rm -f "$__manifest" 2>/dev/null || true
+    fi
+    if [ "$__n_keep" -eq 0 ]; then
+      log_info "$(_t 'the skill is up to date'): $__dstabs ($__n_same unchanged)"
+    fi
+    return 0
   fi
 
-  if [ "$__n_upd" -eq 0 ] && [ "$__n_keep" -eq 0 ]; then
-    log_info "$(_t 'the skill is up to date'): $__dstabs ($__n_same unchanged)"
+  # ---------- 阶段三：整组事务提交（issue #86）----------
+  # 先铺阶段目录：旧副本原样搬进去（用户自己加的文件、保留项都在），
+  # 要写的文件写到阶段目录里 —— 提交之前目标一个字节都没被碰过。
+  fs_ensure_dir "$__stage" 755 || return 1
+  if [ -d "$__dstabs" ]; then
+    if ! cp -R "$__dstabs/." "$__stage/"; then
+      rm -rf "$__stage" 2>/dev/null || true
+      return 1
+    fi
   fi
+  __i=0
+  while [ "$__i" -lt "${#_SK_SKILL_REL[@]}" ]; do
+    [ "${_SK_SKILL_ACT[$__i]}" = "W" ] || {
+      __i=$((__i + 1))
+      continue
+    }
+    __rel=${_SK_SKILL_REL[$__i]}
+    if [ "$__rel" = "SKILL.md" ] || [ "$__rel" = "VERSION" ]; then
+      fs_ensure_dir "$__stage" 755 || return 1
+    else
+      fs_ensure_dir "$__stage/references" 755 || return 1
+    fi
+    case "$__rel" in
+      VERSION)
+        if [ -f "$__src/VERSION" ]; then
+          __sfile="$__src/VERSION"
+        else
+          __sfile="$SELF_DIR/VERSION"
+        fi
+        ;;
+      *) __sfile="$__src/$__rel" ;;
+    esac
+    # 逐字节搬进阶段目录；目标是软链时 rename 换掉的是链接本身，
+    # 不会顺着链接写到别处
+    if ! fs_atomic_copy "$__sfile" "$__stage/$__rel" 644; then
+      rm -rf "$__stage" 2>/dev/null || true
+      return 1
+    fi
+    __i=$((__i + 1))
+  done
+
+  # 清单落进阶段目录：所有权与基线以这一轮结束时的状态为准
+  __txt=$(_sk_fs_own_render)
+  if [ -n "$__txt" ]; then
+    fs_atomic_write "$__stage/.shellkit-skill-manifest" "$__txt" 644 || {
+      rm -rf "$__stage" 2>/dev/null || true
+      return 1
+    }
+  fi
+
+  # 提交前校验：清单点名的每个文件都必须在阶段目录里、内容与指纹一致。
+  # 保留项里的软链跳过 —— os_sha256 会跟着链接走，量的是别人的文件。
+  __i=0
+  while [ "$__i" -lt "${#_SK_OWN_RELS[@]}" ]; do
+    __f="$__stage/${_SK_OWN_RELS[$__i]}"
+    if [ ! -L "$__f" ]; then
+      __cur=$(os_sha256 "$__f" 2>/dev/null) || __cur=""
+      if [ "$__cur" != "${_SK_OWN_SUMS[$__i]}" ]; then
+        log_error "$(_t 'the staged skill copy failed verification'): $__f"
+        rm -rf "$__stage" 2>/dev/null || true
+        return 1
+      fi
+    fi
+    __i=$((__i + 1))
+  done
+
+  # 提交：旧的挪开、新的挪进来。两次 rename 都在同一个文件系统里；
+  # 中间被打断时下次安装先恢复（见函数开头的 .shellkit-skill-old 逻辑）。
+  if [ -e "$__dstabs" ]; then
+    if ! mv "$__dstabs" "$__old"; then
+      log_error "$(_t 'the staged skill copy could not be committed'): $__stage"
+      rm -rf "$__stage" 2>/dev/null || true
+      return 1
+    fi
+  fi
+  if ! mv "$__stage" "$__dstabs"; then
+    if [ -e "$__old" ]; then
+      mv "$__old" "$__dstabs" 2>/dev/null || true
+      log_warn "$(_t 'skill install failed mid-commit; the previous copy was restored')"
+    fi
+    rm -rf "$__stage" 2>/dev/null || true
+    return 1
+  fi
+  rm -rf "$__old" 2>/dev/null || true
   return 0
 }
 

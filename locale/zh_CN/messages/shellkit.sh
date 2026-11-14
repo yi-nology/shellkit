@@ -292,8 +292,12 @@ _sk_msg_lookup_shellkit() {
     'remembered the client in') printf '%s' '客户端已记入' ;;
     'the skill package is incomplete') printf '%s' 'skill 包不完整' ;;
     'the target exists and is not a directory') printf '%s' '目标已存在且不是目录' ;;
+    'recovering the skill copy after an interrupted install') printf '%s' '恢复被打断的 skill 安装：正在从旧副本还原' ;;
     'refusing to write through a symlink') printf '%s' '拒绝顺着符号链接写入' ;;
     'the skill is up to date') printf '%s' 'skill 已是最新' ;;
+    'the staged skill copy failed verification') printf '%s' '阶段目录里的 skill 副本校验不过' ;;
+    'the staged skill copy could not be committed') printf '%s' '阶段目录里的 skill 副本无法提交' ;;
+    'skill install failed mid-commit; the previous copy was restored') printf '%s' 'skill 安装在提交途中失败；已恢复原来的副本' ;;
     'cannot verify which files were installed by shellkit; nothing was removed') printf '%s' '无法分辨哪些文件是 shellkit 装的；什么都没有删除' ;;
     'the directory is not empty, left in place') printf '%s' '目录非空，原样保留' ;;
     'known AI clients') printf '%s' '已知 AI 客户端' ;;

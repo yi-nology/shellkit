@@ -8,7 +8,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: shellkit 0.20.0\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-11-14 13:58+0800\n"
+"POT-Creation-Date: 2026-11-14 14:12+0800\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language-Team: LANGUAGE <LL@li.org>\n"
@@ -893,10 +893,22 @@ msgstr ""
 msgid "the target exists and is not a directory"
 msgstr ""
 
+msgid "recovering the skill copy after an interrupted install"
+msgstr ""
+
 msgid "refusing to write through a symlink"
 msgstr ""
 
 msgid "the skill is up to date"
+msgstr ""
+
+msgid "the staged skill copy failed verification"
+msgstr ""
+
+msgid "the staged skill copy could not be committed"
+msgstr ""
+
+msgid "skill install failed mid-commit; the previous copy was restored"
 msgstr ""
 
 msgid ""
