@@ -247,6 +247,11 @@ jobs:
       - name: coverage
         run: make coverage
 
+      # 分支级棘轮（路线图 v0.23.0「分支覆盖缺口收敛」）：基线与判据同函数级，
+      # 考核范围是四条关键路径（Upgrade / Install / Skill / Repair）与 release gate。
+      - name: branch coverage
+        run: make coverage-branch
+
   # 性能基准：出报告，不阻断。
   #
   # 为什么不是硬门禁：共享 runner 的波动比代码的性能差异大得多，

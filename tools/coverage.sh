@@ -977,7 +977,7 @@ else
       cat >"$GUARDS_FILE" <<'GDEFE'
 #39|shellkit|_sk_skill_uninstall_from|_SK_OWN_RELS[@]}" -gt 0
 #39|shellkit|_sk_skill_uninstall_from|_sk_fs_rel_safe
-#39|shellkit|_sk_skill_uninstall_from|__cur" = "$__sum
+#39|shellkit|_sk_fs_safe_remove_owned|__cur" != "$__expect
 #40|shellkit|_sk_skill_install_into|_sk_fs_no_symlink_below
 #41|repair.sh|_complete|lib/core/$__mod.sh
 #41|repair.sh|_complete|lib/bootstrap.sh
