@@ -24,6 +24,9 @@ fi
 # queued/none、MISSING；表里没有的名字按 MISSING 回话。
 # 特殊值 pending-then-success：第一次回答 queued/none，然后把表里的值
 # 改成 completed/success —— 模拟「还在跑，下一轮就绿」。
+# 特殊值 missing-then-success：第一次回答 MISSING，然后把表里的值
+# 改成 completed/success —— 模拟「push 后 check-run 尚未注册，下一轮
+# 才注册跑完」（issue #85：注册竞态不该被当成失败）。
 mk_gh() {
   local state=$1 bin
   bin=$(mktemp -d "$TEST_TMP_ROOT/ghbin.XXXXXX") || _fail "mktemp failed"
@@ -42,6 +45,11 @@ line=\$(awk -F'\t' -v n="\$name" '\$1 == n { print \$2; exit }' "\$state" 2>/dev
 case "\$line" in
   pending-then-success)
     printf 'queued/none'
+    tmp=\$(mktemp)
+    awk -F'\t' -v n="\$name" -v v="completed/success" 'BEGIN{OFS="\t"} \$1==n{\$2=v; found=1} {print} END{if(!found) print n, v}' "\$state" >"\$tmp" && mv "\$tmp" "\$state"
+    ;;
+  missing-then-success)
+    printf 'MISSING'
     tmp=\$(mktemp)
     awk -F'\t' -v n="\$name" -v v="completed/success" 'BEGIN{OFS="\t"} \$1==n{\$2=v; found=1} {print} END{if(!found) print n, v}' "\$state" >"\$tmp" && mv "\$tmp" "\$state"
     ;;
@@ -106,12 +114,40 @@ rc=$?
 assert_eq "3" "$rc" "a pending required check must block the release"
 assert_contains "$out" "pending" "the verdict must say what is still pending"
 
-# CASE: 一个必需检查缺席（这个 SHA 上 CI 根本没跑）⇒ 不放行，退出码 1
+# CASE: 一个必需检查缺席（这个 SHA 上 CI 还没跑到/没注册）⇒ 按「还没有
+# 结论」处理，退出码 3。push / tag 后立刻跑门禁是常态，check-run 注册有
+# 竞态（issue #85）：「还没注册」与「失败」是两回事，轮询窗口内先等。
 printf 'alpha\tcompleted/success\ngamma\tcompleted/success\n' >"$d/state"
 out=$(env PATH="$bin:$PATH" "$GATE_ENV" bash "$GATE" "$SHA" --once 2>&1)
 rc=$?
-assert_eq "1" "$rc" "a missing required check must block the release"
+assert_eq "3" "$rc" "a missing required check must be waited for, not failed on sight"
+assert_contains "$out" "missing" "the verdict must say what is missing"
 assert_contains "$out" "beta" "the verdict must name the missing check"
+
+# CASE: 检查缺席但下一轮就注册跑绿 ⇒ 轮询能等到（issue #85 的核心场景）
+printf 'alpha\tcompleted/success\nbeta\tmissing-then-success\ngamma\tcompleted/success\n' >"$d/state"
+out=$(env PATH="$bin:$PATH" "$GATE_ENV" bash "$GATE" "$SHA" --interval 0 2>&1)
+rc=$?
+assert_eq "0" "$rc" "a check that registers late must eventually pass"
+assert_contains "$out" "verdict: PASSED" "the verdict must say passed"
+
+# CASE: 超时后仍缺席 ⇒ 这时才判失败，退出码 1，说明原因
+printf 'alpha\tcompleted/success\ngamma\tcompleted/success\n' >"$d/state2"
+bin2=$(mk_gh "$d/state2")
+out=$(env PATH="$bin2:$PATH" "$GATE_ENV" bash "$GATE" "$SHA" --timeout 0 --interval 0 2>&1)
+rc=$?
+assert_eq "1" "$rc" "a check that never registers must fail the gate after the timeout"
+assert_contains "$out" "NOT PASSED" "the verdict must say not passed"
+assert_contains "$out" "never registered" "the verdict must explain why"
+assert_contains "$out" "beta" "the verdict must name the missing check"
+
+# CASE: 超时后仍在跑（非缺席）⇒ 维持「没结论」语义，退出码 3
+printf 'alpha\tcompleted/success\nbeta\tin_progress/none\ngamma\tcompleted/success\n' >"$d/state3"
+bin3=$(mk_gh "$d/state3")
+out=$(env PATH="$bin3:$PATH" "$GATE_ENV" bash "$GATE" "$SHA" --timeout 0 --interval 0 2>&1)
+rc=$?
+assert_eq "3" "$rc" "a timeout with a check still running has no verdict"
+assert_contains "$out" "timed out" "the verdict must say it timed out"
 
 # CASE: 还在跑但下一轮就绿 ⇒ 轮询能等到结论（不是 --once 的路径）
 printf 'alpha\tcompleted/success\nbeta\tpending-then-success\ngamma\tcompleted/success\n' >"$d/state"
