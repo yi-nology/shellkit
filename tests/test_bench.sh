@@ -236,11 +236,38 @@ __tl=${__tl%%,*}
 # trace 行数非零：数不到命令说明 xtrace 没接上（__xtrace 开关掉了）
 assert_true test "$__tl" -ge 100
 
-# CASE: --profile 与 --check 语义互斥 ⇒ 用法错（profile 不产出可比的耗时值）
+# CASE: profile 计数基线 —— 写入 → 正控制 → 反控（塞离谱数必须红）→ 缺基线 3
+#
+# 计数基线与计时基线是两套文件、两种口径：计数由代码路径决定、跨机器可比，
+# 判定带 ±10%（--tolerance 可调）。判据能力自检：基线里的数被改大一倍，
+# --check 必须点名路径与指标报错 —— 只比格式不比数的校验没有约束力。
+pfbase="$d/profile-base"
 rc=0
-out=$(bash "$BENCH" --profile --check --only cli_bootstrap 2>&1) || rc=$?
-assert_eq "2" "$rc" "--profile must refuse --check"
-assert_contains "$out" "--profile cannot be combined" "the usage error must say why"
+out=$(bash "$BENCH" --profile --only cli_bootstrap --write-baseline --baseline "$pfbase" 2>&1) || rc=$?
+assert_eq "0" "$rc" "profile baseline must be written"
+assert_contains "$out" "wrote profile baseline" "the write must be announced"
+assert_contains "$(cat "$pfbase")" "cli_bootstrap" "the baseline must name the path"
+assert_contains "$(cat "$pfbase")" "trace_lines=" "the baseline must carry metrics"
+
+# 正控制：拿刚写出来的基线查刚跑出来的数 —— 必须放行
+rc=0
+out=$(bash "$BENCH" --profile --only cli_bootstrap --check --baseline "$pfbase" 2>&1) || rc=$?
+assert_eq "0" "$rc" "a baseline built from the current run must pass the check"
+assert_contains "$out" "profile check: ok" "the pass must be announced"
+
+# 反控：把基线里的每个指标翻倍 —— 必须点名报错
+awk -F'\t' 'BEGIN{OFS="\t"} /^#/ || NF<2 {print; next} {n=split($2,a," "); s=""; for(i=1;i<=n;i++){split(a[i],kv,"="); s=s (i>1?" ":"") kv[1]"="kv[2]*2} print $1, s}' \
+  "$pfbase" >"$pfbase.bad"
+rc=0
+out=$(bash "$BENCH" --profile --only cli_bootstrap --check --baseline "$pfbase.bad" 2>&1) || rc=$?
+assert_eq "1" "$rc" "a tampered baseline must fail the check"
+assert_contains "$out" "profile check: cli_bootstrap" "the failure must name the path"
+
+# 缺基线 ⇒ 前置条件 3
+rc=0
+out=$(bash "$BENCH" --profile --only cli_bootstrap --check --baseline "$d/no-such-profile-base" 2>&1) || rc=$?
+assert_eq "3" "$rc" "a missing profile baseline must be a precondition failure"
+assert_contains "$out" "not found" "the error must name the missing file"
 
 # CASE: text 模式（默认）给人读
 rc=0
