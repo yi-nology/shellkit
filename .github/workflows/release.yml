@@ -127,6 +127,16 @@ jobs:
           # demo.sh 走的是 release 资产（发布前拿不到），所以这里验的是包里的 CLI。
           ./shellkit demo "$work/demo2"
 
+      # 签名工具：ubuntu runner 默认没有 minisign。v0.21.0 首发正是在签名步骤
+      # 报 exit 3（密钥已配置但工具缺失 —— 按设计「配了钥匙就该红」），先装工具
+      # 才轮得到签名；没配私钥时装了也不碍事（sign_release.sh 照旧跳过）。
+      - name: install minisign
+        run: |
+          set -euo pipefail
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq minisign
+          minisign -v || true
+
       # 签名是可选步骤（issue #66）：没配私钥时 sign_release.sh 明确提示并 0 退出，
       # 不挡发布；配了私钥却签不动（缺 minisign 等）才红 —— 那时就该红。
       - name: sign release assets (optional)
