@@ -3575,20 +3575,39 @@ _sk_skill_install_into() {
   fs_ensure_dir "$__dir" "" || return 1
   __dirabs=$(cd "$__dir" 2>/dev/null && pwd -P) || return 1
   __dstabs="$__dirabs/shellkit"
-  __stage="$__dirabs/.shellkit-skill-new"
-  __old="$__dirabs/.shellkit-skill-old"
+  # 阶段目录带 pid：并发安装各铺各的（固定名会互相 rm -rf 对方的阶段目录 ——
+  # fault 矩阵的 skill|concurrent 场景抓到过），残骸按 pid 归属清理。
+  __stage="$__dirabs/.shellkit-skill-new.$$"
+  __old="$__dirabs/.shellkit-skill-old.$$"
 
   # 中断恢复（issue #86）：提交是两次 rename，唯一撕破的状态是「旧的挪走了、
-  # 新的还没挪进来」—— 此时 dst 不见了而 .old 是唯一完整副本，先挪回去。
-  # dst 在而 .old 也在 ⇒ 提交已完成，.old 只是残骸；两种局面都收掉残骸。
-  if [ -e "$__old" ] || [ -L "$__old" ]; then
+  # 新的还没挪进来」—— 此时 dst 不见了而 .old 是唯一完整副本，先挪回去；
+  # dst 在 ⇒ 提交已完成，.old 只是残骸，直接清。
+  # 残骸都带 pid：还活着的进程的目录绝不碰（那是它正在铺的阶段目录），
+  # 死了的就是残骸 —— 旧副本按上面恢复，阶段目录清掉。
+  for __f in "$__dirabs"/.shellkit-skill-old.*; do
+    [ -e "$__f" ] || [ -L "$__f" ] || continue
     if [ ! -e "$__dstabs" ]; then
-      log_warn "$(_t 'recovering the skill copy after an interrupted install'): $__old"
-      mv "$__old" "$__dstabs" || return 1
+      log_warn "$(_t 'recovering the skill copy after an interrupted install'): $__f"
+      mv "$__f" "$__dstabs" || return 1
+    else
+      rm -rf "$__f" 2>/dev/null || true
     fi
-    rm -rf "$__old" 2>/dev/null || true
-  fi
-  rm -rf "$__stage" 2>/dev/null || true
+  done
+  for __f in "$__dirabs"/.shellkit-skill-new.*; do
+    [ -e "$__f" ] || [ -L "$__f" ] || continue
+    __pid=${__f##*.}
+    case "$__pid" in
+      *[!0-9]*)
+        rm -rf "$__f" 2>/dev/null || true
+        continue
+        ;;
+    esac
+    if _sk_lock_pid_alive "$__pid"; then
+      continue
+    fi
+    rm -rf "$__f" 2>/dev/null || true
+  done
   # 边界校验：shellkit 与 shellkit/references 每一级已存在的都必须是真目录。
   # 这里挡住的就是「预置软链写到目标根之外」的洞 —— 无论链接指向根内还是根外。
   if ! _sk_fs_no_symlink_below "$__dirabs" "shellkit/references"; then

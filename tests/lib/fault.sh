@@ -768,9 +768,14 @@ fault_mode() {
 }
 
 if [ "${FAULT_PERM_STAGE:-}" = "write" ] && [ -n "${FAULT_PERM_PATH:-}" ]; then
+  # FAULT_PERM_PATH 支持 glob：写目标在阶段目录里、目录名带 pid 的场景
+  # （skill 安装的整组事务提交，issue #86）没法预先点名，用
+  # .shellkit-skill-new.*/FILE 这样的模式点。没有 glob 元字符时，case 的
+  # 模式按字面解释，与旧的逐字匹配完全等价。
   case "$tmpl" in
-  "$FAULT_PERM_PATH".tmp.* | "$(fault_phys "$FAULT_PERM_PATH")".tmp.*)
-    dir=$(dirname "$FAULT_PERM_PATH")
+  $FAULT_PERM_PATH.tmp.* | "$(fault_phys "$FAULT_PERM_PATH")".tmp.*)
+    # 目录取自真实模板：glob 模式下 dirname 模式串取不到真目录
+    dir=$(dirname "$tmpl")
     mode=$(fault_mode "$dir")
     chmod 500 "$dir" 2>/dev/null
     echo "perm stage=write path=$FAULT_PERM_PATH" >>"$FAULT_TRACE"

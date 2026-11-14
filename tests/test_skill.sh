@@ -229,25 +229,29 @@ assert_false test -e "$d/41/shellkit/references/reference.md"
 # rename 整体换上：提交前失败伤不到现有副本，提交途中被打断由下次安装先恢复。
 
 # CASE: 提交途中被打断（dst 挪走、.old 是唯一完整副本）⇒ 下次安装先恢复再装
+# 残骸目录带 pid（并发安装互不踩踏）；这里用一个不存在进程的 pid 模拟残骸。
 d=$(mktemp -d "$TEST_TMP_ROOT/skill86.XXXXXX") || _fail "mktemp failed"
 "$SK" skill install --dir "$d/t1" >/dev/null 2>&1 || _fail "skill install failed"
 printf 'MINE\n' >"$d/t1/shellkit/user-note.txt"
-mv "$d/t1/shellkit" "$d/t1/.shellkit-skill-old"
+mv "$d/t1/shellkit" "$d/t1/.shellkit-skill-old.424242"
 out=$("$SK" skill install --dir "$d/t1" 2>&1) && rc=0 || rc=$?
 assert_eq "0" "$rc" "the next install must recover from the interrupted commit"
 assert_contains "$out" "recovering the skill copy" "the recovery must say what it did"
 assert_true test -f "$d/t1/shellkit/SKILL.md"
 assert_true test -f "$d/t1/shellkit/user-note.txt"
-assert_false test -e "$d/t1/.shellkit-skill-old"
-assert_false test -e "$d/t1/.shellkit-skill-new"
+if ls "$d/t1"/.shellkit-skill-* >/dev/null 2>&1; then
+  _fail "no skill residue may survive the recovery: $(ls "$d/t1"/.shellkit-skill-*)"
+fi
 
 # CASE: 提交已完成、只剩 .old 残骸 ⇒ 下次安装收掉残骸，正常装
 "$SK" skill install --dir "$d/t2" >/dev/null 2>&1 || _fail "skill install failed"
 printf 'MINE\n' >"$d/t2/shellkit/user-note.txt"
-mkdir -p "$d/t2/.shellkit-skill-old"
+mkdir -p "$d/t2/.shellkit-skill-old.424242"
 out=$("$SK" skill install --dir "$d/t2" 2>&1) && rc=0 || rc=$?
 assert_eq "0" "$rc" "stale residue must not break the next install"
-assert_false test -e "$d/t2/.shellkit-skill-old"
+if ls "$d/t2"/.shellkit-skill-* >/dev/null 2>&1; then
+  _fail "stale residue must be cleaned up: $(ls "$d/t2"/.shellkit-skill-*)"
+fi
 assert_true test -f "$d/t2/shellkit/user-note.txt"
 
 # CASE: 装完的真机上重装 ⇒ 目标目录原样（幂等，无多余换名）
