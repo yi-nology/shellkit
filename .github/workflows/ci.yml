@@ -186,6 +186,20 @@ jobs:
 
   # bats 用例：真正独立的测试用例（每个 @test 一个进程）。
   # 不进 make check —— bats 是外部依赖；这里单独一个 job 装好再跑。
+  artifact:
+    name: release artifact smoke
+    # v0.24.0 的教训：源码矩阵全绿、系统包构建也全绿，但真 tarball 解包后跑套件才炸
+    # （漏了 .gitignore）。所以「仓库工作树能跑」必须在 PR 阶段就顺带证明「发布包能跑」：
+    # 这里打包 -> 解包 -> 跑整套 -> CLI 三连，用的是发版时同一个
+    # tools/package_artifact_smoke.sh，两侧不会漂移。
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+      - name: build the artifacts
+        run: bash tools/package_tarball.sh
+      - name: smoke the artifacts
+        run: bash tools/package_artifact_smoke.sh
+
   bats:
     name: bats suite
     runs-on: ubuntu-latest
