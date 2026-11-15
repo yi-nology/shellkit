@@ -4,7 +4,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: shellkit\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-11-15 14:34+0800\n"
+"POT-Creation-Date: 2026-11-15 23:56+0800\n"
 "PO-Revision-Date: 2026-11-08 00:00+0800\n"
 "Last-Translator: shellkit contributors\n"
 "Language-Team: shellkit contributors\n"
@@ -495,6 +495,18 @@ msgstr "不是普通檔案，保留不動"
 
 msgid "modified locally, left alone"
 msgstr "本地已修改，保持原樣"
+
+msgid "cannot stage the file to keep"
+msgstr "無法暫存需要保留的檔案"
+
+msgid "the staged copy of a kept file is missing"
+msgstr "需要保留的檔案的暫存副本不見了"
+
+msgid "cannot restore the file kept for the user"
+msgstr "無法把為使用者保留的檔案放回去"
+
+msgid "the restored file does not match the kept copy"
+msgstr "放回去的檔案與暫存副本內容不一致"
 
 msgid "both copies are broken, nothing was removed, reinstall shellkit"
 msgstr "兩份副本都不完整；什麼都沒刪，請重裝 shellkit"

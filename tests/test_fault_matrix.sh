@@ -280,6 +280,70 @@ assert_false test -e "$proj/vendor/.shellkit-old"
 assert_eq "MINE" "$(cat "$proj/vendor/shellkit/user-note.txt")" \
   "the user's own file must survive the recovery too"
 
+# CASE: vendor|keep-fail —— 用户改过的文件搬不进暂存区时，必须整轮失败，而不是静默丢掉修改
+#
+# 以前「把用户改过的文件挪到一边」失败是 `|| true` 吞掉的。吞掉的后果不是「少挪一个
+# 文件」：整树复制随后会把候选目录里那份旧内容覆盖成上游内容，恢复阶段又找不到暂存的
+# 那份，于是用户的编辑消失，而命令返回 0。
+#
+# 注入点选 TMPDIR：__keep 是 `mktemp -d "$TMPDIR/shellkit-own-keep.XXXXXX"`，把 TMPDIR
+# 放进 ENOSPC 作用域后，只有「搬进暂存区」这一步失败 —— 工程目录、暂存目录与整树复制
+# 都不受影响，判据因此能精确指向那一步。
+file_mode() {
+  # 不能用 "stat -f ... || stat -c ..."：GNU 的 stat -f 是 --file-system，退出码为 0
+  # 却吐出 File: "..." 这种非权限内容，兜底根本不触发（同 tools/check_security.sh 的
+  # _mode_of 注释）。所以先取，再校验是不是纯八进制。
+  local __m
+  __m=$(stat -f '%Lp' "$1" 2>/dev/null) || __m=""
+  case "$__m" in
+    '' | *[!0-7]*) __m=$(stat -c '%a' "$1" 2>/dev/null) || __m="" ;;
+  esac
+  printf '%s' "$__m"
+}
+
+proj=$(new_project vkeep)
+target="$proj/vendor/shellkit/shellkit"
+printf '\n# user edit must survive\n' >>"$target"
+usum=$(file_sum "$target")
+umode=$(file_mode "$target")
+bsum=$(file_sum "$proj/vendor/shellkit/lib/bootstrap.sh")
+msum=$(file_sum "$proj/vendor/shellkit/.shellkit-vendor-manifest")
+
+kscope="$work/keep-scope"
+mkdir -p "$kscope"
+kdrv="$work/keep-driver.sh"
+cat >"$kdrv" <<'KDRV'
+#!/usr/bin/env bash
+# TMPDIR 指到注入作用域：__keep 建在里面，于是只有「搬进暂存区」这一步会失败
+export TMPDIR="$1"
+exec "$2" vendor "$3"
+KDRV
+
+fault_reset
+fault_scope "$proj"
+fault_enospc_scope "$kscope"
+rc=0
+fault_run bash "$kdrv" "$kscope" "$SK" "$proj" >"$work/vkeep.log" 2>&1 || rc=$?
+assert_ne "0" "$rc" "a failure to stage the user's file must fail the whole sync"
+assert_true fault_trace_has "enospc wrote="
+assert_eq "$usum" "$(file_sum "$target")" \
+  "the user's edited file must stay byte-identical after the refused sync"
+assert_eq "$umode" "$(file_mode "$target")" \
+  "the user's edited file must keep its permission bits"
+assert_eq "$bsum" "$(file_sum "$proj/vendor/shellkit/lib/bootstrap.sh")" \
+  "the vendored library must stay byte-identical (no half swap)"
+assert_eq "$msum" "$(file_sum "$proj/vendor/shellkit/.shellkit-vendor-manifest")" \
+  "the ownership manifest must not be rewritten by a refused sync"
+assert_false test -e "$proj/vendor/.shellkit-new"
+assert_false test -e "$proj/vendor/.shellkit-old"
+
+fault_reset
+rc=0
+fault_run "$SK" vendor "$proj" >"$work/vkeep2.log" 2>&1 || rc=$?
+assert_eq "0" "$rc" "the retry must succeed once the fault is gone"
+assert_contains "$(cat "$target")" "user edit must survive" \
+  "the user's edit must be back after the retry"
+
 # CASE: vendor|concurrent —— 换名互斥：双跑后旧副本与用户文件完好、无残骸
 proj=$(new_project vconc)
 printf 'MINE\n' >"$proj/vendor/shellkit/user-note.txt"
@@ -604,5 +668,5 @@ printf '%s\n' 'NA backup|permission: 备份只读源、只新增文件，建不�
 printf '%s\n' 'NA backup|signal: 备份是「同目录临时文件 + rename」，目标只可能是完整旧值或完整新值，被杀只留 .tmp 残骸（轮转按名计数时已跳过 *.tmp.*）—— 与 config|signal 同构'
 printf '%s\n' 'NA backup|concurrent: 两个并发备份各拿各的名字（pid + 序号），轮转是 last-writer-wins：并发下可能多删一份最旧的，但不会出现半截文件 —— 本行要的是「不半截」而不是「都留下」'
 
-printf '%s\n' 'matrix: 24 cells - 14 new cases, 3 cross-referenced (upgrade row), 7 not-applicable'
+printf '%s\n' 'matrix: 25 cells - 15 new cases, 3 cross-referenced (upgrade row), 7 not-applicable'
 exit 0

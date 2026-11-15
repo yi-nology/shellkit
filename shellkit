@@ -446,6 +446,30 @@ _sk_fs_safe_remove_owned() {
 #
 # 计数写进 _SK_OWN_N_W / _SK_OWN_N_S / _SK_OWN_N_K / _SK_OWN_N_DEL。
 # @exitcode 0 同步完成；1 复制或写清单失败
+
+# _sk_own_keep_put SRC KEEPDIR REL —— 把「要保住的那份文件」搬进暂存区
+#
+# 搬不过去必须中止整轮同步，不能吞掉错误继续：整树复制随后会把候选目录里的同一
+# 路径覆盖成上游内容，而恢复阶段暂存区里又没有它 —— 用户的编辑就这么被静默抹掉，
+# 退出码还是 0。所以这里一律硬失败，由调用方收拾暂存目录（原副本一个字节都不动）。
+# 只搬「普通文件 / 软链」：目录、以及清单里记着但磁盘上已经没有的路径没有可搬的
+# 内容（整树复制会照常处理它们 —— 与「保留不安全目标」那条既有判据一致）。
+# 真正的失败是「有东西该搬却搬不动」，那种必须把整轮同步打断。
+# @exitcode 0 搬好了，或本来就没有可搬的东西
+# @exitcode 1 有内容但搬不动
+_sk_own_keep_put() {
+  local __src=${1:-} __kept=${2:-} __rel=${3:-}
+  if [ -L "$__src" ]; then
+    cp -P "$__src" "$__kept/$__rel" && return 0
+  elif [ -f "$__src" ]; then
+    fs_atomic_copy "$__src" "$__kept/$__rel" && return 0
+  else
+    return 0
+  fi
+  log_error "$(_t 'cannot stage the file to keep'): $__rel"
+  return 1
+}
+
 _sk_own_sync() {
   local __src=${1:-} __stage=${2:-} __manifest=${3:-} __rels=${4:-} __trees=${5:-}
   local __force=${6:-0}
@@ -454,7 +478,7 @@ _sk_own_sync() {
   local __destroot=${7:-$__stage}
   local __rel __srcf __dstf __cur __new __base __act __txt __ownf __tree __expect
   local __rc __j __dup
-  local __srcsums __dstsums __table __keep __n_w=0 __n_s=0 __n_k=0 __n_del=0
+  local __srcsums __dstsums __table __keep __ka __kb __n_w=0 __n_s=0 __n_k=0 __n_del=0
   local __i=0
 
   _SK_OWN_N_W=0
@@ -518,13 +542,11 @@ _sk_own_sync() {
         _SK_OWN_NEW_RELS[${#_SK_OWN_NEW_RELS[@]}]=$__rel
         _SK_OWN_NEW_SUMS[${#_SK_OWN_NEW_SUMS[@]}]=${_SK_OWN_SUMS[$__i]}
         fs_ensure_dir "$__keep/$(dirname "$__rel")" 755 || return 1
-        if [ -L "$__stage/$__rel" ]; then
-          cp -P "$__stage/$__rel" "$__keep/$__rel" 2>/dev/null || true
-        elif [ -f "$__stage/$__rel" ]; then
-          # 暂存目录里的单文件写也走原子写：整目录换上去之前那份文件不该是半截的。
-          fs_atomic_copy "$__stage/$__rel" "$__keep/$__rel" 2>/dev/null || true
+        _sk_own_keep_put "$__stage/$__rel" "$__keep" "$__rel" || return 1
+        # 只有真搬进来一份才登记：登记了却没有副本，恢复阶段就无从放回去
+        if [ -e "$__keep/$__rel" ] || [ -L "$__keep/$__rel" ]; then
+          _SK_OWN_KEEP[${#_SK_OWN_KEEP[@]}]=$__rel
         fi
-        _SK_OWN_KEEP[${#_SK_OWN_KEEP[@]}]=$__rel
       fi
     fi
     __i=$((__i + 1))
@@ -615,12 +637,10 @@ _sk_own_sync() {
         fi
         # 挪到一边：整树复制会盖掉它
         fs_ensure_dir "$__keep/$(dirname "$__rel")" 755 || return 1
-        if [ -L "$__dstf" ]; then
-          cp -P "$__dstf" "$__keep/$__rel" 2>/dev/null || true
-        elif [ -f "$__dstf" ]; then
-          fs_atomic_copy "$__dstf" "$__keep/$__rel" 2>/dev/null || true
+        _sk_own_keep_put "$__dstf" "$__keep" "$__rel" || return 1
+        if [ -e "$__keep/$__rel" ] || [ -L "$__keep/$__rel" ]; then
+          _SK_OWN_KEEP[${#_SK_OWN_KEEP[@]}]=$__rel
         fi
-        _SK_OWN_KEEP[${#_SK_OWN_KEEP[@]}]=$__rel
         __n_k=$((__n_k + 1))
         ;;
     esac
@@ -655,13 +675,30 @@ _sk_own_sync() {
   __i=0
   while [ "$__i" -lt "${#_SK_OWN_KEEP[@]}" ]; do
     __rel=${_SK_OWN_KEEP[$__i]}
-    if [ -e "$__keep/$__rel" ] || [ -L "$__keep/$__rel" ]; then
-      fs_ensure_dir "$(dirname "$__stage/$__rel")" 755 || return 1
-      rm -f "$__stage/$__rel" 2>/dev/null || true
-      if [ -L "$__keep/$__rel" ]; then
-        cp -P "$__keep/$__rel" "$__stage/$__rel" 2>/dev/null || true
-      else
-        fs_atomic_copy "$__keep/$__rel" "$__stage/$__rel" 2>/dev/null || true
+    # 登记进 KEEP 的条目，暂存区里必须真的有一份；没有就说明搬运阶段出了问题 ——
+    # 此时提交候选目录等于把用户的修改换成上游内容（静默数据丢失）。
+    if [ ! -e "$__keep/$__rel" ] && [ ! -L "$__keep/$__rel" ]; then
+      log_error "$(_t 'the staged copy of a kept file is missing'): $__rel"
+      return 1
+    fi
+    fs_ensure_dir "$(dirname "$__stage/$__rel")" 755 || return 1
+    if [ -L "$__keep/$__rel" ]; then
+      rm -f "$__stage/$__rel" || return 1
+      cp -P "$__keep/$__rel" "$__stage/$__rel" || {
+        log_error "$(_t 'cannot restore the file kept for the user'): $__rel"
+        return 1
+      }
+    else
+      fs_atomic_copy "$__keep/$__rel" "$__stage/$__rel" || {
+        log_error "$(_t 'cannot restore the file kept for the user'): $__rel"
+        return 1
+      }
+      # 提交前自检：原子写只保证「不半截」，不保证「内容对」。
+      __ka=$(os_sha256 "$__keep/$__rel") || __ka=""
+      __kb=$(os_sha256 "$__stage/$__rel") || __kb=""
+      if [ -z "$__ka" ] || [ "$__ka" != "$__kb" ]; then
+        log_error "$(_t 'the restored file does not match the kept copy'): $__rel"
+        return 1
       fi
     fi
     __i=$((__i + 1))
