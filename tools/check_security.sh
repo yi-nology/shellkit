@@ -174,7 +174,7 @@ _path_write_exempt() {
   return 1
 }
 
-_PATH_WRITE_GUARDS="_sk_fs_in_dir|_sk_fs_rel_safe|_sk_fs_no_symlink_below|_sk_upgrade_rel_safe|_sk_upgrade_in_dir|_sk_valid_name|-L[[:space:]]"
+_PATH_WRITE_GUARDS="_sk_fs_in_dir|_sk_fs_rel_safe|_sk_fs_no_symlink_below|_sk_valid_name|-L[[:space:]]"
 
 # _write_call_funcs FILE —— 哪些函数里出现了写原语的调用
 _write_call_funcs() {
@@ -205,7 +205,7 @@ _check_path_write() {
       __body=$(_func_body "$__f" "$__fn")
       [ -n "$__body" ] || continue
       if ! printf '%s\n' "$__body" | grep -Eq "$_PATH_WRITE_GUARDS"; then
-        _fail "path.write" "$__rel: $__fn 写文件前没有路径边界守卫（_sk_fs_in_dir / _sk_fs_rel_safe / _sk_fs_no_symlink_below / _sk_upgrade_rel_safe / _sk_upgrade_in_dir / _sk_valid_name，或显式的 -L 拒绝）"
+        _fail "path.write" "$__rel: $__fn 写文件前没有路径边界守卫（_sk_fs_in_dir / _sk_fs_rel_safe / _sk_fs_no_symlink_below / _sk_valid_name，或显式的 -L 拒绝）"
         _fail_check
       fi
     done

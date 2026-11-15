@@ -129,10 +129,7 @@ lib/core/error.sh:require_bash:2
 lib/core/error.sh:require_cmd:2
 lib/core/error.sh:require_file:2
 lib/core/error.sh:require_root:1
-lib/core/fs.sh:_sk_fs_in_dir:2
 lib/core/fs.sh:_sk_fs_in_dir:3
-lib/core/fs.sh:_sk_fs_in_dir:4
-lib/core/fs.sh:_sk_fs_in_dir:5
 lib/core/fs.sh:_sk_fs_mode:1
 lib/core/fs.sh:_sk_fs_mode:3
 lib/core/fs.sh:_sk_fs_mode:4
@@ -146,7 +143,6 @@ lib/core/fs.sh:_sk_fs_own_read:11
 lib/core/fs.sh:_sk_fs_own_read:3
 lib/core/fs.sh:_sk_fs_own_read:8
 lib/core/fs.sh:_sk_fs_own_sum:1
-lib/core/fs.sh:_sk_fs_rel_safe:1
 lib/core/fs.sh:fs_atomic_copy:1
 lib/core/fs.sh:fs_atomic_copy:12
 lib/core/fs.sh:fs_atomic_copy:3

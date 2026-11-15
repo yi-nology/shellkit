@@ -1363,48 +1363,11 @@ _sk_upgrade_cleanup() {
   return 0
 }
 
-# _sk_upgrade_rel_safe REL —— 这个相对路径能不能安全地写进工程目录
-#
-# 两个不变量：不是绝对路径，且不含 .. 组件。
-# 清单里的项目名会被拼进 bin/<name> —— 名字里带 ../ 就能把文件写到工程之外。
-_sk_upgrade_rel_safe() {
-  local __rel=${1:-}
-  case "$__rel" in
-    '' | /*) return 1 ;;
-  esac
-  case "/$__rel/" in
-    */../*) return 1 ;;
-  esac
-  return 0
-}
-
-# _sk_upgrade_in_dir BASE TARGET —— TARGET 是否落在 BASE 之内
-#
-# BASE 必须是解析过的绝对路径（pwd -P），中间目录的符号链接也要解析：
-# 工程里有个 tests/ 指向工程外，那不是「工程内的路径」。
-# 目标所在的目录还不存在时，向上找到第一个存在的祖先再判。
-_sk_upgrade_in_dir() {
-  local __base=${1:-} __tgt=${2:-} __dir __parent
-  if [ -z "$__base" ] || [ -z "$__tgt" ]; then
-    return 1
-  fi
-  __dir=$(dirname "$__tgt")
-  while [ ! -d "$__dir" ]; do
-    __parent=$(dirname "$__dir")
-    if [ "$__parent" = "$__dir" ]; then
-      return 1
-    fi
-    __dir=$__parent
-  done
-  __parent=$(cd "$__dir" 2>/dev/null && pwd -P) || return 1
-  case "$__parent" in
-    "$__base") return 0 ;;
-    "$__base"/*) return 0 ;;
-  esac
-  return 1
-}
-
 # _sk_upgrade_path_ok BASE REL —— 目标的父路径每一级都建得出来吗
+#
+# 「相对路径安全」与「解析后落在工程内」这两条不变量由库里的
+# _sk_fs_rel_safe / _sk_fs_in_dir 判定 —— CLI 不持有同判据的私有副本：
+# 两份实现各改一半的分叉，比任何单点缺陷都难发现。
 #
 # 相对路径的目录部分要逐级看：中间哪一级已经是个普通文件，后面就建不出来
 # （fs_ensure_dir 会失败）—— 而那已经是半路上了。
@@ -1798,7 +1761,7 @@ EOF
     # 前两条不满足是清单有问题（不可信输入），直接报错退出；
     # 第三条不满足是工程里本来就这么摆着的，跳过并提示，用户的东西不动。
     __target="$__dirabs/$__rel"
-    if ! _sk_upgrade_rel_safe "$__rel" || ! _sk_upgrade_in_dir "$__dirabs" "$__target"; then
+    if ! _sk_fs_rel_safe "$__rel" || ! _sk_fs_in_dir "$__dirabs" "$__target"; then
       log_error "$(_t 'refusing to write outside the project directory'): $__rel"
       _sk_upgrade_cleanup "$__tmp" "$__oldtpl"
       return "$SK_VERIFY"

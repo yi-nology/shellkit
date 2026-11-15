@@ -120,17 +120,22 @@ coverage:
 coverage-branch:
 	@bash tools/coverage.sh --branch
 
-# 变异测试：把语义变异种进升级路径的守卫区，验证守卫用例必须 100% 杀灭
-# （位点区间锚在 _sk_upgrade_* 函数上，封顶 12 个保证跑得完）。
-# 白名单只剩两条「当前真的没有判据」的位点；其余位点都必须被杀灭。
+# 变异测试：把语义变异种进路径守卫区，验证守卫用例必须 100% 杀灭
+# （位点区间锚在库里的 _sk_fs_rel_safe / _sk_fs_in_dir 上，升级路径调的就是这份）。
+# 白名单只剩三条「当前真的没有判据」的位点，行号用**内容锚点**现算 ——
+# 「锚点 + 偏移」会随函数内容漂移，把白名单悄悄挪到有判据的位点上。
 # 报告与 stdout 会写清四层口径（枚举/窗口/计分/跳过），不把跳过藏起来。
 # 不进 check —— 它要把守卫用例跑十几遍；回归在 tests/test_mutation.sh。
 mutation:
-	@first=$$(grep -n '^_sk_upgrade_rel_safe()' shellkit | cut -d: -f1); \
-	last=$$(grep -n '^_sk_upgrade_writable()' shellkit | cut -d: -f1); \
-	bash tools/mutation.sh --target shellkit \
-	  --from-line "$$first" --to-line "$$last" --max-sites 12 \
-	  --skip "$$((first + 25))" --skip "$$((first + 29)):return" \
+	@first=$$(grep -n '^_sk_fs_rel_safe()' lib/core/fs.sh | cut -d: -f1); \
+	last=$$(grep -n '^_sk_fs_no_symlink_below()' lib/core/fs.sh | cut -d: -f1); \
+	[ -n "$$first" ] && [ -n "$$last" ] || { echo 'mutation: guard anchors are gone — update this target' >&2; exit 3; }; \
+	root=$$(awk -v s="$$first" -v e="$$last" 'NR > s && NR < e && /\[ "\$$__parent" = "\$$__dir" \]/ { print NR; exit }' lib/core/fs.sh); \
+	pwdline=$$(awk -v s="$$first" -v e="$$last" 'NR > s && NR < e && /pwd -P\)/ { print NR; exit }' lib/core/fs.sh); \
+	[ -n "$$root" ] && [ -n "$$pwdline" ] || { echo 'mutation: whitelist anchors are gone — update this target' >&2; exit 3; }; \
+	bash tools/mutation.sh --target lib/core/fs.sh \
+	  --from-line "$$first" --to-line "$$last" --max-sites 13 \
+	  --skip "$$root" --skip "$$((root + 1))" --skip "$$pwdline:return" \
 	  --test "bash tests/test_upgrade_guard.sh" --min-score 100
 
 # ---------- 文档站 ----------
