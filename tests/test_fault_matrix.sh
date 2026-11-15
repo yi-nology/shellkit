@@ -290,7 +290,15 @@ assert_eq "MINE" "$(cat "$proj/vendor/shellkit/user-note.txt")" \
 # 放进 ENOSPC 作用域后，只有「搬进暂存区」这一步失败 —— 工程目录、暂存目录与整树复制
 # 都不受影响，判据因此能精确指向那一步。
 file_mode() {
-  stat -f '%Lp' "$1" 2>/dev/null || stat -c '%a' "$1" 2>/dev/null
+  # 不能用 "stat -f ... || stat -c ..."：GNU 的 stat -f 是 --file-system，退出码为 0
+  # 却吐出 File: "..." 这种非权限内容，兜底根本不触发（同 tools/check_security.sh 的
+  # _mode_of 注释）。所以先取，再校验是不是纯八进制。
+  local __m
+  __m=$(stat -f '%Lp' "$1" 2>/dev/null) || __m=""
+  case "$__m" in
+    '' | *[!0-7]*) __m=$(stat -c '%a' "$1" 2>/dev/null) || __m="" ;;
+  esac
+  printf '%s' "$__m"
 }
 
 proj=$(new_project vkeep)
