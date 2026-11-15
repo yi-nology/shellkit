@@ -2,6 +2,16 @@
 本文件由 `tools/release.sh` 在发版时自动追加，已发布的小节不要手改。
 最新的在最前面。每一条对应一个提交 —— 要看「为什么」而不是「改了什么」，读 `docs/MIGRATING.md`。
 
+## 0.24.2 — 2026-11-16
+
+988f77f fix(own_sync): 用户改过的文件搬不动时整轮失败，不再静默丢失
+1872c03 fix(test): file_mode 用八进制校验挑 stat 写法（GNU 的 stat -f 会「成功」吐垃圾）
+1007cf1 docs(roadmap): 按实际发版重写为版本验收账本（原文档还写着 v0.18.0 是当前阶段）
+eef9e09 chore(coverage): 臂号后移后已覆盖的 11 条 _sk_own_sync 条目移出基线
+0be56c5 feat(release): 真产物验收抽成脚本并在 PR 阶段就跑（路线图 v0.25.0）
+d7fd98a style(tools): 按 shfmt -i 2 -ci 重排产物验收脚本
+fb4062d chore(coverage): 按 CI 的权威清单补齐 _sk_own_sync 的 12 条臂、删掉已不存在的 :63
+
 ## 0.24.1 — 2026-11-15
 
 f2e74b9 fix(package): 发布 tarball 带上 .gitignore，否则包内 smoke 必红
