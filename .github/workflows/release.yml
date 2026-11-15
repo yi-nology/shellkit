@@ -106,6 +106,7 @@ jobs:
                     skills/shellkit/references/reference.md \
                     README.md \
                     AGENTS.md \
+                    .gitignore \
                     VERSION
           do
             if [ ! -e "$f" ]; then
