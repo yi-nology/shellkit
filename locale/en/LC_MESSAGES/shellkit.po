@@ -4,7 +4,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: shellkit\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-11-14 14:12+0800\n"
+"POT-Creation-Date: 2026-11-15 14:34+0800\n"
 "PO-Revision-Date: 2026-11-08 00:00+0800\n"
 "Last-Translator: shellkit contributors\n"
 "Language-Team: shellkit contributors\n"
@@ -99,6 +99,9 @@ msgid "configuration value must be a single line"
 msgstr ""
 
 msgid "configuration file is not initialized"
+msgstr ""
+
+msgid "failed to write the file"
 msgstr ""
 
 msgid "invalid exit code"
@@ -672,9 +675,6 @@ msgid "would add"
 msgstr ""
 
 msgid "would update"
-msgstr ""
-
-msgid "failed to write the file"
 msgstr ""
 
 msgid "added"

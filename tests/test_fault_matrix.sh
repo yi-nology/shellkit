@@ -462,5 +462,97 @@ assert_true test -f "$prefix/share/shellkit/lib/bootstrap.sh"
 
 printf '%s\n' 'NA repair|diskfull: repair 只做整目录 rename 与 rm、不写文件内容；同文件系统 rename 不消耗目标目录空间，ENOSPC 不改变状态机可达的终态，故本格不适用'
 
-printf '%s\n' 'matrix: 16 cells - 11 new cases, 3 cross-referenced (upgrade row), 2 not-applicable'
+# ---------------------------------------------------------------- config 行
+#
+# 配置层的写入是「同目录临时文件 + mv」：临时文件写不完（磁盘满 / 配额）时，
+# 如果把写失败的状态丢掉，mv 会把**半截**配置换上去，调用方还拿到 0 ——
+# 用户数据静默损坏，而且没有任何提示。这一行钉的就是这件事。
+cdir="$work/config"
+mkdir -p "$cdir"
+
+# config_driver DIR —— 只做一次配置写操作的小驱动
+# 必须是被 fault_run 拉起的独立进程：ulimit -f 是进程级的，
+# 在测试脚本自己身上生效会把后面的用例一起限死。
+# 第三个参数选操作：set（默认）/ unset / disable —— 三个入口共用同一套
+# 「临时文件 + mv」，漏掉任何一个都会静默损坏配置，所以三个都要钉。
+config_driver() {
+  local __dir=$1
+  local __drv="$__dir/drive.sh"
+  cat >"$__drv" <<'DRV'
+#!/usr/bin/env bash
+set -u
+. "$1/lib/bootstrap.sh" log fs config >/dev/null 2>&1
+export SK_CONF_FILE="$2"
+conf_init "$2" >/dev/null 2>&1
+case "${3:-set}" in
+  unset) conf_unset KEY_010 ;;
+  disable) conf_disable KEY_010 ;;
+  *) conf_set NEW_KEY "a-very-long-value-that-cannot-fit-into-the-size-limit" ;;
+esac
+DRV
+  printf '%s' "$__drv"
+}
+
+# config_fixture PATH —— 200 行的既有配置（约 3KB）
+#
+# 为什么要这么大：上限是「一个 ulimit -f 块」（512 字节），但 macOS 实测
+# RLIMIT_FSIZE=1 块时实际能写到 1KB（页粒度）—— 配置比 1KB 小的时候注入
+# 根本不发生，这一格会**恒绿**（假通过）。文件连同新键明显超过 1KB，
+# 两种粒度下都必然写不完。
+config_fixture() {
+  local __f=$1 __i=0
+  : >"$__f"
+  while [ "$__i" -lt 200 ]; do
+    printf 'KEY_%03d=value-%03d\n' "$__i" "$__i" >>"$__f"
+    __i=$((__i + 1))
+  done
+}
+
+# CASE: config|diskfull —— 临时文件写不完 ⇒ 三个写入口都必须失败，配置一个字节都不变
+drv=$(config_driver "$cdir")
+fault_reset
+fault_scope "$cdir"
+fault_disk_full_limit 512
+for op in set unset disable; do
+  cfg="$cdir/app.$op.env"
+  config_fixture "$cfg"
+  sum_before=$(file_sum "$cfg")
+  rc=0
+  fault_run bash "$drv" "$TEST_ROOT" "$cfg" "$op" >"$work/cfgfull.$op.log" 2>&1 || rc=$?
+  assert_ne "0" "$rc" "conf_$op must report failure when the temp file cannot be written"
+  assert_eq "$sum_before" "$(file_sum "$cfg")" \
+    "conf_$op must keep the exact old content (a half-written temp must never be renamed in)"
+  assert_eq "KEY_199=value-199" "$(tail -n 1 "$cfg")" \
+    "conf_$op must keep the last line of the old configuration"
+  # 残骸计数用 glob，不用 ls|grep（SC2010：ls 的输出本来就不该被解析）
+  leftover=0
+  for __res in "$cdir/app.$op.env.tmp."*; do
+    [ -e "$__res" ] || continue
+    leftover=$((leftover + 1))
+  done
+  assert_eq "0" "$leftover" "conf_$op must not leave temp residue behind"
+done
+
+# CASE: config|permission —— 建不了临时文件 ⇒ 明确失败，配置不动
+if fault_perm_usable; then
+  pcdir="$work/config-perm"
+  mkdir -p "$pcdir"
+  pcfg="$pcdir/app.set.env"
+  config_fixture "$pcfg"
+  psum=$(file_sum "$pcfg")
+  pdrv=$(config_driver "$pcdir")
+  chmod 500 "$pcdir" || _fail "cannot make the config directory read-only"
+  rc=0
+  fault_run bash "$pdrv" "$TEST_ROOT" "$pcfg" >"$work/cfgperm.log" 2>&1 || rc=$?
+  chmod 700 "$pcdir" 2>/dev/null || true
+  assert_ne "0" "$rc" "conf_set must fail when the temp file cannot be created"
+  assert_eq "$psum" "$(file_sum "$pcfg")" "a refused write must leave the configuration untouched"
+else
+  printf '%s\n' 'NA config|permission: running as root, chmod cannot deny uid 0 (issue #76)'
+fi
+
+printf '%s\n' 'NA config|signal: 每次写都是「同目录临时文件 + rename」的原子替换，目标永远是完整的旧值或新值；被杀只会留下 .tmp 残骸 —— 与本行磁盘满格同构，且 conf_set 没有两阶段提交'
+printf '%s\n' 'NA config|concurrent: 配置层不承诺并发合并（没有锁也没有三方合并），两个 conf_set 并发是 last-writer-wins，且每次改名都完整；要的是「不半截」而不是「都留下」，那一半由上面两格覆盖'
+
+printf '%s\n' 'matrix: 20 cells - 13 new cases, 3 cross-referenced (upgrade row), 4 not-applicable'
 exit 0

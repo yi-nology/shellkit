@@ -725,3 +725,19 @@ job 双跑与 bench job 的 profile check 都不改变本地 `make check` 的行
 `tools/stability_exempt.txt` 只许变短）；Stable 的承诺变更由门禁兜底 —— 不写进本表
 就重生成不了行为基线（判据见 `tests/test_api_stability.sh`）。
 
+
+### 0.23.0 → 0.24.0：会改变结果的行为变化
+
+这一版是 v1.0.0 阶段四的门禁收口段。一处会改变结果的修复：
+
+| 变化 | 以前 | 现在 | 你会在哪里撞到 |
+|---|---|---|---|
+| `conf_set` / `conf_unset` / `conf_disable` 写临时文件时失败（磁盘满、配额超限、`RLIMIT_FSIZE`） | 返回 **0**，并把写了一半（甚至 0 字节）的临时文件 `mv` 成正式配置 —— 配置文件被清空，调用方一无所知 | 返回 **1**，正式配置一个字节都不动，临时文件删掉，stderr 报一句 `failed to write the file` | 磁盘 / 配额出问题的那一刻：以前是「静默损坏」，现在是「明确失败且原值还在」 |
+
+`@exitcode 1 写文件失败` 这三行承诺一直都在，只是实现从来没检查过写入状态 ——
+这一版是把承诺兑现，不是改承诺（`tools/api_baseline.txt` 里的返回码集合没有变化）。
+私有助手 `_sk_conf_render_line` / `_sk_conf_new_line` 的退出状态现在如实反映
+写失败（以前恒为 0），全库只有 `conf_set` 一处调用它们。
+
+回归判据：`tests/test_fault_matrix.sh` 的 `config` 行 —— 三个入口各一格，
+在 `RLIMIT_FSIZE` 上限下必须同时满足「返回非 0 + 原文件指纹不变 + 不留临时文件残骸」。

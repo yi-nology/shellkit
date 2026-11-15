@@ -4,7 +4,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: shellkit\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-11-14 14:12+0800\n"
+"POT-Creation-Date: 2026-11-15 14:34+0800\n"
 "PO-Revision-Date: 2026-11-08 00:00+0800\n"
 "Last-Translator: shellkit contributors\n"
 "Language-Team: shellkit contributors\n"
@@ -100,6 +100,9 @@ msgstr "設定值只能是單行"
 
 msgid "configuration file is not initialized"
 msgstr "設定檔尚未初始化"
+
+msgid "failed to write the file"
+msgstr "寫檔案失敗"
 
 msgid "invalid exit code"
 msgstr "非法的退出碼"
@@ -675,9 +678,6 @@ msgstr "將新增"
 
 msgid "would update"
 msgstr "將更新"
-
-msgid "failed to write the file"
-msgstr "寫檔案失敗"
 
 msgid "added"
 msgstr "已新增"

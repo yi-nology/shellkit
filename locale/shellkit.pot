@@ -8,7 +8,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: shellkit 0.23.0\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-11-15 01:59+0800\n"
+"POT-Creation-Date: 2026-11-15 14:34+0800\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language-Team: LANGUAGE <LL@li.org>\n"
@@ -102,6 +102,9 @@ msgid "configuration value must be a single line"
 msgstr ""
 
 msgid "configuration file is not initialized"
+msgstr ""
+
+msgid "failed to write the file"
 msgstr ""
 
 msgid "invalid exit code"
@@ -675,9 +678,6 @@ msgid "would add"
 msgstr ""
 
 msgid "would update"
-msgstr ""
-
-msgid "failed to write the file"
 msgstr ""
 
 msgid "added"
