@@ -8,7 +8,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: shellkit 0.24.1\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-11-15 17:10+0800\n"
+"POT-Creation-Date: 2026-11-16 00:18+0800\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language-Team: LANGUAGE <LL@li.org>\n"
@@ -497,6 +497,18 @@ msgid "not a regular file, left alone"
 msgstr ""
 
 msgid "modified locally, left alone"
+msgstr ""
+
+msgid "cannot stage the file to keep"
+msgstr ""
+
+msgid "the staged copy of a kept file is missing"
+msgstr ""
+
+msgid "cannot restore the file kept for the user"
+msgstr ""
+
+msgid "the restored file does not match the kept copy"
 msgstr ""
 
 msgid "both copies are broken, nothing was removed, reinstall shellkit"
