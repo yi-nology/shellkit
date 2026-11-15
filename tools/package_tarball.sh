@@ -70,7 +70,11 @@ mkdir -p "$dist/$name" || die "cannot create $dist/$name" 1
 # 所以清单原样保留在这里，且 cp 自带逐项点名（缺哪个源就报哪个）。
 cp -R shellkit install.sh repair.sh demo.sh lib templates locale po tools tests docs skills examples "$dist/$name/" ||
   die "cannot copy the release tree (see which path above is missing)" 3
-cp README.md AGENTS.md VERSION LICENSE NOTICE Makefile CHANGELOG.md "$dist/$name/" ||
+# .gitignore 也要随包走：tests/test_gitignore.sh 会读它（把规则重放进一个一次性
+# git 仓库再问 git 自己「.env / 私钥会不会被带走」）。漏了它，发布 tarball 里的
+# smoke（release.yml 解包后跑 tests/run.sh）必红 —— v0.24.0 就是在这一步现的原形：
+# cp: cannot stat '…/shellkit-0.24.0/.gitignore' → FAIL: .gitignore 必须忽略凭据…
+cp README.md AGENTS.md VERSION LICENSE NOTICE Makefile CHANGELOG.md .gitignore "$dist/$name/" ||
   die "cannot copy the top-level files (see which path above is missing)" 3
 rm -rf "$dist/$name/docs/superpowers"
 chmod +x "$dist/$name/shellkit" "$dist/$name/install.sh" "$dist/$name/repair.sh" "$dist/$name/demo.sh"
