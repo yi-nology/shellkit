@@ -120,12 +120,15 @@ fs_atomic_copy() {
 }
 
 # fs_backup FILE [KEEP] —— 产出 FILE.bak.YYYYmmddHHMMSS，按名升序保留最新 KEEP 份
+#
+# 备份文件本身也是「同目录临时文件 + rename」写出来的：中途被打断时要么没有
+# 这份备份、要么是一份完整可用的，不会留下半截内容去顶掉完好的旧备份。
 # @exitcode 0 备份成功（或文件本来就不存在）
 # @exitcode 2 参数错（保留份数不是正整数）
 # @exitcode 1 备份失败
 # @stability stable
 fs_backup() {
-  local __file=${1:-} __keep=${2:-3} __stamp __bak __x __i=0 __total __seq=0
+  local __file=${1:-} __keep=${2:-3} __stamp __bak __tmp __x __i=0 __total __seq=0
   local -a __list=()
   _sk_need_args "$#" 1 "fs_backup FILE [KEEP]" || return $?
   case "$__keep" in
@@ -145,8 +148,27 @@ fs_backup() {
     __seq=$((__seq + 1))
     __bak="$__file.bak.$__stamp.$$-$__seq"
   done
-  cp -p "$__file" "$__bak" || return 1
+  # 落盘用「同目录临时文件 + rename」（坑 9），不直接 cp 到最终名字：
+  # cp 先建目标再往里写，写到一半被打断（断电、磁盘满、进程被杀）留下的是
+  # **半截备份** —— 既不是旧内容也不是新内容，而下面的轮转还会把它当成一份
+  # 合格的备份计数，把真正完好的旧备份挤掉（一次失败带走两份历史）。
+  # cp -p 的语义保留：权限与时间戳跟着源，备份要能原样还原。
+  __tmp=$(mktemp "$__bak.tmp.XXXXXX") || return 1
+  if ! cp -p "$__file" "$__tmp"; then
+    rm -f "$__tmp"
+    return 1
+  fi
+  if ! mv -f "$__tmp" "$__bak"; then
+    rm -f "$__tmp"
+    return 1
+  fi
   for __x in "$__file".bak.*; do
+    # 原子写的临时文件不是备份：名字也以 .bak. 开头，混进轮转就会顶掉一份真备份。
+    # 只认「以 .tmp.<6 位随机串> 结尾」这一种形态 —— 文件名自己带 .tmp. 的备份
+    # （x.tmp.conf.bak.<时间戳>.<pid>）不会被误伤。
+    case "$__x" in
+      *.tmp.??????) continue ;;
+    esac
     if [ -e "$__x" ]; then
       __list[${#__list[@]}]=$__x
     fi

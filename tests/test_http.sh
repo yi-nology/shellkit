@@ -85,6 +85,18 @@ net_request GET "https://api.example.com/v1/items" >"$d/stdout.txt" 2>"$d/stderr
 assert_eq "4" "$rc" "a failed connection returns SK_NET"
 assert_eq "" "$SK_HTTP_CODE" "a failed connection leaves the status code empty"
 
+# 失败时的命令行必须是**脱敏后**的那一份（SECURITY.md 偏差 7）
+# 两条判据缺一不可：必须真有那一行（否则「脱敏」只是没打印），
+# 且那一行里不能有令牌原文（否则脱敏没生效）。
+stub curl --exit 7 --body "$FAKE_CURL_BODY"
+rc=0
+net_request GET "https://api.example.com/v1/items" --header 'Authorization: Bearer s3cr3t-tok-9f8e7d' \
+  >"$d/stdout.txt" 2>"$d/stderr.txt" || rc=$?
+assert_eq "4" "$rc" "a failed connection with a header still returns SK_NET"
+assert_contains "$(cat "$d/stderr.txt")" "curl" "the failure log names the command that failed"
+assert_contains "$(cat "$d/stderr.txt")" "Authorization: ***" "the logged command masks the header value"
+assert_not_contains "$(cat "$d/stderr.txt")" "s3cr3t-tok-9f8e7d" "the token must not reach the log"
+
 # 参数错 -> SK_USAGE(2)
 stub curl --stdout '200' --body "$FAKE_CURL_BODY"
 rc=0

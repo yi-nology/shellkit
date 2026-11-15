@@ -38,7 +38,7 @@ scaffold     error fs i18n log os str validate
 retry        i18n log str
 lock         i18n log str trap
 net          error fs i18n log os ver
-http         error i18n log
+http         error i18n log run
 config       fs i18n log str validate
 prompt       error i18n log str
 cli          error i18n log str
