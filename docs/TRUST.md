@@ -112,8 +112,14 @@ rm -f shellkit.key # 本地不再留副本
 # 3) 把公钥 base64（.pub 文件第 2 行）钉进本文件的「当前公钥」一节，随下一个 tag 发布
 ```
 
-- **没配私钥时**：`tools/sign_release.sh` 打印 `skipped: SHELLKIT_MINISIGN_KEY is not set`
-  并以 0 退出 —— 发布不挡、资产没有 `.minisig`、**绝不伪造签名产物**；
+- **正式发布必须签名（v0.27.0 起）**：`release.yml` 调的是
+  `tools/sign_release.sh --dist dist --require` —— 没配私钥时直接以 **3** 失败，
+  不产出「看起来一样、其实没签」的发行版；
+- **非发布场景**（本地打包、试签名）不带 `--require`：打印
+  `skipped: SHELLKIT_MINISIGN_KEY is not set` 并以 0 退出，**绝不伪造签名产物**；
+- **发布后独立验签**：`release.yml` 在 publish 之后调 `tools/verify_release.sh <tag>`，
+  从 Release 重新取回资产、用本文件钉住的公钥逐份验签，并与 `SHA256SUMS` 对账 ——
+  你也可以在本地跑同一条命令复核。
 - **顺序**：先发带签名的 release，再给 install.sh 配公钥。反过来配公钥，
   验签会因为「签名资产不存在」以 5 失败（这是故意的：要验就必须验得过）；
 - **轮换**：换钥匙后，旧公钥验证旧版本、新公钥验证新版本 —— 本文件按版本钉历史公钥。
