@@ -32,6 +32,7 @@ _sk_msg_lookup_shellkit() {
     'invalid configuration key') printf '%s' '非法的設定鍵名' ;;
     'configuration value must be a single line') printf '%s' '設定值只能是單行' ;;
     'configuration file is not initialized') printf '%s' '設定檔尚未初始化' ;;
+    'failed to write the file') printf '%s' '寫檔案失敗' ;;
     'invalid exit code') printf '%s' '非法的退出碼' ;;
     'Required command not found') printf '%s' '找不到必要的指令' ;;
     'This action must be run as root') printf '%s' '這個操作需要 root 權限' ;;
@@ -220,7 +221,6 @@ _sk_msg_lookup_shellkit() {
     'failed to write the upgrade journal') printf '%s' '寫入升級日誌失敗' ;;
     'would add') printf '%s' '將新增' ;;
     'would update') printf '%s' '將更新' ;;
-    'failed to write the file') printf '%s' '寫檔案失敗' ;;
     'added') printf '%s' '已新增' ;;
     'updated') printf '%s' '已更新：' ;;
     'already running from the vendored copy') printf '%s' '已經在用 vendor 副本本身執行' ;;

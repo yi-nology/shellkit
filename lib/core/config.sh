@@ -177,14 +177,16 @@ _sk_conf_line_style() {
 #
 # 保留原来的写法：export 前缀留着，引号风格留着（值里出现同一个引号就换成
 # 能读回来的那种写法）。这样 conf_set 改一个 dotenv 文件，不会把它改成另一种风格。
-# @exitcode 0 总是成功（stdout 输出改写后的那一行）
+# @exitcode 0 改写后的那一行写进 stdout 了
+# @exitcode 1 写失败（磁盘满 / 配额超限）—— 调用方必须当失败处理，
+#            否则半截内容会被改名成正式配置
 _sk_conf_render_line() {
   local __line=${1:-} __key=${2:-} __value=${3:-} __fmt=${4:-auto}
   local __style __body __prefix="" __quote="" __raw
   __style=$(_sk_conf_line_style "$__line" "$__fmt")
   if [ "$__style" = "env" ]; then
     printf '%s=%s\n' "$__key" "$__value"
-    return 0
+    return
   fi
   __body="$__line"
   __body="${__body#"${__body%%[![:space:]]*}"}"
@@ -210,14 +212,14 @@ _sk_conf_render_line() {
   else
     printf '%s%s=%s\n' "$__prefix" "$__key" "$(_sk_conf_dotenv_token "$__value")"
   fi
-  return 0
 }
 
 # _sk_conf_new_line KEY VALUE FORMAT —— 追加一个新键时该怎么写
 #
 # env 与 auto：原样写（KEY=VALUE），取回来就是原值。
 # dotenv：值要能读回来，带行尾空白或首尾引号的值会被加上引号。
-# @exitcode 0 总是成功（stdout 输出新行）
+# @exitcode 0 新行写进 stdout 了
+# @exitcode 1 写失败（磁盘满 / 配额超限）—— 同 _sk_conf_render_line
 _sk_conf_new_line() {
   local __key=${1:-} __value=${2:-} __fmt=${3:-auto}
   case "$__fmt" in
@@ -228,7 +230,6 @@ _sk_conf_new_line() {
       printf '%s=%s\n' "$__key" "$__value"
       ;;
   esac
-  return 0
 }
 
 # _sk_conf_layer_set KEY VALUE —— 写配置层；同键覆盖
@@ -535,7 +536,7 @@ conf_source() {
 # @exitcode 1 写文件失败
 # @stability stable
 conf_set() {
-  local __key=${1:-} __value=${2:-} __file=${SK_CONF_FILE:-} __line __tmp __origin __replaced=0
+  local __key=${1:-} __value=${2:-} __file=${SK_CONF_FILE:-} __line __tmp __origin __replaced=0 __werr=0
   local __fmt=${SK_CONF_FORMAT:-auto}
   if ! validate_key "$__key"; then
     log_error "$(_t 'invalid configuration key'): $__key"
@@ -562,16 +563,23 @@ conf_set() {
     while IFS= read -r __line || [ -n "$__line" ]; do
       if _sk_conf_assign "$__line" "$__fmt" && [ "$_SK_CONF_PKEY" = "$__key" ]; then
         if [ "$__replaced" -eq 0 ]; then
-          _sk_conf_render_line "$__line" "$__key" "$__value" "$__fmt"
+          _sk_conf_render_line "$__line" "$__key" "$__value" "$__fmt" || __werr=1
           __replaced=1
         fi
         continue
       fi
-      printf '%s\n' "$__line"
+      printf '%s\n' "$__line" || __werr=1
     done <"$__file" >"$__tmp"
   fi
   if [ "$__replaced" -eq 0 ]; then
-    _sk_conf_new_line "$__key" "$__value" "$__fmt" >>"$__tmp"
+    _sk_conf_new_line "$__key" "$__value" "$__fmt" >>"$__tmp" || __werr=1
+  fi
+  # 写不完（磁盘满 / 配额超限）时 mv 会把半截临时文件换上去：调用方拿到 0，
+  # 配置已经损坏。所以先判写失败 —— 失败就丢掉临时文件，原文件一个字节都不动。
+  if [ "$__werr" -ne 0 ]; then
+    rm -f "$__tmp"
+    log_error "$(_t 'failed to write the file'): $__file"
+    return 1
   fi
   chmod 600 "$__tmp" 2>/dev/null || true
   if ! mv -f "$__tmp" "$__file"; then
@@ -591,7 +599,7 @@ conf_set() {
 # @exitcode 1 写文件失败
 # @stability stable
 conf_unset() {
-  local __key=${1:-} __file=${SK_CONF_FILE:-} __line __tmp
+  local __key=${1:-} __file=${SK_CONF_FILE:-} __line __tmp __werr=0
   local __fmt=${SK_CONF_FORMAT:-auto}
   if ! validate_key "$__key"; then
     return "$SK_USAGE"
@@ -609,8 +617,14 @@ conf_unset() {
     if _sk_conf_assign "$__line" "$__fmt" && [ "$_SK_CONF_PKEY" = "$__key" ]; then
       continue
     fi
-    printf '%s\n' "$__line"
+    printf '%s\n' "$__line" || __werr=1
   done <"$__file" >"$__tmp"
+  # 同 conf_set：半截临时文件不许改名成正式配置
+  if [ "$__werr" -ne 0 ]; then
+    rm -f "$__tmp"
+    log_error "$(_t 'failed to write the file'): $__file"
+    return 1
+  fi
   chmod 600 "$__tmp" 2>/dev/null || true
   if ! mv -f "$__tmp" "$__file"; then
     rm -f "$__tmp"
@@ -626,7 +640,7 @@ conf_unset() {
 # @exitcode 1 写文件失败
 # @stability stable
 conf_disable() {
-  local __key=${1:-} __file=${SK_CONF_FILE:-} __line __tmp
+  local __key=${1:-} __file=${SK_CONF_FILE:-} __line __tmp __werr=0
   local __fmt=${SK_CONF_FORMAT:-auto}
   if ! validate_key "$__key"; then
     return "$SK_USAGE"
@@ -641,11 +655,17 @@ conf_disable() {
   __tmp=$(mktemp "$__file.tmp.XXXXXX") || return 1
   while IFS= read -r __line || [ -n "$__line" ]; do
     if _sk_conf_assign "$__line" "$__fmt" && [ "$_SK_CONF_PKEY" = "$__key" ]; then
-      printf '# %s\n' "$__line"
+      printf '# %s\n' "$__line" || __werr=1
       continue
     fi
-    printf '%s\n' "$__line"
+    printf '%s\n' "$__line" || __werr=1
   done <"$__file" >"$__tmp"
+  # 同 conf_set：半截临时文件不许改名成正式配置
+  if [ "$__werr" -ne 0 ]; then
+    rm -f "$__tmp"
+    log_error "$(_t 'failed to write the file'): $__file"
+    return 1
+  fi
   chmod 600 "$__tmp" 2>/dev/null || true
   if ! mv -f "$__tmp" "$__file"; then
     rm -f "$__tmp"
