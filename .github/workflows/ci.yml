@@ -200,6 +200,20 @@ jobs:
       - name: smoke the artifacts
         run: bash tools/package_artifact_smoke.sh
 
+
+  upgrade-matrix:
+    name: cross-version upgrade matrix
+    # 路线图 v0.25.0：用例都是「当前版本 → 当前版本」，证明不了老工程能不能被新版本接住。
+    # 这里下载**已发布**的旧版本 tarball，用它建工程，再用当前 CLI 升级，断言：
+    # 退出码 0 / vendor 里的 VERSION 跟上 / 用户文件字节不变 / 无残骸 / 再跑一次是幂等。
+    # 离网时脚本会显式 SKIP 并返回 0（不假绿），所以这个 job 不会因为网络抖动误报缺陷。
+    runs-on: ubuntu-latest
+    env:
+      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+      - name: run the matrix
+        run: bash tools/upgrade_matrix.sh
   bats:
     name: bats suite
     runs-on: ubuntu-latest
