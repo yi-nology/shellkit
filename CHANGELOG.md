@@ -2,6 +2,10 @@
 本文件由 `tools/release.sh` 在发版时自动追加，已发布的小节不要手改。
 最新的在最前面。每一条对应一个提交 —— 要看「为什么」而不是「改了什么」，读 `docs/MIGRATING.md`。
 
+## 0.24.1 — 2026-11-15
+
+f2e74b9 fix(package): 发布 tarball 带上 .gitignore，否则包内 smoke 必红
+
 ## 0.24.0 — 2026-11-15
 
 d0cd5fc refactor(upgrade): 路径守卫收口到库内唯一实现（gate-2）
