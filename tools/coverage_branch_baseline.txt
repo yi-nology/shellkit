@@ -161,6 +161,9 @@ lib/core/fs.sh:fs_atomic_write:2
 lib/core/fs.sh:fs_atomic_write:4
 lib/core/fs.sh:fs_atomic_write:5
 lib/core/fs.sh:fs_backup:4
+lib/core/fs.sh:fs_backup:5
+lib/core/fs.sh:fs_backup:6
+lib/core/fs.sh:fs_backup:7
 lib/core/fs.sh:fs_ensure_block:12
 lib/core/fs.sh:fs_ensure_block:5
 lib/core/fs.sh:fs_ensure_block:6
@@ -585,10 +588,6 @@ shellkit:_sk_check_dir:2
 shellkit:_sk_check_dir:3
 shellkit:_sk_copy_complete:1
 shellkit:_sk_copy_complete:10
-shellkit:_sk_copy_legal:1
-shellkit:_sk_copy_legal:2
-shellkit:_sk_copy_legal:3
-shellkit:_sk_copy_legal:4
 shellkit:_sk_copy_tree:2
 shellkit:_sk_copy_tree:3
 shellkit:_sk_copy_tree:4
