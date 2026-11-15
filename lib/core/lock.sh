@@ -173,6 +173,7 @@ lock_acquire() {
 # @exitcode 0 释放成功（或本来就没锁）
 # @exitcode 2 锁名非法
 # @exitcode 3 锁被别的进程持有
+# @stability stable
 lock_release() {
   local __name=${1:-} __dir __pid
   if ! _sk_lock_name_ok "$__name"; then
@@ -197,6 +198,7 @@ lock_release() {
 # @exitcode 0 锁着
 # @exitcode 1 没锁
 # @exitcode 2 锁名非法
+# @stability stable
 lock_held() {
   local __name=${1:-} __dir __pid
   if ! _sk_lock_name_ok "$__name"; then

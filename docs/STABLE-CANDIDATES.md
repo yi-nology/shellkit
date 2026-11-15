@@ -140,3 +140,18 @@
 5. ✅ `tests/test_api_stability.sh` 新增判据：Stable 函数的行为变更必须出现在
    `docs/MIGRATING.md`「会改变结果的行为变化」小节（把「Stable 才进迁移表」从约定变成门禁）；
 6. 全量 `make check` + CI 绿后合入，随后发 v0.19.0。
+
+## 第二批（v0.26.0，2026-11-16）
+
+v0.24.x 把 fs / config / lock 的**失败语义**逐一收口、并被故障注入钉住之后再晋升这一批 ——
+判据比首批更硬：不止「探针 + MIGRATING 记录 + 返回码齐全」，还要「失败后的磁盘终态有独立用例」。
+
+| 模块 | 新晋升（13 个） | 依据 |
+|---|---|---|
+| fs | `fs_atomic_write` `fs_ensure_dir` `fs_ensure_symlink` `fs_tmp_init` `fs_tmpdir` | 原子写与权限语义由 `perm.mode` 判据 + `tests/test_fs.sh` 钉住 |
+| config | `conf_init` `conf_get_any` `conf_has` `conf_keys` `conf_file` `conf_format` | 写失败不再清空配置：`test_fault_matrix.sh` 的 `config` 行 4 格 |
+| lock | `lock_held` `lock_release` | 回收语义由 `exec.lock` 判据钉住（pid 缺失可回收、活着的持有者绝不回收） |
+
+现状：**50 stable / 112 experimental**（162 个公开函数），`tools/stability_exempt.txt` 从 125 条降到 112 条。
+落地：源码加 `@stability stable` → 移出豁免名单 → `bash tools/api_baseline.sh --write-baseline` → `./shellkit docs`。
+下一批建议按路线图 v0.26.0 继续：`os_*`、`error` 系（`die` / `fail` / `require_*`）、`net_*`。
