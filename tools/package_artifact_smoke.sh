@@ -25,7 +25,10 @@ while [ $# -gt 0 ]; do
   case $1 in
     --dist)
       shift
-      [ $# -gt 0 ] || { printf 'usage: %s [--dist DIR]\n' "${0##*/}" >&2; exit 2; }
+      [ $# -gt 0 ] || {
+        printf 'usage: %s [--dist DIR]\n' "${0##*/}" >&2
+        exit 2
+      }
       dist=$1
       ;;
     --dist=*) dist=${1#*=} ;;
@@ -33,7 +36,10 @@ while [ $# -gt 0 ]; do
       printf 'usage: %s [--dist DIR]\n' "${0##*/}"
       exit 0
       ;;
-    *) printf 'unknown option: %s\n' "$1" >&2; exit 2 ;;
+    *)
+      printf 'unknown option: %s\n' "$1" >&2
+      exit 2
+      ;;
   esac
   shift
 done
@@ -96,8 +102,7 @@ for f in shellkit \
   README.md \
   AGENTS.md \
   .gitignore \
-  VERSION
-do
+  VERSION; do
   [ -e "$pkgdir/$f" ] || die "the release tarball is missing $f"
 done
 
@@ -106,14 +111,14 @@ done
 
 # 3) 包内测试套件
 say "running the suite inside the artifact (this is the long part)"
-( cd "$pkgdir" && bash tests/run.sh ) || die "the suite is not green inside the release tarball"
+(cd "$pkgdir" && bash tests/run.sh) || die "the suite is not green inside the release tarball"
 
 # 4) 包内 CLI 三连
 say "checking the packaged CLI"
-( cd "$pkgdir" && ./shellkit doctor ) || true
-( cd "$pkgdir" && ./shellkit new "$work/demo" --cmd start ) || die "shellkit new failed inside the artifact"
-( cd "$work/demo" && make test ) || die "the generated project does not pass its own tests"
-( cd "$pkgdir" && ./shellkit demo "$work/demo2" ) || die "shellkit demo failed inside the artifact"
+(cd "$pkgdir" && ./shellkit doctor) || true
+(cd "$pkgdir" && ./shellkit new "$work/demo" --cmd start) || die "shellkit new failed inside the artifact"
+(cd "$work/demo" && make test) || die "the generated project does not pass its own tests"
+(cd "$pkgdir" && ./shellkit demo "$work/demo2") || die "shellkit demo failed inside the artifact"
 
 say "ok: shellkit $version artifact passed"
 exit 0
