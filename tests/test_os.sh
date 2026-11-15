@@ -170,18 +170,19 @@ case "$(os_distro_family)" in
   *) _fail "unexpected os_distro_family: $(os_distro_family)" ;;
 esac
 
-# os_desktop_env：先探一次本机有没有会话二进制（下面的断言要区分「没有线索」和「机器上本来就有」）
-__sk_test_bin=0
-for __sk_test_b in ukui-session kwin_x11 startdde dde-desktop gnome-session \
-  gnome-shell plasmashell startplasma-x11 xfce4-session mate-session \
-  cinnamon-session lxsession; do
-  if command -v "$__sk_test_b" >/dev/null 2>&1; then
-    __sk_test_bin=1
-    break
-  fi
-done
+# os_desktop_env 的线索有两路：三个环境变量，以及「装了哪些会话二进制」。
+# 后者按类型优先级可能压过前者 —— 真装了桌面的机器上（例如带 lxsession 的 LXQt），
+# 「环境变量说 budgie」这条会被判成 lxqt 而误红（issue #104）。
+# 所以下面整段用 PATH 把会话二进制这一路挡住，只让用例自己设的线索生效：
+#   - os_desktop_env 只用**内建**的 command -v 探测，PATH 里没有它即等于「没装」；
+#   - 但 _sk_os_lower 需要 tr，所以隔离目录里只放一个 tr 的软链。
+# stub 注册要落文件，因此在隔离之外（正常 PATH）做注册，断言时才切进隔离。
+__iso=$(mktemp -d "${TMPDIR:-/tmp}/sk-nodesktop.XXXXXX") || _fail "cannot create the isolation dir"
+ln -s "$(command -v tr)" "$__iso/tr" || _fail "cannot link tr into the isolation dir"
+__saved_path=$PATH
 
-# os_desktop_env：三个环境变量
+# os_desktop_env：三个环境变量（只看这一路）
+PATH=$__iso
 unset XDG_CURRENT_DESKTOP XDG_SESSION_DESKTOP DESKTOP_SESSION
 export XDG_CURRENT_DESKTOP="ubuntu:GNOME"
 assert_eq "gnome" "$(os_desktop_env)" "os_desktop_env 冒号列表"
@@ -222,31 +223,35 @@ assert_eq "mate" "$(os_desktop_env)" "os_desktop_env XDG_SESSION_DESKTOP"
 unset XDG_SESSION_DESKTOP
 export DESKTOP_SESSION="startdde"
 assert_eq "dde" "$(os_desktop_env)" "os_desktop_env DESKTOP_SESSION"
+PATH=$__saved_path
 
 # os_desktop_env：装了会话二进制也算线索
 unset XDG_CURRENT_DESKTOP XDG_SESSION_DESKTOP DESKTOP_SESSION
 stub gnome-session
+PATH=$__iso
 assert_eq "gnome" "$(os_desktop_env)" "os_desktop_env 二进制线索"
 
 # os_desktop_env：线索来源不同也按类型优先级 —— 环境变量说 xfce、二进制说 gnome => gnome
 export XDG_CURRENT_DESKTOP="xfce"
 assert_eq "gnome" "$(os_desktop_env)" "os_desktop_env 跨来源按类型优先级"
 unset XDG_CURRENT_DESKTOP
+PATH=$__saved_path
 unstub gnome-session
 
 # os_desktop_env：kwin_x11 的名字里既没有 plasma 也没有 kde，单独不构成线索
 # （与 unix_script 的 detect_desktop 同口径；真实 KDE 会话必然带 plasmashell / startplasma-x11）
 stub kwin_x11
-if [ "$__sk_test_bin" = "0" ]; then
-  assert_eq "none" "$(os_desktop_env)" "os_desktop_env kwin_x11 单独不算线索"
-fi
+PATH=$__iso
+assert_eq "none" "$(os_desktop_env)" "os_desktop_env kwin_x11 单独不算线索"
+PATH=$__saved_path
 unstub kwin_x11
 
-# os_desktop_env：什么线索都没有才是 none
-if [ "$__sk_test_bin" = "0" ]; then
-  assert_eq "none" "$(os_desktop_env)" "os_desktop_env none"
-  assert_exit_code 1 os_is_desktop
-fi
+# os_desktop_env：什么线索都没有才是 none（隔离里本来就没有任何会话二进制）
+PATH=$__iso
+assert_eq "none" "$(os_desktop_env)" "os_desktop_env none"
+assert_exit_code 1 os_is_desktop
+PATH=$__saved_path
+rm -rf "$__iso" 2>/dev/null || true
 
 # os_is_desktop：在桌面环境返回 0
 export XDG_CURRENT_DESKTOP="GNOME"
