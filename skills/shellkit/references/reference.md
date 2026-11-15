@@ -359,7 +359,7 @@ fs_atomic_copy SRC DST [MODE] —— 按字节把 SRC 复制到 DST；写法是�
 
 ### `fs_backup`
 
-fs_backup FILE [KEEP] —— 产出 FILE.bak.YYYYmmddHHMMSS，按名升序保留最新 KEEP 份
+fs_backup FILE [KEEP] —— 产出 FILE.bak.YYYYmmddHHMMSS，按名升序保留最新 KEEP 份 备份文件本身也是「同目录临时文件 + rename」写出来的：中途被打断时要么没有 这份备份、要么是一份完整可用的，不会留下半截内容去顶掉完好的旧备份。
 
 **稳定性**：stable
 

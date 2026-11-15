@@ -2,6 +2,8 @@
 #
 # HTTP 客户端：基于 curl 的通用请求 + JSON 解析。
 #
+# curl 经 run 执行（依赖 run 模块）：失败时打印的是脱敏后的命令行。
+#
 # 全库约定在这里同样成立：stdout 只给数据，日志一律 stderr；
 # 出参用 printf -v 写全局变量，不去改调用方的局部变量。
 #
@@ -337,7 +339,12 @@ _sk_http_exec() {
     return "$SK_ERR"
   }
 
-  __code=$(curl -sS ${_SK_HTTP_CURL_ARGS[@]+"${_SK_HTTP_CURL_ARGS[@]}"} -D "$__head_file" -o "$__body_file" -w '%{http_code}' "$_SK_HTTP_URL")
+  # 经 run 执行，不直接调 curl（SECURITY.md 偏差 7）：
+  #   --always  不让 SHELLKIT_DRY_RUN 把请求「跳过」—— 那会让调用方读到空状态码；
+  #   --no-die  成败在下面自己判，run 只负责执行与**脱敏后的**命令行。
+  # 差别只在失败那一刻：多一行形如「command failed: curl … Authorization: ***」的
+  # 日志，请求头里的令牌被 run 的脱敏挡住，而不是整条命令行要么不打印、要么原文照打。
+  __code=$(run --always --no-die -- curl -sS ${_SK_HTTP_CURL_ARGS[@]+"${_SK_HTTP_CURL_ARGS[@]}"} -D "$__head_file" -o "$__body_file" -w '%{http_code}' "$_SK_HTTP_URL")
   __rc=$?
 
   if [ "$__rc" -ne 0 ]; then

@@ -554,5 +554,55 @@ fi
 printf '%s\n' 'NA config|signal: 每次写都是「同目录临时文件 + rename」的原子替换，目标永远是完整的旧值或新值；被杀只会留下 .tmp 残骸 —— 与本行磁盘满格同构，且 conf_set 没有两阶段提交'
 printf '%s\n' 'NA config|concurrent: 配置层不承诺并发合并（没有锁也没有三方合并），两个 conf_set 并发是 last-writer-wins，且每次改名都完整；要的是「不半截」而不是「都留下」，那一半由上面两格覆盖'
 
-printf '%s\n' 'matrix: 20 cells - 13 new cases, 3 cross-referenced (upgrade row), 4 not-applicable'
+# ---------------------------------------------------------------- backup 行
+#
+# fs_backup 是「改之前留一份旧的」。它以前是 cp -p 直接写最终名字：写到一半被
+# 打断（磁盘满 / 配额 / 断电 / 被杀）会留下**半截备份** —— 既不是旧内容也不是
+# 新内容，而轮转按名字计数，那份半截文件会顶掉一份完好的旧备份。
+# 这一格钉的是「失败时不产出备份」，不是「产出一份坏的」。
+bdir="$work/backup"
+mkdir -p "$bdir"
+
+# backup_driver DIR —— 只做一次 fs_backup 的小驱动
+# 与 config_driver 同理：ulimit -f 是进程级的，必须在 fault_run 拉起的独立进程里生效。
+backup_driver() {
+  local __dir=$1
+  local __drv="$__dir/drive.sh"
+  cat >"$__drv" <<'DRV'
+#!/usr/bin/env bash
+set -u
+. "$1/lib/bootstrap.sh" log fs >/dev/null 2>&1
+fs_backup "$2" 3
+DRV
+  printf '%s' "$__drv"
+}
+
+# CASE: backup|diskfull —— 备份写不完 ⇒ 明确失败，源文件与旧备份都不受损
+bdrv=$(backup_driver "$bdir")
+bsrc="$bdir/app.conf"
+# 复用 config 行的 200 行夹具（约 3KB）：必须明显超过 macOS 的 1KB 页粒度上限，
+# 否则 ulimit 注入根本不发生，这一格会恒绿（假通过）。
+config_fixture "$bsrc"
+bsum=$(file_sum "$bsrc")
+fault_reset
+fault_scope "$bdir"
+fault_disk_full_limit 512
+rc=0
+fault_run bash "$bdrv" "$TEST_ROOT" "$bsrc" >"$work/bkfull.log" 2>&1 || rc=$?
+assert_ne "0" "$rc" "fs_backup must report failure when the copy cannot be written"
+assert_eq "$bsum" "$(file_sum "$bsrc")" "a failed backup must not touch the source file"
+leftover=0
+for __bk in "$bsrc".bak.*; do
+  [ -e "$__bk" ] || continue
+  leftover=$((leftover + 1))
+done
+assert_eq "0" "$leftover" "a failed backup must not leave a half-written .bak file behind"
+fault_reset
+printf '%s\n' 'CELL backup|diskfull -> 本节 CASE（RLIMIT_FSIZE 内核层，判据：非 0 退出 + 无 .bak 残骸 + 源不变）'
+
+printf '%s\n' 'NA backup|permission: 备份只读源、只新增文件，建不了临时文件时 mktemp 直接失败、源文件不在写入路径上；这条与 config|permission 同一套 mktemp 口径，不重复注入'
+printf '%s\n' 'NA backup|signal: 备份是「同目录临时文件 + rename」，目标只可能是完整旧值或完整新值，被杀只留 .tmp 残骸（轮转按名计数时已跳过 *.tmp.*）—— 与 config|signal 同构'
+printf '%s\n' 'NA backup|concurrent: 两个并发备份各拿各的名字（pid + 序号），轮转是 last-writer-wins：并发下可能多删一份最旧的，但不会出现半截文件 —— 本行要的是「不半截」而不是「都留下」'
+
+printf '%s\n' 'matrix: 24 cells - 14 new cases, 3 cross-referenced (upgrade row), 7 not-applicable'
 exit 0

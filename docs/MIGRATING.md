@@ -733,6 +733,8 @@ job 双跑与 bench job 的 profile check 都不改变本地 `make check` 的行
 | 变化 | 以前 | 现在 | 你会在哪里撞到 |
 |---|---|---|---|
 | `conf_set` / `conf_unset` / `conf_disable` 写临时文件时失败（磁盘满、配额超限、`RLIMIT_FSIZE`） | 返回 **0**，并把写了一半（甚至 0 字节）的临时文件 `mv` 成正式配置 —— 配置文件被清空，调用方一无所知 | 返回 **1**，正式配置一个字节都不动，临时文件删掉，stderr 报一句 `failed to write the file` | 磁盘 / 配额出问题的那一刻：以前是「静默损坏」，现在是「明确失败且原值还在」 |
+| `fs_backup` 备份文件的落盘 | `cp -p` 直接写最终名字：写到一半被打断就留下**半截备份**（实测 macOS 在 `RLIMIT_FSIZE` 下留 1024 字节），而轮转按名字计数 —— 那份半截文件还会顶掉一份完好的旧备份 | 同目录临时文件 + rename：失败要么没有这份备份、要么完整；轮转列表跳过 `*.tmp.*` 残骸 | 备份时磁盘满 / 被杀的人：不再有半截备份；返回码口径不变（失败仍是 1） |
+| `net_request` / `net_json` **失败**时的 stderr | 只有一句 `HTTP request failed: GET <url>` | 多一行 `command failed: curl …` —— 其中的 `Authorization` / `Cookie` 一类请求头已脱敏成 `***`，随后仍是原来那句 | 拿 stderr 做精确比对的脚本；顺带确认令牌不会因为失败日志进日志文件 |
 
 `@exitcode 1 写文件失败` 这三行承诺一直都在，只是实现从来没检查过写入状态 ——
 这一版是把承诺兑现，不是改承诺（`tools/api_baseline.txt` 里的返回码集合没有变化）。
@@ -740,4 +742,9 @@ job 双跑与 bench job 的 profile check 都不改变本地 `make check` 的行
 写失败（以前恒为 0），全库只有 `conf_set` 一处调用它们。
 
 回归判据：`tests/test_fault_matrix.sh` 的 `config` 行 —— 三个入口各一格，
-在 `RLIMIT_FSIZE` 上限下必须同时满足「返回非 0 + 原文件指纹不变 + 不留临时文件残骸」。
+在 `RLIMIT_FSIZE` 上限下必须同时满足「返回非 0 + 原文件指纹不变 + 不留临时文件残骸」；
+`backup` 行同口径（非 0 + 源文件不变 + 不留 `.bak` 残骸），`tests/test_http.sh`
+钉「失败日志里有脱敏后的命令行、且没有令牌原文」。
+
+同版还删掉了一个私有函数 `_sk_copy_legal`（`shellkit` 里的 LICENSE/NOTICE 拷贝，
+从来没有调用点）—— 私有符号不属于公开 API，`docs/REFERENCE.md` 不收录，删它不影响任何调用方。

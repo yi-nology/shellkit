@@ -232,20 +232,6 @@ EOF
   return 0
 }
 
-# _sk_copy_legal DEST —— 把 LICENSE 与 NOTICE 拷进目标目录
-# MIT 许可证要求「软件的所有副本都要带上版权声明与许可声明」。
-# vendor 出去的副本和装出来的副本都是副本，所以两份文件都得跟着走。
-_sk_copy_legal() {
-  local __dest=$1
-  if [ -f "$SELF_DIR/LICENSE" ]; then
-    cp -f "$SELF_DIR/LICENSE" "$__dest/LICENSE" || return 1
-  fi
-  if [ -f "$SELF_DIR/NOTICE" ]; then
-    cp -f "$SELF_DIR/NOTICE" "$__dest/NOTICE" || return 1
-  fi
-  return 0
-}
-
 # ---------- 安装/同步的所有权清单（issue #69）----------
 #
 # vendor 副本与 install-self 副本都是「我们装的一套文件」。
@@ -535,7 +521,8 @@ _sk_own_sync() {
         if [ -L "$__stage/$__rel" ]; then
           cp -P "$__stage/$__rel" "$__keep/$__rel" 2>/dev/null || true
         elif [ -f "$__stage/$__rel" ]; then
-          cp -f "$__stage/$__rel" "$__keep/$__rel" 2>/dev/null || true
+          # 暂存目录里的单文件写也走原子写：整目录换上去之前那份文件不该是半截的。
+          fs_atomic_copy "$__stage/$__rel" "$__keep/$__rel" 2>/dev/null || true
         fi
         _SK_OWN_KEEP[${#_SK_OWN_KEEP[@]}]=$__rel
       fi
@@ -631,7 +618,7 @@ _sk_own_sync() {
         if [ -L "$__dstf" ]; then
           cp -P "$__dstf" "$__keep/$__rel" 2>/dev/null || true
         elif [ -f "$__dstf" ]; then
-          cp -f "$__dstf" "$__keep/$__rel" 2>/dev/null || true
+          fs_atomic_copy "$__dstf" "$__keep/$__rel" 2>/dev/null || true
         fi
         _SK_OWN_KEEP[${#_SK_OWN_KEEP[@]}]=$__rel
         __n_k=$((__n_k + 1))
@@ -674,7 +661,7 @@ _sk_own_sync() {
       if [ -L "$__keep/$__rel" ]; then
         cp -P "$__keep/$__rel" "$__stage/$__rel" 2>/dev/null || true
       else
-        cp -f "$__keep/$__rel" "$__stage/$__rel" 2>/dev/null || true
+        fs_atomic_copy "$__keep/$__rel" "$__stage/$__rel" 2>/dev/null || true
       fi
     fi
     __i=$((__i + 1))
