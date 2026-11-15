@@ -236,7 +236,9 @@ for __d in lib tests tools templates locale po docs examples skills; do
   fi
 done
 
-for __f in shellkit install.sh repair.sh Makefile VERSION README.md AGENTS.md LICENSE NOTICE; do
+# .gitignore 也要带：tests/test_gitignore.sh 拿它对着 git 问「凭据会不会被带走」，
+# 副本里没有这个文件时那条用例必红（覆盖率口径下 82 个用例一起被判红，跑不出结论）。
+for __f in shellkit install.sh repair.sh Makefile VERSION README.md AGENTS.md LICENSE NOTICE .gitignore; do
   if [ -f "$ROOT/$__f" ]; then
     cp -p "$ROOT/$__f" "$TREE/" || {
       log "cannot copy $__f"
