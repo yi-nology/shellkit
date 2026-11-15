@@ -59,74 +59,9 @@ jobs:
           cat dist/SHA256SUMS
 
       - name: smoke test the artifact
-        run: |
-          set -euo pipefail
-          version=$(cat VERSION)
-          # skill 包必须能独立解开：装进 AI 客户端的就是它。
-          # 缺 references/ 的残包 AI 会照着残缺的内容写代码 —— 用户看不出区别。
-          skillpkg="dist/shellkit-skill-$version.tar.gz"
-          if [ ! -f "$skillpkg" ]; then
-            echo "the release is missing $skillpkg" >&2
-            exit 1
-          fi
-          skillwork=$(mktemp -d)
-          tar -C "$skillwork" -xzf "$skillpkg"
-          for f in shellkit/SKILL.md shellkit/references/reference.md shellkit/references/cli.md; do
-            if [ ! -s "$skillwork/$f" ]; then
-              echo "the skill package is missing $f" >&2
-              exit 1
-            fi
-          done
-          work=$(mktemp -d)
-          tar -C "$work" -xzf "dist/shellkit-$version.tar.gz"
-          cd "$work/shellkit-$version"
-          # 许可文件必须随包走：MIT 要求版权声明随每一份副本分发，
-          # NOTICE 里的上游署名同理。漏了不会有任何报错，只有收到律师函时才知道。
-          for f in LICENSE NOTICE; do
-            if [ ! -s "$f" ]; then
-              echo "the release tarball is missing $f" >&2
-              exit 1
-            fi
-          done
-          # 打包清单必须逐项点名：少拷一个目录，smoke test 要到几百行之后
-          # 才会以「command not found / 127」的形式炸掉，看不出是打包漏了东西。
-          # （v0.15.0 就是在这一步现原形：tests/ 漏了，报出来的是 127。）
-          for f in shellkit \
-                    install.sh \
-                    repair.sh \
-                    demo.sh \
-                    lib/bootstrap.sh \
-                    templates \
-                    locale/shellkit.pot \
-                    po/messages.sh \
-                    tests/run.sh \
-                    tests/test_helper.sh \
-                    docs/MIGRATING.md \
-                    skills/shellkit/SKILL.md \
-                    skills/shellkit/references/reference.md \
-                    README.md \
-                    AGENTS.md \
-                    .gitignore \
-                    VERSION
-          do
-            if [ ! -e "$f" ]; then
-              echo "the release tarball is missing $f" >&2
-              exit 1
-            fi
-          done
-          # repair.sh 必须可执行：CLI 起不来时，它是唯一的恢复入口。
-          # 漏打包 ⇒ 那台机器连自救的路都没有。
-          if [ ! -x repair.sh ]; then
-            echo "the release tarball is missing an executable repair.sh" >&2
-            exit 1
-          fi
-          bash tests/run.sh
-          ./shellkit doctor || true
-          ./shellkit new "$work/demo" --cmd start
-          ( cd "$work/demo" && make test )
-          # demo 命令必须能用：它生成工程并跑工程自己的测试，跑的是真二进制。
-          # demo.sh 走的是 release 资产（发布前拿不到），所以这里验的是包里的 CLI。
-          ./shellkit demo "$work/demo2"
+        # 验收逻辑只维护一份：tools/package_artifact_smoke.sh —— PR 阶段（ci.yml 的
+        # artifact job）与这里调的是同一个脚本，两边不可能漂移（v0.25.0）。
+        run: bash tools/package_artifact_smoke.sh
 
       # 签名工具：ubuntu runner 默认没有 minisign。v0.21.0 首发正是在签名步骤
       # 报 exit 3（密钥已配置但工具缺失 —— 按设计「配了钥匙就该红」），先装工具

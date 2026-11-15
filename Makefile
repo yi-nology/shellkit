@@ -9,7 +9,7 @@ SOURCES := shellkit install.sh repair.sh demo.sh lib/bootstrap.sh $(wildcard lib
 TEMPLATES := $(shell find templates -type f)
 SHOTS := $(wildcard docs/shots/*.shot)
 
-.PHONY: help test syntax lint lint-templates fmt messages messages-check docs docs-check versions-check check-docs cookbook-check shots examples check install release release-dry site-deps site-sync site site-serve local-names-check module-count-check pipe-safety-check dup-functions-check mutation security-check api-baseline-check bench coverage coverage-branch ident-boundary-check
+.PHONY: help test syntax lint lint-templates fmt messages messages-check docs docs-check versions-check check-docs cookbook-check shots examples artifact-smoke check install release release-dry site-deps site-sync site site-serve local-names-check module-count-check pipe-safety-check dup-functions-check mutation security-check api-baseline-check bench coverage coverage-branch ident-boundary-check
 
 help:
 	@printf '%s\n' \
@@ -112,6 +112,10 @@ bats-check:
 
 # 覆盖率：函数级（162 个公开函数谁没被测到），带白名单棘轮。
 # 不进 check —— 它要把整套测试跑两遍，太慢；想收紧覆盖率就调 --min。
+artifact-smoke:
+	@bash tools/package_tarball.sh
+	@bash tools/package_artifact_smoke.sh
+
 coverage:
 	@bash tools/coverage.sh --min 40
 
