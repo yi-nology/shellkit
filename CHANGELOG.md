@@ -2,6 +2,19 @@
 本文件由 `tools/release.sh` 在发版时自动追加，已发布的小节不要手改。
 最新的在最前面。每一条对应一个提交 —— 要看「为什么」而不是「改了什么」，读 `docs/MIGRATING.md`。
 
+## 0.24.0 — 2026-11-15
+
+d0cd5fc refactor(upgrade): 路径守卫收口到库内唯一实现（gate-2）
+1ec0bc4 fix(coverage): 按 CI 日志把 4 条已覆盖分支移出基线（gate-2 后续）
+84e36eb docs(security): 偏差表按代码实数校正三条已收口项；给凭据忽略规则补判据
+91240c9 fix(config): 写临时文件失败时不再静默清空配置（conf_set/conf_unset/conf_disable）
+a014bcc test(gitignore): 覆盖率副本要带上 .gitignore，否则新用例必红
+d76b52b chore(coverage): 按 Linux 实测重算 conf_* 的分支基线（写失败修复的连带）
+d2ab947 fix(tests): test_doctor.sh 无 python3 时取值断言整段跳过——不再是红而是显式 skip(#101) (#102)
+260d262 fix(security): 收口偏差表剩三条——备份原子写、暂存单文件写、http 经 run 脱敏
+d1482ed chore(coverage): 按 Linux 实测重算 fs_backup 的分支基线（备份原子写的连带）
+7128082 test(test_os): 隔离 PATH，让 os_desktop_env 的断言不再被机器上装着的会话二进制干扰
+
 ## 0.23.0 — 2026-11-15
 
 53560ff fix(own_sync): 上游删除+用户改过的文件冻结基线登记——加回时不被静默覆盖(#91) (#94)
