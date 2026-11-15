@@ -110,6 +110,7 @@ assert_eq "$plain" "$limited" "SHELLKIT_MODULES must not change doctor's output"
 # jget FILE PATH —— 取 JSON 里的一个值打印出来（没有 python3 时跳过）
 # jlen FILE PATH —— 取 JSON 里的一个数组/对象的长度打印出来
 if command -v python3 >/dev/null 2>&1; then
+  json_values=1
   jget() {
     python3 -c 'import json, sys
 d = json.load(open(sys.argv[1]))
@@ -127,6 +128,11 @@ for k in sys.argv[2].split("."):
 print(len(cur))' "$1" "$2"
   }
 else
+  # 无解析器：取值断言整段跳过（#101）。jget/jlen 仍保留为「打 skip 再报错」的
+  # 兜底——万一将来有新调用点漏进/漏出下面的包裹块，会得到明确报错而不是
+  # 算式的语法错 + unbound variable（旧形态：$(($(jlen ...) + $(jlen ...))) 变
+  # 「$(( + ))」直接炸，测试变红而不是跳过）。
+  json_values=0
   jget() {
     printf 'skip: no python3, the JSON value assertions are not run\n' >&2
     return 1
@@ -149,65 +155,69 @@ assert_eq "}" "$(tail -c 2 "$jout" | head -c 1)" "the JSON report ends with an o
 assert_not_contains "$(cat "$jout")" "environment check" "the JSON report does not mix in the text section titles"
 
 # CASE: 文本形态与 JSON 形态看到的是同一批检查 —— 少一条就说明有一边漏了
-text_out="$(run_doctor bash "$TEST_ROOT/shellkit" doctor 2>/dev/null)"
-text_rows="$(printf '%s\n' "$text_out" | grep -cE '^  [A-Z]+ +')"
-json_rows=$(($(jlen "$jout" dependencies) + $(jlen "$jout" checks)))
-assert_eq "$text_rows" "$json_rows" "the text and JSON forms report the same number of rows"
+if [ "$json_values" = 1 ]; then
+  text_out="$(run_doctor bash "$TEST_ROOT/shellkit" doctor 2>/dev/null)"
+  text_rows="$(printf '%s\n' "$text_out" | grep -cE '^  [A-Z]+ +')"
+  json_rows=$(($(jlen "$jout" dependencies) + $(jlen "$jout" checks)))
+  assert_eq "$text_rows" "$json_rows" "the text and JSON forms report the same number of rows"
 
-# CASE: 字段取值 —— schema / 退出码 / 模块清单
-assert_eq "shellkit.doctor.v1" "$(jget "$jout" schema)" "the schema identifier is stable"
-assert_eq "0" "$(jget "$jout" result.exit_code)" "the JSON exit code matches the command exit code"
-assert_eq "False" "$(jget "$jout" result.verify_failed)" "a healthy library has no verification failure"
-manifest_n="$(awk '{ sub(/#.*/, ""); if (NF > 0) print $1 }' "$TEST_ROOT/lib/modules.txt" | wc -l | tr -d ' ')"
-assert_eq "$manifest_n" "$(jget "$jout" modules.count)" "the module count matches lib/modules.txt"
-assert_eq "$manifest_n" "$(jget "$jout" modules.loadable)" "every manifest module is loadable on a healthy library"
-assert_eq "$manifest_n" "$(jlen "$jout" modules.listed)" "the listed module array covers the manifest"
-assert_eq "0" "$(jget "$jout" result.missing_required)" "nothing required is missing on a healthy library"
+  # CASE: 字段取值 —— schema / 退出码 / 模块清单
+  assert_eq "shellkit.doctor.v1" "$(jget "$jout" schema)" "the schema identifier is stable"
+  assert_eq "0" "$(jget "$jout" result.exit_code)" "the JSON exit code matches the command exit code"
+  assert_eq "False" "$(jget "$jout" result.verify_failed)" "a healthy library has no verification failure"
+  manifest_n="$(awk '{ sub(/#.*/, ""); if (NF > 0) print $1 }' "$TEST_ROOT/lib/modules.txt" | wc -l | tr -d ' ')"
+  assert_eq "$manifest_n" "$(jget "$jout" modules.count)" "the module count matches lib/modules.txt"
+  assert_eq "$manifest_n" "$(jget "$jout" modules.loadable)" "every manifest module is loadable on a healthy library"
+  assert_eq "$manifest_n" "$(jlen "$jout" modules.listed)" "the listed module array covers the manifest"
+  assert_eq "0" "$(jget "$jout" result.missing_required)" "nothing required is missing on a healthy library"
 
-# CASE: 库不完整 —— 退出码与文本形态一致（5），JSON 里点出缺哪个模块
-run_doctor bash "$broken/shellkit" doctor --json >"$work/broken.json" 2>/dev/null && rc=0 || rc=$?
-assert_eq 5 "$rc" "doctor --json exits 5 when a module file is missing"
-assert_eq "True" "$(jget "$work/broken.json" result.verify_failed)" "a missing module is a verification failure"
-assert_contains "$(jget "$work/broken.json" modules.missing)" "http" "the missing module is named in the report"
+  # CASE: 库不完整 —— 退出码与文本形态一致（5），JSON 里点出缺哪个模块
+  run_doctor bash "$broken/shellkit" doctor --json >"$work/broken.json" 2>/dev/null && rc=0 || rc=$?
+  assert_eq 5 "$rc" "doctor --json exits 5 when a module file is missing"
+  assert_eq "True" "$(jget "$work/broken.json" result.verify_failed)" "a missing module is a verification failure"
+  assert_contains "$(jget "$work/broken.json" modules.missing)" "http" "the missing module is named in the report"
 
-# CASE: 缺可选依赖只是降级 —— 退出码仍是 0，必需/可选分开报
-#
-# PATH 必须是**受控的**（#72）：原来拿 /usr/bin:/bin 当「受限 PATH」，判据
-# 实际读的是 Runner 预装了什么 —— Ubuntu 的 /usr/bin 里 shellcheck/xgettext/curl
-# 都在，只缺 shfmt，missing_optional=1 ⇒ 本机 ≥2、CI 恒红。
-# 现在自己搭一个目录：只放**必需工具与跑 doctor 所需的基础命令**，
-# 可选的一个都不放 ⇒ 与机器预装无关。
-depdir="$work/deppath"
-mkdir -p "$depdir" || _fail "cannot build the controlled PATH directory"
-for __c in bash sh sha256sum shasum awk sed cat grep tr sort head tail wc dirname basename uname mktemp find env printf; do
-  __p=$(command -v "$__c" 2>/dev/null) || continue
-  ln -s "$__p" "$depdir/$__c" 2>/dev/null || true
-done
-run_doctor env PATH="$depdir" bash "$TEST_ROOT/shellkit" doctor --json >"$work/min.json" 2>/dev/null && rc=0 || rc=$?
-assert_eq 0 "$rc" "missing optional tooling does not fail the check"
-assert_eq "0" "$(jget "$work/min.json" result.missing_required)" "optional tooling is not counted as required"
-opt_n="$(jget "$work/min.json" result.missing_optional)"
-if [ "$opt_n" -lt 2 ]; then
-  _fail "expected the optional dependencies to be reported missing, got <$opt_n>"
+  # CASE: 缺可选依赖只是降级 —— 退出码仍是 0，必需/可选分开报
+  #
+  # PATH 必须是**受控的**（#72）：原来拿 /usr/bin:/bin 当「受限 PATH」，判据
+  # 实际读的是 Runner 预装了什么 —— Ubuntu 的 /usr/bin 里 shellcheck/xgettext/curl
+  # 都在，只缺 shfmt，missing_optional=1 ⇒ 本机 ≥2、CI 恒红。
+  # 现在自己搭一个目录：只放**必需工具与跑 doctor 所需的基础命令**，
+  # 可选的一个都不放 ⇒ 与机器预装无关。
+  depdir="$work/deppath"
+  mkdir -p "$depdir" || _fail "cannot build the controlled PATH directory"
+  for __c in bash sh sha256sum shasum awk sed cat grep tr sort head tail wc dirname basename uname mktemp find env printf; do
+    __p=$(command -v "$__c" 2>/dev/null) || continue
+    ln -s "$__p" "$depdir/$__c" 2>/dev/null || true
+  done
+  run_doctor env PATH="$depdir" bash "$TEST_ROOT/shellkit" doctor --json >"$work/min.json" 2>/dev/null && rc=0 || rc=$?
+  assert_eq 0 "$rc" "missing optional tooling does not fail the check"
+  assert_eq "0" "$(jget "$work/min.json" result.missing_required)" "optional tooling is not counted as required"
+  opt_n="$(jget "$work/min.json" result.missing_optional)"
+  if [ "$opt_n" -lt 2 ]; then
+    _fail "expected the optional dependencies to be reported missing, got <$opt_n>"
+  fi
+  assert_contains "$(jget "$work/min.json" dependencies)" "'required': True" "required dependencies are flagged as required"
+  assert_contains "$(jget "$work/min.json" dependencies)" "'required': False" "optional dependencies are flagged as optional"
+
+  # CASE: 报告要能直接贴进 issue —— 值像凭据时自动脱敏
+  redact_dir="$work/PASSWORD=hunter2"
+  mkdir -p "$redact_dir"
+  run_doctor bash "$TEST_ROOT/shellkit" doctor --json --dir "$redact_dir" >"$work/redact.json" 2>/dev/null
+  assert_not_contains "$(cat "$work/redact.json")" "hunter2" "a credential in the report is masked"
+  assert_contains "$(jget "$work/redact.json" checks)" "PASSWORD=***" "the credential value is replaced"
+
+  # CASE: 库自己都坏了 —— 仍然给一份 JSON（贴 issue 要的就是这份）
+  deg="$work/degraded"
+  copy_cli "$deg" || _fail "cannot copy the CLI"
+  printf 'if then fi\n' >"$deg/lib/bootstrap.sh"
+  run_doctor bash "$deg/shellkit" doctor --json >"$work/degraded.json" 2>/dev/null && rc=0 || rc=$?
+  assert_eq 5 "$rc" "a library that cannot be loaded exits 5"
+  assert_eq "True" "$(jget "$work/degraded.json" result.verify_failed)" "the degraded report flags the failure"
+  assert_eq "shellkit.doctor.v1" "$(jget "$work/degraded.json" schema)" "the degraded report has the same schema"
+else
+  printf 'skip: no python3, the JSON value assertions are not run\n' >&2
 fi
-assert_contains "$(jget "$work/min.json" dependencies)" "'required': True" "required dependencies are flagged as required"
-assert_contains "$(jget "$work/min.json" dependencies)" "'required': False" "optional dependencies are flagged as optional"
-
-# CASE: 报告要能直接贴进 issue —— 值像凭据时自动脱敏
-redact_dir="$work/PASSWORD=hunter2"
-mkdir -p "$redact_dir"
-run_doctor bash "$TEST_ROOT/shellkit" doctor --json --dir "$redact_dir" >"$work/redact.json" 2>/dev/null
-assert_not_contains "$(cat "$work/redact.json")" "hunter2" "a credential in the report is masked"
-assert_contains "$(jget "$work/redact.json" checks)" "PASSWORD=***" "the credential value is replaced"
-
-# CASE: 库自己都坏了 —— 仍然给一份 JSON（贴 issue 要的就是这份）
-deg="$work/degraded"
-copy_cli "$deg" || _fail "cannot copy the CLI"
-printf 'if then fi\n' >"$deg/lib/bootstrap.sh"
-run_doctor bash "$deg/shellkit" doctor --json >"$work/degraded.json" 2>/dev/null && rc=0 || rc=$?
-assert_eq 5 "$rc" "a library that cannot be loaded exits 5"
-assert_eq "True" "$(jget "$work/degraded.json" result.verify_failed)" "the degraded report flags the failure"
-assert_eq "shellkit.doctor.v1" "$(jget "$work/degraded.json" schema)" "the degraded report has the same schema"
 
 # CASE: 字段契约 —— doctor --json 的字段集合与 docs/JSON.md 逐节双向一致
 #
