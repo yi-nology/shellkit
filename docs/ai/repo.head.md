@@ -182,9 +182,9 @@
     bash tools/api_baseline.sh       # 只看公开 API 的承诺与基线、MIGRATING 声明是否一致
     bash tools/bench.sh              # 只看性能基准（--check 跟基线比；--write-baseline 重写基线）
     bash tools/coverage.sh --write-baseline  # 按真实覆盖率重生成白名单（只记当前未覆盖的）
-    bash tools/mutation.sh --target shellkit --test "bash tests/test_upgrade_guard.sh" \
-      --from-line $(grep -n '^_sk_upgrade_rel_safe()' shellkit | cut -d: -f1) \
-      --to-line $(grep -n '^_sk_upgrade_writable()' shellkit | cut -d: -f1)  # 变异位点
+    bash tools/mutation.sh --target lib/core/fs.sh --test "bash tests/test_upgrade_guard.sh" \
+      --from-line $(grep -n '^_sk_fs_rel_safe()' lib/core/fs.sh | cut -d: -f1) \
+      --to-line $(grep -n '^_sk_fs_no_symlink_below()' lib/core/fs.sh | cut -d: -f1)  # 变异位点
     make site                         # 构建文档站（先从 docs/ 同步，再查产物内部链接）
 
 ## 发版

@@ -300,7 +300,7 @@ lock_acquire deploy 30
 | # | 偏差 | 现状 | 影响 |
 |---|---|---|---|
 | 1 | `fs_atomic_write` 覆盖既有文件**不保留**原权限 | 实现按传入的 MODE 落盘（默认 600）；但函数上方的 `@exitcode` 注释写的是「原文件权限保留」 | 注释与实现不符；保留原权限的是 `fs_atomic_copy`。**注释要改** |
-| 2 | `_sk_fs_rel_safe` / `_sk_fs_in_dir` 在库内**没有调用点** | 公共内部实现已就位（`lib/core/fs.sh`），CLI 侧用的是同判据的私有版本 `_sk_upgrade_rel_safe` / `_sk_upgrade_in_dir` | 库用户应优先用这两个公共版本；CLI 与库之间有一份重复实现 |
+| 2 | ~~`_sk_fs_rel_safe` / `_sk_fs_in_dir` 在库内没有调用点~~ **已收口** | 实现只剩库里这一份：升级路径（`shellkit`）也调它，CLI 的同判据私有副本 `_sk_upgrade_rel_safe` / `_sk_upgrade_in_dir` 已删除 | 两份实现各改一半的分叉不会再出现；变异测试的位点区间随之锚到库里 |
 | 3 | `.gitignore` 没有覆盖凭据文件名 | 只覆盖 `.upstream/`、*.mo.bak`、`locale/**/*.mo~`、`site/node_modules/`、`.DOCS.*` | `.env` / `*.pem` / `id_rsa` 一旦被 `git add` 就入库了。门禁只查「已入库的」，**忽略规则要补** |
 | 4 | `fs_backup` 用 `cp -p` 直接备份，不是原子写 | 备份是「留一份旧的」，不参与覆盖语义 | 中断可能留下半截备份文件；影响面小，但要知情 |
 | 5 | `shellkit` 自己的安装与 vendor 暂存用 `cp -f` | 落在暂存目录里，随后整体换目录（坑 11 的做法） | 暂存目录内的单文件写不是原子的；整体换目录兜底 |

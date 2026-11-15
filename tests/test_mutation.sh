@@ -91,39 +91,55 @@ assert_eq "2" "$rc" "usage errors must exit 2"
 
 # CASE: 位点枚举必须确定 —— 同一份树跑两次，集合与顺序逐字一致
 . "$MUT"
-from_line=$(grep -n '^_sk_upgrade_rel_safe()' "$TEST_ROOT/shellkit" | cut -d: -f1)
-to_line=$(grep -n '^_sk_upgrade_writable()' "$TEST_ROOT/shellkit" | cut -d: -f1)
+# 区间锚在库里的共享守卫实现上（升级路径调的就是这份，CLI 已不再持有私有副本）：
+# 实现被改名/搬走时 grep 取不到锚点，这里必须 loudly red 而不是静默换个区间。
+from_line=$(grep -n '^_sk_fs_rel_safe()' "$TEST_ROOT/lib/core/fs.sh" | cut -d: -f1)
+to_line=$(grep -n '^_sk_fs_no_symlink_below()' "$TEST_ROOT/lib/core/fs.sh" | cut -d: -f1)
 [ -n "$from_line" ] && [ -n "$to_line" ] ||
-  _fail "case.3: the upgrade-path anchor functions are gone — update this test"
-a=$(mut_enum_sites "$TEST_ROOT/shellkit" "$from_line" "$to_line")
-b=$(mut_enum_sites "$TEST_ROOT/shellkit" "$from_line" "$to_line")
+  _fail "case.3: the shared path-guard functions are gone — update this test"
+a=$(mut_enum_sites "$TEST_ROOT/lib/core/fs.sh" "$from_line" "$to_line")
+b=$(mut_enum_sites "$TEST_ROOT/lib/core/fs.sh" "$from_line" "$to_line")
 assert_eq "$a" "$b" "case.3: site enumeration must be deterministic across runs"
 case $a in
   *$'cond'* | '') ;;
   *) _fail "case.3: the upgrade-path region must still contain cond sites" ;;
 esac
 
-# CASE: 真 campaign —— 升级路径守卫区的有界变异必须 100% 杀灭
+# CASE: 真 campaign —— 路径守卫区的有界变异必须 100% 杀灭
 #
-# 位点区间锚在四个 _sk_upgrade_* 守卫函数上（grep 现取，库被重构时 loudly red），
-# --max-sites 封顶保证 < 300 秒。
+# 位点区间锚在库里的 _sk_fs_rel_safe / _sk_fs_in_dir 上（grep 现取，实现被重构时
+# loudly red），--max-sites 封顶保证跑得完。
 #
-# 白名单（--skip，行号 = 锚点 + 偏移，偏移随函数内容变化时会 loud red）：
-#   +25 return   in_dir 循环的文件系统根出口 —— 需要父目录链走到根，守卫场景不可达
-#   +29:return   $(cd … && pwd -P) 失败分支 —— 需要父目录不存在/不可执行；
-#                守卫场景的悬空符号链接在更外层被拦，走不到这里
+# 白名单（--skip）用**内容锚点**现算行号，不用「锚点 + 偏移」——
+# 偏移会随函数内容变化漂移：上一版加了行注释，白名单就悄悄指到了别的位点，
+# 于是「跳过的一个无判据位点」变成「跳过了一个本来有判据的位点」，分数还是 100%。
+# 取不到锚点就直接 loud red，不做静默兜底。
+#   root_cond / root_ret   in_dir 循环的文件系统根出口 —— 需要父目录链走到根，守卫场景不可达
+#   pwd_line:return        $(cd … && pwd -P) 的失败分支 —— 需要父目录不存在/不可执行；
+#                          守卫场景的悬空符号链接在更外层被拦，走不到这里
 #
-# 其余位点现在都有判据（白名单从 7 条缩到 2 条，计分位点 5 → 10）：
+# 其余位点都有判据：
 #   rel_safe 的空/绝对路径分支与 .. 分支、in_dir 的空参数防御分支 ——
 #     由 test_upgrade_guard.sh 末尾把函数从源码抽出来直接断言；
 #   in_dir 的「目标在工程子目录」分支 ——
 #     由 test_upgrade_guard.sh 里「工程里已经有子目录」那条用例走到。
+root_cond=$(awk -v s="$from_line" -v e="$to_line" \
+  'NR > s && NR < e && /\[ "\$__parent" = "\$__dir" \]/ { print NR; exit }' \
+  "$TEST_ROOT/lib/core/fs.sh")
+# 锚点只认 `pwd -P)` 这一行，不认 `|| return 1`：覆盖率分支插桩会把右臂
+# 改写成 `|| __cov_hit N return 1`，跨 `||` 的字面量在这里会取不到。
+pwd_line=$(awk -v s="$from_line" -v e="$to_line" \
+  'NR > s && NR < e && /pwd -P\)/ { print NR; exit }' \
+  "$TEST_ROOT/lib/core/fs.sh")
+[ -n "$root_cond" ] && [ -n "$pwd_line" ] ||
+  _fail "case.4: the whitelist anchors moved — update this test"
+root_ret=$((root_cond + 1))
 d=$(tmpdir) || _fail "cannot create tmpdir"
 mkdir -p "$d"
 rc=0
-bash "$MUT" --root "$TEST_ROOT" --target shellkit \
-  --from-line "$from_line" --to-line "$to_line" --max-sites 12 \
-  --skip "$((from_line + 25))" --skip "$((from_line + 29)):return" \
+bash "$MUT" --root "$TEST_ROOT" --target lib/core/fs.sh \
+  --from-line "$from_line" --to-line "$to_line" --max-sites 13 \
+  --skip "$root_cond" --skip "$root_ret" --skip "$pwd_line:return" \
   --test "bash tests/test_upgrade_guard.sh" --min-score 100 \
   --report "$d/report" >"$d/out" 2>"$d/log" || rc=$?
 report=$(cat "$d/report")
@@ -138,11 +154,11 @@ assert_contains "$report" "score: 100%" \
 # 计分范围必须摆在明面上：得分只对计分位点负责，不许把跳过的藏起来。
 assert_contains "$report" "sites enumerated: " \
   "case.4: the report must say how many sites were enumerated in the range"
-assert_contains "$report" "campaign window: 12" \
+assert_contains "$report" "campaign window: 13" \
   "case.4: the report must say how big the campaign window is"
 assert_contains "$report" "scored: 10" \
   "case.4: the report must say how many sites were actually scored"
-assert_contains "$report" "skipped: 2" \
+assert_contains "$report" "skipped: 3" \
   "case.4: the report must say how many sites the whitelist skipped"
 assert_contains "$report" "skipped by the whitelist" \
   "case.4: the report must list the skipped sites one by one"

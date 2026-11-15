@@ -128,7 +128,7 @@ assert_contains "$out" "upgrade finished" "a normal project must still upgrade"
 assert_exists "$p5/README.md" "a normal project must still get its files"
 
 # ---------------------------------------------------------------- 工程里已经有子目录
-# _sk_upgrade_in_dir 的「目标在工程子目录」分支（"$base"/*）平时走不到：
+# _sk_fs_in_dir 的「目标在工程子目录」分支（"$base"/*）平时走不到：
 # 守卫工程是「只有清单」的空壳，目标文件的父目录都不存在，判定停在上一层的
 # 「父目录正好等于工程目录」分支上。给工程放一个已存在的子目录，判定才会落到
 # 子目录这一支 —— 这一支一旦被变异（return 0 变 return 1），升级会误判成
@@ -143,31 +143,35 @@ assert_true test -f "$p8/tests/keep.txt"
 assert_exists "$p8/tests/run.sh" "the files under the existing subdirectory must still be written"
 
 # ---------------------------------------------------------------- 相对路径里的 .. 组件
-# _sk_upgrade_rel_safe 的 */../* 分支是防御纵深：名字校验先拦掉了 name 带 .. / 的
+# _sk_fs_rel_safe 的 */../* 分支是防御纵深：名字校验先拦掉了 name 带 .. / 的
 # 情况，文件列表又只来自模板自有清单 —— CLI 路径当前到不了这一支。但它是
 # 「清单不可信」的最后一道闸，必须有判据（变异测试发现这里一打就活）。
-# 函数在 shellkit 里、不在库里，从源码抽出直接钉住：
-eval "$(sed -n '/^_sk_upgrade_rel_safe()/,/^}/p' "$TEST_ROOT/shellkit")"
-assert_false _sk_upgrade_rel_safe "../evil"
-assert_false _sk_upgrade_rel_safe "a/../../evil"
-assert_false _sk_upgrade_rel_safe "a/../b"
-assert_false _sk_upgrade_rel_safe "/etc/passwd"
-assert_false _sk_upgrade_rel_safe ""
-assert_true _sk_upgrade_rel_safe "bin/tool"
-assert_true _sk_upgrade_rel_safe "x..y/file"
+# 实现只有一份、在库里（升级路径也调它），从库源码抽出直接钉住：
+eval "$(sed -n '/^_sk_fs_rel_safe()/,/^}/p' "$TEST_ROOT/lib/core/fs.sh")"
+assert_false _sk_fs_rel_safe "../evil"
+assert_false _sk_fs_rel_safe "a/../../evil"
+assert_false _sk_fs_rel_safe "a/../b"
+assert_false _sk_fs_rel_safe "/etc/passwd"
+assert_false _sk_fs_rel_safe ""
+assert_true _sk_fs_rel_safe "bin/tool"
+assert_true _sk_fs_rel_safe "x..y/file"
 
-# ---------------------------------------------------------------- _sk_upgrade_in_dir 的空参数防御
+# ---------------------------------------------------------------- _sk_fs_in_dir 的空参数防御
 # 同一个手法抽函数出来直接钉住：两个参数任一为空都必须判「不在目录内」。
 # 这一支的判定是 [ -z "$__base" ] || [ -z "$__tgt" ] —— 把 || 变异成 && 之后，
 # 「base 为空、target 非空」就会漏过空参数检查，一路走到 case 分支，
 # 最终把空 base 拼成的模式当通配符放行。
-eval "$(sed -n '/^_sk_upgrade_in_dir()/,/^}/p' "$TEST_ROOT/shellkit")"
+eval "$(sed -n '/^_sk_fs_in_dir()/,/^}/p' "$TEST_ROOT/lib/core/fs.sh")"
 # 基准目录要用物理路径：函数内部比的是 `pwd -P` 的结果，
 # macOS 上 /var 是 /private/var 的软链，拿逻辑路径去比会永远判「不在目录内」。
 phys=$(cd "$work" && pwd -P)
-assert_false _sk_upgrade_in_dir "" "$phys/x"
-assert_false _sk_upgrade_in_dir "$phys" ""
-assert_true _sk_upgrade_in_dir "$phys" "$phys/x"
-assert_true _sk_upgrade_in_dir "$phys" "$phys/x/y"
+assert_false _sk_fs_in_dir "" "$phys/x"
+assert_false _sk_fs_in_dir "$phys" ""
+assert_true _sk_fs_in_dir "$phys" "$phys/x"
+assert_true _sk_fs_in_dir "$phys" "$phys/x/y"
+# 根外目标必须被拒：这是函数最后那条兜底 return 1 的唯一判据。
+# 没有它，「兜底改成 return 0」的变异会活下来 —— 守卫在正常路径上照样返回 0，
+# 只有真的把目标放到根外才看得出它已经不拦了。
+assert_false _sk_fs_in_dir "$phys" "$(dirname "$phys")/outside/x"
 
 exit 0
