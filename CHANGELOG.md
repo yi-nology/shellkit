@@ -2,6 +2,15 @@
 本文件由 `tools/release.sh` 在发版时自动追加，已发布的小节不要手改。
 最新的在最前面。每一条对应一个提交 —— 要看「为什么」而不是「改了什么」，读 `docs/MIGRATING.md`。
 
+## 0.23.0 — 2026-11-15
+
+53560ff fix(own_sync): 上游删除+用户改过的文件冻结基线登记——加回时不被静默覆盖(#91) (#94)
+53635e5 ci(coverage): 分支级覆盖率接进 CI —— 新增 make coverage-branch，coverage job 双跑（路线图 v0.23.0）
+890e8e1 feat(coverage): 分支覆盖缺口收敛 —— 基线 1011→988，34+ 缺口臂补测，#39 守卫锚点跟上重构（路线图 v0.23.0）
+c93f146 fix(coverage): 基线改按 CI runner 口径重算 + chmod 场景补 root 守卫
+bbf98c3 feat(bench): profile 计数基线 —— 升级热点有可比较的指标（路线图 v0.23.0-B2）
+91dc93e docs(migrating): 0.22.0 → 0.23.0 行为变化表 —— profile 基线解禁与覆盖基线口径
+
 ## 0.22.0 — 2026-11-15
 
 06b6036 feat(supply-chain): 正式启用 Minisign —— 密钥入 secret、公钥钉入 TRUST、发布加钉入一致性门禁（路线图 v0.22.0）
