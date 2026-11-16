@@ -7,6 +7,7 @@ SK_TMPDIR=""
 # @exitcode 0 目录已存在或建好
 # @exitcode 2 没给参数
 # @exitcode 1 mkdir 失败
+# @stability stable
 fs_ensure_dir() {
   local __dir=${1:-} __mode=${2:-}
   _sk_need_args "$#" 1 "fs_ensure_dir DIR [MODE]" || return $?
@@ -28,6 +29,7 @@ fs_ensure_dir() {
 # 与 fs_atomic_copy 的分工：那个不传 MODE 时保留目标原权限，这个总是按 MODE 写 ——
 # 「写内容」的场景（清单、配置）要的就是「权限是定死的」，不然改一次配置就把
 # 权限改了。
+# @stability stable
 fs_atomic_write() {
   local __file=${1:-} __content=${2:-} __mode=${3:-600} __dir __tmp
   _sk_need_args "$#" 2 "fs_atomic_write FILE CONTENT [MODE]" || return $?
@@ -498,6 +500,7 @@ fs_ensure_block() {
 # @exitcode 0 软链已就位
 # @exitcode 2 参数错
 # @exitcode 1 建链失败
+# @stability stable
 fs_ensure_symlink() {
   local __target=${1:-} __link=${2:-} __cur
   _sk_need_args "$#" 2 "fs_ensure_symlink TARGET LINK" || return $?
@@ -539,6 +542,7 @@ _sk_tmp_base() {
 # 它不注册 trap，外部有 EXIT 需求请用 fs_tmp_init。
 # @exitcode 0 成功（stdout 输出临时目录路径）
 # @exitcode 1 建不了临时目录
+# @stability stable
 fs_tmpdir() {
   local __base __dir
   if [ -n "${SK_TMPDIR:-}" ] && [ -d "$SK_TMPDIR" ]; then
@@ -564,6 +568,7 @@ fs_tmpdir() {
 # 与调用方自己的 trap 共存（trap_install 会链式保留已有 EXIT trap）。
 # @exitcode 0 成功（初始化当前工程的临时目录）
 # @exitcode 1 建不了临时目录
+# @stability stable
 fs_tmp_init() {
   if ! fs_tmpdir >/dev/null; then
     return 1

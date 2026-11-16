@@ -329,6 +329,8 @@ trap_install —— 安装 EXIT / INT / TERM / HUP 处理器；可重复调用 �
 
 fs_ensure_dir DIR [MODE] —— 幂等建目录；给了 MODE 就 chmod
 
+**稳定性**：stable
+
 **退出码**
 
 - 0 目录已存在或建好
@@ -338,6 +340,8 @@ fs_ensure_dir DIR [MODE] —— 幂等建目录；给了 MODE 就 chmod
 ### `fs_atomic_write`
 
 fs_atomic_write FILE CONTENT [MODE] —— 原子写文件；默认权限 600，父目录不存在会先建 权限：MODE 给什么就是什么（默认 600），**覆盖已有文件也照样改**。 与 fs_atomic_copy 的分工：那个不传 MODE 时保留目标原权限，这个总是按 MODE 写 —— 「写内容」的场景（清单、配置）要的就是「权限是定死的」，不然改一次配置就把 权限改了。
+
+**稳定性**：stable
 
 **退出码**
 
@@ -397,6 +401,8 @@ fs_ensure_block FILE BEGIN END CONTENT —— 标记块内内容整体替换；�
 
 fs_ensure_symlink TARGET LINK —— 已是正确链接则不动；否者替换（绝不覆盖普通文件）
 
+**稳定性**：stable
+
 **退出码**
 
 - 0 软链已就位
@@ -407,6 +413,8 @@ fs_ensure_symlink TARGET LINK —— 已是正确链接则不动；否者替换�
 
 fs_tmpdir —— 确保临时目录存在并输出路径。 目录名按 UID+进程号确定，因此同一进程内的 $(...) 子 shell 拿到的是同一个目录； 它不注册 trap，外部有 EXIT 需求请用 fs_tmp_init。
 
+**稳定性**：stable
+
 **退出码**
 
 - 0 成功（stdout 输出临时目录路径）
@@ -415,6 +423,8 @@ fs_tmpdir —— 确保临时目录存在并输出路径。 目录名按 UID+进
 ### `fs_tmp_init`
 
 fs_tmp_init —— 在当前 shell 初始化临时目录，并把清理动作推进清理栈。 与 0.1.0 的差别：以前「调用方已有 EXIT trap 就放弃清理」，现在改为入栈， 与调用方自己的 trap 共存（trap_install 会链式保留已有 EXIT trap）。
+
+**稳定性**：stable
 
 **退出码**
 
@@ -1231,6 +1241,8 @@ lock_acquire NAME [WAIT_SEC] —— 0 成功；SK_PRECOND 被占用/超时；SK_
 
 lock_release NAME —— 只释放自己持有的锁
 
+**稳定性**：stable
+
 **退出码**
 
 - 0 释放成功（或本来就没锁）
@@ -1240,6 +1252,8 @@ lock_release NAME —— 只释放自己持有的锁
 ### `lock_held`
 
 lock_held NAME —— 返回码判断是否被占；被占时 stdout 输出持有者 pid
+
+**稳定性**：stable
 
 **退出码**
 
@@ -1400,6 +1414,8 @@ PATTERN 是正则（匹配 browser_download_url）；没有匹配时输出空串
 
 conf_init FILE [--format env|dotenv] —— 载入配置文件；文件不存在不报错（当成空配置） --format 决定文件怎么解析：auto（默认，老行为 + 容忍 dotenv 写法）、 env（严格 KEY=VALUE）、dotenv（完整 dotenv 语义）。 严格格式（env / dotenv）下不合规的行会在载入时报警并跳过。
 
+**稳定性**：stable
+
 **退出码**
 
 - 0 成功（文件不存在当成空配置）
@@ -1409,6 +1425,8 @@ conf_init FILE [--format env|dotenv] —— 载入配置文件；文件不存在
 
 conf_file —— 当前生效的配置文件路径；未初始化时为空
 
+**稳定性**：stable
+
 **退出码**
 
 - 0 总是成功（stdout 输出当前配置文件路径）
@@ -1416,6 +1434,8 @@ conf_file —— 当前生效的配置文件路径；未初始化时为空
 ### `conf_format`
 
 conf_format —— 当前生效的配置格式（auto|env|dotenv）
+
+**稳定性**：stable
 
 **退出码**
 
@@ -1436,6 +1456,8 @@ conf_get KEY [DEFAULT] —— 只输出值；未初始化或无文件时返回�
 
 conf_has KEY —— 返回码 0/1
 
+**稳定性**：stable
+
 **退出码**
 
 - 0 键存在
@@ -1445,6 +1467,8 @@ conf_has KEY —— 返回码 0/1
 ### `conf_get_any`
 
 conf_get_any KEY [DEFAULT] —— 环境变量 > 配置层 > 配置文件 > 默认值
+
+**稳定性**：stable
 
 **退出码**
 
@@ -1515,6 +1539,8 @@ conf_disable KEY —— 把 KEY=VALUE 改成注释行，保留原值
 ### `conf_keys`
 
 conf_keys —— 逐行输出键名（配置层的键在前，文件里的键在后，不重复）
+
+**稳定性**：stable
 
 **退出码**
 

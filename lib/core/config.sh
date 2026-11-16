@@ -298,6 +298,7 @@ _sk_conf_layer_del() {
 # 严格格式（env / dotenv）下不合规的行会在载入时报警并跳过。
 # @exitcode 0 成功（文件不存在当成空配置）
 # @exitcode 2 参数错（没给路径或格式不认识）
+# @stability stable
 conf_init() {
   local __file="" __format="auto" __seen=0 __line __lineno=0 __rc
   while [ $# -gt 0 ]; do
@@ -370,10 +371,12 @@ conf_init() {
 
 # conf_file —— 当前生效的配置文件路径；未初始化时为空
 # @exitcode 0 总是成功（stdout 输出当前配置文件路径）
+# @stability stable
 conf_file() { printf '%s\n' "${SK_CONF_FILE:-}"; }
 
 # conf_format —— 当前生效的配置格式（auto|env|dotenv）
 # @exitcode 0 总是成功（stdout 输出当前解析格式）
+# @stability stable
 conf_format() { printf '%s\n' "${SK_CONF_FORMAT:-auto}"; }
 
 # conf_get KEY [DEFAULT] —— 只输出值；未初始化或无文件时返回默认值
@@ -417,6 +420,7 @@ conf_get() {
 # @exitcode 0 键存在
 # @exitcode 1 键不存在
 # @exitcode 2 键名非法
+# @stability stable
 conf_has() {
   local __key=${1:-} __file=${SK_CONF_FILE:-} __line
   if ! validate_key "$__key"; then
@@ -443,6 +447,7 @@ conf_has() {
 # conf_get_any KEY [DEFAULT] —— 环境变量 > 配置层 > 配置文件 > 默认值
 # @exitcode 0 成功（stdout 输出值：环境变量 > 配置层 > 配置文件 > 默认值）
 # @exitcode 2 键名非法
+# @stability stable
 conf_get_any() {
   local __key=${1:-} __default=${2:-} __env=""
   if ! _sk_is_name "$__key"; then
@@ -677,6 +682,7 @@ conf_disable() {
 
 # conf_keys —— 逐行输出键名（配置层的键在前，文件里的键在后，不重复）
 # @exitcode 0 总是成功（stdout 逐行输出键名）
+# @stability stable
 conf_keys() {
   local __file=${SK_CONF_FILE:-} __line __i=0
   while [ "$__i" -lt "$SK_CONF_N" ]; do
