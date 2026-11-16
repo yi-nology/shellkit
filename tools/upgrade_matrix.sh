@@ -24,6 +24,7 @@ set -u
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 versions="0.20.0 0.23.0 0.24.1"
+strict=0
 repo="yi-nology/shellkit"
 SK="$ROOT/shellkit"
 
@@ -47,8 +48,11 @@ while [ $# -gt 0 ]; do
       repo=$1
       ;;
     --repo=*) repo=${1#*=} ;;
+    # CI / 正式发布用：**全部跳过也算失败**。离网时本地跑允许 skip（那是开发体验），
+    # 但「所有声明的源版本一个都没验成」不能当成通过 —— 否则这一项等于没做。
+    --strict) strict=1 ;;
     -h | --help)
-      printf 'usage: %s [--versions "A B C"] [--repo OWNER/NAME]\n' "${0##*/}"
+      printf 'usage: %s [--versions "A B C"] [--repo OWNER/NAME] [--strict]\n' "${0##*/}"
       exit 0
       ;;
     *) die "unknown option: $1" 2 ;;
@@ -171,4 +175,7 @@ done
 
 say "summary: ran=$ran skipped=$skipped fails=$fails"
 [ "$fails" -eq 0 ] || exit 1
+if [ "$strict" = "1" ] && [ "$ran" -eq 0 ]; then
+  die "strict mode: not a single upgrade source was actually tested (every version was skipped)" 1
+fi
 exit 0
