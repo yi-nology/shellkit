@@ -19,12 +19,13 @@
 #                               不给则用 minisign -R 从私钥重建一份发布）
 #
 # 退出码：0 成功（或按策略跳过）/ 1 一般错误 / 2 用法错 /
-#         3 配了私钥却缺 minisign / 私钥不可读（前置条件不满足）
+#         3 配了私钥却缺 minisign / 私钥不可读 / 用了 --require 却没配私钥（前置条件不满足）
 set -u
 
 PROG=sign_release.sh
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 dist=dist
+require=0
 tmp=""
 
 say() { printf '[sign] %s\n' "$*" >&2; }
@@ -35,7 +36,7 @@ die() {
 }
 
 usage() {
-  printf 'Usage: bash %s [--dist DIR]\n' "$PROG" >&2
+  printf 'Usage: bash %s [--dist DIR] [--require]\n' "$PROG" >&2
 }
 
 while [ "$#" -gt 0 ]; do
@@ -47,6 +48,9 @@ while [ "$#" -gt 0 ]; do
       }
       dist=$2
       shift
+      ;;
+    --require)
+      require=1
       ;;
     -h | --help)
       usage
@@ -67,6 +71,13 @@ cd "$ROOT" || die "cannot cd into $ROOT" 1
 # ---------------------------------------------------------------- 私钥解析
 key_value=${SHELLKIT_MINISIGN_KEY:-}
 if [ -z "$key_value" ]; then
+  # 正式发布必须签名（路线图 v0.27.0）：以前这里一律跳过并 0 退出，结果是
+  # 「配了钥匙的仓库」与「没配钥匙的仓库」发出来的东西长得一样 —— 用户只能
+  # 事后去 Release 页面看有没有 .minisig。要求签名的调用方用 --require 把它
+  # 变成硬失败：没钥匙就别发。
+  if [ "$require" = "1" ]; then
+    die "SHELLKIT_MINISIGN_KEY is required for a release but is not set (signing is not optional since v0.27.0; see docs/TRUST.md)" 3
+  fi
   say "skipped: SHELLKIT_MINISIGN_KEY is not set — this release will ship unsigned."
   say "         (generate a key pair and configure the secret; see docs/TRUST.md)"
   exit 0

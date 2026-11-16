@@ -75,11 +75,13 @@ jobs:
 
       # 签名是可选步骤（issue #66）：没配私钥时 sign_release.sh 明确提示并 0 退出，
       # 不挡发布；配了私钥却签不动（缺 minisign 等）才红 —— 那时就该红。
-      - name: sign release assets (optional)
+      - name: sign release assets
         env:
           SHELLKIT_MINISIGN_KEY: ${{ secrets.SHELLKIT_MINISIGN_KEY }}
           SHELLKIT_MINISIGN_PUBKEY: ${{ secrets.SHELLKIT_MINISIGN_PUBKEY }}
-        run: bash tools/sign_release.sh --dist dist
+        # --require：正式发布必须签名（路线图 v0.27.0）。没配私钥就红，
+        # 而不是产出一份「看起来一样、其实没签」的发布。
+        run: bash tools/sign_release.sh --dist dist --require
 
       # 公钥钉入一致性（路线图 v0.22.0）：TRUST.md「当前公钥」钉的 base64 必须与
       # 本次签名用的公钥一致 —— 钉的是跨渠道核对的锚点，漂移了用户按文档验签必失败。
@@ -123,6 +125,14 @@ jobs:
               --title "shellkit $(cat VERSION)" \
               --generate-notes
           fi
+
+      - name: verify the published assets
+        # 发布后从 Release 重新取回资产，用固定公钥独立验签（路线图 v0.27.0）。
+        # 只在 dist/ 上验签证明不了「下载到的那份」与签名对得上，也证明不了公钥
+        # 没被换过 —— 这里走的是与用户 docs/TRUST.md 手动验签完全一致的口径。
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: bash tools/verify_release.sh "$GITHUB_REF_NAME"
 
   # deb / rpm（issue #65）：基于**已发布**的那份 tarball 打包 —— 下载 release
   # 资产并对 SHA256SUMS，确保包的是「发出去的那份」，不是本地重建的第二份。
