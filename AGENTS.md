@@ -7,9 +7,10 @@
 
 ## 地图
 
-    shellkit                  生成器 CLI（new / upgrade / doctor / list / vendor / docs / completion /
-                              install-self / uninstall-self / update）
+    shellkit                  生成器 CLI（new / demo / upgrade / doctor / list / vendor / docs / man /
+                              completion / install-self / uninstall-self / update / skill 共 13 个子命令）
     install.sh                一键安装脚本：取版本 → 下载 release → 校验 sha256 → 交给 install-self
+                              （配了 SHELLKIT_MINISIGN_PUBKEY[_FILE] 时再验 minisign 签名，见 docs/TRUST.md）
     repair.sh                 独立修复脚本：不依赖已安装的库，检查 .old/.new 残骸并恢复启动能力
     lib/bootstrap.sh          唯一入口：按 lib/modules.txt 的顺序 source lib/core/*.sh
                               SHELLKIT_MODULES="log fs" 只加载这两个模块和它们的传递依赖
@@ -26,7 +27,10 @@
                               check_ident_boundary.sh（$ident 紧跟非 ASCII 的边界检查，issue #73）
                               bench.sh（性能基准，基线在 tools/bench_baseline.txt）
                               package_tarball / package_syspkg / package_smoke（deb/rpm 打包与冒烟）
-                              sign_release.sh（minisign 发布签名，可选：没私钥就跳过）
+                              sign_release.sh（minisign 签名；--require 供正式发布，--file 供事后补签）
+                              verify_release.sh（从 Release 重新取回资产、按钉住公钥逐份验签）
+                              release_assets.sh（不可变上传：同摘要跳过、异摘要拒绝覆盖）
+                              check_trust_pin.sh（TRUST.md 钉的公钥与本次签名钥一致性）
                               release.sh（一条命令发版）/ check_versions.sh（版本引用一致性）
                               site_sync.sh（docs/ → 站点页面）/ site_links.sh（产物链接门禁）
     docs/                     README 之外的深度文档；REFERENCE.md 与 AGENTS.md 是生成物
@@ -51,10 +55,11 @@
 ## 门禁
 
     make check     # syntax + test + lint + module-order-check + check-exitcode-docs +
-                  # local-names-check + module-count-check + pipe-safety-check +
-                  # dup-functions-check + security-check + api-baseline-check +
-                  # docs-check + versions-check + check-docs +
+                  # local-names-check + ident-boundary-check + module-count-check +
+                  # pipe-safety-check + dup-functions-check + security-check +
+                  # api-baseline-check + docs-check + versions-check + check-docs +
                   # cookbook-check + messages-check + examples + fmt，CI 也是这组
+                  # 步骤清单的唯一真相源是 Makefile 的 check 目标（上面这份是投影）
     make bats-check  # tests/bats 下的 bats 用例（bats 是外部依赖，不进 check）
 
 `docs-check` 会拦两种事：公开函数缺注释、`docs/` 里的生成物与源码不一致。
@@ -74,7 +79,7 @@
 只有真正成功应用了模板的文件才能推进基线；跳过的文件保持原基线。
 回归用例：`tests/test_upgrade.sh` 与 `tests/bats/scaffold.bats`（都要连升两次以上）。
 
-## 十六个已经踩过的坑
+## 十八个已经踩过的坑
 
 1. **bash 3.2 与 5 的 trap 语义不同**：子 shell 里 `trap -p EXIT`，3.2 读到空，5.x 仍打印
    父 shell 的 trap 但子 shell 退出时不执行。所以幂等不能只查 `trap -p`，看到是自己的
@@ -166,6 +171,28 @@
     报告与 stdout 必须写清四层口径：枚举到多少、campaign 窗口多大、
     计分多少、白名单跳过多少（逐条列出）。否则 100% 会被读成「全都验过了」。
 
+17. **发布顺序和「可选 job」都会让失败静默**：
+    `gh release create` 不带 `--draft` 时，资产在验签**之前**就挂在网页上了 ——
+    验签失败时用户已经能下到没通过校验的版本。顺序固定为
+    draft → `verify_release.sh`（从 draft 重新下载、用 TRUST.md 钉住的公钥逐份验、
+    并与 `SHA256SUMS` 对账）→ `gh release edit --draft=false --latest`。
+    判据在 `tests/test_release_publish_order.sh`：去掉 `--draft`、或把验签与公开对调，
+    用例必须红。
+    另一头是 `continue-on-error: true` 的可选 job：`packages` 红了，整个 run 仍显示绿。
+    v0.26.0（job 没装 `minisign` ⇒ `exit 3`）与 v0.26.1（`--file` 补签仍要求
+    `SHA256SUMS` 整份齐全）都因此**静默缺 deb/rpm**。所以：① 凡是调用 `sign_release.sh`
+    的 job，必须在同一 job 内先装 `minisign`（`tests/test_release_signing_tool.sh` 扫
+    workflow 文件，不靠人记得）；② 发完必须 `gh release view --json assets` 亲眼看资产清单 ——
+    「run 是绿的」不等于「包发了」。
+
+18. **用 `find . -type f` 生成 MANIFEST = 把用户放进去的文件记成自己的**：
+    安装清单若按「目录里现在有什么」生成，用户自己放进安装目录的文件会被记成
+    「我们装的」⇒ 卸载时连同用户文件一起删（0.26.0 修的 P0）。
+    正解：装的时候记「我们装的 + 内容指纹」（`.shellkit-install-manifest`），
+    卸载逐条比对 —— 用户新增的文件不在清单里、用户改过的文件指纹对不上，
+    都保留并告警；整体清理只在 `--purge`。故意保留用户文件不算失败（退出码 0），
+    只有真的删不掉才是非 0。回归用例：`tests/test_install_ownership.sh`。
+
 ## 本场景的验证
 
     make check
@@ -175,6 +202,7 @@
     bash tools/check_docs.sh         # 只看文档里的示例是否仍然成立
     bash tools/check_module_order.sh  # 只看模块加载顺序对不对
     bash tools/check_local_names.sh  # 只看命名空间与出参保留名单对不对
+    bash tools/check_ident_boundary.sh # 只看 $ident 紧跟非 ASCII 时的边界（issue #73）
     bash tools/check_exitcode_docs.sh # 只看公开函数有没有写明返回码
     bash tools/check_cookbook_count.sh # 只看文档里说的场景数对不对
     bash tools/check_pipe_safety.sh  # 只看管道里有没有会提前退出的消费者
@@ -256,6 +284,9 @@ shellkit 是一个 Bash 库加脚手架：日志、配置、下载校验、重�
 | 调 HTTP 接口 | `net_request GET URL [--header 'K: V'] [--json BODY]`（`SK_HTTP_CODE` / `SK_HTTP_BODY` / `SK_HTTP_HEADERS`）；要 JSON 就 `net_json ... --path a.b.c` |
 | 读 dotenv | `conf_load_dotenv FILE`（只进配置层）；要导出给子进程用 `conf_source FILE` |
 | 同一条命令并发跑 N 份 | `run_concurrent 8 -- ./deploy.sh`（stdout 给成功数，stderr 逐实例标注） |
+| 起/停/查系统服务 | `svc_start` / `svc_restart` / `svc_is_active`（写类动作吃 `SHELLKIT_DRY_RUN`；macOS 上写类动作返回 3） |
+| 比较版本号 | `ver_cmp` / `ver_gt` / `ver_lt` / `ver_eq`（纯 bash 分段比较，别用 `sort -V`；非法输入返回 2，不伪装成「相等」） |
+| 输出机器可读状态 | `SHELLKIT_STATUS_MODE=machine` + `status_emit STATE 人类文案`（再按需 `status_version` / `status_extra`） |
 | 日志要能进采集系统 | `SHELLKIT_LOG_FORMAT=json`；按级别过滤用 `SHELLKIT_LOG_LEVEL=warn`；落文件用 `SHELLKIT_LOG_FILE=/var/log/x.log` |
 | 新工程要带自定义变量 | `shellkit new ./x --set KEY=VALUE`；变量声明在模板的 `template.config` |
 | 已有工程跟上模板更新 | `shellkit upgrade ./x`（本地改过的文件会跳过并告警） |

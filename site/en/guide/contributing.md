@@ -6,16 +6,23 @@
 make check
 ```
 
-All twelve steps must be green. To run one step on its own:
+Every step must be green (the `check` target in `Makefile` is the single source of truth for the list). To run one step on its own:
 
 ```bash
-bash tests/run.sh
-./shellkit docs --check
-bash tools/check_versions.sh
-bash tools/check_docs.sh
-bash tools/check_module_order.sh
-bash tools/check_exitcode_docs.sh
+bash tests/run.sh                   # tests
+./shellkit docs --check             # generated artefacts are current
+bash tools/check_versions.sh        # version references agree
+bash tools/check_docs.sh            # documented examples still hold
+bash tools/check_module_order.sh    # module order and dependency declarations
+bash tools/check_exitcode_docs.sh   # public functions document return codes
+bash tools/check_local_names.sh     # out-parameter reserved names
+bash tools/check_pipe_safety.sh     # early-exit consumers (SIGPIPE + pipefail)
+bash tools/check_security.sh        # paths/symlinks/permissions/redaction/locks/atomic writes
+bash tools/api_baseline.sh          # API behaviour baseline and Stable promises
 ```
+
+`make bats-check`, `make coverage`, `make mutation` and `make bench` stay out of `make check`:
+they need external tools (bats) or run the suite several times over, so CI has dedicated jobs/steps.
 
 ## Adding a module means three edits; miss one and the gate goes red
 

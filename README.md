@@ -115,6 +115,9 @@ curl -fsSL .../install.sh | VERSION=0.26.1 bash           # 钉版本
 脚本自己不往目标目录放任何文件：取版本号 → 下载 tar.gz 与 `SHA256SUMS` → 校验 → 交给包内自带的
 `shellkit install-self`。**sha256 对不上就 `exit 5`，一个字节都不落地**。
 
+想连「这个包是谁发的」一起验：配 `SHELLKIT_MINISIGN_PUBKEY`（或 `..._FILE`）走 minisign 验签，
+验签发生在读清单**之前**。完整信任链、公钥三个核对渠道、离线校验步骤见 [docs/TRUST.md](docs/TRUST.md)。
+
 手动装（已经 clone 下来时）：
 
 ```bash
@@ -157,11 +160,18 @@ repair.sh --project ./my-app --check                       # 只报告，不动�
 shellkit update --check     # 只比对版本；stdout 只给版本号，可直接进脚本
 shellkit update             # 更新到最新 release，校验 sha256 才装
 shellkit update --from pkg.tar.gz --sha256 SUM   # 离线或内网：指定本地包
-shellkit uninstall-self     # 按 MANIFEST 删干净
+shellkit uninstall-self     # 只删「我们装的、内容还是原样」的
+shellkit uninstall-self --purge   # 连安装目录里用户自己放的文件一起清掉
 ```
 
-卸载不猜：安装时把真实落盘的文件写成 `PREFIX/share/shellkit/MANIFEST`，卸载只删清单里列出的
-相对路径（`../` 一律跳过并告警）；没有清单就报错退出（退出码 3），交给人决定。
+卸载不猜，也不误删：安装时把每个落盘文件的指纹写进
+`PREFIX/share/shellkit/.shellkit-install-manifest`（**所有权清单**），卸载逐条比对 ——
+用户新增的文件不在清单里、用户改过的文件指纹对不上，都会保留并打印
+`kept files that are not ours: N`；**故意保留不算失败**（退出码 0），只有真的删不掉才是非 0。
+`--purge` 是唯一的「整个目录清掉」开关。
+
+老安装只有 `MANIFEST`、没有指纹清单，分不清归属 ⇒ 仍按旧语义全删并告警；
+重装一次（`install-self`）就能拿到指纹清单。
 
 ## 不装也能用
 
@@ -268,6 +278,11 @@ SHELLKIT_MODULES="log fs" . ./vendor/shellkit/lib/bootstrap.sh
 | `validate` | `validate_*`（not_empty / single_line / key / port / ip / version / abs_path / url / enum） | 失败原因写 `SK_VALIDATE_ERR` |
 | `fs` | `fs_atomic_write` `fs_backup` `fs_ensure_dir` `fs_tmp_init` `fs_ensure_line` `fs_ensure_block` `fs_ensure_symlink` | 原子写；备份按名升序保留最新 N 份；`ensure_*` 幂等改文件 |
 | `os` | `os_name` `os_arch` `os_is_root` `os_has_cmd` `os_pkg_*` `os_sed_i` `os_md5` `os_sha256` | Darwin/Linux 差异只在这里 |
+| `svc` | `svc_start` `svc_stop` `svc_restart` `svc_is_active` `svc_is_enabled` `svc_install_unit` | 服务管理：写类动作吃 `SHELLKIT_DRY_RUN`；macOS 上写类动作返回 3（动词是 systemd 语义） |
+| `ver` | `ver_cmp` `ver_gt` `ver_lt` `ver_eq` | 纯 bash 分段比较，不依赖 `sort -V`；非法输入返回 2 而不是「相等」 |
+| `status` | `status_emit` `status_version` `status_extra` `status_is_machine` `status_state_valid` | 双轨状态输出：人类文案 / `SHELLKIT_STATUS_MODE=machine` 的规范字段行 |
+| `registry` | `registry_add` `registry_scan` `registry_get` `registry_list` `registry_deps` `registry_topo` | 清单注册表：字段查询、平台可见性、依赖拓扑；不认领域字段名 |
+| `profile` | `profile_write` `profile_append` `profile_parse` `profile_env` | profile 文件格式原语（每行一个模块 + key=value），只管读写解析 |
 | `trap` | `trap_push` `trap_pop` `trap_cleanup` `trap_install` `trap_list` | 清理栈：LIFO、幂等、退出码保真、链式保留已有 EXIT trap |
 | `run` | `run` | 跑命令失败即 `die`（消息带命令原文与退出码）；`SHELLKIT_DRY_RUN=1` 只打印 |
 | `retry` | `retry` | 退避重试；用法错与校验失败默认不重试 |
@@ -464,8 +479,10 @@ net_download() {
 
 ```bash
 make check     # syntax + test + lint + module-order-check + check-exitcode-docs
-               # + docs-check + check-docs + cookbook-check + messages-check
-               # + examples + fmt
+               # + local-names-check + ident-boundary-check + module-count-check
+               # + pipe-safety-check + dup-functions-check + security-check
+               # + api-baseline-check + docs-check + versions-check + check-docs
+               # + cookbook-check + messages-check + examples + fmt
 ```
 
 - `docs-check`：公开函数缺注释、生成物与源码不一致 ⇒ 红。
@@ -476,6 +493,13 @@ make check     # syntax + test + lint + module-order-check + check-exitcode-docs
   「返回码就是接口的一部分」这句话得有门禁兑现，否则接口是残的。
 - `cookbook-check`：README 与站点首页里手写的「N 个场景」必须与 Cookbook 实际场景数一致 ⇒ 红。
   手抄的数字必然过期，过期就得有人记得改 —— 这道门替那个人。
+- `security-check`：路径穿越、软链写穿、权限位、日志脱敏、锁与原子写这些边界动作必须走库里的
+  助手函数，不许各写一遍 ⇒ 红。
+- `api-baseline-check`：公开函数的返回码集合、Stable 集合与 `tools/api_baseline.txt` 对不上，
+  或改了 Stable 行为却没写进 `docs/MIGRATING.md` ⇒ 红。
+- `local-names-check` / `pipe-safety-check` / `dup-functions-check`：分别拦「出参名撞局部变量导致
+  静默写丢」「`grep -q` 早退把上游 SIGPIPE 打死」「同名函数定义两遍、先写的那份失效」——
+  三种都不报错、不崩，只是你以为在跑 A。
 
 ## 示例工程
 

@@ -29,6 +29,25 @@ sha256 只证明「下载没被改」，不证明「这个包是我们发的」�
 验签步骤必须排在 `--draft=false` 之前、公开动作只能出现一次；把 `--draft` 去掉或把两步
 对调，用例都会红。
 
+## 补签：发布之后才有的资产
+
+deb / rpm 是基于**已发布**的 tarball 在发布之后才打出来的，所以用点名模式补签：
+
+```bash
+bash tools/sign_release.sh --dist dist --require \
+  --file "dist/shellkit-$ver.deb" --file "dist/shellkit-$ver.rpm"
+```
+
+- 点名模式**只签点名的那些文件**（不会顺手重签 `SHA256SUMS` 与 `install.sh`），
+  也不再要求清单里其他文件在本地存在 —— 补签场景下 `dist/` 天然只有一部分资产；
+- 没配私钥时 `--require` 直接失败：宁可不附加，也不发布无签名的系统包；
+- 上传仍走 `tools/release_assets.sh`（不可变）；验签口径与主资产一致：
+  `minisign -Vm "shellkit-$ver.deb" -p shellkit.minisign.pub`。
+
+> v0.26.1 的 tag **不含**「点名模式跳过整份枚举」这条修复（它在 `569df9a` 才进 main），
+> 所以那一版的 `packages` job 仍以 `SHA256SUMS lists a missing file` 失败、没带 deb/rpm；
+> 系统包随下一版恢复。
+
 ## install.sh 验什么、不验什么
 
 **验**（仅远端安装路径；本地 git 检出安装不联网、无此环节）：
@@ -127,13 +146,14 @@ rm -f shellkit.key # 本地不再留副本
 # 3) 把公钥 base64（.pub 文件第 2 行）钉进本文件的「当前公钥」一节，随下一个 tag 发布
 ```
 
-- **正式发布必须签名（v0.27.0 起）**：`release.yml` 调的是
+- **正式发布必须签名（v0.25.0 起）**：`release.yml` 调的是
   `tools/sign_release.sh --dist dist --require` —— 没配私钥时直接以 **3** 失败，
   不产出「看起来一样、其实没签」的发行版；
 - **非发布场景**（本地打包、试签名）不带 `--require`：打印
   `skipped: SHELLKIT_MINISIGN_KEY is not set` 并以 0 退出，**绝不伪造签名产物**；
-- **发布后独立验签**：`release.yml` 在 publish 之后调 `tools/verify_release.sh <tag>`，
-  从 Release 重新取回资产、用本文件钉住的公钥逐份验签，并与 `SHA256SUMS` 对账 ——
+- **公开之前独立验签**：`release.yml` 在 draft 上（`--draft=false` **之前**）调
+  `tools/verify_release.sh <tag>`，从 Release 重新取回资产、用本文件钉住的公钥逐份验签，
+  并与 `SHA256SUMS` 对账；验不过就停在 draft，用户看不到任何资产 ——
   你也可以在本地跑同一条命令复核。
 - **顺序**：先发带签名的 release，再给 install.sh 配公钥。反过来配公钥，
   验签会因为「签名资产不存在」以 5 失败（这是故意的：要验就必须验得过）；

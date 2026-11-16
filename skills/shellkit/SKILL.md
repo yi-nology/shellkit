@@ -30,7 +30,8 @@ shellkit 是 Bash 库 + 脚手架。用它，你不用再手写日志、配置�
     # C. 自用脚本：全局安装（一键取 release，sha256 校验通过才装）
     curl -fsSL https://github.com/yi-nology/shellkit/releases/latest/download/install.sh | bash
     shellkit update            # 之后一条命令更新
-    shellkit uninstall-self    # 不想要了按 MANIFEST 删干净
+    shellkit uninstall-self    # 不想要了：只删「我们装的、内容还是原样」的（用户文件默认保留）
+    shellkit uninstall-self --purge   # 连安装目录里用户自己放的一起清掉
 
     # 已经 clone 下来时也可以直接装，或用 --prefix 换目录
     shellkit install-self --prefix ~/.local
@@ -130,6 +131,9 @@ shellkit 是一个 Bash 库加脚手架：日志、配置、下载校验、重�
 | 调 HTTP 接口 | `net_request GET URL [--header 'K: V'] [--json BODY]`（`SK_HTTP_CODE` / `SK_HTTP_BODY` / `SK_HTTP_HEADERS`）；要 JSON 就 `net_json ... --path a.b.c` |
 | 读 dotenv | `conf_load_dotenv FILE`（只进配置层）；要导出给子进程用 `conf_source FILE` |
 | 同一条命令并发跑 N 份 | `run_concurrent 8 -- ./deploy.sh`（stdout 给成功数，stderr 逐实例标注） |
+| 起/停/查系统服务 | `svc_start` / `svc_restart` / `svc_is_active`（写类动作吃 `SHELLKIT_DRY_RUN`；macOS 上写类动作返回 3） |
+| 比较版本号 | `ver_cmp` / `ver_gt` / `ver_lt` / `ver_eq`（纯 bash 分段比较，别用 `sort -V`；非法输入返回 2，不伪装成「相等」） |
+| 输出机器可读状态 | `SHELLKIT_STATUS_MODE=machine` + `status_emit STATE 人类文案`（再按需 `status_version` / `status_extra`） |
 | 日志要能进采集系统 | `SHELLKIT_LOG_FORMAT=json`；按级别过滤用 `SHELLKIT_LOG_LEVEL=warn`；落文件用 `SHELLKIT_LOG_FILE=/var/log/x.log` |
 | 新工程要带自定义变量 | `shellkit new ./x --set KEY=VALUE`；变量声明在模板的 `template.config` |
 | 已有工程跟上模板更新 | `shellkit upgrade ./x`（本地改过的文件会跳过并告警） |

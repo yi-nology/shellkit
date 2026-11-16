@@ -14,6 +14,11 @@
 | [validate](/reference/validate.md) | 输入校验 | `validate_not_empty` `validate_single_line` `validate_key` `validate_port` `validate_ip` `validate_version` `validate_abs_path` `validate_url` `validate_enum` |
 | [fs](/reference/fs.md) | 原子写与幂等改文件 | `fs_atomic_write` `fs_backup` `fs_ensure_dir` `fs_ensure_line` `fs_ensure_block` `fs_ensure_symlink` `fs_tmp_init` |
 | [os](/reference/os.md) | 平台差异只在这里 | `os_name` `os_arch` `os_is_root` `os_has_cmd` `os_pkg_install` `os_sed_i` `os_md5` `os_sha256` |
+| [svc](/reference/svc.md) | 服务管理（systemd 语义） | `svc_start` `svc_stop` `svc_restart` `svc_is_active` `svc_is_enabled` `svc_install_unit` |
+| [ver](/reference/ver.md) | 版本比较（纯 bash 分段） | `ver_cmp` `ver_gt` `ver_lt` `ver_eq` |
+| [status](/reference/status.md) | 机器可读状态契约 | `status_emit` `status_version` `status_extra` `status_is_machine` `status_state_valid` |
+| [registry](/reference/registry.md) | 清单注册表 | `registry_add` `registry_scan` `registry_get` `registry_list` `registry_deps` `registry_topo` |
+| [profile](/reference/profile.md) | profile 文件格式原语 | `profile_write` `profile_append` `profile_parse` `profile_env` |
 | [trap](/reference/trap.md) | 清理栈 | `trap_push` `trap_pop` `trap_cleanup` `trap_install` `trap_list` |
 | [run](/reference/run.md) | 跑命令 | `run` |
 | [retry](/reference/retry.md) | 退避重试 | `retry` |

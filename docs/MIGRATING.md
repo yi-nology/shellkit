@@ -186,7 +186,7 @@ shellkit vendor . --check    # 只比对，不写盘
 | 升级中途被 SIGKILL 之后重跑 | 文件已经换成新版、清单还记着旧指纹 ⇒ 下次升级把这些文件判成「用户改过」，**从此再也拿不到模板更新**（冻结） | 升级前先写升级日志（`.shellkit-upgrade-journal`），重跑时按磁盘实际指纹比对日志，命中就说明「这是上一轮换上去的」，基线推进到它，文件解冻 | 在升级中途被杀的工程（断电、SIGKILL、磁盘满） |
 | 工程目录里的新文件 | —— | 升级进行中会有 `.shellkit-upgrade-journal`；升级成功（清单提交后）自动删除。升级被中断时它会留下 —— 那是恢复的依据，不是垃圾，可以手工删 | 升级被中断后重跑成功，文件自动消失 |
 | `upgrade --check` 的输出 | —— | 命中恢复时会多一行 `recovered from an interrupted upgrade` | 断言升级输出行数的脚本 |
-| 安装目录里的新文件 | —— | 装好的副本里多一份 `repair.sh`，`PREFIX/bin/` 下多一个 `shellkit-repair` 软链 | 卸载会按 MANIFEST 一并删掉；`install-self` 的 MANIFEST 里多一行 |
+| 安装目录里的新文件 | —— | 装好的副本里多一份 `repair.sh`，`PREFIX/bin/` 下多一个 `shellkit-repair` 软链 | 卸载会按 MANIFEST 一并删掉；`install-self` 的 MANIFEST 里多一行（**0.26.0 起改为按所有权指纹删除，用户自己的文件默认保留** —— 见「0.25.0 → 0.26.0」一节） |
 
 只加不改的部分：正常升级路径的判定与输出、单文件原子写的语义、`--check` 的口径都没变。
 另外三条只动工具与门禁，不影响库的使用者：
@@ -720,7 +720,7 @@ job 双跑与 bench job 的 profile check 都不改变本地 `make check` 的行
 
 **分级的适用范围（issue #79）**：`@stability` 注解落地之后，本表将**只登记 Stable API
 的行为变化** —— experimental 级的改动在提交信息与 `CHANGELOG.md` 里说明，不构成
-兼容性承诺。当前 162 个公开函数中 **37 个已晋升 Stable**（名单与准入标准见
+兼容性承诺。当前 162 个公开函数中 **50 个已晋升 Stable**（名单与准入标准见
 `docs/STABLE-CANDIDATES.md`），其余 125 个仍是 experimental（豁免名单
 `tools/stability_exempt.txt` 只许变短）；Stable 的承诺变更由门禁兜底 —— 不写进本表
 就重生成不了行为基线（判据见 `tests/test_api_stability.sh`）。
@@ -742,6 +742,23 @@ shellkit uninstall-self --purge
 
 > 老安装（只有 `MANIFEST`、没有 `.shellkit-install-manifest`）无法区分归属，卸载仍按旧语义全删，
 > 并打印一条明确告警；先重装一次（`install-self`）即可获得指纹清单。
+
+### 0.26.0 → 0.26.1：会改变结果的行为变化
+
+库本身（`lib/core/*.sh`）零变化；变的是发布工具链与 CI job 的前提。**调用方不用改任何代码。**
+
+| 变化 | 以前 | 现在 | 你会在哪里撞到 |
+|---|---|---|---|
+| 每个签名 job 的运行时依赖 | 以为 runner 自带 `minisign`：`packages` job 直接调 `sign_release.sh` → `exit 3`，又被 `continue-on-error` 吞掉，那一版静默缺 deb/rpm | 凡是调用 `sign_release.sh` 的 job，**必须在同一 job 内先装** `minisign`；`tests/test_release_signing_tool.sh` 做结构判据（扫 workflow 文件） | 新增或改动签名 job 的人：漏装工具会让 CI 红（这是要的） |
+| `packages` job 的结论可信度 | 「run 是绿的」不等于「包发了」——可选 job 红了会被 `continue-on-error` 吞 | 结论仍不挡发布（刻意），但发版后必须看 `gh release view` 的资产清单 | 发版的人：验收多一步 |
+
+### 0.26.1 → 下一版（未发布）：`--file` 点名补签不再要求清单整份齐全
+
+`0.26.1` 的 tag **不含**这条修复（它在 `569df9a` 才进 main），所以那一版仍然没带 deb/rpm。
+
+| 变化 | 以前 | 现在 | 你会在哪里撞到 |
+|---|---|---|---|
+| `tools/sign_release.sh --file` | 点名补签也会枚举整份 `SHA256SUMS`：`dist/` 里缺任一清单文件就 `[FAIL] SHA256SUMS lists a missing file: shellkit-skill-x.y.z.tar.gz` | 点名模式**跳过整份枚举**，只签点名的文件（也不再顺手重签 `SHA256SUMS` / `install.sh`） | 发布之后补签 deb/rpm / 镜像清单的流水线：从必红变为可用 |
 
 ## 0.23.0 → 0.24.0：会改变结果的行为变化
 

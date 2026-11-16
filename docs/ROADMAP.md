@@ -1,6 +1,6 @@
 # ShellKit 路线图：三层架构与版本验收状态
 
-状态：2026-11-16 按**实际发版**重写（当前 **v0.26.0** 已发布）。本文是**方向**，不是承诺 ——
+状态：2026-11-16 按**实际发版**重写（当前 **v0.26.1** 已发布）。本文是**方向**，不是承诺 ——
 每个版本的退出条件写清楚，条件不满足就不进下一个版本（见「迭代节奏」）。
 
 进度只按**验收结果**记，不按日期：标为已完成（Completed）的每一条都能在仓库里指到判据；
@@ -34,6 +34,7 @@
 | v0.24.2 | 数据安全收口（P0） | `_sk_own_sync` 搬不动就整轮失败、写回后 `os_sha256` 自检；`test_fault_matrix.sh` 的 `vendor\|keep-fail` 格（注入点 `TMPDIR`） |
 | v0.25.0 | 发布质量前移 + API 契约 + 供应链（三批合并发布） | `tools/package_artifact_smoke.sh`（PR 与发版同一份）、`tools/upgrade_matrix.sh`、50 个 Stable API、`sign_release.sh --require` + `tools/verify_release.sh` |
 | v0.26.0 | 发版原子性 + 卸载所有权（两处 P0） | draft → 独立验签 → 公开；`uninstall-self` 只删「我们装的、内容还是原样」的；`packages` job 自装 minisign + 结构判据 |
+| v0.26.1 | 系统包 job 的两处附产品：签名工具与补签前提 | `packages` job 自装 minisign；`sign_release.sh --file` 点名模式不再要求 `SHA256SUMS` 整份齐全（`tests/test_release_signing_tool.sh` 盯着签名 job） |
 
 ### v0.24.2 —— 数据安全收口（已发布 2026-11-16）
 
@@ -80,8 +81,24 @@ v0.24.0 暴露的缺口是：源码矩阵全绿、系统包构建也全绿，但
 **结果**：v0.26.0（`89ba66e`）13 项资产全部签名，`draft=false` 在验签通过之后才置位；
 卸载语义变化按 minor 处理，`docs/MIGRATING.md` 有对照表。
 
-**遗留并已修**：该版缺 `.deb` / `.rpm` —— `packages` job 因缺 `minisign` 失败，
-又被 `continue-on-error` 吞掉，发布说明里已如实标注；修法与结构判据见 #120，系统包随下一版恢复。
+**遗留与后续**：该版缺 `.deb` / `.rpm` —— `packages` job 因缺 `minisign` 失败，
+又被 `continue-on-error` 吞掉，发布说明里已如实标注；修法（job 自装工具）+ 结构判据见 #120。
+
+### v0.26.1 —— 系统包 job 的两处附产品（已发布 2026-11-16）
+
+这一版本身只随 `packages` job 的修复出车，但它把「可选 job 也会静默失败」这件事钉住了。
+
+| 交付 | 判据 |
+|---|---|
+| 每个签名 job 自己装 `minisign` | `tests/test_release_signing_tool.sh`：凡是调用 `sign_release.sh` 的 job，同一 job 内必须先装工具 |
+| `sign_release.sh --file` 点名补签不要求清单整份齐全 | 点名模式跳过整份 `SHA256SUMS` 枚举；补签场景下 `dist/` 天然只有一部分资产 |
+| 迟到的 deb/rpm 用点名模式补签 | `release.yml` 的 `sign the packages` 传 `--file`；签名覆盖与 tarball 同口径 |
+
+**结果与未完成项**：v0.26.1 的 13 项主资产全部签名、`draft=false` 在验签之后才置位；
+但 `packages` job **仍然失败**，原因换成了「`--file` 补签仍在要求 `SHA256SUMS` 整份齐全」
+（`SHA256SUMS lists a missing file: shellkit-skill-0.26.1.tar.gz`）—— 该修在 `569df9a` 才进 main，
+**0.26.1 的 tag 不含它** ⇒ 这一版依旧没有 deb/rpm。系统包随下一版恢复；
+发完必须亲自看一眼 `gh release view` 的资产清单，`continue-on-error` 不会替你看。
 
 ### API 与配置契约冻结（已随 v0.25.0 发布）
 
@@ -90,7 +107,7 @@ v0.24.0 暴露的缺口是：源码矩阵全绿、系统包构建也全绿，但
 > 所以它们随 **v0.25.0** 一起发布（`ce23822`，13 项资产、全部签名）。本节的「Planned」清单一律按
 > 实际代码状态维护，不靠版本号表达进度。
 
-当前 162 个公开函数里 37 个是 Stable。目标不是把所有函数都升 Stable（那会锁死演进），
+当前 162 个公开函数里 50 个是 Stable。目标不是把所有函数都升 Stable（那会锁死演进），
 而是把核心能力钉死：Filesystem、Config、Run、Lock、Retry、Error、Validate、OS、CLI。
 
 | 交付 | 判据 |
@@ -106,8 +123,8 @@ gates 兜底，只需扩集合）。
 
 | 交付 | 判据 |
 |---|---|
-| 签名从可选改为必需 | 正式 Release 缺签名直接失败（当前允许无签名发行） |
-| 发布后独立验签 | 从 GitHub Release 重新下载资产，用 `docs/TRUST.md` 固定公钥验签 |
+| 签名从可选改为必需 | `sign_release.sh --require`：没配私钥以 **3** 失败，不产出「看起来一样、其实没签」的发行版 |
+| 公开前独立验签 | 从 **draft** Release 重新下载资产，用 `docs/TRUST.md` 固定公钥逐份验签并与 `SHA256SUMS` 对账；验不过不置 `--draft=false` |
 | 诊断与恢复体验统一 | `doctor` / `repair` / `doctor --json` 的字段与措辞一致，有对账用例 |
 
 退出条件：一次完整发布里，「下载 → 验签 → 安装 → 升级 → 卸载」全部由脚本自动判过。

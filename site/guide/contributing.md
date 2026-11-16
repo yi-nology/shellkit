@@ -6,17 +6,23 @@
 make check
 ```
 
-十五步全绿才算过。单跑某一步：
+全部步骤全绿才算过（清单的唯一真相源是 `Makefile` 的 `check` 目标）。单跑某一步：
 
 ```bash
-bash tests/run.sh
-./shellkit docs --check
-bash tools/check_versions.sh
-bash tools/check_docs.sh
-bash tools/check_module_order.sh
-bash tools/check_exitcode_docs.sh
-bash tools/check_pipe_safety.sh
+bash tests/run.sh                   # 测试
+./shellkit docs --check             # 生成物是否最新
+bash tools/check_versions.sh        # 版本引用是否一致
+bash tools/check_docs.sh            # 文档里的例子是否仍然成立
+bash tools/check_module_order.sh    # 模块加载顺序与依赖声明
+bash tools/check_exitcode_docs.sh   # 公开函数有没有写明返回码
+bash tools/check_local_names.sh     # 出参保留名与命名空间
+bash tools/check_pipe_safety.sh     # 管道早退（SIGPIPE + pipefail）
+bash tools/check_security.sh        # 路径/软链/权限/脱敏/锁/原子写
+bash tools/api_baseline.sh          # 公开 API 行为基线 + Stable 承诺
 ```
+
+`make bats-check`、`make coverage`、`make mutation`、`make bench` 不进 `make check`：
+它们要么依赖外部工具（bats），要么要跑好几遍套件 —— CI 里有单独的 job/步骤。
 
 ## 加一个模块要改三处，少一处就红
 

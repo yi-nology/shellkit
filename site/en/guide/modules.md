@@ -15,6 +15,11 @@ just another way of hitting the same trap twice.
 | [validate](/en/reference/validate.md) | input validation | `validate_not_empty` `validate_single_line` `validate_key` `validate_port` `validate_ip` `validate_version` `validate_abs_path` `validate_url` `validate_enum` |
 | [fs](/en/reference/fs.md) | atomic writes, idempotent edits | `fs_atomic_write` `fs_backup` `fs_ensure_dir` `fs_ensure_line` `fs_ensure_block` `fs_ensure_symlink` `fs_tmp_init` |
 | [os](/en/reference/os.md) | the only place for platform differences | `os_name` `os_arch` `os_is_root` `os_has_cmd` `os_pkg_install` `os_sed_i` `os_md5` `os_sha256` |
+| [svc](/en/reference/svc.md) | service management (systemd verbs) | `svc_start` `svc_stop` `svc_restart` `svc_is_active` `svc_is_enabled` `svc_install_unit` |
+| [ver](/en/reference/ver.md) | version comparison (pure bash, segmented) | `ver_cmp` `ver_gt` `ver_lt` `ver_eq` |
+| [status](/en/reference/status.md) | machine-readable status contract | `status_emit` `status_version` `status_extra` `status_is_machine` `status_state_valid` |
+| [registry](/en/reference/registry.md) | manifest registry | `registry_add` `registry_scan` `registry_get` `registry_list` `registry_deps` `registry_topo` |
+| [profile](/en/reference/profile.md) | profile file primitives | `profile_write` `profile_append` `profile_parse` `profile_env` |
 | [trap](/en/reference/trap.md) | the cleanup stack | `trap_push` `trap_pop` `trap_cleanup` `trap_install` `trap_list` |
 | [run](/en/reference/run.md) | run a command | `run` |
 | [retry](/en/reference/retry.md) | retries with backoff | `retry` |
