@@ -163,16 +163,19 @@ shellkit update             # 更新到最新 release，校验 sha256 才装
 shellkit update --from pkg.tar.gz --sha256 SUM   # 离线或内网：指定本地包
 shellkit uninstall-self     # 只删「我们装的、内容还是原样」的
 shellkit uninstall-self --purge   # 连安装目录里用户自己放的文件一起清掉
+shellkit uninstall-self --legacy  # 旧安装（无指纹清单）的显式兼容清理：按 MANIFEST 全删
 ```
 
 卸载不猜，也不误删：安装时把每个落盘文件的指纹写进
 `PREFIX/share/shellkit/.shellkit-install-manifest`（**所有权清单**），卸载逐条比对 ——
 用户新增的文件不在清单里、用户改过的文件指纹对不上，都会保留并打印
 `kept files that are not ours: N`；**故意保留不算失败**（退出码 0），只有真的删不掉才是非 0。
-`--purge` 是唯一的「整个目录清掉」开关。
+保留下来的文件基线也会留下：之后重装/更新仍认得出「这份是用户改过的」，不会静默覆盖。
+`--purge` 是唯一的「整个目录清掉」开关，普通卸载之后也能再跑一次收尾。
 
-老安装只有 `MANIFEST`、没有指纹清单，分不清归属 ⇒ 仍按旧语义全删并告警；
-重装一次（`install-self`）就能拿到指纹清单。
+老安装只有 `MANIFEST`、没有指纹清单，分不清归属 ⇒ **默认拒绝卸载（退出码 3）**，
+不做无法确认所有权的删除。先 `install-self --force` 重新采纳指纹（会覆盖本地修改）再卸载；
+确实要按旧语义把 MANIFEST 里的文件全删，显式用 `uninstall-self --legacy`。
 
 ## 不装也能用
 

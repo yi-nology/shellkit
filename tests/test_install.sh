@@ -133,12 +133,15 @@ assert_exit_code 0 "$sk" install-self --prefix "$p2"
 assert_exit_code 0 "$p2/bin/shellkit" uninstall-self
 assert_false test -e "$p2/share/shellkit"
 
-# 清单是文件，不是可信输入：../ 不许把删除动作带出安装目录
+# 清单是文件，不是可信输入：../ 不许把删除动作带出安装目录。
+# 没有指纹清单的旧安装默认 fail-closed（issue #124），旧语义走 --legacy。
 esc=$work/esc
 mkdir -p "$esc/share/shellkit" "$esc/outside"
 printf 'victim\n' >"$esc/outside/victim"
 printf '# shellkit test\n../outside/victim\n' >"$esc/share/shellkit/MANIFEST"
-err=$("$sk" uninstall-self --prefix "$esc" 2>&1)
+assert_exit_code 3 "$sk" uninstall-self --prefix "$esc"
+assert_true test -f "$esc/share/shellkit/MANIFEST"
+err=$("$sk" uninstall-self --prefix "$esc" --legacy 2>&1)
 rc=$?
 assert_eq "0" "$rc" "a skipped path is not a failure"
 assert_contains "$err" "skipped a path"
@@ -149,7 +152,8 @@ mkdir -p "$work/other/share/shellkit" "$work/other/bin"
 printf '# shellkit test\n' >"$work/other/share/shellkit/MANIFEST"
 printf '#!/bin/sh\n' >"$work/other/target"
 ln -s "$work/other/target" "$work/other/bin/shellkit"
-err=$("$sk" uninstall-self --prefix "$work/other" 2>&1)
+assert_exit_code 3 "$sk" uninstall-self --prefix "$work/other"
+err=$("$sk" uninstall-self --prefix "$work/other" --legacy 2>&1)
 rc=$?
 assert_eq "0" "$rc"
 assert_contains "$err" "points elsewhere"

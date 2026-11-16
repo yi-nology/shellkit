@@ -4,7 +4,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: shellkit\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-11-16 12:07+0800\n"
+"POT-Creation-Date: 2026-11-17 05:27+0800\n"
 "PO-Revision-Date: 2026-11-08 00:00+0800\n"
 "Last-Translator: shellkit contributors\n"
 "Language-Team: shellkit contributors\n"
@@ -498,6 +498,9 @@ msgstr "本地已修改，保持原樣"
 
 msgid "cannot stage the file to keep"
 msgstr "無法暫存需要保留的檔案"
+
+msgid "no ownership baseline, left alone (use --force to overwrite)"
+msgstr "沒有所有權基線，原樣保留（要覆蓋請用 --force）"
 
 msgid "the staged copy of a kept file is missing"
 msgstr "需要保留的檔案的暫存副本不見了"
@@ -1002,13 +1005,32 @@ msgstr "這裡沒有安裝清單："
 msgid "nothing was removed, delete that directory by hand if you are sure"
 msgstr "沒有刪除任何東西；確認無誤請手動刪除該目錄"
 
-msgid "removing"
-msgstr "正在刪除："
+msgid "refusing to purge: not a shellkit install directory"
+msgstr "拒絕清理：這不是 shellkit 安裝目錄"
 
 msgid ""
-"legacy install without ownership fingerprints; every listed file will be "
-"removed"
-msgstr "舊安裝沒有所有權指紋清單，清單裡列出的檔案會被全部刪除"
+"legacy install without ownership fingerprints; every file listed in MANIFEST "
+"will be removed (--legacy)"
+msgstr "舊安裝沒有所有權指紋清單；MANIFEST 裡列出的檔案都會被刪除（--legacy）"
+
+msgid "refusing to remove a legacy install without ownership fingerprints"
+msgstr "拒絕卸載沒有所有權指紋清單的舊安裝"
+
+msgid ""
+"run install-self --force to adopt fingerprints (this can overwrite local "
+"edits), then uninstall; or rerun with --legacy to remove every file listed "
+"in the old manifest"
+msgstr ""
+"請先執行 install-self --force 採納指紋（會覆蓋本機修改），再卸載；或重新執行"
+"並加上 --legacy，依舊清單刪除所有列出的檔案"
+
+msgid ""
+"--legacy applies only to installs without ownership fingerprints; using the "
+"default ownership checks"
+msgstr "--legacy 只適用於沒有所有權指紋清單的安裝；這裡依預設的所有權判準處理"
+
+msgid "removing"
+msgstr "正在刪除："
 
 msgid "failed to remove"
 msgstr "刪除失敗："
@@ -1021,6 +1043,9 @@ msgstr "要一併刪除請用 --purge"
 
 msgid "leftover files were kept"
 msgstr "保留了未清理的檔案："
+
+msgid "failed to write the ownership baseline"
+msgstr "寫所有權基線失敗"
 
 msgid "left the symlink alone, it points elsewhere"
 msgstr "未動該符號連結，它指向別處："
@@ -1087,6 +1112,11 @@ msgstr "已開啟強制模式"
 
 msgid "finished"
 msgstr "完成"
+
+#~ msgid ""
+#~ "legacy install without ownership fingerprints; every listed file will be "
+#~ "removed"
+#~ msgstr "舊安裝沒有所有權指紋清單，清單裡列出的檔案會被全部刪除"
 
 #~ msgid "print a shell completion script"
 #~ msgstr "輸出 shell 補全腳本"

@@ -103,12 +103,18 @@ shellkit update --from shellkit-0.26.2.tar.gz --sha256 "$SUM"
 ## Uninstall
 
 ```bash
-shellkit uninstall-self
+shellkit uninstall-self            # remove only our files whose content is still original
+shellkit uninstall-self --purge    # also remove files the user added (works after a normal uninstall)
+shellkit uninstall-self --legacy   # explicit legacy cleanup for old installs without fingerprints
 ```
 
-Installation records every file it actually wrote into `PREFIX/share/shellkit/MANIFEST`. Uninstall removes only
-the relative paths listed there; anything containing `../` is skipped with a warning. **Without a manifest it fails
-with exit code 3** and leaves the decision to a human -- guessing is the fastest way to delete somebody else's files.
+Installation records every file it actually wrote, with fingerprints, in
+`PREFIX/share/shellkit/.shellkit-install-manifest`. Uninstall compares each entry, skips anything containing
+`../` with a warning, and keeps user-edited or user-added files (`kept files that are not ours: N`).
+Without a manifest a normal uninstall fails with exit code 3 and leaves the decision to a human -- guessing is
+the fastest way to delete somebody else's files. Old installs that only have `MANIFEST` (no fingerprints)
+fail closed by default: run `install-self --force` to adopt fingerprints (this overwrites local edits) and then
+uninstall, or use `--legacy` to explicitly delete every file listed in the old manifest.
 
 ## What landed where
 
@@ -118,7 +124,8 @@ PREFIX/share/shellkit/lib/           the library (bootstrap.sh + core/*.sh)
 PREFIX/share/shellkit/locale/        translations
 PREFIX/share/shellkit/templates/     templates used by shellkit new
 PREFIX/share/shellkit/tests/         assertions and runner (an installed copy can test itself)
-PREFIX/share/shellkit/MANIFEST       the uninstall ledger
+PREFIX/share/shellkit/MANIFEST       the installed-file ledger
+PREFIX/share/shellkit/.shellkit-install-manifest  ownership fingerprints (uninstall/reinstall baseline)
 ```
 
 ## Exit codes

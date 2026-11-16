@@ -63,4 +63,207 @@ assert_eq "0" "$rc" "the purge must succeed"
 assert_false test -d "$dest2"
 assert_false test -e "$prefix2/bin/shellkit"
 
+# ---------- #123：卸载保留用户修改后，重装不许静默覆盖 ----------
+#
+# 卸载（不带 --purge）保留用户改过的文件时，所有权基线不能随卸载消失：
+# 重装/更新要能认出「这份不是我们装的原文」而继续保留；只有 --force 才覆盖。
+p3="$d/prefix3"
+"$SK" install-self --prefix "$p3" >/dev/null 2>&1 || _fail "the third install must succeed"
+d3="$p3/share/shellkit"
+orig_log_sum=$(sum "$d3/lib/core/log.sh")
+printf '\n# user edit survived uninstall\n' >>"$d3/lib/core/log.sh"
+edit_log_sum=$(sum "$d3/lib/core/log.sh")
+printf 'MINE\n' >"$d3/my-own-3.sh"
+mine3_sum=$(sum "$d3/my-own-3.sh")
+
+unlog="$d/uninstall3.log"
+rc=0
+"$SK" uninstall-self --prefix "$p3" >"$unlog" 2>&1 || rc=$?
+assert_eq "0" "$rc" "the uninstall keeping user edits must succeed"
+assert_eq "$edit_log_sum" "$(sum "$d3/lib/core/log.sh")" "the user edit must survive uninstall"
+assert_contains "$(cat "$unlog")" "kept files that are not ours" \
+  "the uninstall must report the kept files"
+# 卸载后基线必须留下：没有它，重装就分不清「上游原文」与「用户改过」
+assert_true test -f "$d3/.shellkit-install-manifest"
+
+relog="$d/reinstall3.log"
+rc=0
+"$SK" install-self --prefix "$p3" >"$relog" 2>&1 || rc=$?
+assert_eq "0" "$rc" "the reinstall after uninstall must succeed"
+assert_eq "$edit_log_sum" "$(sum "$d3/lib/core/log.sh")" \
+  "the reinstall must not silently overwrite the user edit kept by uninstall"
+assert_eq "$mine3_sum" "$(sum "$d3/my-own-3.sh")" \
+  "the reinstall must keep the user-added file"
+assert_contains "$(cat "$relog")" "modified locally, left alone" \
+  "the reinstall must report the kept user edit"
+# 基线仍是上游原文的指纹 —— 推进成用户内容就等于把编辑记成「我们装的原文」
+if grep -q "$(printf '%s\t%s' 'lib/core/log.sh' "$edit_log_sum")" "$d3/.shellkit-install-manifest"; then
+  _fail "the ownership baseline must not advance to the user's edited content"
+fi
+assert_contains "$(cat "$d3/.shellkit-install-manifest")" "lib/core/log.sh" \
+  "the kept file must stay in the ownership baseline"
+assert_not_contains "$(cat "$d3/.shellkit-install-manifest")" "my-own-3.sh" \
+  "user-added files must not enter the ownership baseline"
+
+# 反例：同一条链路带上 --force，用户修改必须被显式覆盖（逃逸口只对开关开）
+frc=0
+"$SK" install-self --prefix "$p3" --force >/dev/null 2>&1 || frc=$?
+assert_eq "0" "$frc" "the forced reinstall must succeed"
+assert_eq "$(sum "$TEST_ROOT/lib/core/log.sh")" "$(sum "$d3/lib/core/log.sh")" \
+  "an explicit --force must overwrite the user edit"
+assert_ne "$orig_log_sum" "$edit_log_sum" "the fixture edit must change the hash"
+assert_eq "$mine3_sum" "$(sum "$d3/my-own-3.sh")" \
+  "--force must not delete the user's own files"
+
+# 没有基线的既有同名文件（旧安装 / 资产目录里的同名文件）：默认保留并告警，
+# 只有 --force 才允许覆盖。这是 #123 的另一半：不能靠「没基线」就落进 W。
+p4="$d/prefix4"
+d4="$p4/share/shellkit"
+mkdir -p "$d4/lib/core"
+printf '# pre-existing local file\n' >"$d4/lib/core/log.sh"
+pre_sum=$(sum "$d4/lib/core/log.sh")
+inc="$d/install4.log"
+rc=0
+"$SK" install-self --prefix "$p4" >"$inc" 2>&1 || rc=$?
+assert_eq "0" "$rc" "installing over a pre-existing same-name file must succeed"
+assert_eq "$pre_sum" "$(sum "$d4/lib/core/log.sh")" \
+  "a same-name file without an ownership baseline must not be overwritten by default"
+assert_contains "$(cat "$inc")" "no ownership baseline" \
+  "the install must explain that the file was kept for lack of a baseline"
+rc=0
+"$SK" install-self --prefix "$p4" --force >/dev/null 2>&1 || rc=$?
+assert_eq "0" "$rc" "the forced install must succeed"
+assert_eq "$(sum "$TEST_ROOT/lib/core/log.sh")" "$(sum "$d4/lib/core/log.sh")" \
+  "an explicit --force must overwrite a same-name file without a baseline"
+
+# ---------- #124：没有指纹清单的旧安装，普通卸载默认 fail-closed ----------
+#
+# 旧 MANIFEST 由 find 生成，里面的用户文件/用户修改无法与新装的文件区分。
+# 只告警就按 MANIFEST 全删，与「默认保护用户文件」契约冲突；默认必须拒绝，
+# 把旧语义留给显式 --legacy。
+p5="$d/prefix5"
+"$SK" install-self --prefix "$p5" >/dev/null 2>&1 || _fail "the fifth install must succeed"
+d5="$p5/share/shellkit"
+rm -f "$d5/.shellkit-install-manifest"
+printf '\n# legacy user edit\n' >>"$d5/lib/core/log.sh"
+legacy_sum=$(sum "$d5/lib/core/log.sh")
+untouched_sum=$(sum "$d5/LICENSE")
+
+lout="$d/legacy-default.log"
+rc=0
+"$SK" uninstall-self --prefix "$p5" >"$lout" 2>&1 || rc=$?
+assert_eq "3" "$rc" "a legacy install without fingerprints must be refused by default"
+assert_contains "$(cat "$lout")" "refusing to remove a legacy install without ownership fingerprints" \
+  "the refusal must explain why nothing was removed"
+assert_contains "$(cat "$lout")" "--legacy" "the refusal must point at the explicit escape hatch"
+assert_eq "$legacy_sum" "$(sum "$d5/lib/core/log.sh")" \
+  "the default legacy uninstall must not delete the user's edited file"
+assert_eq "$untouched_sum" "$(sum "$d5/LICENSE")" \
+  "the default legacy uninstall must not delete even untouched files"
+assert_true test -f "$d5/MANIFEST"
+
+# 显式 --legacy：旧语义（按 MANIFEST 全删）必须是可用的逃逸口
+rc=0
+"$SK" uninstall-self --prefix "$p5" --legacy >"$d/legacy-explicit.log" 2>&1 || rc=$?
+assert_eq "0" "$rc" "an explicit --legacy uninstall must succeed"
+assert_false test -e "$d5/lib/core/log.sh"
+assert_false test -e "$d5/LICENSE"
+assert_contains "$(cat "$d/legacy-explicit.log")" "MANIFEST will be removed (--legacy)" \
+  "the explicit legacy mode must say what it deletes"
+
+# 有指纹清单时 --legacy 不许绕过所有权保护（全清请用 --purge）
+p6="$d/prefix6"
+"$SK" install-self --prefix "$p6" >/dev/null 2>&1 || _fail "the sixth install must succeed"
+d6="$p6/share/shellkit"
+printf '\n# own edit\n' >>"$d6/lib/core/log.sh"
+own_sum=$(sum "$d6/lib/core/log.sh")
+rc=0
+"$SK" uninstall-self --prefix "$p6" --legacy >"$d/legacy-ignored.log" 2>&1 || rc=$?
+assert_eq "0" "$rc" "uninstall with fingerprints and --legacy must still succeed"
+assert_eq "$own_sum" "$(sum "$d6/lib/core/log.sh")" \
+  "--legacy must not delete user edits when ownership fingerprints exist"
+assert_contains "$(cat "$d/legacy-ignored.log")" "using the default ownership checks" \
+  "--legacy must say it is ignored for fingerprinted installs"
+
+# ---------- #125：普通卸载后 --purge 能二次清理 ----------
+#
+# 普通卸载为了保留用户文件删掉了 MANIFEST；如果连指纹清单也删了，日志里
+# 「use --purge to remove them too」就是一句做不到的话。保留清单作为标记，
+# purge 才能在没有任何 MANIFEST 的情况下收尾。
+p7="$d/prefix7"
+"$SK" install-self --prefix "$p7" >/dev/null 2>&1 || _fail "the seventh install must succeed"
+d7="$p7/share/shellkit"
+printf '\n# user edit before purge\n' >>"$d7/lib/core/log.sh"
+printf 'MINE\n' >"$d7/my-own-7.sh"
+rc=0
+"$SK" uninstall-self --prefix "$p7" >/dev/null 2>&1 || rc=$?
+assert_eq "0" "$rc" "the first (non-purge) uninstall must succeed"
+assert_true test -f "$d7/my-own-7.sh"
+if [ ! -f "$d7/.shellkit-install-manifest" ]; then
+  _fail "the ownership baseline must survive a non-purge uninstall for the later purge"
+fi
+assert_false test -f "$d7/MANIFEST"
+
+pout="$d/purge-after-uninstall.log"
+rc=0
+"$SK" uninstall-self --prefix "$p7" --purge >"$pout" 2>&1 || rc=$?
+assert_eq "0" "$rc" "a second --purge after a non-purge uninstall must succeed"
+assert_false test -d "$d7"
+assert_false test -e "$p7/bin/shellkit"
+
+# ---------- #125：删除失败时不能连带删清单 ----------
+#
+# 注入一次「父目录是软链」的拒绝删除：清单必须留着，修好现场后才能重试清完。
+p8="$d/prefix8"
+"$SK" install-self --prefix "$p8" >/dev/null 2>&1 || _fail "the eighth install must succeed"
+d8="$p8/share/shellkit"
+out8="$d/outside8"
+mkdir -p "$out8"
+cp "$d8/lib/core/fs.sh" "$out8/fs.sh"
+rm -rf "$d8/lib/core"
+ln -s "$out8" "$d8/lib/core"
+rc=0
+"$SK" uninstall-self --prefix "$p8" >"$d/fail-uninstall.log" 2>&1 || rc=$?
+assert_ne "0" "$rc" "a blocked removal must be reported as a failure"
+if [ ! -f "$d8/MANIFEST" ]; then
+  _fail "a failed uninstall must keep MANIFEST for the next retry"
+fi
+if [ ! -f "$d8/.shellkit-install-manifest" ]; then
+  _fail "a failed uninstall must keep the ownership baseline for the next retry"
+fi
+assert_eq "$(sum "$TEST_ROOT/lib/core/fs.sh")" "$(sum "$out8/fs.sh")" \
+  "the blocked file outside the install root must survive"
+# 修好现场（把软链换回真目录）后，下一次卸载必须能接着清完
+rm -f "$d8/lib/core"
+mkdir -p "$d8/lib/core"
+rc=0
+"$SK" uninstall-self --prefix "$p8" >"$d/retry-uninstall.log" 2>&1 || rc=$?
+assert_eq "0" "$rc" "the retry uninstall must finish the cleanup"
+assert_false test -d "$d8"
+
+# ---------- #125：--purge 的范围必须收紧 ----------
+# 不是 shellkit 安装目录的路径（没有任何标记）绝不允许 rm -rf。
+p9="$d/not-shellkit"
+mkdir -p "$p9/share/shellkit"
+printf 'keep me\n' >"$p9/share/shellkit/keep.txt"
+rc=0
+"$SK" uninstall-self --prefix "$p9" --purge >"$d/purge-scope.log" 2>&1 || rc=$?
+assert_eq "3" "$rc" "purging a directory without shellkit markers must be refused"
+assert_true test -f "$p9/share/shellkit/keep.txt"
+assert_contains "$(cat "$d/purge-scope.log")" "refusing to purge: not a shellkit install directory" \
+  "the refusal must name the scope check"
+
+# 目标本身是软链也拒绝：--purge 绝不顺着链接删到别处
+p10="$d/purge-symlink"
+real10="$d/real-purge-target"
+mkdir -p "$p10/share" "$real10"
+printf 'keep me\n' >"$real10/keep.txt"
+ln -s "$real10" "$p10/share/shellkit"
+rc=0
+"$SK" uninstall-self --prefix "$p10" --purge >"$d/purge-symlink.log" 2>&1 || rc=$?
+assert_eq "3" "$rc" "purging a symlinked install directory must be refused"
+assert_true test -f "$real10/keep.txt"
+assert_contains "$(cat "$d/purge-symlink.log")" "refusing to purge: not a shellkit install directory" \
+  "the symlink refusal must name the scope check"
+
 exit 0
