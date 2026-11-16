@@ -31,18 +31,23 @@
 | v0.23.0 | 分支覆盖棘轮 + profile 基线 | `make coverage-branch` 进 CI 双跑；基线按 CI runner 口径重算 |
 | v0.24.0 | 偏差表七条全闭（备份原子写 / 暂存单文件写 / http 经 run） | `docs/SECURITY.md` 第 6 节；`test_fault_matrix.sh` 的 `backup` 行；`test_http.sh` 脱敏断言 |
 | v0.24.1 | 发布链路修复 | 发布 tarball 带上 `.gitignore`；smoke 由 `release.yml` 在**真产物**上跑 |
+| v0.24.2 | 数据安全收口（P0） | `_sk_own_sync` 搬不动就整轮失败、写回后 `os_sha256` 自检；`test_fault_matrix.sh` 的 `vendor\|keep-fail` 格（注入点 `TMPDIR`） |
+| v0.25.0 | 发布质量前移 + API 契约 + 供应链（三批合并发布） | `tools/package_artifact_smoke.sh`（PR 与发版同一份）、`tools/upgrade_matrix.sh`、50 个 Stable API、`sign_release.sh --require` + `tools/verify_release.sh` |
 
-### v0.24.2 —— 数据安全收口（In Progress）
+### v0.24.2 —— 数据安全收口（已发布 2026-11-16）
 
 | 交付 | 判据 |
 |---|---|
 | `_sk_own_sync` 的暂存/恢复失败不再被 `|| true` 吞掉 | 搬不动 ⇒ 整轮失败；恢复缺件 ⇒ 整轮失败；写回后 `os_sha256` 自检 |
-| 故障注入钉住这条路径 | `test_fault_matrix.sh` 的 `vendor|keep-fail` 格：注入点选 `TMPDIR`，只有「搬进暂存区」失败 |
+| 故障注入钉住这条路径 | `test_fault_matrix.sh` 的 `vendor\|keep-fail` 格：注入点选 `TMPDIR`，只有「搬进暂存区」失败 |
 | 自检：把缺陷造回去必须变红 | 还原成 `|| true` 后同一条用例必须报「搬不动却返回 0」 |
 
 退出条件：上述三格全绿，且 `make check` 与 CI 全矩阵通过。
 
-### v0.25.0 —— 发布质量前移（Planned）
+**结果**：本地 `make check` 78 个文件全过、CI 21/21 绿；自检（还原成 `|| true`）实测
+`vendor` 返回 0，正是要治的那个静默丢失。
+
+### v0.25.0 —— 发布质量前移（已发布 2026-11-16）
 
 v0.24.0 暴露的缺口是：源码矩阵全绿、系统包构建也全绿，但**真产物**解包后跑套件才炸
 （tarball 漏了 `.gitignore`）。说明「仓库工作树能跑」不等于「发布包能跑」。
@@ -56,7 +61,16 @@ v0.24.0 暴露的缺口是：源码矩阵全绿、系统包构建也全绿，但
 
 退出条件：故意漏掉一个打包文件时，**PR 阶段的 CI 必须红**（自证）。
 
-### v0.26.0 —— API 与配置契约冻结（Planned）
+**结果**：把 `.gitignore` 从 tarball 里删掉，脚本以 `rc=1`、
+`FAIL: the release tarball is missing .gitignore` 当场失败；跨版本矩阵实测
+`0.20.0 / 0.23.0 / 0.24.1 / 0.24.2 → 当前` 全部通过。
+
+### v0.26.0 —— API 与配置契约冻结（已随 v0.25.0 发布）
+
+> **关于版本号**：v0.25 / v0.26 / v0.27 三批改动是同时合入 main 的，而 CHANGELOG 由
+> 「距上个 tag 的提交」生成 —— 分别打三个 tag 会让 v0.25.0 的条目包含后两批、后两个变成空条目。
+> 所以它们随 **v0.25.0** 一起发布（`ce23822`，13 项资产、全部签名）。本节的「Planned」清单一律按
+> 实际代码状态维护，不靠版本号表达进度。
 
 当前 162 个公开函数里 37 个是 Stable。目标不是把所有函数都升 Stable（那会锁死演进），
 而是把核心能力钉死：Filesystem、Config、Run、Lock、Retry、Error、Validate、OS、CLI。
@@ -70,7 +84,7 @@ v0.24.0 暴露的缺口是：源码矩阵全绿、系统包构建也全绿，但
 退出条件：Stable 集合的每一次行为变化都必须进 `docs/MIGRATING.md`，否则门禁红（已有机制，
 gates 兜底，只需扩集合）。
 
-### v0.27.0 —— 供应链与运维体验（Planned）
+### v0.27.0 —— 供应链与运维体验（已随 v0.25.0 发布）
 
 | 交付 | 判据 |
 |---|---|
