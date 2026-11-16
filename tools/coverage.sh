@@ -227,7 +227,9 @@ mkdir -p "$TREE" || {
   exit 3
 }
 
-for __d in lib tests tools templates locale po docs examples skills; do
+# .github 也要带：tests/test_release_gate_checks.sh 拿 ci.yml 与发布门禁对账，
+# 副本里没有它时那条用例必红（与 .gitignore 那次同一个原因）。
+for __d in lib tests tools templates locale po docs examples skills .github; do
   if [ -e "$ROOT/$__d" ]; then
     cp -Rp "$ROOT/$__d" "$TREE/" || {
       log "cannot copy $__d"

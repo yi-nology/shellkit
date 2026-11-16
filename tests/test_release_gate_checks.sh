@@ -17,6 +17,13 @@ set -u
 GATE="$TEST_ROOT/tools/release_gate.sh"
 CI="$TEST_ROOT/.github/workflows/ci.yml"
 
+# 覆盖率跑在副本里，副本按白名单拷贝目录；万一将来 .github 又被漏掉，
+# 这里要显式说「这项没验」而不是拿空文件去对账（空文件会让对账看起来"通过"）。
+if [ ! -f "$CI" ]; then
+  printf 'NA: .github/workflows/ci.yml is not in this tree — the release gate reconciliation is skipped\n'
+  exit 0
+fi
+
 # 只出报告、不挡发版的 job：仓库对 performance bench 的定位就是「CI 里只出报告」
 # （见 Makefile help 与 ci.yml 的注释）。要往这里加东西必须有明确理由。
 INFO_JOBS="performance bench"
