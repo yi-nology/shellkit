@@ -107,6 +107,8 @@ jobs:
                    "dist/shellkit-skill-$(cat VERSION).tar.gz.minisig" \
                    "dist/SHA256SUMS.minisig" \
                    "install.sh.minisig" \
+                   "repair.sh.minisig" \
+                   "demo.sh.minisig" \
                    "dist/shellkit.minisign.pub"; do
             if [ -f "$f" ]; then
               assets[${#assets[@]}]="$f"
@@ -181,6 +183,19 @@ jobs:
           bash tools/package_syspkg.sh --tarball "dist/shellkit-$ver.tar.gz" --out dist rpm
           bash tools/package_smoke.sh --tarball "dist/shellkit-$ver.tar.gz" "dist/shellkit-$ver.rpm"
 
+      # deb/rpm 在发布之后才打出来，所以在这里补签名：签名覆盖范围要与 tarball 一致，
+      # 否则同一个版本里「有的资产能验、有的不能验」（评估 2026-11-16）。没配私钥时
+      # --require 直接失败 ⇒ 宁可不附加，也不发布无签名的系统包。
+      - name: sign the packages
+        env:
+          SHELLKIT_MINISIGN_KEY: ${{ secrets.SHELLKIT_MINISIGN_KEY }}
+        run: |
+          set -euo pipefail
+          ver=$(cat VERSION)
+          bash tools/sign_release.sh --dist dist --require \
+            --file "dist/shellkit-$ver.deb" \
+            --file "dist/shellkit-$ver.rpm"
+
       - name: attach packages to the release
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -188,5 +203,10 @@ jobs:
           set -euo pipefail
           ver=$(cat VERSION)
           # 不可变上传（issue #87）：同摘要跳过、异摘要拒绝覆盖并要求人工处理
-          bash tools/release_assets.sh "$GITHUB_REF_NAME" \
-            "dist/shellkit-$ver.deb" "dist/shellkit-$ver.rpm"
+          assets=("dist/shellkit-$ver.deb" "dist/shellkit-$ver.rpm")
+          for f in "dist/shellkit-$ver.deb.minisig" "dist/shellkit-$ver.rpm.minisig"; do
+            if [ -f "$f" ]; then
+              assets[${#assets[@]}]="$f"
+            fi
+          done
+          bash tools/release_assets.sh "$GITHUB_REF_NAME" "${assets[@]}"

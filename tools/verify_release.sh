@@ -96,10 +96,15 @@ if [ -n "$tag" ] && [ -f "$ROOT/tools/check_trust_pin.sh" ]; then
   bash "$ROOT/tools/check_trust_pin.sh" --pub "$pub" || die "the published public key does not match docs/TRUST.md" 1
 fi
 
-# 1) 每个应签资产都要有 .minisig
+# 1) 每一个发布的资产都必须有 .minisig —— 只覆盖 tar.gz / install.sh / SHA256SUMS 会让
+#    repair.sh / demo.sh / deb / rpm 变成「同版本、不同完整性保证」的缺口
+#    （评估 2026-11-16）。.pub 与 .minisig 自己不需要再签。
 signed=0
-for f in "$dist"/*.tar.gz "$dist"/install.sh "$dist"/SHA256SUMS; do
+for f in "$dist"/*; do
   [ -f "$f" ] || continue
+  case "$f" in
+    *.minisig | *.pub) continue ;;
+  esac
   signed=$((signed + 1))
   [ -f "$f.minisig" ] || die "unsigned asset: $(basename "$f") (every published asset must be signed)"
 done
