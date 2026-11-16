@@ -329,7 +329,10 @@ _sk_msg_lookup_shellkit() {
     'no install manifest under') printf '%s' '这里没有安装清单：' ;;
     'nothing was removed, delete that directory by hand if you are sure') printf '%s' '没有删除任何东西；确认无误请手工删除该目录' ;;
     'removing') printf '%s' '正在删除：' ;;
+    'legacy install without ownership fingerprints; every listed file will be removed') printf '%s' '老安装没有所有权指纹清单，清单里列出的文件会被全部删除' ;;
     'failed to remove') printf '%s' '删除失败：' ;;
+    'kept files that are not ours') printf '%s' '保留了不属于我们的文件' ;;
+    'use --purge to remove them too') printf '%s' '要一并删除请用 --purge' ;;
     'leftover files were kept') printf '%s' '保留了未清理的文件：' ;;
     'left the symlink alone, it points elsewhere') printf '%s' '未动该符号链接，它指向别处：' ;;
     'left the file alone, it is not a symlink') printf '%s' '未动该文件，它不是符号链接：' ;;

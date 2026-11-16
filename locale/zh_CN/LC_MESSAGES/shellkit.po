@@ -4,7 +4,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: shellkit\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-11-15 23:56+0800\n"
+"POT-Creation-Date: 2026-11-16 12:07+0800\n"
 "PO-Revision-Date: 2026-11-08 00:00+0800\n"
 "Last-Translator: shellkit contributors\n"
 "Language-Team: shellkit contributors\n"
@@ -1005,8 +1005,19 @@ msgstr "没有删除任何东西；确认无误请手工删除该目录"
 msgid "removing"
 msgstr "正在删除："
 
+msgid ""
+"legacy install without ownership fingerprints; every listed file will be "
+"removed"
+msgstr "老安装没有所有权指纹清单，清单里列出的文件会被全部删除"
+
 msgid "failed to remove"
 msgstr "删除失败："
+
+msgid "kept files that are not ours"
+msgstr "保留了不属于我们的文件"
+
+msgid "use --purge to remove them too"
+msgstr "要一并删除请用 --purge"
 
 msgid "leftover files were kept"
 msgstr "保留了未清理的文件："
