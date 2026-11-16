@@ -4252,6 +4252,27 @@ cmd_skill() {
 # _sk_install_dest PREFIX —— 安装目录，前缀末尾多余斜杠会被吃掉
 _sk_install_dest() { printf '%s' "${1%/}/share/shellkit"; }
 
+# _sk_uninstall_purge_target DEST PREFIX —— --purge 的目标范围（issue #125）
+#
+# --purge 必须能在普通卸载之后（MANIFEST 已经删掉）二次清理，但绝不
+# rm -rf 任意目录。判据：
+#   1. DEST 必须正好是 _sk_install_dest(PREFIX) 的产物，PREFIX 不能为空；
+#   2. DEST 必须是真的目录，不能是软链（不顺着链接删到别处）；
+#   3. DEST 里必须留有 shellkit 的安装标记：shellkit / lib/bootstrap.sh /
+#      MANIFEST / .shellkit-install-manifest。普通卸载保留用户文件后，
+#      前两个可能已经不在了，所以两份清单本身也是标记。
+# 任一不满足都拒绝 —— 宁可让用户手删，也不猜着 rm -rf。
+# @exitcode 0 可以按全清语义删除
+# @exitcode 1 不是可确认的 shellkit 安装目录
+_sk_uninstall_purge_target() {
+  local __dest=${1:-} __prefix=${2:-}
+  [ -n "$__prefix" ] || return 1
+  [ "$__dest" = "$(_sk_install_dest "$__prefix")" ] || return 1
+  [ -d "$__dest" ] && [ ! -L "$__dest" ] || return 1
+  [ -f "$__dest/shellkit" ] || [ -f "$__dest/lib/bootstrap.sh" ] ||
+    [ -f "$__dest/MANIFEST" ] || [ -f "$__dest/.shellkit-install-manifest" ]
+}
+
 # _sk_running_prefix —— 当前跑的是装好的副本时，返回它的 PREFIX
 # 副本长这样：PREFIX/share/shellkit/shellkit。从它自己的位置就能推出该更新/删除哪里，
 # 不必让用户把 --prefix 再写一遍（写错了就是在 /usr/local 上找不到清单）。
@@ -4498,7 +4519,7 @@ cmd_install_self() {
 cmd_uninstall_self() {
   local __prefix __run __dest __bin __line __path __n=0 __fail=0 __link __rbin
   local __purge=0 __own __force_legacy=0 __legacy_install=0 __rel __want __cur __lock __kept=0
-  local __keep_rels=() __keep_sums=() __i=0 __txt=""
+  local __keep_rels=() __keep_sums=() __purge_own="" __purge_man="" __i=0 __txt="" __has_leftover=0
   __run=$(_sk_running_prefix)
   __prefix=${__run:-/usr/local}
   while [ "$#" -gt 0 ]; do
@@ -4539,7 +4560,7 @@ cmd_uninstall_self() {
   __lock=$(_sk_prefix_lock_name "$__prefix") || return 1
   _sk_proj_lock_acquire "$__lock" || return $?
 
-  if [ ! -f "$__dest/MANIFEST" ]; then
+  if [ ! -d "$__dest" ]; then
     log_error "$(_t 'no install manifest under'): $__dest"
     log_info "$(_t 'nothing was removed, delete that directory by hand if you are sure')"
     return "$SK_PRECOND"
@@ -4547,15 +4568,32 @@ cmd_uninstall_self() {
 
   __own="$__dest/.shellkit-install-manifest"
 
-  # 前置判据（issue #124）：只有 MANIFEST、没有指纹清单的旧安装无法确认
-  # 所有权 —— 默认 fail-closed，不做无法确认所有权的删除；--legacy 或
-  # --purge 才是显式逃逸口。
+  # 前置判据（issue #124/#125）：
+  #   - --purge 是显式「全清」：允许没有 MANIFEST（普通卸载保留下来的用户文件
+  #     目录还要能二次清理），但目标必须是可确认的 shellkit 安装目录 ——
+  #     判据在 _sk_uninstall_purge_target，绝不 rm -rf 任意目录；
+  #   - 普通卸载至少要有一份清单；两份都没有就没什么可确认的东西；
+  #   - 只有 MANIFEST、没有指纹清单的旧安装：默认 fail-closed，不做无法确认
+  #     所有权的删除；--legacy 或 --purge 才是显式逃逸口。
+  if [ "$__purge" = "1" ]; then
+    if ! _sk_uninstall_purge_target "$__dest" "$__prefix"; then
+      log_error "$(_t 'refusing to purge: not a shellkit install directory'): $__dest"
+      log_info "$(_t 'nothing was removed, delete that directory by hand if you are sure')"
+      return "$SK_PRECOND"
+    fi
+  elif [ ! -f "$__dest/MANIFEST" ] && [ ! -f "$__own" ]; then
+    log_error "$(_t 'no install manifest under'): $__dest"
+    log_info "$(_t 'nothing was removed, delete that directory by hand if you are sure')"
+    return "$SK_PRECOND"
+  fi
+
   if [ ! -f "$__own" ]; then
     __legacy_install=1
     if [ "$__purge" != "1" ]; then
       if [ "$__force_legacy" = "1" ]; then
         log_warn "$(_t 'legacy install without ownership fingerprints; every file listed in MANIFEST will be removed (--legacy)'): $__dest"
       else
+        # issue #124：只告警不能构成保护 —— 非交互脚本里 warn 等于没有。
         log_error "$(_t 'refusing to remove a legacy install without ownership fingerprints'): $__dest"
         log_info "$(_t 'run install-self --force to adopt fingerprints (this can overwrite local edits), then uninstall; or rerun with --legacy to remove every file listed in the old manifest')"
         log_info "$(_t 'nothing was removed, delete that directory by hand if you are sure')"
@@ -4575,48 +4613,70 @@ cmd_uninstall_self() {
   #   - 用户改过的文件指纹对不上 => 保留并告警；
   #   - 软链一律不删（我们不在安装目录里放软链）；
   #   - --purge 才回到「全清」语义。
-  if [ "$__legacy_install" = "1" ]; then
-    while IFS= read -r __line; do
-      case "$__line" in
-        '' | '#'*) continue ;;
-      esac
-      # 清单是文件，不是可信输入：相对路径先过合法性校验 —— ../ 这类名字
-      # 本来就不是我们装的，跳过即可（不算失败）；合法路径的删除统一走
-      # _sk_fs_safe_remove_owned（issue #81）：父目录边界在那边判 —— 以前只过滤
-      # .. 字符串，拦不住「清单里某级父目录被换成指向外部的软链」的删除
-      # （rm 会跟着链接走出去）。--legacy 是显式旧语义：不传基线、跳过内容比对，
-      # 清单里列的都删。
-      if ! _sk_fs_rel_safe "$__line"; then
-        log_warn "$(_t 'skipped a path outside the install directory'): $__line"
-        continue
+  if [ "$__purge" = "1" ]; then
+    # 全清语义：目标范围已在上面的 _sk_uninstall_purge_target 判过。
+    # 先记住清单：rm -rf 中途失败（权限/残留）时要放回去 —— 下一次还能接着清，
+    # 不能让一次失败把重试所需的元数据一起带走（issue #125）。
+    if [ -f "$__own" ]; then
+      __purge_own=$(cat "$__own" 2>/dev/null) || __purge_own=""
+    fi
+    if [ -f "$__dest/MANIFEST" ]; then
+      __purge_man=$(cat "$__dest/MANIFEST" 2>/dev/null) || __purge_man=""
+    fi
+    __n=$(find "$__dest" \( -type f -o -type l \) 2>/dev/null | wc -l | tr -d ' ') || __n=0
+    rm -rf "$__dest" 2>/dev/null || true
+    if [ -e "$__dest" ] || [ -L "$__dest" ]; then
+      log_warn "$(_t 'failed to remove'): $__dest"
+      __fail=$((__fail + 1))
+      if [ ! -f "$__own" ] && [ -n "$__purge_own" ]; then
+        fs_atomic_write "$__own" "$__purge_own" 644 || true
       fi
-      __path="$__dest/$__line"
-      if [ -e "$__path" ] || [ -L "$__path" ]; then
-        if _sk_fs_safe_remove_owned "$__dest" "$__line"; then
-          __n=$((__n + 1))
-        else
-          log_warn "$(_t 'failed to remove'): $__path"
-          __fail=$((__fail + 1))
-        fi
+      if [ ! -f "$__dest/MANIFEST" ] && [ -n "$__purge_man" ]; then
+        fs_atomic_write "$__dest/MANIFEST" "$__purge_man" 644 || true
       fi
-    done <"$__dest/MANIFEST"
+    fi
   else
-    # 末尾没有换行符时 while read 会丢掉最后一行（_sk_fs_own_render 的文本经过
-    # 命令替换，结尾换行被吃掉）—— 那份恰好是清单里字母序最后一个文件，漏掉它就
-    # 永远删不掉。用标准惯用法补上。
-    while IFS=$'\t' read -r __rel __want || [ -n "$__rel" ]; do
-      case "$__rel" in
-        '' | '#'* | manifest_version=*) continue ;;
-      esac
-      _sk_fs_rel_safe "$__rel" || {
-        log_warn "$(_t 'skipped a path outside the install directory'): $__rel"
-        continue
-      }
-      __path="$__dest/$__rel"
-      if [ ! -e "$__path" ] && [ ! -L "$__path" ]; then
-        continue
-      fi
-      if [ "$__purge" != "1" ]; then
+    if [ "$__legacy_install" = "1" ]; then
+      while IFS= read -r __line; do
+        case "$__line" in
+          '' | '#'*) continue ;;
+        esac
+        # 清单是文件，不是可信输入：相对路径先过合法性校验 —— ../ 这类名字
+        # 本来就不是我们装的，跳过即可（不算失败）；合法路径的删除统一走
+        # _sk_fs_safe_remove_owned（issue #81）：父目录边界在那边判 —— 以前只过滤
+        # .. 字符串，拦不住「清单里某级父目录被换成指向外部的软链」的删除
+        # （rm 会跟着链接走出去）。--legacy 是显式旧语义：不传基线、跳过内容比对，
+        # 清单里列的都删。
+        if ! _sk_fs_rel_safe "$__line"; then
+          log_warn "$(_t 'skipped a path outside the install directory'): $__line"
+          continue
+        fi
+        __path="$__dest/$__line"
+        if [ -e "$__path" ] || [ -L "$__path" ]; then
+          if _sk_fs_safe_remove_owned "$__dest" "$__line"; then
+            __n=$((__n + 1))
+          else
+            log_warn "$(_t 'failed to remove'): $__path"
+            __fail=$((__fail + 1))
+          fi
+        fi
+      done <"$__dest/MANIFEST"
+    else
+      # 末尾没有换行符时 while read 会丢掉最后一行（_sk_fs_own_render 的文本经过
+      # 命令替换，结尾换行被吃掉）—— 那份恰好是清单里字母序最后一个文件，漏掉它就
+      # 永远删不掉。用标准惯用法补上。
+      while IFS=$'\t' read -r __rel __want || [ -n "$__rel" ]; do
+        case "$__rel" in
+          '' | '#'* | manifest_version=*) continue ;;
+        esac
+        _sk_fs_rel_safe "$__rel" || {
+          log_warn "$(_t 'skipped a path outside the install directory'): $__rel"
+          continue
+        }
+        __path="$__dest/$__rel"
+        if [ ! -e "$__path" ] && [ ! -L "$__path" ]; then
+          continue
+        fi
         if [ -L "$__path" ]; then
           log_warn "$(_t 'the target is a symlink, left alone'): $__rel"
           __kept=$((__kept + 1))
@@ -4636,56 +4696,75 @@ cmd_uninstall_self() {
           fi
           continue
         fi
-      fi
-      if _sk_fs_safe_remove_owned "$__dest" "$__rel" "$__want"; then
-        __n=$((__n + 1))
+        if _sk_fs_safe_remove_owned "$__dest" "$__rel" "$__want"; then
+          __n=$((__n + 1))
+        else
+          log_warn "$(_t 'failed to remove'): $__path"
+          __fail=$((__fail + 1))
+        fi
+      done <"$__own"
+    fi
+
+    # 由深到浅删空目录；rmdir 只删空目录，碰到别人的东西会失败而不是删掉。
+    # dest 自己暂时删不掉（两份清单还在里面）—— 清单收尾之后再收一遍。
+    find "$__dest" -depth -type d -exec rmdir {} \; 2>/dev/null || true
+
+    # 除两份清单之外还有没有残留？有就按原有语义记账（故意保留的用户文件不算失败）。
+    __has_leftover=0
+    if [ -d "$__dest" ]; then
+      for __path in "$__dest"/* "$__dest"/.*; do
+        case "${__path##*/}" in
+          . | .. | MANIFEST | .shellkit-install-manifest) continue ;;
+        esac
+        if [ -e "$__path" ] || [ -L "$__path" ]; then
+          __has_leftover=1
+          break
+        fi
+      done
+    fi
+    if [ "$__has_leftover" = "1" ]; then
+      if [ "$__kept" -gt 0 ]; then
+        # 故意留下的（用户新增/改过的）不算失败：卸载做到了它承诺的事。
+        log_info "$(_t 'kept files that are not ours'): $__kept ($(_t 'use --purge to remove them too'))"
       else
-        log_warn "$(_t 'failed to remove'): $__path"
+        log_warn "$(_t 'leftover files were kept'): $__dest"
         __fail=$((__fail + 1))
       fi
-    done <"$__own"
-  fi
-
-  # issue #123：保留用户修改时，所有权基线不能随卸载一起消失 —— 保留项的
-  # **旧基线**写回指纹清单（墓碑基线），重装/更新才能继续认出「这份不是
-  # 我们装的原文」。MANIFEST 可以删（卸载的文件表已经完成使命）。
-  if [ "$__kept" -gt 0 ] && [ "${#__keep_rels[@]}" -gt 0 ]; then
-    _SK_OWN_RELS=()
-    _SK_OWN_SUMS=()
-    __i=0
-    while [ "$__i" -lt "${#__keep_rels[@]}" ]; do
-      _SK_OWN_RELS[${#_SK_OWN_RELS[@]}]=${__keep_rels[$__i]}
-      _SK_OWN_SUMS[${#_SK_OWN_SUMS[@]}]=${__keep_sums[$__i]}
-      __i=$((__i + 1))
-    done
-    __txt=$(_sk_fs_own_render)
-    if fs_atomic_write "$__own" "$__txt" 644; then
-      rm -f "$__dest/MANIFEST"
-    else
-      log_error "$(_t 'failed to write the ownership baseline'): $__own"
-      __fail=$((__fail + 1))
     fi
-  elif [ "$__kept" -gt 0 ]; then
-    # 清单损坏、没记下可用基线：保留原清单（宁可多留，不可错删）
-    rm -f "$__dest/MANIFEST"
-  else
-    rm -f "$__dest/MANIFEST" "$__dest/.shellkit-install-manifest"
-  fi
-  # 由深到浅删空目录；rmdir 只删空目录，碰到别人的东西会失败而不是删掉
-  find "$__dest" -depth -type d -exec rmdir {} \; 2>/dev/null || true
 
-  if [ "$__purge" = "1" ] && [ -d "$__dest" ]; then
-    # 清理语义：把目录整个端掉（--purge 是用户明确要求「全删」）
-    rm -rf "$__dest" 2>/dev/null || true
-  fi
-  if [ -d "$__dest" ]; then
-    if [ "$__kept" -gt 0 ]; then
-      # 故意留下的（用户新增/改过的）不算失败：卸载做到了它承诺的事。
-      log_info "$(_t 'kept files that are not ours'): $__kept ($(_t 'use --purge to remove them too'))"
-    else
-      log_warn "$(_t 'leftover files were kept'): $__dest"
-      __fail=$((__fail + 1))
+    # 清单收尾（issue #123/#125）：
+    #   - 有真失败：两份清单都原样留着 —— 删除失败的文件还在，下一次才能接着清；
+    #   - 成功且保留了用户文件：把保留项的**旧基线**写回指纹清单（墓碑基线），
+    #     重装/更新才分得清「上游原文」与「用户改过」；MANIFEST 可以删（--purge
+    #     的二次清理靠指纹清单这个标记）；
+    #   - 成功且没有保留项：两份都删，卸载干净。删完再收一遍空目录，dest 就消失。
+    if [ "$__fail" -eq 0 ]; then
+      if [ "$__kept" -gt 0 ]; then
+        if [ "${#__keep_rels[@]}" -gt 0 ]; then
+          _SK_OWN_RELS=()
+          _SK_OWN_SUMS=()
+          __i=0
+          while [ "$__i" -lt "${#__keep_rels[@]}" ]; do
+            _SK_OWN_RELS[${#_SK_OWN_RELS[@]}]=${__keep_rels[$__i]}
+            _SK_OWN_SUMS[${#_SK_OWN_SUMS[@]}]=${__keep_sums[$__i]}
+            __i=$((__i + 1))
+          done
+          __txt=$(_sk_fs_own_render)
+          if fs_atomic_write "$__own" "$__txt" 644; then
+            rm -f "$__dest/MANIFEST"
+          else
+            log_error "$(_t 'failed to write the ownership baseline'): $__own"
+            __fail=$((__fail + 1))
+          fi
+        else
+          # 清单损坏、没记下可用基线：保留原清单（宁可多留，不可错删）
+          rm -f "$__dest/MANIFEST"
+        fi
+      else
+        rm -f "$__dest/MANIFEST" "$__own"
+      fi
     fi
+    find "$__dest" -depth -type d -exec rmdir {} \; 2>/dev/null || true
   fi
 
   if [ -L "$__bin" ]; then

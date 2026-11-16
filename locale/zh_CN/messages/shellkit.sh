@@ -329,16 +329,17 @@ _sk_msg_lookup_shellkit() {
     'failed to create symlink') printf '%s' '创建符号链接失败' ;;
     'no install manifest under') printf '%s' '这里没有安装清单：' ;;
     'nothing was removed, delete that directory by hand if you are sure') printf '%s' '没有删除任何东西；确认无误请手工删除该目录' ;;
+    'refusing to purge: not a shellkit install directory') printf '%s' '拒绝清理：这不是 shellkit 安装目录' ;;
     'legacy install without ownership fingerprints; every file listed in MANIFEST will be removed (--legacy)') printf '%s' '老安装没有所有权指纹清单；MANIFEST 里列出的文件都会被删除（--legacy）' ;;
     'refusing to remove a legacy install without ownership fingerprints') printf '%s' '拒绝卸载没有所有权指纹清单的老安装' ;;
     'run install-self --force to adopt fingerprints (this can overwrite local edits), then uninstall; or rerun with --legacy to remove every file listed in the old manifest') printf '%s' '请先运行 install-self --force 采纳指纹（会覆盖本地修改），再卸载；或重新运行并加 --legacy，按旧清单删除所有列出的文件' ;;
     '--legacy applies only to installs without ownership fingerprints; using the default ownership checks') printf '%s' '--legacy 只适用于没有所有权指纹清单的安装；这里按默认的所有权判据处理' ;;
     'removing') printf '%s' '正在删除：' ;;
     'failed to remove') printf '%s' '删除失败：' ;;
-    'failed to write the ownership baseline') printf '%s' '写所有权基线失败' ;;
     'kept files that are not ours') printf '%s' '保留了不属于我们的文件' ;;
     'use --purge to remove them too') printf '%s' '要一并删除请用 --purge' ;;
     'leftover files were kept') printf '%s' '保留了未清理的文件：' ;;
+    'failed to write the ownership baseline') printf '%s' '写所有权基线失败' ;;
     'left the symlink alone, it points elsewhere') printf '%s' '未动该符号链接，它指向别处：' ;;
     'left the file alone, it is not a symlink') printf '%s' '未动该文件，它不是符号链接：' ;;
     'removed') printf '%s' '已删除：' ;;

@@ -102,7 +102,7 @@ shellkit update --from shellkit-0.26.2.tar.gz --sha256 "$SUM"
 
 ```bash
 shellkit uninstall-self            # 只删「我们装的、内容还是原样」的，用户文件默认保留
-shellkit uninstall-self --purge    # 连安装目录里用户自己放的一起清掉
+shellkit uninstall-self --purge    # 连安装目录里用户自己放的一起清掉（普通卸载之后也能再跑）
 shellkit uninstall-self --legacy   # 旧安装（只有 MANIFEST、无指纹清单）的显式兼容清理
 ```
 

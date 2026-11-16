@@ -104,7 +104,7 @@ shellkit update --from shellkit-0.26.2.tar.gz --sha256 "$SUM"
 
 ```bash
 shellkit uninstall-self            # remove only our files whose content is still original
-shellkit uninstall-self --purge    # also remove files the user added
+shellkit uninstall-self --purge    # also remove files the user added (works after a normal uninstall)
 shellkit uninstall-self --legacy   # explicit legacy cleanup for old installs without fingerprints
 ```
 

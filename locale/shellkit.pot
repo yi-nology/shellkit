@@ -1006,6 +1006,9 @@ msgstr ""
 msgid "nothing was removed, delete that directory by hand if you are sure"
 msgstr ""
 
+msgid "refusing to purge: not a shellkit install directory"
+msgstr ""
+
 msgid ""
 "legacy install without ownership fingerprints; every file listed in MANIFEST "
 "will be removed (--legacy)"
@@ -1031,9 +1034,6 @@ msgstr ""
 msgid "failed to remove"
 msgstr ""
 
-msgid "failed to write the ownership baseline"
-msgstr ""
-
 msgid "kept files that are not ours"
 msgstr ""
 
@@ -1041,6 +1041,9 @@ msgid "use --purge to remove them too"
 msgstr ""
 
 msgid "leftover files were kept"
+msgstr ""
+
+msgid "failed to write the ownership baseline"
 msgstr ""
 
 msgid "left the symlink alone, it points elsewhere"

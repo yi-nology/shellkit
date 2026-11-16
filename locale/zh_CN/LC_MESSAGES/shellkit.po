@@ -1005,6 +1005,9 @@ msgstr "这里没有安装清单："
 msgid "nothing was removed, delete that directory by hand if you are sure"
 msgstr "没有删除任何东西；确认无误请手工删除该目录"
 
+msgid "refusing to purge: not a shellkit install directory"
+msgstr "拒绝清理：这不是 shellkit 安装目录"
+
 msgid ""
 "legacy install without ownership fingerprints; every file listed in MANIFEST "
 "will be removed (--legacy)"
@@ -1018,22 +1021,19 @@ msgid ""
 "edits), then uninstall; or rerun with --legacy to remove every file listed "
 "in the old manifest"
 msgstr ""
-"请先运行 install-self --force 采纳指纹（会覆盖本地修改），再卸载；或重新运行并加 --legacy，按旧清单删除所有列出的文件"
+"请先运行 install-self --force 采纳指纹（会覆盖本地修改），再卸载；或重新运行"
+"并加 --legacy，按旧清单删除所有列出的文件"
 
 msgid ""
 "--legacy applies only to installs without ownership fingerprints; using the "
 "default ownership checks"
-msgstr ""
-"--legacy 只适用于没有所有权指纹清单的安装；这里按默认的所有权判据处理"
+msgstr "--legacy 只适用于没有所有权指纹清单的安装；这里按默认的所有权判据处理"
 
 msgid "removing"
 msgstr "正在删除："
 
 msgid "failed to remove"
 msgstr "删除失败："
-
-msgid "failed to write the ownership baseline"
-msgstr "写所有权基线失败"
 
 msgid "kept files that are not ours"
 msgstr "保留了不属于我们的文件"
@@ -1043,6 +1043,9 @@ msgstr "要一并删除请用 --purge"
 
 msgid "leftover files were kept"
 msgstr "保留了未清理的文件："
+
+msgid "failed to write the ownership baseline"
+msgstr "写所有权基线失败"
 
 msgid "left the symlink alone, it points elsewhere"
 msgstr "未动该符号链接，它指向别处："

@@ -185,5 +185,72 @@ assert_eq "$own_sum" "$(sum "$d6/lib/core/log.sh")" \
 assert_contains "$(cat "$d/legacy-ignored.log")" "using the default ownership checks" \
   "--legacy must say it is ignored for fingerprinted installs"
 
+# ---------- #125：普通卸载后 --purge 能二次清理 ----------
+#
+# 普通卸载为了保留用户文件删掉了 MANIFEST；如果连指纹清单也删了，日志里
+# 「use --purge to remove them too」就是一句做不到的话。保留清单作为标记，
+# purge 才能在没有任何 MANIFEST 的情况下收尾。
+p7="$d/prefix7"
+"$SK" install-self --prefix "$p7" >/dev/null 2>&1 || _fail "the seventh install must succeed"
+d7="$p7/share/shellkit"
+printf '\n# user edit before purge\n' >>"$d7/lib/core/log.sh"
+printf 'MINE\n' >"$d7/my-own-7.sh"
+rc=0
+"$SK" uninstall-self --prefix "$p7" >/dev/null 2>&1 || rc=$?
+assert_eq "0" "$rc" "the first (non-purge) uninstall must succeed"
+assert_true test -f "$d7/my-own-7.sh"
+if [ ! -f "$d7/.shellkit-install-manifest" ]; then
+  _fail "the ownership baseline must survive a non-purge uninstall for the later purge"
+fi
+assert_false test -f "$d7/MANIFEST"
+
+pout="$d/purge-after-uninstall.log"
+rc=0
+"$SK" uninstall-self --prefix "$p7" --purge >"$pout" 2>&1 || rc=$?
+assert_eq "0" "$rc" "a second --purge after a non-purge uninstall must succeed"
+assert_false test -d "$d7"
+assert_false test -e "$p7/bin/shellkit"
+
+# ---------- #125：删除失败时不能连带删清单 ----------
+#
+# 注入一次「父目录是软链」的拒绝删除：清单必须留着，修好现场后才能重试清完。
+p8="$d/prefix8"
+"$SK" install-self --prefix "$p8" >/dev/null 2>&1 || _fail "the eighth install must succeed"
+d8="$p8/share/shellkit"
+out8="$d/outside8"
+mkdir -p "$out8"
+cp "$d8/lib/core/fs.sh" "$out8/fs.sh"
+rm -rf "$d8/lib/core"
+ln -s "$out8" "$d8/lib/core"
+rc=0
+"$SK" uninstall-self --prefix "$p8" >"$d/fail-uninstall.log" 2>&1 || rc=$?
+assert_ne "0" "$rc" "a blocked removal must be reported as a failure"
+if [ ! -f "$d8/MANIFEST" ]; then
+  _fail "a failed uninstall must keep MANIFEST for the next retry"
+fi
+if [ ! -f "$d8/.shellkit-install-manifest" ]; then
+  _fail "a failed uninstall must keep the ownership baseline for the next retry"
+fi
+assert_eq "$(sum "$TEST_ROOT/lib/core/fs.sh")" "$(sum "$out8/fs.sh")" \
+  "the blocked file outside the install root must survive"
+# 修好现场（把软链换回真目录）后，下一次卸载必须能接着清完
+rm -f "$d8/lib/core"
+mkdir -p "$d8/lib/core"
+rc=0
+"$SK" uninstall-self --prefix "$p8" >"$d/retry-uninstall.log" 2>&1 || rc=$?
+assert_eq "0" "$rc" "the retry uninstall must finish the cleanup"
+assert_false test -d "$d8"
+
+# ---------- #125：--purge 的范围必须收紧 ----------
+# 不是 shellkit 安装目录的路径（没有任何标记）绝不允许 rm -rf。
+p9="$d/not-shellkit"
+mkdir -p "$p9/share/shellkit"
+printf 'keep me\n' >"$p9/share/shellkit/keep.txt"
+rc=0
+"$SK" uninstall-self --prefix "$p9" --purge >"$d/purge-scope.log" 2>&1 || rc=$?
+assert_eq "3" "$rc" "purging a directory without shellkit markers must be refused"
+assert_true test -f "$p9/share/shellkit/keep.txt"
+assert_contains "$(cat "$d/purge-scope.log")" "refusing to purge: not a shellkit install directory" \
+  "the refusal must name the scope check"
 
 exit 0
