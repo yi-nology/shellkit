@@ -751,7 +751,7 @@ shellkit uninstall-self --purge
 | 变化 | 以前 | 现在 | 你会在哪里撞到 |
 |---|---|---|---|
 | 每个签名 job 的运行时依赖 | 以为 runner 自带 `minisign`：`packages` job 直接调 `sign_release.sh` → `exit 3`，又被 `continue-on-error` 吞掉，那一版静默缺 deb/rpm | 凡是调用 `sign_release.sh` 的 job，**必须在同一 job 内先装** `minisign`；`tests/test_release_signing_tool.sh` 做结构判据（扫 workflow 文件） | 新增或改动签名 job 的人：漏装工具会让 CI 红（这是要的） |
-| `packages` job 的结论可信度 | 「run 是绿的」不等于「包发了」——可选 job 红了会被 `continue-on-error` 吞 | 结论仍不挡发布（刻意），但发版后必须看 `gh release view` 的资产清单 | 发版的人：验收多一步 |
+| `packages` job 的结论可信度 | 「run 是绿的」不等于「包发了」——可选 job 红了会被 `continue-on-error` 吞 | 0.26.x 时结论仍不挡发布（刻意），发版后必须看 `gh release view` 的资产清单；**后续版本已改为公开前硬门禁（issue #127）**，缺包不再能发布 | 发版的人：验收多一步 |
 
 ### 0.26.1 → 下一版（未发布）：`--file` 点名补签不再要求清单整份齐全
 

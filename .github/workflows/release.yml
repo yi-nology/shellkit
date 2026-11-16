@@ -1,6 +1,8 @@
 name: release
 
-# 发版四段：Build → Quality Gate → Artifact Verification → Publish。
+# 发版四段：Build（含 deb/rpm）→ Quality Gate → Artifact Verification → Publish。
+# 系统包在公开之前构建/冒烟/签名（issue #127）：Release 绿必须意味着
+# 承诺的发行资产齐全，不能出现「页面存在、但下载列表里没有 .deb/.rpm」。
 #
 # 旧实现是「tag 一推就发布」：release.yml 与 ci.yml 之间没有任何依赖，
 # CI 没跑、跑了但失败、或者还在跑，release 照发（issue #42）。而且 GitHub
@@ -76,8 +78,46 @@ jobs:
           sudo apt-get install -y -qq minisign
           minisign -v || true
 
-      # 签名是可选步骤（issue #66）：没配私钥时 sign_release.sh 明确提示并 0 退出，
-      # 不挡发布；配了私钥却签不动（缺 minisign 等）才红 —— 那时就该红。
+      # deb / rpm 前移到公开之前（issue #127）：系统包与主资产走同一张验收表。
+      # 以前 packages job 在 release 公开之后才跑且 continue-on-error —— Release
+      # 页面存在且绿，不代表承诺的发行资产齐全（v0.26.0/v0.26.1 实际缺过包）。
+      # 现在在同一个 release job 内构建、冒烟、签名；任何一步失败即整条 run 红，
+      # 公开动作不会发生。
+      - name: install rpmbuild
+        run: |
+          set -euo pipefail
+          # Ubuntu 上 rpmbuild 由 rpm 包提供
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq rpm
+          command -v rpmbuild
+
+      - name: verify the tarball against SHA256SUMS
+        # 系统包必须基于**将要发布的那份** tarball，不是本地重建的第二份。
+        run: |
+          set -euo pipefail
+          ver=$(cat VERSION)
+          expect=$(awk -v n="shellkit-$ver.tar.gz" '$2==n{print $1}' dist/SHA256SUMS)
+          [ -n "$expect" ] || { echo "no checksum for shellkit-$ver.tar.gz in SHA256SUMS" >&2; exit 1; }
+          actual=$(sha256sum "dist/shellkit-$ver.tar.gz" | awk '{print $1}')
+          [ "$expect" = "$actual" ] || { echo "checksum mismatch: expected $expect, got $actual" >&2; exit 1; }
+          echo "tarball verified: $actual"
+
+      - name: build deb and smoke it (install, run, remove)
+        run: |
+          set -euo pipefail
+          ver=$(cat VERSION)
+          bash tools/package_syspkg.sh --tarball "dist/shellkit-$ver.tar.gz" --out dist deb
+          bash tools/package_smoke.sh --tarball "dist/shellkit-$ver.tar.gz" "dist/shellkit-$ver.deb"
+
+      - name: build rpm and smoke it (install, run, remove)
+        run: |
+          set -euo pipefail
+          ver=$(cat VERSION)
+          bash tools/package_syspkg.sh --tarball "dist/shellkit-$ver.tar.gz" --out dist rpm
+          bash tools/package_smoke.sh --tarball "dist/shellkit-$ver.tar.gz" "dist/shellkit-$ver.rpm"
+
+      # 签名是硬门禁（issue #66 / 路线图 v0.27.0）：没配私钥或配了却签不动
+      # （缺 minisign 等）都以非 0 退出 —— 不产出「看起来一样、其实没签」的发布。
       - name: sign release assets
         env:
           SHELLKIT_MINISIGN_KEY: ${{ secrets.SHELLKIT_MINISIGN_KEY }}
@@ -86,9 +126,21 @@ jobs:
         # 而不是产出一份「看起来一样、其实没签」的发布。
         run: bash tools/sign_release.sh --dist dist --require
 
+      # 系统包与主资产同一把钥匙、同一轮签名（issue #127）：签名覆盖范围与
+      # tarball 一致，否则同版本里「有的资产能验、有的不能验」。
+      - name: sign the system packages
+        env:
+          SHELLKIT_MINISIGN_KEY: ${{ secrets.SHELLKIT_MINISIGN_KEY }}
+        run: |
+          set -euo pipefail
+          ver=$(cat VERSION)
+          bash tools/sign_release.sh --dist dist --require \
+            --file "dist/shellkit-$ver.deb" \
+            --file "dist/shellkit-$ver.rpm"
+
       # 公钥钉入一致性（路线图 v0.22.0）：TRUST.md「当前公钥」钉的 base64 必须与
       # 本次签名用的公钥一致 —— 钉的是跨渠道核对的锚点，漂移了用户按文档验签必失败。
-      # 没配私钥时上一步跳过、公钥文件不存在，这一步也跟着跳过（与签名步骤同口径）。
+      # 没配私钥时 sign_release.sh --require 已在上一步硬失败，这一步不会执行。
       - name: verify pinned public key (TRUST.md)
         run: |
           if [ -f dist/shellkit.minisign.pub ]; then
@@ -107,14 +159,19 @@ jobs:
           # install.sh 也作为资产发布：releases/latest/download/install.sh 是稳定地址，
           # raw.githubusercontent.com 在部分地区不可达，网页上那条一行命令要能走 release。
           tag="$GITHUB_REF_NAME"
-          assets=("dist/shellkit-$(cat VERSION).tar.gz" "dist/SHA256SUMS" "install.sh" "repair.sh" "demo.sh" "dist/shellkit-skill-$(cat VERSION).tar.gz")
-          # 签名产物（没配私钥时这些文件不存在 —— 可选，缺了不挡发布）
-          for f in "dist/shellkit-$(cat VERSION).tar.gz.minisig" \
-                   "dist/shellkit-skill-$(cat VERSION).tar.gz.minisig" \
+          ver=$(cat VERSION)
+          # 系统包是正式交付物（issue #127）：draft 里缺任何一个都走不到公开。
+          assets=("dist/shellkit-$ver.tar.gz" "dist/SHA256SUMS" "install.sh" "repair.sh" "demo.sh" \
+                  "dist/shellkit-skill-$ver.tar.gz" "dist/shellkit-$ver.deb" "dist/shellkit-$ver.rpm")
+          # 签名产物（--require 下必然存在；保留存在性判断兼容本地重放）
+          for f in "dist/shellkit-$ver.tar.gz.minisig" \
+                   "dist/shellkit-skill-$ver.tar.gz.minisig" \
                    "dist/SHA256SUMS.minisig" \
                    "install.sh.minisig" \
                    "repair.sh.minisig" \
                    "demo.sh.minisig" \
+                   "dist/shellkit-$ver.deb.minisig" \
+                   "dist/shellkit-$ver.rpm.minisig" \
                    "dist/shellkit.minisign.pub"; do
             if [ -f "$f" ]; then
               assets[${#assets[@]}]="$f"
@@ -153,117 +210,16 @@ jobs:
           # 验签过了才让它变成正式 Release；--latest 让 latest/download/* 指向这一版。
           gh release edit "$tag" --draft=false --latest
 
-  # deb / rpm（issue #65）：基于**已发布**的那份 tarball 打包 —— 下载 release
-  # 资产并对 SHA256SUMS，确保包的是「发出去的那份」，不是本地重建的第二份。
-  #
-  # 可选 job：continue-on-error + 不被任何 job 依赖 ⇒ 挂了不挡 release，
-  # 这是验收明写的要求（包还没进主线发版必须物）。同一套脚本在 packages.yml
-  # 里于 PR/推送阶段先跑，这里的失败当信号看，不改发布结论。
-  packages:
-    name: deb/rpm packages (optional)
-    needs: release
-    continue-on-error: true
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
-
-      - name: download the published tarball (the single source of truth)
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: |
-          set -euo pipefail
-          ver=$(cat VERSION)
-          mkdir -p dist
-          # 只取 tarball 与清单就够：后面用 --file 点名补签，那种模式不再要求
-          # 「SHA256SUMS 整份齐全」（v0.26.1 首发因这个前提挂过，见 sign_release.sh 的注释）。
-          gh release download "$GITHUB_REF_NAME" --dir dist --clobber \
-            --pattern "shellkit-$ver.tar.gz" --pattern SHA256SUMS
-          # 下载的东西先对校验和，再拿去打包
-          expect=$(awk -v n="shellkit-$ver.tar.gz" '$2==n{print $1}' dist/SHA256SUMS)
-          [ -n "$expect" ] || { echo "no checksum for shellkit-$ver.tar.gz in SHA256SUMS" >&2; exit 1; }
-          actual=$(sha256sum "dist/shellkit-$ver.tar.gz" | awk '{print $1}')
-          [ "$expect" = "$actual" ] || { echo "checksum mismatch: expected $expect, got $actual" >&2; exit 1; }
-          echo "tarball verified: $actual"
-
-      - name: build deb and smoke it (install, run, remove)
-        run: |
-          set -euo pipefail
-          ver=$(cat VERSION)
-          bash tools/package_syspkg.sh --tarball "dist/shellkit-$ver.tar.gz" --out dist deb
-          bash tools/package_smoke.sh --tarball "dist/shellkit-$ver.tar.gz" "dist/shellkit-$ver.deb"
-
-      - name: build rpm and smoke it (install, run, remove)
-        run: |
-          set -euo pipefail
-          ver=$(cat VERSION)
-          # Ubuntu 上 rpmbuild 由 rpm 包提供
-          sudo apt-get update -qq
-          sudo apt-get install -y -qq rpm
-          bash tools/package_syspkg.sh --tarball "dist/shellkit-$ver.tar.gz" --out dist rpm
-          bash tools/package_smoke.sh --tarball "dist/shellkit-$ver.tar.gz" "dist/shellkit-$ver.rpm"
-
-      # 签名工具：这个 job 也要签名，就必须自己装 minisign —— runner 默认没有。
-      # v0.26.0 首发正是漏了这一步：「sign the packages」报 exit 3
-      # （SHELLKIT_MINISIGN_KEY 配置了但工具缺失），而 continue-on-error 把红
-      # 吞掉了 ⇒ 那一版没带 deb/rpm。上面 release job 里同样的坑（v0.21.0）写在了注释里，
-      # 但没人保证新 job 会照做 —— 现在由 tests/test_release_signing_tool.sh 盯着。
-      - name: install minisign
-        run: |
-          set -euo pipefail
-          sudo apt-get update -qq
-          sudo apt-get install -y -qq minisign
-          minisign -v || true
-
-      # deb/rpm 在发布之后才打出来，所以在这里补签名：签名覆盖范围要与 tarball 一致，
-      # 否则同一个版本里「有的资产能验、有的不能验」（评估 2026-11-16）。没配私钥时
-      # --require 直接失败 ⇒ 宁可不附加，也不发布无签名的系统包。
-      - name: sign the packages
-        env:
-          SHELLKIT_MINISIGN_KEY: ${{ secrets.SHELLKIT_MINISIGN_KEY }}
-        run: |
-          set -euo pipefail
-          ver=$(cat VERSION)
-          bash tools/sign_release.sh --dist dist --require \
-            --file "dist/shellkit-$ver.deb" \
-            --file "dist/shellkit-$ver.rpm"
-
-      - name: attach packages to the release
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: |
-          set -euo pipefail
-          ver=$(cat VERSION)
-          # 不可变上传（issue #87）：同摘要跳过、异摘要拒绝覆盖并要求人工处理
-          assets=("dist/shellkit-$ver.deb" "dist/shellkit-$ver.rpm")
-          for f in "dist/shellkit-$ver.deb.minisig" "dist/shellkit-$ver.rpm.minisig"; do
-            if [ -f "$f" ]; then
-              assets[${#assets[@]}]="$f"
-            fi
-          done
-          bash tools/release_assets.sh "$GITHUB_REF_NAME" "${assets[@]}"
-
-  # 发布后自检（v0.27.0）：**可选 job 的失败不许静默**。
-  #
-  # packages 带 continue-on-error —— 它红了，整条 run 仍可能显示绿色（v0.26.0 /
-  # v0.26.1 就是这样静默地少了 deb/rpm）。这里用一个**不可选**的 job 等它跑完，
-  # 再对着已发布的 Release 逐项点名：主资产、签名、系统包，缺一个就红。
+  # 发布后自检（v0.27.0，issue #127 起不再是「可选 job 的补丁」）：发布前
+  # release job 已硬失败保证 deb/rpm 齐全；这里再从**已发布**的 Release 独立
+  # 复核资产清单（主资产、每份 .minisig、.deb/.rpm），缺一个就红。
   # 判据在 tools/release_selfcheck.sh（有 stub 回归 tests/test_release_selfcheck.sh）。
   self-check:
     name: release self-check (published assets)
-    needs: [release, packages]
-    # packages 是可选 job：它失败时依赖它的 job 默认会被跳过，所以必须 always()。
-    # release 自己失败时已经红了，这里不必重复判。
-    if: always() && needs.release.result == 'success'
+    needs: release
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
-
-      - name: report the optional packages job
-        run: |
-          echo "packages job result: ${{ needs.packages.result }}"
-          if [ "${{ needs.packages.result }}" != "success" ]; then
-            echo "::error::the optional packages job did not succeed — deb/rpm are probably missing from the release"
-          fi
 
       - name: verify the published asset list
         env:

@@ -4,10 +4,11 @@
 #
 #   bash tools/release_selfcheck.sh <tag> [--require-packages] [--no-require-signatures]
 #
-# 为什么要有这一步（v0.26.0 / v0.26.1 两版静默缺 deb/rpm）：deb/rpm 由
-# release.yml 的 **可选** job 打出来，那个 job 带 continue-on-error ——
-# 它红了，整条 run 仍显示绿色，网页上只是「这一版没有系统包」，
-# 没人会注意到。发完必须亲眼看资产清单，人的眼睛守不住每次发布，所以让脚本看。
+# 为什么要有这一步（v0.26.0 / v0.26.1 两版静默缺 deb/rpm）：旧 release.yml 把
+# deb/rpm 放在**公开之后**的可选 job 里，那个 job 带 continue-on-error ——
+# 它红了，整条 run 仍显示绿色，网页上只是「这一版没有系统包」。
+# issue #127 起系统包已前移到公开之前并硬失败；这里仍从**已发布**的 Release
+# 独立复核一遍资产清单（发布后可见面）——人的眼睛守不住每次发布，所以让脚本看。
 #
 # 判据（全部满足才返回 0）：
 #   1. tag 与 VERSION 一致（防止查错版本）；
@@ -103,8 +104,8 @@ fi
 
 if [ -n "$missing" ]; then
   say "the release $TAG is missing:$missing"
-  say "  note: the deb/rpm packages are built by an optional job; when it fails the run"
-  say "        can still look green — this check is what makes that visible."
+  say "  note: deb/rpm are built and signed before publish since #127; a missing package"
+  say "        now means the release workflow regressed — this check makes it visible."
   exit 1
 fi
 

@@ -74,41 +74,47 @@ bash tools/release.sh x.y.z --no-push # 本地提交与打 tag，推远端留给
 2. **打包** `tools/package_tarball.sh`：打包清单只维护一份（`release.yml` 与 `packages.yml` 共用）；
 3. **验真产物** `tools/package_artifact_smoke.sh`：解包后跑整套 `tests/run.sh` + CLI 三连 ——
    PR 阶段 `ci.yml` 的 artifact job 调的是同一个脚本，两边不可能漂移；
-4. **装 minisign**：ubuntu runner 默认没有。凡是调用 `sign_release.sh` 的 job，**必须在同一 job 内先装它**
-   （`tests/test_release_signing_tool.sh` 盯着这条规则 —— v0.21.0 与 v0.26.0 都在这上面栽过）；
-5. **签名** `bash tools/sign_release.sh --dist dist --require`：正式发布必须签名，
-   没配私钥直接以 `3` 失败，不产出「看起来一样、其实没签」的发行版；
-6. **核对钉入公钥** `tools/check_trust_pin.sh`：`docs/TRUST.md`「当前公钥」与本次签名钥不一致就中止；
-7. **建 draft release**：13 项资产 —— 6 份内容（tarball / skill 包 / `SHA256SUMS` / `install.sh` /
-   `repair.sh` / `demo.sh`）+ 6 份 `.minisig` + `shellkit.minisign.pub`。
-   上传走 `tools/release_assets.sh`（不可变：同摘要跳过、异摘要拒绝覆盖）；
-8. **独立验签** `bash tools/verify_release.sh <tag>`：从 draft 重新取回资产，用 TRUST.md 钉住的公钥
+4. **装 minisign + rpmbuild**：ubuntu runner 默认都没有。凡是调用 `sign_release.sh` 的 job，
+   **必须在同一 job 内先装 minisign**（`tests/test_release_signing_tool.sh` 盯着这条规则 ——
+   v0.21.0 与 v0.26.0 都在这上面栽过）；
+5. **构建 deb / rpm 并冒烟**（issue #127）：基于**将要发布的那份 tarball**（先对 `SHA256SUMS`）
+   打包，再逐个「装上 → 跑通 → 卸干净」。系统包与主资产走同一张验收表：任何一步失败
+   整条 run 红，公开动作不会发生；
+6. **签名** `bash tools/sign_release.sh --dist dist --require`，随后用 `--file` 给 deb/rpm
+   补签（同一把钥匙、同一次运行）：正式发布必须签名，没配私钥直接以 `3` 失败，
+   不产出「看起来一样、其实没签」的发行版；
+7. **核对钉入公钥** `tools/check_trust_pin.sh`：`docs/TRUST.md`「当前公钥」与本次签名钥不一致就中止；
+8. **建 draft release**：17 项资产 —— 8 份内容（tarball / skill 包 / `SHA256SUMS` / `install.sh` /
+   `repair.sh` / `demo.sh` / `.deb` / `.rpm`）+ 8 份 `.minisig` + `shellkit.minisign.pub`。
+   上传走 `tools/release_assets.sh`（不可变：同摘要跳过、异摘要拒绝覆盖）。draft 里缺
+   deb/rpm 或签名就走不到公开；
+9. **独立验签** `bash tools/verify_release.sh <tag>`：从 draft 重新取回资产，用 TRUST.md 钉住的公钥
    逐份验签并与 `SHA256SUMS` 对账 —— 只在 `dist/` 上验签证明不了「用户下载到的那份」是对的。
    draft 还没对外可见，所以这一步失败时用户什么都看不到；
-9. **公开** `gh release edit <tag> --draft=false --latest`：验签过了才轮到它。
-   判据在 `tests/test_release_publish_order.sh`：去掉 `--draft`、把验签与公开对调，用例必须红；
-10. **发布后自检** `tools/release_selfcheck.sh <tag> --require-packages`：等 `packages` 跑完，
-    对着已发布的 Release 逐项点名（主资产、每份 `.minisig`、`.deb` / `.rpm`），
-    缺一个就红。这一步**不可选**（不带 `continue-on-error`），专门堵住
-    「可选 job 失败被吞掉、run 仍显示绿色」的静默缺口。
+10. **公开** `gh release edit <tag> --draft=false --latest`：验签过了才轮到它。
+    判据在 `tests/test_release_publish_order.sh`：去掉 `--draft`、把验签与公开对调，用例必须红；
+11. **发布后自检** `tools/release_selfcheck.sh <tag> --require-packages`：对着已发布的
+    Release 逐项点名（主资产、每份 `.minisig`、`.deb` / `.rpm`），缺一个就红。
+    系统包已在公开前硬失败，这一步是发布后可见面的独立复核。
 
-### 可选 job：deb / rpm
+### deb / rpm 是发版硬门禁（issue #127）
 
-`packages` job 基于**已发布**的 tarball 打 deb/rpm（下载资产 → 对 `SHA256SUMS` → 打包 → 冒烟）、
-用 `--file` 点名补签、再不可变上传。它本身是 `continue-on-error: true`，
-所以**这个 job 红了不会挡发布**；但 `release.yml` 里有一个不可选的 `self-check` job
-等它跑完，用 `tools/release_selfcheck.sh --require-packages` 检查资产清单 ——
-缺包时整条 run 是红的，不会再出现「全绿但没有 deb/rpm」。仍然建议亲眼看一遍：
+旧流程把 deb/rpm 放在公开之后的 `continue-on-error` job 里：Release 页面存在且绿，
+不代表下载列表里有系统包（v0.26.0 / v0.26.1 实际缺过）。现在系统包在
+**同一个 release job 内、公开之前**构建/冒烟/签名；`packages` job 已删除，
+`release.yml` 里不再出现 `continue-on-error`。判据在
+`tests/test_release_packages_gate.sh`（构建/签名步骤必须在公开步骤之前，缺一步就红）。
+仍然建议亲眼看一遍：
 
 ```bash
 gh run view <run-id> --json jobs --jq '.jobs[] | [.name,.conclusion] | @tsv'
 gh release view "v$version" --json assets --jq '.assets[].name'
 ```
 
-上面第二条里没有 `shellkit-<ver>.deb` / `.rpm` ⇒ 这一版没带系统包（tarball 路径不受影响）。
-v0.26.0 与 v0.26.1 都栽在这里，两次原因不同：前者是 job 没装 minisign（`exit 3`），
-后者是 `--file` 补签仍在要求「`SHA256SUMS` 整份齐全」（`SHA256SUMS lists a missing file`）——
-后者已在 main 修（点名模式跳过整份清单枚举），随下一版恢复系统包。
+上面第二条里没有 `shellkit-<ver>.deb` / `.rpm` ⇒ 发布流程出现回归（系统包已是公开前
+硬门禁，正常不应发生）；`self-check` 也会按同一判据红。v0.26.0 与 v0.26.1 的历史缺口
+（前者 job 没装 minisign，后者 `--file` 补签仍要求 `SHA256SUMS` 整份齐全）对应的
+「发布后补打」路径已随 #127 删除。
 
 ## 发布前：连续三次全矩阵绿
 
@@ -136,27 +142,25 @@ done
 
 ## 迟到的资产：--file 补签
 
-发布之后才打出来的资产（deb/rpm、镜像清单）用点名补签，不要重跑整份签名：
+发布之后才打出来的资产（例如镜像清单）用点名补签，不要重跑整份签名：
 
 ```bash
-bash tools/sign_release.sh --dist dist --require \
-  --file "dist/shellkit-$version.deb" --file "dist/shellkit-$version.rpm"
-
+bash tools/sign_release.sh --dist dist --require --file "dist/manifest.json"
 bash tools/release_assets.sh "v$version" \
-  "dist/shellkit-$version.deb" "dist/shellkit-$version.deb.minisig" \
-  "dist/shellkit-$version.rpm" "dist/shellkit-$version.rpm.minisig"
+  "dist/manifest.json" "dist/manifest.json.minisig"
 ```
 
+deb/rpm 不再走这条路：它们在 release job 内、公开之前与主资产一起签名（#127）。
 点名模式**只签点名的文件**（不会顺手重签 `SHA256SUMS` 与 `install.sh`），
 也不再要求清单里其他文件在本地存在 —— 补签场景下 `dist/` 里天然只有一部分资产。
-没配私钥时 `--require` 直接失败：宁可不附加，也不发布无签名的系统包。
+没配私钥时 `--require` 直接失败：宁可不附加，也不发布无签名的资产。
 
 ## 发布之后必须自己验一遍
 
 CI 绿了不等于用户装得上。这四个动作是发版的验收标准：
 
 ```bash
-# 1) release 工作流跑完了吗（含可选的 packages job）
+# 1) release 工作流跑完了吗（deb/rpm 已在公开前硬门禁内）
 gh run list --workflow=release.yml --limit 1
 
 # 2) draft 已公开、资产齐全（脚本点名，缺一份就非 0）

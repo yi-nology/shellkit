@@ -4,9 +4,11 @@ name: packages
 #
 # 与 release 的关系：
 #   - 这里是 PR / 推送阶段的早期信号：包能不能建、装上跑不跑得通、卸得干不干净；
-#   - release.yml 里另有一个 continue-on-error 的可选 job，在**已发布**的 tarball
-#     上重跑同一套脚本 —— 挂了不挡 release（验收明写）；
-#   - 刻意不进 tools/release_gate.sh 的必需检查清单：它不是主线发版必须物。
+#   - release.yml 在**同一个 release job 内、公开之前**用同一套脚本构建/冒烟/
+#     签名 deb/rpm，任何一步失败即不发布（issue #127）——本工作流是它的前置
+#     信号，不是另一条「可选发布路径」；
+#   - 刻意不进 tools/release_gate.sh 的必需检查清单：PR 门禁允许先合入再修
+#     包装问题，发版时由 release.yml 硬挡。
 #
 # 原生发行版矩阵（issue #88）：deb/rpm 的冒烟以前都在 Ubuntu runner 上做 ——
 # 与目标发行版的 systemd 布局、依赖解析、安装路径不完全一致。这里在
