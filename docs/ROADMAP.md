@@ -1,6 +1,6 @@
 # ShellKit 路线图：三层架构与版本验收状态
 
-状态：2026-11-16 按**实际发版**重写（当前 **v0.26.1** 已发布）。本文是**方向**，不是承诺 ——
+状态：2026-11-16 按**实际发版**重写（当前 **v0.26.2** 已发布）。本文是**方向**，不是承诺 ——
 每个版本的退出条件写清楚，条件不满足就不进下一个版本（见「迭代节奏」）。
 
 进度只按**验收结果**记，不按日期：标为已完成（Completed）的每一条都能在仓库里指到判据；
@@ -34,6 +34,7 @@
 | v0.24.2 | 数据安全收口（P0） | `_sk_own_sync` 搬不动就整轮失败、写回后 `os_sha256` 自检；`test_fault_matrix.sh` 的 `vendor\|keep-fail` 格（注入点 `TMPDIR`） |
 | v0.25.0 | 发布质量前移 + API 契约 + 供应链（三批合并发布） | `tools/package_artifact_smoke.sh`（PR 与发版同一份）、`tools/upgrade_matrix.sh`、50 个 Stable API、`sign_release.sh --require` + `tools/verify_release.sh` |
 | v0.26.0 | 发版原子性 + 卸载所有权（两处 P0） | draft → 独立验签 → 公开；`uninstall-self` 只删「我们装的、内容还是原样」的；`packages` job 自装 minisign + 结构判据 |
+| v0.26.2 | 补签语义修复 | `sign_release.sh --file` 不再要求 `SHA256SUMS` 整份齐全（`dist` 只有一部分资产是补签的常态）；17 项资产全签名并经独立验签 |
 | v0.26.1 | 系统包 job 的两处附产品：签名工具与补签前提 | `packages` job 自装 minisign；`sign_release.sh --file` 点名模式不再要求 `SHA256SUMS` 整份齐全（`tests/test_release_signing_tool.sh` 盯着签名 job） |
 
 ### v0.24.2 —— 数据安全收口（已发布 2026-11-16）
@@ -99,6 +100,16 @@ v0.24.0 暴露的缺口是：源码矩阵全绿、系统包构建也全绿，但
 （`SHA256SUMS lists a missing file: shellkit-skill-0.26.1.tar.gz`）—— 该修在 `569df9a` 才进 main，
 **0.26.1 的 tag 不含它** ⇒ 这一版依旧没有 deb/rpm。系统包随下一版恢复；
 发完必须亲自看一眼 `gh release view` 的资产清单，`continue-on-error` 不会替你看。
+
+### v0.26.2 —— 补签语义修复（已发布 2026-11-16）
+
+| 交付 | 判据 |
+|---|---|
+| `--file` 点名模式跳过整份 `SHA256SUMS` 枚举 | `tests/test_release_signature.sh` 双向：partial dist + `--file` 必须成功；同一份 dist 不点名仍必须以 `lists a missing file` 拒签 |
+| 系统包恢复 | `v0.26.2` 17 项资产（含 `.deb` / `.rpm`）全部签名；`tools/verify_release.sh v0.26.2` 逐项验过，`rc=0` |
+
+`packages` job 三个 job 全绿（quality gate → build/verify/publish → deb/rpm），
+两版缺包在 `v0.26.2` 收口：`gh release view v0.26.2` 的资产清单里有 `.deb` / `.rpm` 且各带 `.minisig`。
 
 ### API 与配置契约冻结（已随 v0.25.0 发布）
 
