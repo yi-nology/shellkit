@@ -12,6 +12,7 @@
 # @exitcode 0 成功
 # @exitcode 2 缺参数
 # @exitcode 1 写不了
+# @stability experimental
 profile_write() {
   local __file="${1:-}"
   if [ -z "$__file" ]; then
@@ -26,6 +27,7 @@ profile_write() {
 # @exitcode 0 成功
 # @exitcode 2 缺参数
 # @exitcode 1 写不了
+# @stability experimental
 profile_append() {
   local __file="${1:-}" __mod="${2:-}" __line
   if [ -z "$__file" ] || [ -z "$__mod" ]; then
@@ -45,6 +47,7 @@ profile_append() {
 # 输出：`<模块名>``<TAB>``<k=v,k=v>`（每行一个）
 # 注释从**第一个 #** 起截断（与 unix_script 的 profile 解析同口径）。
 # @exitcode 0 总是成功
+# @stability experimental
 profile_parse() {
   local __file="${1:-}" __line __content __mod __rest
   if [ -z "$__file" ] || [ ! -r "$__file" ]; then
@@ -74,6 +77,7 @@ profile_parse() {
 
 # profile_env MODULE_TAB_KV PREFIX —— 把键值对变成环境变量赋值（每行一个）
 # @exitcode 0 总是成功
+# @stability experimental
 profile_env() {
   local __line="${1:-}" __prefix="${2:-}" __kv __item __k __v __tab
   # 分隔符：优先 TAB，没有就用空格（profile 文件本身是空格分隔的）

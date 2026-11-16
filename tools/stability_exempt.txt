@@ -1,122 +1,17 @@
-# 分级豁免名单（issue #79）：这些公开函数**还没有** @stability 注解。
+# 分级豁免名单（issue #79 / v0.27.0）
+#
+# 这个名单记的是「**还没有** @stability 注解的公开函数」。
+# v0.27.0 起它必须是**空的**：162 个公开函数全部显式声明了分级
+# （50 stable / 112 experimental），一个不漏 —— 具体编号见 docs/COMPATIBILITY.md。
 #
 # 棘轮规则（双向，坑 15 的口径）：
 #   1. 源码里没有 @stability 的公开函数必须出现在这里 —— 新函数第一天就要求
 #      显式声明 @stability stable|experimental；
 #   2. 本名单里的函数一旦加上 @stability，必须**移出**名单 —— 否则将来注解被删，
 #      棘轮也看不见；
-#   3. 本名单只许变短，不许变长（加长 = 放松，要说明理由单独提交）。
+#   3. 名单只许**空**。往这里加一条 = 把一个公开函数降成「没有承诺等级」，
+#      与 docs/COMPATIBILITY.md 的「每个公开函数都有等级」直接矛盾 ——
+#      tools/check_compatibility.sh 会拦下来。确实需要例外时，先改承诺文档，
+#      再在提交说明里写清理由。
 #
-# 由 tools/api_baseline.sh 的门禁强制；生成：awk 按基线名字列导出后补本头。
-cli_cmd
-cli_completion_script
-cli_group
-cli_has
-cli_opt_init
-cli_usage_cmd
-cli_usage_global
-die
-http_github_latest_tag
-http_github_release_asset
-log_debug
-log_error
-log_info
-log_ok
-log_section
-log_warn
-man_count_functions
-man_module_page
-man_modules
-man_page
-man_write_all
-net_download
-net_escape_json
-net_json
-net_request
-net_sha256
-net_verify
-net_wait_http
-net_wait_port
-os_arch
-os_desktop_env
-os_distro_family
-os_distro_id
-os_distro_name
-os_is_desktop
-os_is_root
-os_md5
-os_name
-os_pkg_install
-os_pkg_install_root
-os_pkg_installed
-os_pkg_manager
-os_pkg_manager_full
-os_pkg_remove_root
-os_pkg_update
-os_pkg_update_root
-os_release_field
-os_sed_i
-os_sha256
-os_sudo_ready
-parallel_map
-profile_append
-profile_env
-profile_parse
-profile_write
-registry_list
-registry_scan_multi
-require_bash
-require_file
-require_root
-run_func_timeout
-run_install_sudo_shim
-run_timeout
-scaffold_config_load
-scaffold_manifest_file_sum
-scaffold_manifest_get
-scaffold_manifest_list_files
-scaffold_manifest_read
-scaffold_manifest_write
-scaffold_manifest_write_baselines
-scaffold_render
-scaffold_run_hook
-scaffold_vars_get
-scaffold_vars_list
-scaffold_vars_set
-status_emit
-status_extra
-status_is_machine
-status_state_valid
-status_version
-str_contains
-str_ends_with
-str_lower
-str_repeat
-str_starts_with
-str_suggest
-str_trim
-str_upper
-svc_daemon_reload
-svc_disable
-svc_disable_now
-svc_enable
-svc_enable_now
-svc_install_unit
-svc_is_active
-svc_is_enabled
-svc_platform
-svc_reload
-svc_restart
-svc_start
-svc_stop
-trap_cleanup
-trap_list
-trap_pop
-validate_abs_path
-validate_enum
-validate_key
-validate_not_empty
-validate_port
-validate_single_line
-validate_url
-validate_version
+# 由 tools/api_baseline.sh 的门禁强制；tools/check_compatibility.sh 另外要求它保持为空。

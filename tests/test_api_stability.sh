@@ -5,10 +5,12 @@
 #   1. 当前树上门禁是绿的（注解 / 基线分级列 / 豁免名单三者一致）
 #   2. 新公开函数既没写 @stability、又不在豁免名单 ⇒ 红（棘轮：新函数第一天就要声明）
 #   3. 豁免名单里的函数已经写了 @stability ⇒ 红（必须移出名单，双向棘轮，坑 15）
+#   3b. 未分级函数躲进豁免名单 ⇒ api_baseline 放过它（规则一），但
+#       tools/check_compatibility.sh 必须红（v0.27.0 起名单只许为空）
 #   4. 基线里的分级与源码注解对不上 ⇒ 红（重生成基线）
 #   5. Stable 函数的承诺变更没写进 MIGRATING ⇒ 不许重生成基线（#79 拍板项②：
 #      「晋升 Stable 后改动必须进迁移表」由门禁兜底 —— 用例自带分级前提自证）
-# 外加：shdoc 把 @stability 渲染成「稳定性」小节。
+# 外加：shdoc 把 @stability 渲染成「稳定性」小节；兼容文档的数量与小节必须与源码一致。
 #
 # 副本是「门禁需要的最小树」（lib/ + MIGRATING + VERSION，门禁文件从工作树拷），
 # **不依赖 git** —— compat 容器里没有 git、或 git 不认这个 checkout 的属主，
@@ -35,7 +37,8 @@ _copy_repo() {
   cp "$REPO/VERSION" "$dst/" || return 1
   mkdir -p "$dst/tools" || return 1
   cp "$REPO/tools/api_baseline.sh" "$REPO/tools/api_baseline.txt" \
-    "$REPO/tools/stability_exempt.txt" "$dst/tools/" || return 1
+    "$REPO/tools/stability_exempt.txt" "$REPO/tools/check_compatibility.sh" "$dst/tools/" || return 1
+  cp "$REPO/docs/COMPATIBILITY.md" "$dst/docs/" || return 1
   return 0
 }
 
@@ -68,23 +71,22 @@ assert_ne "0" "$GATE_RC" "an unannotated new function must fail the gate"
 assert_contains "$GATE_OUT" "没有声明 @stability" "the gate must name the missing annotation"
 assert_contains "$GATE_OUT" "zz_probe_fn" "the gate must name the function"
 
-# CASE 3: 豁免名单里的函数已经写了 @stability ⇒ 红（必须移出名单）
+# CASE 3: 一个**已经写了注解**的函数被列进豁免名单 ⇒ 红（必须移出名单）
+#
+# v0.27.0 起豁免名单是空的（162 个公开函数全部有等级），所以不能再用「名单里
+# 现成的一条」当素材 —— 自己造一个：先写注解，再把名字塞进名单。
 d=$(tmpdir)
 _copy_repo "$d" || _fail "cannot create the repo copy"
-# 挑一个在豁免名单里的函数，给它加上注解（插在定义行之前）
-__fn=$(grep -v '^#' "$d/tools/stability_exempt.txt" | sed -n '1p')
-[ -n "$__fn" ] || _fail "the exempt list must not be empty"
-# 逐文件处理：把注解插到该函数定义行之前（扫描器只认紧邻的注释块）
-for __f in "$d/lib/core/"*.sh; do
-  awk -v fn="$__fn" '
-    $0 ~ "^" fn "\\(\\)" && !done { print "# @stability stable"; done = 1 }
-    { print }
-  ' "$__f" >"$__f.tmp" && mv "$__f.tmp" "$__f"
-done
+# 必须带 @exitcode：没有它，扫描输出中间是空字段，read 会把两段 Tab 折成一个
+# （IFS 里的 Tab 是空白字符），分级列会被读进承诺列 —— 真实函数都由
+# check-exitcode-docs 保证有 @exitcode，这里照同样的形状造。
+printf '# 临时函数\n# @exitcode 0 永远成功\n# @stability experimental\nzz_exempt_fn() {\n  return 0\n}\n' >"$d/lib/core/zzexempt.sh"
+printf 'zz_exempt_fn\t0\tactive\t-\tskip\t-\t-\texperimental\n' >>"$d/tools/api_baseline.txt"
+printf 'zz_exempt_fn\n' >>"$d/tools/stability_exempt.txt"
 _gate "$d"
 assert_ne "0" "$GATE_RC" "an annotated function still listed as exempt must fail the gate"
 assert_contains "$GATE_OUT" "必须移出名单" "the gate must demand removing it from the exempt list"
-assert_contains "$GATE_OUT" "$__fn" "the gate must name the function"
+assert_contains "$GATE_OUT" "zz_exempt_fn" "the gate must name the function"
 
 # CASE 4: 基线里的分级被改 ⇒ 红
 d=$(tmpdir)
@@ -152,3 +154,46 @@ assert_contains "$out" "conf_get" "the tool should report what changed"
 _gate "$d"
 assert_eq "0" "$GATE_RC" "the gate must pass once the stable change is declared"
 assert_contains "$GATE_OUT" "api_baseline: ok" "the gate should report success"
+
+# CASE 7: 兼容承诺文档与源码对账（tools/check_compatibility.sh，v0.27.0）
+d=$(tmpdir)
+_copy_repo "$d" || _fail "cannot create the repo copy"
+rc=0
+out=$(bash "$d/tools/check_compatibility.sh" 2>&1) || rc=$?
+assert_eq "0" "$rc" "the compatibility gate must be green on the current tree"
+
+# 7a. 文档里手抄的分级数量与源码对不上 ⇒ 红（数字会过期，必须有判据）
+d2=$(tmpdir)
+_copy_repo "$d2" || _fail "cannot create the repo copy"
+awk '{ if ($0 ~ /\| `stable` \|/) sub(/\| 50 个 \|/, "| 49 个 |"); print }' \
+  "$d2/docs/COMPATIBILITY.md" >"$d2/docs/COMPATIBILITY.tmp" && mv "$d2/docs/COMPATIBILITY.tmp" "$d2/docs/COMPATIBILITY.md"
+rc=0
+out=$(bash "$d2/tools/check_compatibility.sh" 2>&1) || rc=$?
+assert_eq "5" "$rc" "a wrong stable count in the policy must fail the gate"
+assert_contains "$out" "says 49 stable" "the gate must name the wrong number"
+
+# 7b. 把一个已分级函数的注解摘掉、再塞进豁免名单 ⇒ api_baseline 的规则一放行
+#     （这正是名单存在的目的），但兼容门禁必须红：文档说「每个公开函数都有等级」，
+#     名单非空这句话就是假的。基线分级列同时改成 experimental，否则规则三先红。
+d3=$(tmpdir)
+_copy_repo "$d3" || _fail "cannot create the repo copy"
+__fn="str_trim"
+awk -v fn="$__fn" '
+  { lines[NR] = $0 }
+  END {
+    for (i = 1; i <= NR; i++) {
+      if (lines[i] ~ /@stability/ && i < NR && lines[i + 1] ~ ("^" fn "\\(\\)")) continue
+      print lines[i]
+    }
+  }
+' "$d3/lib/core/str.sh" >"$d3/lib/core/str.new" && mv "$d3/lib/core/str.new" "$d3/lib/core/str.sh"
+awk -F'\t' -v OFS='\t' -v fn="$__fn" '$1 == fn { $8 = "experimental" } { print }' \
+  "$d3/tools/api_baseline.txt" >"$d3/tools/ab.new" && mv "$d3/tools/ab.new" "$d3/tools/api_baseline.txt"
+printf '%s\n' "$__fn" >>"$d3/tools/stability_exempt.txt"
+_gate "$d3"
+assert_eq "0" "$GATE_RC" "api_baseline accepts an exempt function by design (rule one)"
+rc=0
+out=$(bash "$d3/tools/check_compatibility.sh" 2>&1) || rc=$?
+assert_eq "5" "$rc" "an exemption entry must fail the compatibility gate"
+assert_contains "$out" "must stay empty" "the gate must demand an empty exempt list"
+assert_contains "$out" "$__fn" "the gate must name the exempt function"

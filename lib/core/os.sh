@@ -18,15 +18,18 @@ _sk_os_detect
 
 # os_name —— linux | darwin | other
 # @exitcode 0 总是成功（stdout 输出 darwin/linux）
+# @stability experimental
 os_name() { printf '%s\n' "$SK_OS"; }
 
 # os_arch —— x86_64 | aarch64 | other
 # @exitcode 0 总是成功（stdout 输出架构）
+# @stability experimental
 os_arch() { printf '%s\n' "$SK_ARCH"; }
 
 # os_is_root —— 当前是否以 root 身份运行
 # @exitcode 0 是 root
 # @exitcode 1 不是 root
+# @stability experimental
 os_is_root() {
   if [ "$(id -u 2>/dev/null)" = "0" ]; then
     return 0
@@ -69,12 +72,14 @@ _sk_pkg_mgr() {
 # os_pkg_manager —— 本机的包管理器名（apt-get/yum/dnf/zypper/apk）；没有则返回 1
 # @exitcode 0 找到了（stdout 输出包管理器名）
 # @exitcode 1 找不到支持的包管理器
+# @stability experimental
 os_pkg_manager() { _sk_pkg_mgr; }
 
 # os_pkg_update —— 刷新包索引；没有受支持的包管理器返回 SK_PRECOND(3)
 # @exitcode 0 更新成功
 # @exitcode 3 找不到支持的包管理器
 # @exitcode 其他 包管理器自身的退出码
+# @stability experimental
 os_pkg_update() {
   local __mgr
   __mgr=$(_sk_pkg_mgr) || {
@@ -94,6 +99,7 @@ os_pkg_update() {
 # @exitcode 0 安装成功
 # @exitcode 3 找不到支持的包管理器
 # @exitcode 其他 包管理器自身的退出码
+# @stability experimental
 os_pkg_install() {
   local __mgr
   __mgr=$(_sk_pkg_mgr) || {
@@ -112,6 +118,7 @@ os_pkg_install() {
 # os_sed_i ARGS... —— 就地编辑；Darwin 的 sed 必须给个备份后缀
 # @exitcode 0 成功
 # @exitcode 其他 sed 自身的退出码
+# @stability experimental
 os_sed_i() {
   if [ "$SK_OS" = "darwin" ]; then
     sed -i '' "$@"
@@ -124,6 +131,7 @@ os_sed_i() {
 # @exitcode 0 成功（stdout 输出校验和）
 # @exitcode 2 没给参数
 # @exitcode 1 没有 md5sum 也没有 md5
+# @stability experimental
 os_md5() {
   local __f=${1:-} __out=""
   _sk_need_args "$#" 1 "os_md5 FILE" || return $?
@@ -152,6 +160,7 @@ os_md5() {
 # @exitcode 0 成功（stdout 输出校验和）
 # @exitcode 2 没给参数
 # @exitcode 1 没有 sha256sum 也没有 shasum
+# @stability experimental
 os_sha256() {
   local __f=${1:-} __out=""
   _sk_need_args "$#" 1 "os_sha256 FILE" || return $?
@@ -200,6 +209,7 @@ _sk_os_lower() {
 # @param FILE 文件路径；缺省依次尝试 /etc/os-release、/usr/lib/os-release
 # @exitcode 0 总是成功（读不到时 stdout 为空）
 # @exitcode 2 KEY 为空
+# @stability experimental
 os_release_field() {
   local __key=${1:-} __file=${2:-} __f __v
   _sk_need_args "$#" 1 "os_release_field KEY [FILE]" || return $?
@@ -240,6 +250,7 @@ os_release_field() {
 # os_distro_id [FILE] —— 小写的发行版 ID
 # @param FILE os-release 文件路径；缺省读本机的
 # @exitcode 0 总是成功（读不到时 stdout 为空）
+# @stability experimental
 os_distro_id() {
   local __id
   __id=$(os_release_field ID "${1:-}") || __id=""
@@ -250,6 +261,7 @@ os_distro_id() {
 # os_distro_name [FILE] —— 发行版显示名（PRETTY_NAME，空则回退 NAME）
 # @param FILE os-release 文件路径；缺省读本机的
 # @exitcode 0 总是成功（读不到时 stdout 为空）
+# @stability experimental
 os_distro_name() {
   local __v
   __v=$(os_release_field PRETTY_NAME "${1:-}") || __v=""
@@ -264,6 +276,7 @@ os_distro_name() {
 # 判定顺序：包管理器实测 -> ID_LIKE 词表 -> ID 词表
 # @param FILE os-release 文件路径；缺省走主机模式（先按包管理器实测）
 # @exitcode 0 总是成功（判不出时输出 unknown）
+# @stability experimental
 os_distro_family() {
   local __file=${1:-} __id __like __fam
   # 主机模式先按包管理器实测；给了文件就只看这个文件，不许混入本机包管理器
@@ -331,6 +344,7 @@ os_distro_family() {
 # 判定口径与 unix_script 的 detect_desktop 逐字等价：所有线索拼成一个串，
 # 再按桌面类型优先级匹配（ukui > dde > kde > gnome > xfce > mate > cinnamon > lxqt > budgie）
 # @exitcode 0 总是成功（没有线索时输出 none）
+# @stability experimental
 os_desktop_env() {
   local __clues='' __v __b
   # 三个线索环境变量（XDG_CURRENT_DESKTOP 可能是冒号分隔的列表）
@@ -362,6 +376,7 @@ os_desktop_env() {
 # os_is_desktop —— 当前是否在桌面环境
 # @exitcode 0 在桌面环境
 # @exitcode 1 不在桌面环境
+# @stability experimental
 os_is_desktop() {
   local __env
   __env=$(os_desktop_env) || __env='none'
@@ -427,6 +442,7 @@ _sk_pkg_mgr_full() {
 #   detect_pkg_manager 认这两个）—— 两套并存，不改既有函数。
 # @exitcode 0 找到包管理器，stdout 是包管理器名
 # @exitcode 1 没有找到受支持的包管理器
+# @stability experimental
 os_pkg_manager_full() {
   _sk_pkg_mgr_full
 }
@@ -445,6 +461,7 @@ _sk_sudo_prefix() {
 #   已是 root 直接放行；否则先试免密（sudo -n true），不行则提示输入一次（sudo -v）。
 # @exitcode 0 sudo 可用
 # @exitcode 3 拿不到 sudo 权限
+# @stability experimental
 os_sudo_ready() {
   if [ "$(id -u 2>/dev/null)" = '0' ]; then
     return 0
@@ -483,6 +500,7 @@ _sk_pkg_exec() {
 # @exitcode 2 没给包名
 # @exitcode 3 没有受支持的包管理器
 # @exitcode 其他 包管理器自身的退出码
+# @stability experimental
 os_pkg_install_root() {
   local __mgr
   local -a __cmd
@@ -515,6 +533,7 @@ os_pkg_install_root() {
 # @exitcode 2 没给包名
 # @exitcode 3 没有受支持的包管理器
 # @exitcode 其他 包管理器自身的退出码
+# @stability experimental
 os_pkg_remove_root() {
   local __mgr
   local -a __cmd
@@ -544,6 +563,7 @@ os_pkg_remove_root() {
 # @exitcode 0 成功
 # @exitcode 3 没有受支持的包管理器
 # @exitcode 其他 包管理器自身的退出码
+# @stability experimental
 os_pkg_update_root() {
   local __mgr
   local -a __cmd
@@ -573,6 +593,7 @@ os_pkg_update_root() {
 # @exitcode 1 未安装
 # @exitcode 2 没给包名
 # @exitcode 3 没有受支持的包管理器
+# @stability experimental
 os_pkg_installed() {
   local __mgr __pkg
   _sk_need_args "$#" 1 "os_pkg_installed PKG" || return $?

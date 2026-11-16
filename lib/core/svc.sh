@@ -16,6 +16,7 @@
 # svc_platform —— 当前平台的服务管理器
 #   可用 SK_SVC_PLATFORM 覆盖（测试与特殊环境用）。
 # @exitcode 0 总是成功（stdout 输出 systemd|launchd|none）
+# @stability experimental
 svc_platform() {
   if [ -n "${SK_SVC_PLATFORM:-}" ]; then
     printf '%s\n' "${SK_SVC_PLATFORM}"
@@ -70,6 +71,7 @@ _sk_svc_do() {
 # @exitcode 2 缺 unit
 # @exitcode 3 当前平台没有 systemd
 # @exitcode 4 systemd 自身失败
+# @stability experimental
 svc_start() {
   _sk_svc_need_unit start "${1:-}" || return $?
   _sk_svc_need_systemd || return $?
@@ -81,6 +83,7 @@ svc_start() {
 # @exitcode 2 缺 unit
 # @exitcode 3 当前平台没有 systemd
 # @exitcode 4 systemd 自身失败
+# @stability experimental
 svc_stop() {
   _sk_svc_need_unit stop "${1:-}" || return $?
   _sk_svc_need_systemd || return $?
@@ -92,6 +95,7 @@ svc_stop() {
 # @exitcode 2 缺 unit
 # @exitcode 3 当前平台没有 systemd
 # @exitcode 4 systemd 自身失败
+# @stability experimental
 svc_restart() {
   _sk_svc_need_unit restart "${1:-}" || return $?
   _sk_svc_need_systemd || return $?
@@ -103,6 +107,7 @@ svc_restart() {
 # @exitcode 2 缺 unit
 # @exitcode 3 当前平台没有 systemd
 # @exitcode 4 systemd 自身失败
+# @stability experimental
 svc_reload() {
   _sk_svc_need_unit reload "${1:-}" || return $?
   _sk_svc_need_systemd || return $?
@@ -114,6 +119,7 @@ svc_reload() {
 # @exitcode 2 缺 unit
 # @exitcode 3 当前平台没有 systemd
 # @exitcode 4 systemd 自身失败
+# @stability experimental
 svc_enable() {
   _sk_svc_need_unit enable "${1:-}" || return $?
   _sk_svc_need_systemd || return $?
@@ -125,6 +131,7 @@ svc_enable() {
 # @exitcode 2 缺 unit
 # @exitcode 3 当前平台没有 systemd
 # @exitcode 4 systemd 自身失败
+# @stability experimental
 svc_disable() {
   _sk_svc_need_unit disable "${1:-}" || return $?
   _sk_svc_need_systemd || return $?
@@ -136,6 +143,7 @@ svc_disable() {
 # @exitcode 2 缺 unit
 # @exitcode 3 当前平台没有 systemd
 # @exitcode 4 systemd 自身失败
+# @stability experimental
 svc_enable_now() {
   _sk_svc_need_unit enable-now "${1:-}" || return $?
   _sk_svc_need_systemd || return $?
@@ -147,6 +155,7 @@ svc_enable_now() {
 # @exitcode 2 缺 unit
 # @exitcode 3 当前平台没有 systemd
 # @exitcode 4 systemd 自身失败
+# @stability experimental
 svc_disable_now() {
   _sk_svc_need_unit disable-now "${1:-}" || return $?
   _sk_svc_need_systemd || return $?
@@ -158,6 +167,7 @@ svc_disable_now() {
 # @exitcode 1 没在跑
 # @exitcode 2 缺 unit
 # @exitcode 3 当前平台没有 systemd
+# @stability experimental
 svc_is_active() {
   _sk_svc_need_unit is-active "${1:-}" || return $?
   _sk_svc_need_systemd || return $?
@@ -169,6 +179,7 @@ svc_is_active() {
 # @exitcode 1 不是
 # @exitcode 2 缺 unit
 # @exitcode 3 当前平台没有 systemd
+# @stability experimental
 svc_is_enabled() {
   _sk_svc_need_unit is-enabled "${1:-}" || return $?
   _sk_svc_need_systemd || return $?
@@ -179,6 +190,7 @@ svc_is_enabled() {
 # @exitcode 0 成功
 # @exitcode 3 当前平台没有 systemd
 # @exitcode 4 systemd 自身失败
+# @stability experimental
 svc_daemon_reload() {
   _sk_svc_need_systemd || return $?
   _sk_svc_do daemon-reload
@@ -192,6 +204,7 @@ svc_daemon_reload() {
 # @exitcode 2 缺 unit 名或名字带路径组件
 # @exitcode 3 当前平台没有 systemd、拿不到 sudo
 # @exitcode 4 写入或 daemon-reload 失败
+# @stability experimental
 svc_install_unit() {
   local __unit="${1:-}" __target __rc=0
   if [ -z "$__unit" ]; then

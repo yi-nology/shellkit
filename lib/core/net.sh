@@ -5,6 +5,7 @@
 # @exitcode 0 成功（stdout 输出校验和）
 # @exitcode 2 参数错
 # @exitcode 1 算不出校验和
+# @stability experimental
 net_sha256() {
   _sk_need_args "$#" 1 "net_sha256 FILE" || return $?
   os_sha256 "$1"
@@ -14,6 +15,7 @@ net_sha256() {
 # @exitcode 0 校验通过
 # @exitcode 2 参数错
 # @exitcode 5 校验和不匹配，或算不出校验和
+# @stability experimental
 net_verify() {
   local __file=${1:-} __expect=${2:-} __actual
   _sk_need_args "$#" 2 "net_verify FILE SHA256" || return $?
@@ -52,6 +54,7 @@ _sk_download_raw() {
 # @exitcode 4 下载失败
 # @exitcode 5 校验和不匹配
 # @exitcode 1 写文件失败
+# @stability experimental
 net_download() {
   local __url=${1:-} __dest=${2:-} __expect=${3:-} __tmp __alt
   _sk_need_args "$#" 2 "net_download URL DEST [SHA256]" || return $?
@@ -114,6 +117,7 @@ net_download() {
 # @exitcode 0 端口已就绪
 # @exitcode 2 参数错
 # @exitcode 4 超时仍未就绪
+# @stability experimental
 net_wait_port() {
   local __host=${1:-} __port=${2:-} __timeout=${3:-30} __i=0
   _sk_need_args "$#" 2 "net_wait_port HOST PORT [TIMEOUT]" || return $?
@@ -134,6 +138,7 @@ net_wait_port() {
 # @exitcode 2 参数错
 # @exitcode 3 没有 curl
 # @exitcode 4 超时仍未就绪
+# @stability experimental
 net_wait_http() {
   local __url=${1:-} __timeout=${2:-30} __i=0
   _sk_need_args "$#" 1 "net_wait_http URL [TIMEOUT]" || return $?

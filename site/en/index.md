@@ -81,6 +81,7 @@ Read more in [Conventions](/en/guide/conventions.md) and [Bash 3.2](/en/guide/ba
 | --- | --- |
 | Decide in five minutes whether this is worth it | [Quick start](/en/guide/quickstart.md) |
 | Scripts already run in production | [Five-step migration](/en/guide/migrating.md) |
+| Will upgrading break my scripts? | [Compatibility policy](/en/guide/compatibility.md) |
 | A concrete task: config, downloads, retries, locking | [Cookbook](/en/guide/cookbook.md) |
 | Exact signature and exit code | [API reference](/en/reference/index.md) |
 | Let an AI write the script | [For AI](/en/guide/ai.md) |

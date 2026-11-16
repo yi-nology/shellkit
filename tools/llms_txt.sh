@@ -84,12 +84,12 @@ _guide_entries() {
     __prefix="guide/"
   fi
   for __name in index installation quickstart conventions bash32 modules \
-    cookbook cli i18n testing ai examples man migrating releasing \
+    cookbook cli i18n testing ai examples man migrating compatibility releasing \
     contributing troubleshooting faq; do
     _entry "$__prefix$__name.md"
   done
   # 剩下的页面按字母序补上：新加的页面不会因为「不在优先列表里」而消失
-  __known=" index installation quickstart conventions bash32 modules cookbook cli i18n testing ai examples man migrating releasing contributing troubleshooting faq "
+  __known=" index installation quickstart conventions bash32 modules cookbook cli i18n testing ai examples man migrating compatibility releasing contributing troubleshooting faq "
   for __f in "$SITE/$__prefix"*.md; do
     [ -f "$__f" ] || continue
     __name=$(basename "$__f" .md)

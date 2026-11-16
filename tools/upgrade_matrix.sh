@@ -16,6 +16,10 @@
 #   4. 用户自己写的文件字节不变
 #   5. 没有 .shellkit-new / .shellkit-old 残骸，清单完整（无 .tmp 残骸）
 #   6. 升级后再跑一次是「已经最新」（幂等）
+#   7. 生命周期一圈（v0.27.0）：install-self → uninstall-self → 重装 → 用装出来的
+#      CLI 再升一次 —— 卸载必须删掉 CLI 与安装清单，重装必须能立刻接着用。
+#      这条守的是「升级链的另一头」：只验 upgrade 不验 install/uninstall，
+#      等于假定用户永远不卸载重装。
 #
 # 离网时显式 SKIP 并返回 0 —— 绝不因为「下不到」而假绿。
 #
@@ -23,7 +27,8 @@
 set -u
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-versions="0.20.0 0.23.0 0.24.1"
+# 0.26.2 是第一个「系统包与签名都齐全」的版本，也是 1.0 前最近的完整发行版。
+versions="0.20.0 0.23.0 0.24.1 0.26.2"
 strict=0
 repo="yi-nology/shellkit"
 SK="$ROOT/shellkit"
@@ -169,8 +174,61 @@ for v in $versions; do
     *) say "   WARN: the second upgrade did not say 'already up to date'" ;;
   esac
 
-  say "   ok: $v -> $current"
+  # --- 7. 生命周期一圈：装 → 卸 → 重装 → 再升级 ---
+  prefix="$dir/prefix"
+  if ! "$SK" install-self --prefix "$prefix" >"$dir/install.log" 2>&1; then
+    say "   FAIL: install-self into a temp prefix exited non-zero (see $dir/install.log)"
+    fails=$((fails + 1))
+    continue
+  fi
+  [ -x "$prefix/bin/shellkit" ] || {
+    say "   FAIL: install-self did not produce $prefix/bin/shellkit"
+    fails=$((fails + 1))
+    continue
+  }
+  if ! "$SK" uninstall-self --prefix "$prefix" >"$dir/uninstall.log" 2>&1; then
+    say "   FAIL: uninstall-self exited non-zero (see $dir/uninstall.log)"
+    fails=$((fails + 1))
+    continue
+  fi
+  [ ! -e "$prefix/bin/shellkit" ] || {
+    say "   FAIL: uninstall-self left the CLI behind"
+    fails=$((fails + 1))
+    continue
+  }
+  [ ! -e "$prefix/share/shellkit/.shellkit-install-manifest" ] || {
+    say "   FAIL: uninstall-self left its install manifest behind"
+    fails=$((fails + 1))
+    continue
+  }
+  if ! "$SK" install-self --prefix "$prefix" >"$dir/reinstall.log" 2>&1; then
+    say "   FAIL: reinstall into the same prefix failed (see $dir/reinstall.log)"
+    fails=$((fails + 1))
+    continue
+  fi
+  out3=$("$prefix/bin/shellkit" upgrade "$proj" 2>&1)
+  rc3=$?
+  if [ "$rc3" -ne 0 ]; then
+    say "   FAIL: the reinstalled CLI cannot upgrade the project (exited $rc3)"
+    printf '%s\n' "$out3" | tail -5 >&2
+    fails=$((fails + 1))
+    continue
+  fi
+  got3=$(tr -d '[:space:]' <"$proj/vendor/shellkit/VERSION" 2>/dev/null)
+  [ "$got3" = "$current" ] || {
+    say "   FAIL: after the reinstall the project VERSION is '$got3', want '$current'"
+    fails=$((fails + 1))
+    continue
+  }
+  [ "$(sum "$proj/user-note.txt")" = "$mine_before" ] || {
+    say "   FAIL: the user's own file changed during the lifecycle round"
+    fails=$((fails + 1))
+    continue
+  }
+
+  say "   ok: $v -> $current (install → uninstall → reinstall → upgrade)"
   printf '%s\n' "CELL upgrade-matrix|$v -> $current: passed"
+  printf '%s\n' "CELL upgrade-matrix|$v lifecycle (install/uninstall/reinstall): passed"
 done
 
 say "summary: ran=$ran skipped=$skipped fails=$fails"

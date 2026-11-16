@@ -35,6 +35,7 @@
                               site_sync.sh（docs/ → 站点页面）/ site_links.sh（产物链接门禁）
     docs/                     README 之外的深度文档；REFERENCE.md 与 AGENTS.md 是生成物
                               SECURITY.md（安全边界规范）/ JSON.md（doctor --json 字段契约）
+                              COMPATIBILITY.md（1.0 兼容承诺：分级、破坏性变更、弃用窗口）
                               TRUST.md（安装信任链：验什么、不验什么、离线怎么验）
                               ROADMAP.md（三层架构与四阶段：退出条件、战略取舍、迭代节奏）
     docs/shots/*.shot         截图源：每行 `$ ` 是真要跑的命令，svg 由 make shots 渲染
@@ -57,8 +58,9 @@
     make check     # syntax + test + lint + module-order-check + check-exitcode-docs +
                   # local-names-check + ident-boundary-check + module-count-check +
                   # pipe-safety-check + dup-functions-check + security-check +
-                  # api-baseline-check + docs-check + versions-check + check-docs +
-                  # cookbook-check + messages-check + examples + fmt，CI 也是这组
+                  # api-baseline-check + compatibility-check + docs-check +
+                  # versions-check + check-docs + cookbook-check + messages-check +
+                  # examples + fmt，CI 也是这组
                   # 步骤清单的唯一真相源是 Makefile 的 check 目标（上面这份是投影）
     make bats-check  # tests/bats 下的 bats 用例（bats 是外部依赖，不进 check）
 
@@ -70,6 +72,9 @@
 调用方开了 `pipefail` 时整条管道误判失败（见下面第 5 条）。
 `dup-functions-check` 拦的是「同名函数定义了两遍」：bash 后定义覆盖先定义，
 先写的那份悄悄失效 —— 不报错、不崩，只是你以为在跑 A、其实在跑 B。
+`compatibility-check` 拦的是「承诺文档说了却没兑现」：`docs/COMPATIBILITY.md` 声称
+每个公开函数都有等级，就要求 `tools/stability_exempt.txt` 为空、文档里的
+stable / experimental 数量与源码一致、四个必备小节都在。
 
 ## 清单里的指纹是「模板基线」，不是「文件当前内容」
 
@@ -224,6 +229,7 @@
 
 改了既有函数的结果（返回码、产出文件名、输出文本）就要升 **minor**，并在
 `docs/MIGRATING.md` 加一张「会改变结果的行为变化」表。只加不改的可以升 patch。
+什么算「结果」、弃用要提前多久、哪些函数不承诺 —— 见 `docs/COMPATIBILITY.md`（v0.27.0 起生效）。
 
 ## 通用规则：用 shellkit 写 Bash
 

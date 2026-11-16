@@ -17,10 +17,17 @@
 #   - 超时后仍缺席 ⇒ 才判失败并说明原因（点名是谁、指路查 ci.yml 是否
 #     在这个 SHA 上跑过、job 名是否与必需清单一致）。
 #
-#   bash tools/release_gate.sh <commit-sha> [--timeout SEC] [--interval SEC] [--once]
+# 第四种状态是「被 runner 取消」（conclusion=cancelled，常见于 macOS runner
+# 配额/抢占）—— 那不是代码失败，也不该靠人盯着网页手动重跑。这里对每个检查
+# **有限自动重跑一次**：从 check-run 的 details_url 里取出 run id，请求
+# `gh run rerun <id> --failed`，然后继续轮询。同一个检查最多重跑一次：
+# 重跑后又被取消 ⇒ 按失败处理（fail-closed，绝不因为「取消」而放行）。
+# --no-rerun 可关掉自动重跑（应急与测试用）。
 #
-# 退出码：0 全部必需检查成功 / 1 有失败，或超时后仍缺席（fail-closed）/
-#         2 用法错 / 3 等到超时还没有结论（进行中或尚未注册）
+#   bash tools/release_gate.sh <commit-sha> [--timeout SEC] [--interval SEC] [--once] [--no-rerun]
+#
+# 退出码：0 全部必需检查成功 / 1 有失败（含重跑后仍被取消），或超时后仍缺席
+#         （fail-closed）/ 2 用法错 / 3 等到超时还没有结论（进行中或尚未注册）
 #
 # 必需检查清单是 ci.yml 的六个 job（矩阵 job 按 name 逐个点名）。
 # SHELLKIT_GATE_CHECKS="a|b|c"（| 分隔）可整体覆盖 —— 供测试与应急使用。
@@ -33,6 +40,7 @@ DEFAULT_CHECKS="test on macos-latest|test on macos-15|test on ubuntu-latest|test
 TIMEOUT=2400
 INTERVAL=30
 ONCE=0
+RERUN=1
 SHA=""
 CHECKS="${SHELLKIT_GATE_CHECKS:-$DEFAULT_CHECKS}"
 
@@ -44,12 +52,13 @@ _die() {
 
 _usage() {
   printf '%s\n' \
-    "usage: bash $PROG <commit-sha> [--timeout SEC] [--interval SEC] [--once]" \
+    "usage: bash $PROG <commit-sha> [--timeout SEC] [--interval SEC] [--once] [--no-rerun]" \
     '' \
     '  <commit-sha>   被 tag 的那个 commit；必需检查查的就是它的 check-runs' \
     '  --timeout SEC  轮询上限（默认 2400）；到点还没结论按未通过处理' \
     '  --interval SEC 轮询间隔（默认 30）' \
-    '  --once         只查一轮，不等待（测试与人工核对用）'
+    '  --once         只查一轮，不等待（测试与人工核对用）' \
+    '  --no-rerun     检查被 runner 取消时不自动重跑（默认会自动重跑一次）'
 }
 
 while [ "$#" -gt 0 ]; do
@@ -71,6 +80,7 @@ while [ "$#" -gt 0 ]; do
       ;;
     --interval=*) INTERVAL=${1#*=} ;;
     --once) ONCE=1 ;;
+    --no-rerun) RERUN=0 ;;
     --?*) _die "unknown option: $1" 2 ;;
     *)
       if [ -n "$SHA" ]; then
@@ -104,74 +114,143 @@ if ! command -v gh >/dev/null 2>&1; then
   _die "gh is required to query check runs" 3
 fi
 
-# _gate_one NAME —— 查一个必需检查的结论，输出三种词之一：
+# _gate_one NAME —— 查一个必需检查的结论，输出「结论[ TAB details_url ]」：
 #   MISSING（该 SHA 上还没有这个名字的检查 —— 可能尚未注册，也可能永不运行）
 #   PENDING（还没跑完）/ SUCCESS / FAILED:<conclusion>
 # MISSING 不在这里定生死：主循环把它当「未注册」处理（issue #85）。
+# details_url 只在被取消时用得上（从里面取 run id 去重跑），别的结论不需要它 ——
+# 所以测试桩只回「结论」也照样能用（没有 TAB 就当作没有 URL）。
 _gate_one() {
   local __name=$1 __out
   __out=$(gh api -X GET "repos/$GATE_REPO/commits/$SHA/check-runs" \
     -f check_name="$__name" -f filter=latest -f per_page=100 \
-    --jq 'if .total_count == 0 then "MISSING" else .check_runs[0].status + "/" + (.check_runs[0].conclusion // "none") end' 2>/dev/null) || {
+    --jq 'if .total_count == 0 then "MISSING" else .check_runs[0].status + "/" + (.check_runs[0].conclusion // "none") + "\t" + (.check_runs[0].details_url // "") end' 2>/dev/null) || {
     printf 'QUERY_FAILED'
     return 0
   }
   printf '%s' "$__out"
 }
 
-# _gate_count LIST —— 清单里实际有几条必需检查
+# 自动重跑：每个检查最多争取一次。状态记在临时目录里 —— 进程重启就重来，
+# 这正是想要的（一次失败的发布流程重新跑，等于又给了它一次机会）。
 #
-# ⚠ 不能用 `printf '%s' "$LIST" | tr '|' '\n' | wc -l`：printf 不补尾换行，
-# wc -l 数的是**换行符个数**而不是行数 ⇒ 永远比实际条数少 1（issue #70：
-# 清单 13 条却报 12，跟下面 verdict 行的 13 对不上 —— 同一个清单两个数）。
-# 这里按 | 逐段拆、空段丢掉 —— 与判定循环的口径完全一致。
-_gate_count() {
-  local __rest=${1:-} __n=0 __item
-  while [ -n "$__rest" ]; do
-    case "$__rest" in
-      *'|'*)
-        __item=${__rest%%|*}
-        __rest=${__rest#*|}
-        ;;
-      *)
-        __item=$__rest
-        __rest=""
-        ;;
-    esac
-    [ -n "$__item" ] || continue
-    __n=$((__n + 1))
-  done
-  printf '%s' "$__n"
+# 建不出来不致命：下面 _rerun_once 建标记时同样会失败 ⇒ 被取消的检查按失败
+# 处理（fail-closed），不会「以为重跑过」。这里刻意不写 `|| true` ——
+# 那个右臂永远走不到（mkdir -p 极少失败），留着只会变成一条没人覆盖、
+# 只能靠白名单兜着的分支。
+RERUN_DIR="${TMPDIR:-/tmp}/release-gate-rerun.$$"
+mkdir -p "$RERUN_DIR" 2>/dev/null
+trap 'rm -rf "${RERUN_DIR:?}"' EXIT INT TERM HUP
+
+# _rerun_once NAME DETAILS_URL —— 请求重跑一次；返回 0 = 已经请求、继续等
+# 返回 1 = 不重跑（禁用 / 没有 URL / 取不到 run id / 同一个检查已经用掉机会）
+_rerun_once() {
+  local __name=$1 __url=$2 __rest __runid
+  [ "$RERUN" = "1" ] || return 1
+  [ -n "$__url" ] || return 1
+  case "$__url" in
+    */actions/runs/*) ;;
+    *) return 1 ;;
+  esac
+  __rest=${__url#*/actions/runs/}
+  __runid=${__rest%%/*}
+  case "$__runid" in
+    '' | *[!0-9]*) return 1 ;;
+  esac
+  # 名字会变成文件名（坑 7）：只允许安全字符
+  case "$__name" in
+    */* | .* | '') return 1 ;;
+  esac
+  # 用「建目录」当一次性标记：已存在 = 这个检查的机会已经用掉；
+  # 建不出来（不可写等）= 也不放行（fail-closed）。两种情况都走同一条臂，
+  # 省掉一个永远注入不出来的「写标记失败」分支。
+  if ! mkdir "$RERUN_DIR/$__name" 2>/dev/null; then
+    return 1
+  fi
+  _say "  [RETRY] $__name — the runner cancelled it; requesting one re-run of run $__runid"
+  # --failed 覆盖「有失败/被取消的 job」；老版本 gh 不认就退回整轮重跑
+  if gh run rerun "$__runid" --failed >/dev/null 2>&1; then
+    return 0
+  fi
+  if gh run rerun "$__runid" >/dev/null 2>&1; then
+    return 0
+  fi
+  _say "  [FAIL] $__name (cancelled, and the re-run request was rejected)"
+  return 1
 }
+
+# 必需检查清单只拆一次，拆成数组；后面计数与判定都用这一份。
+#
+# 两个理由（都不是洁癖）：
+#   ① 拆法按 | 逐段拆、空段丢掉 —— 与判定口径完全一致。
+#      ⚠ 不能用 `printf '%s' "$LIST" | tr '|' '\n' | wc -l`：printf 不补尾换行，
+#      wc -l 数的是**换行符个数**而不是行数 ⇒ 永远比实际条数少 1（issue #70：
+#      清单 13 条却报 12，跟下面 verdict 行的 13 对不上 —— 同一个清单两个数）。
+#   ② 老写法把清单拆在「管道 + 临时文件」里：管道右侧是子 shell，计数器出不来，
+#      只好再写一遍文件读回来。而那个文件写在
+#      ${TMPDIR:-/tmp}/release-gate-results.$$ —— 路径可预测、写不出来时读回来
+#      是空的 ⇒ 计数全是 0 ⇒ 门禁打出「all 0 required checks succeeded」并放行。
+#      **查不了状态却放行**，正是这个脚本最不能犯的错（fail-closed）。
+#      数组活在同一个 shell 里，不跨进程、不落盘，那条路整个没有。
+_CHECK_NAMES=()
+__rest=$CHECKS
+while [ -n "$__rest" ]; do
+  case "$__rest" in
+    *'|'*)
+      __item=${__rest%%|*}
+      __rest=${__rest#*|}
+      ;;
+    *)
+      __item=$__rest
+      __rest=""
+      ;;
+  esac
+  [ -n "$__item" ] || continue
+  _CHECK_NAMES[${#_CHECK_NAMES[@]}]=$__item
+done
+
+# 一条都没有 = 这次发布什么都没验过 ⇒ 绝不能当成「全部通过」。
+[ "${#_CHECK_NAMES[@]}" -gt 0 ] || _die "the required-check list is empty (SHELLKIT_GATE_CHECKS)" 2
 
 _say "repository: $GATE_REPO"
 _say "commit: $SHA"
-_say "required checks: $(_gate_count "$CHECKS")"
+_say "required checks: ${#_CHECK_NAMES[@]}"
 
 __waited=0
 while :; do
-  printf '%s\n' "$CHECKS" | tr '|' '\n' | while IFS= read -r __name; do
-    [ -n "$__name" ] || continue
-    __verdict=$(_gate_one "$__name")
+  # 计数与判定都在这个 shell 里 —— 不跨子进程、不落盘（理由见上面
+  # _CHECK_NAMES 那段：落盘那份曾经会在写不出来时让门禁「零检查通过」）。
+  # missing 与 pending 是两类「还没有结论」：前者是检查尚未注册，
+  # 窗口内等、超时才判失败（issue #85）；后者照旧等。
+  __pending=0 __failed=0 __passed=0 __missing=0 __retried=0
+  __first_bad="" __first_missing=""
+  for __name in ${_CHECK_NAMES[@]+"${_CHECK_NAMES[@]}"}; do
+    __raw=$(_gate_one "$__name")
+    __url=""
+    case "$__raw" in
+      *$'\t'*)
+        __verdict=${__raw%%$'\t'*}
+        __url=${__raw#*$'\t'}
+        ;;
+      *) __verdict=$__raw ;;
+    esac
     case "$__verdict" in
       SUCCESS) __v=ok ;;
       completed/success) __v=ok ;;
       MISSING) __v=missing ;;
       QUERY_FAILED) __v=query ;;
+      # 被 runner 取消：不是代码失败，先争取一次重跑；机会用掉或请求不出去
+      # 就按失败处理（fail-closed）。
+      completed/cancelled)
+        if _rerun_once "$__name" "$__url"; then
+          __v=cancelled-retried
+        else
+          __v=cancelled-blocked
+        fi
+        ;;
       completed/*) __v=fail ;;
       *) __v=pending ;;
     esac
-    # 循环体在管道子 shell 里：计数器出不来，结论打进 stdout，
-    # 由外层从结果文件里重新统计（见下）。
-    printf '%s\t%s\n' "$__v" "$__name"
-  done >"${TMPDIR:-/tmp}/release-gate-results.$$"
-
-  # 子 shell 计数器出不来，用结果文件重新统计。
-  # missing 与 pending 是两类「还没有结论」：前者是检查尚未注册，
-  # 窗口内等、超时才判失败（issue #85）；后者照旧等。
-  __pending=0 __failed=0 __passed=0 __missing=0
-  __first_bad="" __first_missing=""
-  while IFS=$'\t' read -r __v __name; do
     case "$__v" in
       ok) __passed=$((__passed + 1)) ;;
       pending) __pending=$((__pending + 1)) ;;
@@ -179,22 +258,30 @@ while :; do
         __missing=$((__missing + 1))
         [ -n "$__first_missing" ] || __first_missing="$__name"
         ;;
+      cancelled-retried)
+        # 重跑请求已经发出去，这一轮当作「还在跑」——下一轮查的是新那次
+        __retried=$((__retried + 1))
+        __pending=$((__pending + 1))
+        ;;
+      cancelled-blocked)
+        __failed=$((__failed + 1))
+        [ -n "$__first_bad" ] || __first_bad="$__name (cancelled by the runner; the one re-run is spent or unavailable)"
+        ;;
       *)
         __failed=$((__failed + 1))
         [ -n "$__first_bad" ] || __first_bad="$__name ($__v)"
         ;;
     esac
-  done <"${TMPDIR:-/tmp}/release-gate-results.$$"
-  while IFS=$'\t' read -r __v __name; do
     case "$__v" in
       ok) _say "  [ OK ] $__name" ;;
       pending) _say "  [....] $__name (pending)" ;;
       missing) _say "  [....] $__name (missing — not yet registered, will keep waiting)" ;;
       query) _say "  [FAIL] $__name (query failed)" ;;
+      cancelled-retried) _say "  [WAIT] $__name (cancelled by the runner; one re-run requested)" ;;
+      cancelled-blocked) _say "  [FAIL] $__name (cancelled by the runner; the one re-run is spent or unavailable)" ;;
       fail) _say "  [FAIL] $__name" ;;
     esac
-  done <"${TMPDIR:-/tmp}/release-gate-results.$$"
-  rm -f "${TMPDIR:-/tmp}/release-gate-results.$$"
+  done
 
   if [ "$__failed" -gt 0 ]; then
     _say "verdict: NOT PASSED — $__failed required check(s) failed (first: $__first_bad)"
@@ -204,7 +291,11 @@ while :; do
     _say "verdict: PASSED — all $__passed required checks succeeded"
     exit 0
   fi
-  _say "verdict: $__pending pending, $__missing not yet registered, $__passed passed so far"
+  if [ "$__retried" -gt 0 ]; then
+    _say "verdict: $__pending pending ($__retried cancelled check(s) re-run once), $__missing not yet registered, $__passed passed so far"
+  else
+    _say "verdict: $__pending pending, $__missing not yet registered, $__passed passed so far"
+  fi
   if [ "$ONCE" = "1" ]; then
     _say "stopping after one round (--once)"
     exit 3

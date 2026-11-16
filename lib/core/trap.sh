@@ -35,6 +35,7 @@ trap_push() {
 
 # trap_pop —— 丢弃最近注册的一个动作（不执行）
 # @exitcode 0 弹栈成功（或栈本来就是空的）
+# @stability experimental
 trap_pop() {
   if [ "$_SK_TRAP_N" -gt 0 ]; then
     _SK_TRAP_N=$((_SK_TRAP_N - 1))
@@ -45,6 +46,7 @@ trap_pop() {
 
 # trap_list —— 逐行输出已注册的动作（调试用）
 # @exitcode 0 总是成功（stdout 逐行输出栈里的命令）
+# @stability experimental
 trap_list() {
   local __i=0
   while [ "$__i" -lt "$_SK_TRAP_N" ]; do
@@ -56,6 +58,7 @@ trap_list() {
 
 # trap_cleanup —— 逆序执行全部清理动作；幂等；单个失败不中断其余
 # @exitcode 0 清理完成（单个清理失败不中断其余）
+# @stability experimental
 trap_cleanup() {
   local __i __cmd
   if [ "${_SK_TRAP_RUNNING:-0}" = "1" ]; then

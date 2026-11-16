@@ -15,7 +15,7 @@
 #   分级            stable=承诺稳定 / experimental=暂不承诺（源码注释 @stability 的投影）
 #                   没写注解的按 experimental 落盘；是否已声明看 tools/stability_exempt.txt
 #
-baseline-version: 0.24.1
+baseline-version: 0.26.2
 ask	0,1,2,3	active	-	probe	0,3	-	stable
 ask_choice	0,1,2,3	active	-	probe	0,3	-	stable
 ask_yn	0,1,2,3	active	-	probe	0,3	-	stable

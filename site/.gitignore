@@ -8,11 +8,13 @@ guide/bash32.md
 guide/cookbook.md
 guide/man.md
 guide/migrating.md
+guide/compatibility.md
 guide/releasing.md
 reference/
 en/guide/cookbook.md
 en/guide/man.md
 en/guide/migrating.md
+en/guide/compatibility.md
 en/guide/releasing.md
 en/reference/
 .vuepress/public/shots/

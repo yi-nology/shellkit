@@ -83,6 +83,7 @@ _sk_scaffold_store_get() {
 # scaffold_vars_set KEY VALUE —— 设一个模板变量
 # @exitcode 0 设置成功
 # @exitcode 2 变量名非法，或值里有换行（变量表一行一个，装不下多行值）
+# @stability experimental
 scaffold_vars_set() {
   local __key=${1:-} __value=${2:-}
   if ! validate_key "$__key"; then
@@ -98,6 +99,7 @@ scaffold_vars_set() {
 # scaffold_vars_get KEY [DEFAULT] —— 读一个模板变量；未设置时给默认值
 # @exitcode 0 找到（stdout 输出值）
 # @exitcode 1 没有这个变量
+# @stability experimental
 scaffold_vars_get() {
   local __key=${1:-} __default=${2:-}
   if ! validate_key "$__key"; then
@@ -109,6 +111,7 @@ scaffold_vars_get() {
 
 # scaffold_vars_list —— 逐行输出 KEY=VALUE
 # @exitcode 0 总是成功（stdout 逐行输出变量名）
+# @stability experimental
 scaffold_vars_list() {
   local __line __rest="$SK_SCAFFOLD_VARS"
   while [ -n "$__rest" ]; do
@@ -130,6 +133,7 @@ scaffold_vars_list() {
 # @exitcode 0 载入成功
 # @exitcode 2 参数错
 # @exitcode 3 找不到配置文件
+# @stability experimental
 scaffold_config_load() {
   local __file=${1:-} __line __key __value
   _sk_need_args "$#" 1 "scaffold_config_load FILE" || return $?
@@ -188,6 +192,7 @@ _sk_sed_repl_escape() {
 # @exitcode 0 渲染成功（stdout 输出渲染后的文本）
 # @exitcode 2 参数错
 # @exitcode 1 渲染失败
+# @stability experimental
 scaffold_render() {
   local __src=${1:-} __dst=${2:-} __rc=0 __line __key __value __esc
   local __args=()
@@ -233,6 +238,7 @@ EOF
 # @exitcode 0 清单写好
 # @exitcode 2 参数错
 # @exitcode 1 写文件失败
+# @stability experimental
 scaffold_manifest_write() {
   local __dir=${1:-} __name=${2:-} __cmds=${3:-} __tver=${4:-} __files=${5:-}
   _sk_need_args "$#" 4 "scaffold_manifest_write DIR NAME COMDS TEMPLATE_VERSION [FILELIST]" || return $?
@@ -251,6 +257,7 @@ scaffold_manifest_write() {
 # @exitcode 0 清单写好
 # @exitcode 2 参数错
 # @exitcode 1 写文件失败
+# @stability experimental
 scaffold_manifest_write_baselines() {
   local __dir=${1:-} __name=${2:-} __cmds=${3:-} __tver=${4:-} __files=${5:-} __baselines=${6:-}
   _sk_need_args "$#" 6 "scaffold_manifest_write_baselines DIR NAME COMDS TEMPLATE_VERSION FILELIST BASELINES" || return $?
@@ -321,6 +328,7 @@ EOF
 # 标量进 SK_MANIFEST_* 公开变量，@var 条目进模板变量表。
 # @exitcode 0 清单读到了
 # @exitcode 3 这里不是 shellkit 生成的工程
+# @stability experimental
 scaffold_manifest_read() {
   local __dir=${1:-} __file __line __rest
   _sk_need_args "$#" 1 "scaffold_manifest_read DIR" || return $?
@@ -365,6 +373,7 @@ scaffold_manifest_read() {
 # scaffold_manifest_get KEY —— 读 manifest 里的一个标量
 # @exitcode 0 找到（stdout 输出值）
 # @exitcode 1 清单里没有这个键
+# @stability experimental
 scaffold_manifest_get() {
   local __key=${1:-}
   case "$__key" in
@@ -383,6 +392,7 @@ scaffold_manifest_get() {
 
 # scaffold_manifest_list_files —— 逐行输出模板自有的文件（相对路径）
 # @exitcode 0 总是成功（stdout 逐行输出清单里的文件）
+# @stability experimental
 scaffold_manifest_list_files() {
   local __dir=${1:-} __file __line __rel
   _sk_need_args "$#" 1 "scaffold_manifest_list_files DIR" || return $?
@@ -402,6 +412,7 @@ scaffold_manifest_list_files() {
 # scaffold_manifest_file_sum DIR RELPATH —— 读 manifest 里记的某个文件的 sha256
 # @exitcode 0 成功（stdout 输出校验和）
 # @exitcode 1 算不出校验和
+# @stability experimental
 scaffold_manifest_file_sum() {
   local __dir=${1:-} __rel=${2:-} __file __line
   _sk_need_args "$#" 2 "scaffold_manifest_file_sum DIR RELPATH" || return $?
@@ -427,6 +438,7 @@ scaffold_manifest_file_sum() {
 # @exitcode 0 钩子成功（或没有钩子）
 # @exitcode 2 参数错
 # @exitcode 1 钩子执行失败
+# @stability experimental
 scaffold_run_hook() {
   local __file=${1:-} __dir=${2:-} __line __key __value
   _sk_need_args "$#" 2 "scaffold_run_hook FILE PROJECT_DIR" || return $?
