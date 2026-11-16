@@ -212,14 +212,17 @@ _sk_log() {
 
 # log_info MSG... —— 普通信息
 # @exitcode 0 总是成功（级别不够时什么都不输出）
+# @stability experimental
 log_info() { _sk_log INFO 20 "$@"; }
 
 # log_ok MSG... —— 成功；单独用 " OK " 是为了和四字母级别对齐
 # @exitcode 0 总是成功（级别不够时什么都不输出）
+# @stability experimental
 log_ok() { _sk_log OK 20 "$@"; }
 
 # log_warn MSG... —— 警告，不中断
 # @exitcode 0 总是成功（级别不够时什么都不输出）
+# @stability experimental
 log_warn() { _sk_log WARN 30 "$@"; }
 
 # ---------------------------------------------------------------------------
@@ -448,6 +451,7 @@ _sk_err_path_info() {
 
 # log_error MSG... —— 输出错误（stderr），并把最后一条错误记进 SK_ERRMSG
 # @exitcode 0 总是成功；同时把消息记进 SK_ERRMSG
+# @stability experimental
 log_error() {
   local __msg="$*"
   # 错误上下文（issue #63）：栈空时输出与以前逐字相同；
@@ -464,12 +468,14 @@ log_error() {
 
 # log_debug MSG... —— 仅在 SHELLKIT_DEBUG=1 或 SHELLKIT_LOG_LEVEL=debug 时输出
 # @exitcode 0 总是成功（要 SHELLKIT_DEBUG=1 或 SHELLKIT_LOG_LEVEL=debug 才输出）
+# @stability experimental
 log_debug() { _sk_log DEBUG 10 "$@"; }
 
 # log_section TITLE —— 分段标题，带前导空行
 # json 模式下什么都不输出：JSON 行是给采集器消费的，标题没有 level 语义，
 # 混进去会破坏「一行一条记录」的约定。文本模式保持原样。
 # @exitcode 0 总是成功（json 模式下不输出）
+# @stability experimental
 log_section() {
   if _sk_log_is_json; then
     return 0

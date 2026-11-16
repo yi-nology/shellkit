@@ -65,6 +65,11 @@ bash tools/release.sh x.y.z --no-push # 本地提交与打 tag，推远端留给
 
 `v*` tag 推上去就触发，别手工 `gh release create`。顺序是固定的：
 
+0. **质量准入** `tools/release_gate.sh`：查询被 tag 的那个 SHA 上的必需检查，
+   失败、缺席、未完成都不放行。**被 runner 取消的检查会自动重跑一次**
+   （从 check-run 的 `details_url` 取 run id，请求 `gh run rerun --failed`）；
+   重跑后仍被取消 ⇒ 按失败处理（fail-closed）。`--no-rerun` 可关掉自动重跑。
+   判据在 `tests/test_release_gate_cancelled.sh`；
 1. **tag 与 `VERSION` 一致** —— 不一致直接失败，避免发出一个版本号对不上的包；
 2. **打包** `tools/package_tarball.sh`：打包清单只维护一份（`release.yml` 与 `packages.yml` 共用）；
 3. **验真产物** `tools/package_artifact_smoke.sh`：解包后跑整套 `tests/run.sh` + CLI 三连 ——
@@ -81,13 +86,19 @@ bash tools/release.sh x.y.z --no-push # 本地提交与打 tag，推远端留给
    逐份验签并与 `SHA256SUMS` 对账 —— 只在 `dist/` 上验签证明不了「用户下载到的那份」是对的。
    draft 还没对外可见，所以这一步失败时用户什么都看不到；
 9. **公开** `gh release edit <tag> --draft=false --latest`：验签过了才轮到它。
-   判据在 `tests/test_release_publish_order.sh`：去掉 `--draft`、把验签与公开对调，用例必须红。
+   判据在 `tests/test_release_publish_order.sh`：去掉 `--draft`、把验签与公开对调，用例必须红；
+10. **发布后自检** `tools/release_selfcheck.sh <tag> --require-packages`：等 `packages` 跑完，
+    对着已发布的 Release 逐项点名（主资产、每份 `.minisig`、`.deb` / `.rpm`），
+    缺一个就红。这一步**不可选**（不带 `continue-on-error`），专门堵住
+    「可选 job 失败被吞掉、run 仍显示绿色」的静默缺口。
 
 ### 可选 job：deb / rpm
 
 `packages` job 基于**已发布**的 tarball 打 deb/rpm（下载资产 → 对 `SHA256SUMS` → 打包 → 冒烟）、
-用 `--file` 点名补签、再不可变上传。它是 `continue-on-error: true` 且不被任何 job 依赖 ——
-所以**这个 job 红了不会挡发布**，产物也不会出现在 release 页上。发完必须亲眼看一眼：
+用 `--file` 点名补签、再不可变上传。它本身是 `continue-on-error: true`，
+所以**这个 job 红了不会挡发布**；但 `release.yml` 里有一个不可选的 `self-check` job
+等它跑完，用 `tools/release_selfcheck.sh --require-packages` 检查资产清单 ——
+缺包时整条 run 是红的，不会再出现「全绿但没有 deb/rpm」。仍然建议亲眼看一遍：
 
 ```bash
 gh run view <run-id> --json jobs --jq '.jobs[] | [.name,.conclusion] | @tsv'
@@ -98,6 +109,28 @@ gh release view "v$version" --json assets --jq '.assets[].name'
 v0.26.0 与 v0.26.1 都栽在这里，两次原因不同：前者是 job 没装 minisign（`exit 3`），
 后者是 `--file` 补签仍在要求「`SHA256SUMS` 整份齐全」（`SHA256SUMS lists a missing file`）——
 后者已在 main 修（点名模式跳过整份清单枚举），随下一版恢复系统包。
+
+## 发布前：连续三次全矩阵绿
+
+跨版本升级矩阵（`tools/upgrade_matrix.sh`）每天只跑一遍，一次绿证明不了稳定：
+它可能刚好赶上网络好、机器闲。**v1.0.0 起**，正式发布前要求在空闲机器上连续跑三次全绿，
+把三份 `summary` 行贴进发布 PR / issue 作为证据：
+
+```bash
+for i in 1 2 3; do
+  echo "== run $i"
+  bash tools/upgrade_matrix.sh --strict || { echo "run $i failed"; exit 1; }
+done
+```
+
+每次的判据是同一组：`0.20.0 / 0.23.0 / 0.24.1 / 0.26.2 → 当前` 全部 `passed`，
+且每个版本还跑完一圈 `install → uninstall → reinstall → upgrade` 的 lifecycle。
+出现 `SKIP` 不算通过（`--strict` 会让「全部跳过」直接失败）；
+真离网时先解决网络，而不是把跳过当绿。
+
+> 为什么是三次：这个矩阵证明的是「老工程能被新版本接住」，
+> 而它依赖外部 Release 资产与网络路径 —— 一次通过可能只是一次运气。
+> 三次连续通过才值得写进发布说明。
 
 ## 迟到的资产：--file 补签
 
@@ -124,8 +157,9 @@ CI 绿了不等于用户装得上。这四个动作是发版的验收标准：
 # 1) release 工作流跑完了吗（含可选的 packages job）
 gh run list --workflow=release.yml --limit 1
 
-# 2) draft 已公开、资产齐全
+# 2) draft 已公开、资产齐全（脚本点名，缺一份就非 0）
 gh release view "v$version" --json tagName,isDraft,isPrerelease,assets
+bash tools/release_selfcheck.sh "v$version" --require-packages
 
 # 3) 从 Release 重新取回资产，用 TRUST.md 钉住的公钥逐份验签 + 对 SHA256SUMS
 bash tools/verify_release.sh "v$version"

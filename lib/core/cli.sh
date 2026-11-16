@@ -12,6 +12,7 @@ SK_CLI_GROUP_TITLE=""
 # cli_group TITLE —— 后续注册的命令归入该分组
 # @exitcode 0 成功
 # @exitcode 2 分组名非法
+# @stability experimental
 cli_group() {
   SK_CLI_GROUP_TITLE=${1:-}
 }
@@ -27,6 +28,7 @@ _sk_is_cmd_name() {
 # cli_cmd NAME DESC [USAGE] —— 注册一个子命令；要写在命令文件末尾
 # @exitcode 0 注册成功
 # @exitcode 2 命令名非法或与已有命令重名
+# @stability experimental
 cli_cmd() {
   local __name=${1:-} __desc=${2:-} __usage=${3:-}
   if ! _sk_is_cmd_name "$__name"; then
@@ -47,6 +49,7 @@ cli_cmd() {
 # cli_has NAME —— 该命令是否已注册
 # @exitcode 0 有这个命令
 # @exitcode 1 没有
+# @stability experimental
 cli_has() {
   local __n=${1:-} __x
   if [ "${#SK_CLI_NAMES[@]}" -eq 0 ]; then
@@ -65,6 +68,7 @@ _sk_cmd_fn() { printf 'cmd_%s' "$(printf '%s' "${1:-}" | tr '-' '_')"; }
 
 # cli_usage_cmd NAME —— 打印单个子命令的用法行
 # @exitcode 0 总是成功（把用法打到 stdout）
+# @stability experimental
 cli_usage_cmd() {
   local __name=${1:-} __i=0 __prog
   __prog=${SK_PROG:-$(basename "$0")}
@@ -85,6 +89,7 @@ cli_usage_cmd() {
 
 # cli_usage_global —— 打印总用法：命令按分组，选项固定五条
 # @exitcode 0 总是成功（把用法打到 stdout）
+# @stability experimental
 cli_usage_global() {
   local __i=0 __max=8 __len __grp="" __prog
   __prog=${SK_PROG:-$(basename "$0")}
@@ -155,6 +160,7 @@ _sk_cli_opts_of() {
 # 程序名取 SK_PROG（生成出来的工程可以在自己的入口里设成自己的名字）。
 # @exitcode 0 成功（stdout 输出补全脚本）
 # @exitcode 2 不认识的 shell
+# @stability experimental
 cli_completion_script() {
   local __shell=${1:-bash} __i=0 __words="" __name __prog=${SK_PROG:-shellkit}
   local __cases="" __opts=""
@@ -359,6 +365,7 @@ SK_OPTS_LEFT=()
 
 # cli_opt_init —— 清空选项注册表。不接受参数；变量默认值请自己先赋好
 # @exitcode 0 总是成功（清空上一轮的选项状态）
+# @stability experimental
 cli_opt_init() {
   SK_OPT_VARS=()
   SK_OPT_LONGS=()

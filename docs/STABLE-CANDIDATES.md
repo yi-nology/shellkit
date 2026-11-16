@@ -152,6 +152,8 @@ v0.24.x 把 fs / config / lock 的**失败语义**逐一收口、并被故障注
 | config | `conf_init` `conf_get_any` `conf_has` `conf_keys` `conf_file` `conf_format` | 写失败不再清空配置：`test_fault_matrix.sh` 的 `config` 行 4 格 |
 | lock | `lock_held` `lock_release` | 回收语义由 `exec.lock` 判据钉住（pid 缺失可回收、活着的持有者绝不回收） |
 
-现状：**50 stable / 112 experimental**（162 个公开函数），`tools/stability_exempt.txt` 从 125 条降到 112 条。
+现状（v0.27.0 收口后）：**50 stable / 112 experimental**（162 个公开函数），
+`tools/stability_exempt.txt` **已清空** —— 每个公开函数都有等级，一个不漏。
+口径与「什么算破坏性变更」见 `docs/COMPATIBILITY.md`，由 `tools/check_compatibility.sh` 对账。
 落地：源码加 `@stability stable` → 移出豁免名单 → `bash tools/api_baseline.sh --write-baseline` → `./shellkit docs`。
 下一批建议按路线图 v0.26.0 继续：`os_*`、`error` 系（`die` / `fail` / `require_*`）、`net_*`。

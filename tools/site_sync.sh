@@ -130,6 +130,7 @@ _module_page_en() {
 _emit_page "$DOCS/BASH32.md" "$SITE/guide/bash32.md" || _die 'failed to write guide/bash32.md'
 _emit_page "$DOCS/COOKBOOK.md" "$SITE/guide/cookbook.md" || _die 'failed to write guide/cookbook.md'
 _emit_page "$DOCS/MIGRATING.md" "$SITE/guide/migrating.md" || _die 'failed to write guide/migrating.md'
+_emit_page "$DOCS/COMPATIBILITY.md" "$SITE/guide/compatibility.md" || _die 'failed to write guide/compatibility.md'
 _emit_page "$DOCS/RELEASING.md" "$SITE/guide/releasing.md" || _die 'failed to write guide/releasing.md'
 _emit_page "$DOCS/MAN.md" "$SITE/guide/man.md" || _die 'failed to write guide/man.md'
 _emit_page "$DOCS/JSON.md" "$SITE/guide/json.md" || _die 'failed to write guide/json.md'
@@ -206,6 +207,8 @@ _en_notice "$SITE/en/guide/cookbook.md" 'Cookbook' 'cookbook' \
   "$__cookbook_n recipes: editing config, verified downloads, retries, single-instance locks, interactive prompts. Every section is scenario / code / why."
 _en_notice "$SITE/en/guide/migrating.md" 'Migration guide' 'migrating' \
   'Five incremental steps for wiring shellkit into a script that already runs in production. Each step can ship on its own.'
+_en_notice "$SITE/en/guide/compatibility.md" 'Compatibility policy' 'compatibility' \
+  'What counts as a breaking change, how long a deprecation must be announced, and which public functions carry no compatibility promise.'
 _en_notice "$SITE/en/guide/releasing.md" 'Releasing' 'releasing' \
   'How a release happens: one command bumps the version, regenerates artifacts, runs the gates, commits, tags and pushes.'
 _en_notice "$SITE/en/guide/man.md" 'Man pages' 'man' \
@@ -227,5 +230,5 @@ done
 # 清单是扫出来的：新增页面自动进清单，不会出现「加了页面但 llms.txt 里没有」。
 bash "$ROOT/tools/llms_txt.sh" || _die 'failed to generate llms.txt' 1
 
-_say "pages: 7 synced, 1 reference index, $__nfunc functions across $(printf '%s\n' $MODULES | wc -l | tr -d ' ') modules"
+_say "pages: 8 synced, 1 reference index, $__nfunc functions across $(printf '%s\n' $MODULES | wc -l | tr -d ' ') modules"
 exit 0

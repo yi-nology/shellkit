@@ -34,6 +34,7 @@ Every page stands on its own; the cross-links tell you where to go next.
 
 - [Example projects](./examples.md) -- two projects you can run right now; the topic is assembly.
 - [Five-step migration](./migrating.md) -- kill stdout pollution first, then configuration, prompts, CLI, tests.
+- [Compatibility policy](./compatibility.md) -- what counts as a breaking change, the deprecation window, and the functions that carry no promise.
 - [Releasing](./releasing.md) -- one command bumps the version, and why it is built that way.
 - [Contributing](./contributing.md) -- adding a module means four edits; miss one and the gate goes red.
 

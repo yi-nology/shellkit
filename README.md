@@ -44,6 +44,7 @@ https://yi-nology.github.io/shellkit/ —— 中文在 `/`，英文在 `/en/`。
 | 要给 shellkit 自己出 man 页 | [docs/MAN.md](docs/MAN.md)：`shellkit man` 的用法、生成什么、怎么接进 CI |
 | 想先看完整工程长什么样 | [examples/deploy-service](examples/deploy-service)、[examples/fetch-release](examples/fetch-release) |
 | 要发版 | [docs/RELEASING.md](docs/RELEASING.md)：一条命令升版本，附带发版后的验收清单 |
+| 要判断「升级会不会弄坏我」 | [docs/COMPATIBILITY.md](docs/COMPATIBILITY.md)：什么算破坏性变更、弃用窗口、哪些函数不承诺 |
 
 ## 三十秒
 
@@ -481,8 +482,9 @@ net_download() {
 make check     # syntax + test + lint + module-order-check + check-exitcode-docs
                # + local-names-check + ident-boundary-check + module-count-check
                # + pipe-safety-check + dup-functions-check + security-check
-               # + api-baseline-check + docs-check + versions-check + check-docs
-               # + cookbook-check + messages-check + examples + fmt
+               # + api-baseline-check + compatibility-check + docs-check
+               # + versions-check + check-docs + cookbook-check + messages-check
+               # + examples + fmt
 ```
 
 - `docs-check`：公开函数缺注释、生成物与源码不一致 ⇒ 红。
@@ -497,6 +499,8 @@ make check     # syntax + test + lint + module-order-check + check-exitcode-docs
   助手函数，不许各写一遍 ⇒ 红。
 - `api-baseline-check`：公开函数的返回码集合、Stable 集合与 `tools/api_baseline.txt` 对不上，
   或改了 Stable 行为却没写进 `docs/MIGRATING.md` ⇒ 红。
+- `compatibility-check`：`docs/COMPATIBILITY.md` 说「每个公开函数都有等级」，就得真有 ——
+  豁免名单一旦非空、或文档里的 stable/experimental 数量与源码对不上 ⇒ 红。
 - `local-names-check` / `pipe-safety-check` / `dup-functions-check`：分别拦「出参名撞局部变量导致
   静默写丢」「`grep -q` 早退把上游 SIGPIPE 打死」「同名函数定义两遍、先写的那份失效」——
   三种都不报错、不崩，只是你以为在跑 A。

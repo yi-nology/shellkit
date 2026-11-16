@@ -95,6 +95,7 @@ registry_scan() {
 # @param PATTERN 清单文件名模式（如 .manifest）
 # @param ROOT 清单根目录，可给多个
 # @exitcode 0 总是成功
+# @stability experimental
 registry_scan_multi() {
   local __pat="${1:-}" __root
   shift
@@ -163,6 +164,7 @@ registry_get() {
 
 # registry_list —— 列出全部条目名（每行一个）
 # @exitcode 0 总是成功
+# @stability experimental
 registry_list() {
   local __e
   while IFS= read -r __e; do

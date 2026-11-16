@@ -20,6 +20,9 @@ on:
 
 permissions:
   contents: write
+  # 取消的必需检查要自动重跑一次（gh run rerun）—— 那是 Actions 的写权限，
+  # 只有 contents: write 时请求会被拒（然后按 fail-closed 判失败，自动重跑形同虚设）。
+  actions: write
 
 jobs:
   quality-gate:
@@ -238,3 +241,31 @@ jobs:
             fi
           done
           bash tools/release_assets.sh "$GITHUB_REF_NAME" "${assets[@]}"
+
+  # 发布后自检（v0.27.0）：**可选 job 的失败不许静默**。
+  #
+  # packages 带 continue-on-error —— 它红了，整条 run 仍可能显示绿色（v0.26.0 /
+  # v0.26.1 就是这样静默地少了 deb/rpm）。这里用一个**不可选**的 job 等它跑完，
+  # 再对着已发布的 Release 逐项点名：主资产、签名、系统包，缺一个就红。
+  # 判据在 tools/release_selfcheck.sh（有 stub 回归 tests/test_release_selfcheck.sh）。
+  self-check:
+    name: release self-check (published assets)
+    needs: [release, packages]
+    # packages 是可选 job：它失败时依赖它的 job 默认会被跳过，所以必须 always()。
+    # release 自己失败时已经红了，这里不必重复判。
+    if: always() && needs.release.result == 'success'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+
+      - name: report the optional packages job
+        run: |
+          echo "packages job result: ${{ needs.packages.result }}"
+          if [ "${{ needs.packages.result }}" != "success" ]; then
+            echo "::error::the optional packages job did not succeed — deb/rpm are probably missing from the release"
+          fi
+
+      - name: verify the published asset list
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: bash tools/release_selfcheck.sh "$GITHUB_REF_NAME" --require-packages

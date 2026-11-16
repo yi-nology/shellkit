@@ -39,6 +39,7 @@ _man_date() {
 
 # man_modules —— 输出模块名，一行一个
 # @exitcode 0 总是成功
+# @stability experimental
 man_modules() {
   local __list="$SHELLKIT_HOME/lib/modules.txt" __line __name
   [ -r "$__list" ] || return 0
@@ -198,6 +199,7 @@ _man_scan() {
 
 # man_page —— 输出 shellkit(1) 的 roff 正文
 # @exitcode 0 总是成功
+# @stability experimental
 man_page() {
   local __ver __date __i=0 __name __desc __usage __grp="" __last="" __n __m
   __ver=$(_man_version)
@@ -279,6 +281,7 @@ _man_has_module() {
 # man_module_page MODULE —— 输出某模块第 3 节的 roff 正文
 # @exitcode 0 成功
 # @exitcode 2 模块名不合法或模块不存在
+# @stability experimental
 man_module_page() {
   local __mod=${1:-}
   case "$__mod" in
@@ -336,6 +339,7 @@ man_module_page() {
 # man_write_all DIR —— 把所有页面写进 DIR
 # @exitcode 0 全部写成功
 # @exitcode 3 目录不存在或不可写
+# @stability experimental
 man_write_all() {
   local __dir=${1:-}
   if [ -z "$__dir" ] || [ ! -d "$__dir" ] || [ ! -w "$__dir" ]; then
@@ -355,6 +359,7 @@ man_write_all() {
 
 # man_count_functions —— 公开函数总数
 # @exitcode 0 总是成功
+# @stability experimental
 man_count_functions() {
   local __mod __n=0 __line __kind
   for __mod in $(man_modules); do

@@ -9,7 +9,7 @@ SOURCES := shellkit install.sh repair.sh demo.sh lib/bootstrap.sh $(wildcard lib
 TEMPLATES := $(shell find templates -type f)
 SHOTS := $(wildcard docs/shots/*.shot)
 
-.PHONY: help test syntax lint lint-templates fmt messages messages-check docs docs-check versions-check check-docs cookbook-check shots examples artifact-smoke check install release release-dry site-deps site-sync site site-serve local-names-check module-count-check pipe-safety-check dup-functions-check mutation security-check api-baseline-check bench coverage coverage-branch upgrade-matrix ident-boundary-check
+.PHONY: help test syntax lint lint-templates fmt messages messages-check docs docs-check versions-check check-docs cookbook-check shots examples artifact-smoke check install release release-dry site-deps site-sync site site-serve local-names-check module-count-check pipe-safety-check dup-functions-check mutation security-check api-baseline-check compatibility-check bench coverage coverage-branch upgrade-matrix ident-boundary-check
 
 help:
 	@printf '%s\n' \
@@ -37,6 +37,7 @@ help:
 	  'make mutation    变异测试：升级路径守卫用例的判据能力（不进 check）' \
   'make security-check  安全边界的机器判据（路径/软链/权限/脱敏/锁/原子写）' \
   'make api-baseline-check  公开 API 行为基线（返回码或函数集变了就红）' \
+  'make compatibility-check  兼容承诺文档与源码一致（分级齐全、豁免名单为空、数量对账）' \
   'make bench        性能基准：记录与对比基线（不进 check，CI 里只出报告）' \
 	  'make release VERSION=x.y.z  发版：升版本→重生成产物→门禁→commit→tag→push' \
 	  'make release-dry VERSION=x.y.z  同 release，但跑完还原工作树、不提交' \
@@ -208,6 +209,9 @@ security-check:
 
 # 公开 API 行为基线：函数集、承诺返回码、探针实测返回码。
 # 改了公开函数的返回码却没在 docs/MIGRATING.md 里声明 ⇒ 这里红。
+compatibility-check:
+	@$(BASH) tools/check_compatibility.sh
+
 api-baseline-check:
 	@$(BASH) tools/api_baseline.sh
 
@@ -216,7 +220,7 @@ api-baseline-check:
 bench:
 	@$(BASH) tools/bench.sh
 
-check: syntax test lint module-order-check check-exitcode-docs local-names-check ident-boundary-check module-count-check pipe-safety-check dup-functions-check security-check api-baseline-check docs-check versions-check check-docs cookbook-check messages-check examples fmt
+check: syntax test lint module-order-check check-exitcode-docs local-names-check ident-boundary-check module-count-check pipe-safety-check dup-functions-check security-check api-baseline-check compatibility-check docs-check versions-check check-docs cookbook-check messages-check examples fmt
 
 install:
 	./shellkit install-self --prefix $(PREFIX)/usr

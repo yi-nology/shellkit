@@ -25,6 +25,7 @@ _sk_exit_code_ok() {
 # die CODE MSG... —— CODE 必须是 0-255；不合法按用法错误退出 2，而不是让 exit 截成 255
 # @exitcode 0 不会返回（直接退出进程）
 # @exitcode 2 退出码不是合法数字
+# @stability experimental
 die() {
   local __code=${1:-}
   if [ "$#" -gt 0 ]; then
@@ -76,6 +77,7 @@ require_cmd() {
 # require_root —— 必须是 root 运行；否则返回 SK_PRECOND(3)
 # @exitcode 0 已经是 root
 # @exitcode 3 不是 root
+# @stability experimental
 require_root() {
   if [ "$(id -u 2>/dev/null)" = "0" ]; then
     return 0
@@ -88,6 +90,7 @@ require_root() {
 # @exitcode 0 文件都在
 # @exitcode 2 没给参数
 # @exitcode 3 有文件不存在
+# @stability experimental
 require_file() {
   local __f
   _sk_need_args "$#" 1 "require_file PATH..." || return $?
@@ -104,6 +107,7 @@ require_file() {
 # @exitcode 0 版本够新
 # @exitcode 2 没给参数
 # @exitcode 3 版本太老
+# @stability experimental
 require_bash() {
   local __need_major=${1:-3} __need_minor=${2:-0}
   local __major=${BASH_VERSINFO[0]:-0} __minor=${BASH_VERSINFO[1]:-0}

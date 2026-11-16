@@ -20,7 +20,7 @@ const zhGuideSidebar = [
   { text: '开始', collapsible: true, children: ['/guide/index.md', '/guide/installation.md', '/guide/quickstart.md'] },
   { text: '核心概念', collapsible: true, children: ['/guide/conventions.md', '/guide/bash32.md', '/guide/modules.md'] },
   { text: '常见任务', collapsible: true, children: ['/guide/cookbook.md', '/guide/cli.md', '/guide/json.md', '/guide/security.md', '/guide/i18n.md', '/guide/testing.md', '/guide/ai.md'] },
-  { text: '进阶', collapsible: true, children: ['/guide/examples.md', '/guide/man.md', '/guide/migrating.md', '/guide/releasing.md', '/guide/contributing.md'] },
+  { text: '进阶', collapsible: true, children: ['/guide/examples.md', '/guide/man.md', '/guide/migrating.md', '/guide/compatibility.md', '/guide/releasing.md', '/guide/contributing.md'] },
   { text: '排错', collapsible: true, children: ['/guide/troubleshooting.md', '/guide/faq.md'] },
 ]
 
@@ -28,7 +28,7 @@ const enGuideSidebar = [
   { text: 'Getting started', collapsible: true, children: ['/en/guide/index.md', '/en/guide/installation.md', '/en/guide/quickstart.md'] },
   { text: 'Core concepts', collapsible: true, children: ['/en/guide/conventions.md', '/en/guide/bash32.md', '/en/guide/modules.md'] },
   { text: 'Common tasks', collapsible: true, children: ['/en/guide/cookbook.md', '/en/guide/cli.md', '/en/guide/json.md', '/en/guide/security.md', '/en/guide/i18n.md', '/en/guide/testing.md', '/en/guide/ai.md'] },
-  { text: 'Going further', collapsible: true, children: ['/en/guide/examples.md', '/en/guide/man.md', '/en/guide/migrating.md', '/en/guide/releasing.md', '/en/guide/contributing.md'] },
+  { text: 'Going further', collapsible: true, children: ['/en/guide/examples.md', '/en/guide/man.md', '/en/guide/migrating.md', '/en/guide/compatibility.md', '/en/guide/releasing.md', '/en/guide/contributing.md'] },
   { text: 'Troubleshooting', collapsible: true, children: ['/en/guide/troubleshooting.md', '/en/guide/faq.md'] },
 ]
 

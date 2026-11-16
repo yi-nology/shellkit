@@ -488,6 +488,7 @@ run_concurrent() {
 # @exitcode 0 全部条目成功（stdout 输出每个条目的结果）
 # @exitcode 2 参数错（并发数不是正整数、超时值非法、没给命令）
 # @exitcode 其他 第一个失败条目的退出码
+# @stability experimental
 parallel_map() {
   if [ "$#" -eq 0 ]; then
     log_error "$(_t 'usage: parallel_map N [--timeout SEC] -- COMMAND...')"
@@ -675,6 +676,7 @@ parallel_map() {
 # @exitcode 2 参数错（秒数非法或没给命令）
 # @exitcode 124 超时
 # @exitcode 其他 命令自身的退出码
+# @stability experimental
 run_timeout() {
   local __secs=${1:-}
   if [ "$#" -lt 2 ]; then
@@ -724,6 +726,7 @@ run_timeout() {
 # @exitcode 2 参数错（秒数非法或没给函数名）
 # @exitcode 143 超时（SIGTERM）
 # @exitcode 其他 函数自身的退出码
+# @stability experimental
 run_func_timeout() {
   local __secs=${1:-} __fn=${2:-} __outfile __rc=0 __pid __wd
   if [ "$#" -lt 2 ]; then
@@ -757,6 +760,7 @@ run_func_timeout() {
 # @brief 脚本里常有直接书写的 sudo apt-get ...，只靠 run 的 dry-run 拦不住它们。
 # @brief 这是全局副作用（改了当前 shell 的命令解析），所以必须显式调用才生效。
 # @exitcode 0 总是成功
+# @stability experimental
 run_install_sudo_shim() {
   sudo() {
     printf '[dry-run] %s\n' "$(_sk_run_display sudo "$@")" >&2

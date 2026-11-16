@@ -1,6 +1,7 @@
 # ShellKit 路线图：三层架构与版本验收状态
 
-状态：2026-11-16 按**实际发版**重写（当前 **v0.26.2** 已发布）。本文是**方向**，不是承诺 ——
+状态：2026-11-17 更新（当前 **v0.26.2** 已发布；**v0.27.0「1.0 契约」**已落地，待发版）。
+本文是**方向**，不是承诺 ——
 每个版本的退出条件写清楚，条件不满足就不进下一个版本（见「迭代节奏」）。
 
 进度只按**验收结果**记，不按日期：标为已完成（Completed）的每一条都能在仓库里指到判据；
@@ -111,6 +112,22 @@ v0.24.0 暴露的缺口是：源码矩阵全绿、系统包构建也全绿，但
 `packages` job 三个 job 全绿（quality gate → build/verify/publish → deb/rpm），
 两版缺包在 `v0.26.2` 收口：`gh release view v0.26.2` 的资产清单里有 `.deb` / `.rpm` 且各带 `.minisig`。
 
+### v0.27.0 —— 1.0 契约（已落地，待发布）
+
+这一批不加功能，只补「1.0 一发出去就没有回头路」的那几件事：承诺面、取消重跑的
+发布门禁、以及「可选 job 失败不许静默」的自检。
+
+| 交付 | 判据 |
+|---|---|
+| **兼容承诺文档** `docs/COMPATIBILITY.md` | semver 口径、什么算破坏性变更、弃用窗口（至少一个 minor）、experimental 边界；`tools/check_compatibility.sh` 对账小节、分级数量与豁免名单 |
+| **每个公开函数都有等级** | 162 个公开函数：50 `stable` / 112 `experimental`；`tools/stability_exempt.txt` 清空并禁止回填；`tools/api_baseline.sh` 三规则 + 基线重生成 |
+| **取消检查有限自动重跑** | `tools/release_gate.sh`：`completed/cancelled` 时从 `details_url` 取 run id，每个检查最多重跑一次；重跑后仍取消 ⇒ 失败（fail-closed）。`tests/test_release_gate_cancelled.sh` 五个场景（成功、再次取消、`--no-rerun`、无 URL、绿路径不受影响） |
+| **可选 job 失败不再静默** | 新增 `tools/release_selfcheck.sh` + `release.yml` 的不可选 `self-check` job：等 `packages` 跑完，逐项点名主资产 / 签名 / deb+rpm，缺一个就红；`tests/test_release_selfcheck.sh` 含结构判据与自证 |
+| **升级矩阵加格与生命周期** | 默认版本补 `0.26.2`；每个版本多跑一圈 `install-self → uninstall-self → 重装 → 用装出来的 CLI 再升级`；`docs/RELEASING.md` 要求 1.0 前连续三次全矩阵绿并留证据 |
+
+退出条件：`make check` 全绿（含新增 compatibility-check）、CI 全矩阵绿、
+升级矩阵在 `0.20.0 / 0.23.0 / 0.24.1 / 0.26.2` 四格上全部通过且 lifecycle 一圈全过。
+
 ### API 与配置契约冻结（已随 v0.25.0 发布）
 
 > **关于版本号**：v0.25 / v0.26 / v0.27 三批改动是同时合入 main 的，而 CHANGELOG 由
@@ -146,10 +163,12 @@ gates 兜底，只需扩集合）。
 
 1. 用户改过的文件在安装、升级、同步、卸载与恢复失败时，不被静默覆盖或删除；
 2. 关键故障路径有独立的文件哈希、清单与磁盘终态测试；
-3. 已声明的 Stable API 在兼容范围内行为一致；
+3. 已声明的 Stable API 在兼容范围内行为一致（`docs/COMPATIBILITY.md` + `compatibility-check`，
+   v0.27.0 起每个公开函数都有等级）；
 4. PR 与 Release 对同一类真实发行产物执行验收；
 5. 正式发布资产有签名、不可静默替换，且能独立验证；
-6. 多平台 CI 持续稳定，真实发行包在目标系统上通过安装、升级、卸载验证。
+6. 多平台 CI 持续稳定，真实发行包在目标系统上通过安装、升级、卸载验证
+   （v0.27.0：取消自动重跑一次 + 发布后资产自检 + 连续三次全矩阵绿；lifecycle 一格已进矩阵）。
 
 ## 三、战略取舍
 

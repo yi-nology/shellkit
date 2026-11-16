@@ -4,6 +4,8 @@
 
 log_info MSG... —— 普通信息
 
+**稳定性**：experimental
+
 **退出码**
 
 - 0 总是成功（级别不够时什么都不输出）
@@ -11,6 +13,8 @@ log_info MSG... —— 普通信息
 ### `log_ok`
 
 log_ok MSG... —— 成功；单独用 " OK " 是为了和四字母级别对齐
+
+**稳定性**：experimental
 
 **退出码**
 
@@ -20,6 +24,8 @@ log_ok MSG... —— 成功；单独用 " OK " 是为了和四字母级别对齐
 
 log_warn MSG... —— 警告，不中断
 
+**稳定性**：experimental
+
 **退出码**
 
 - 0 总是成功（级别不够时什么都不输出）
@@ -27,6 +33,8 @@ log_warn MSG... —— 警告，不中断
 ### `log_error`
 
 log_error MSG... —— 输出错误（stderr），并把最后一条错误记进 SK_ERRMSG
+
+**稳定性**：experimental
 
 **退出码**
 
@@ -36,6 +44,8 @@ log_error MSG... —— 输出错误（stderr），并把最后一条错误记�
 
 log_debug MSG... —— 仅在 SHELLKIT_DEBUG=1 或 SHELLKIT_LOG_LEVEL=debug 时输出
 
+**稳定性**：experimental
+
 **退出码**
 
 - 0 总是成功（要 SHELLKIT_DEBUG=1 或 SHELLKIT_LOG_LEVEL=debug 才输出）
@@ -43,6 +53,8 @@ log_debug MSG... —— 仅在 SHELLKIT_DEBUG=1 或 SHELLKIT_LOG_LEVEL=debug 时
 ### `log_section`
 
 log_section TITLE —— 分段标题，带前导空行 json 模式下什么都不输出：JSON 行是给采集器消费的，标题没有 level 语义， 混进去会破坏「一行一条记录」的约定。文本模式保持原样。
+
+**稳定性**：experimental
 
 **退出码**
 
@@ -53,6 +65,8 @@ log_section TITLE —— 分段标题，带前导空行 json 模式下什么都�
 ### `die`
 
 die CODE MSG... —— CODE 必须是 0-255；不合法按用法错误退出 2，而不是让 exit 截成 255
+
+**稳定性**：experimental
 
 **退出码**
 
@@ -87,6 +101,8 @@ require_cmd CMD... —— 零参数返回 SK_USAGE（否则 `require_cmd "$EMPTY
 
 require_root —— 必须是 root 运行；否则返回 SK_PRECOND(3)
 
+**稳定性**：experimental
+
 **退出码**
 
 - 0 已经是 root
@@ -95,6 +111,8 @@ require_root —— 必须是 root 运行；否则返回 SK_PRECOND(3)
 ### `require_file`
 
 require_file PATH... —— 零参数返回 SK_USAGE
+
+**稳定性**：experimental
 
 **退出码**
 
@@ -105,6 +123,8 @@ require_file PATH... —— 零参数返回 SK_USAGE
 ### `require_bash`
 
 require_bash MAJOR [MINOR] —— 当前 bash 版本是否达标；不达标返回 SK_PRECOND(3)
+
+**稳定性**：experimental
 
 **退出码**
 
@@ -118,6 +138,8 @@ require_bash MAJOR [MINOR] —— 当前 bash 版本是否达标；不达标返�
 
 str_trim VAR —— 去掉首尾空白，原地改写该变量
 
+**稳定性**：experimental
+
 **退出码**
 
 - 0 成功
@@ -126,6 +148,8 @@ str_trim VAR —— 去掉首尾空白，原地改写该变量
 ### `str_lower`
 
 str_lower VAR —— 转小写，原地改写该变量（3.2 没有大写展开语法）
+
+**稳定性**：experimental
 
 **退出码**
 
@@ -136,6 +160,8 @@ str_lower VAR —— 转小写，原地改写该变量（3.2 没有大写展开�
 
 str_upper VAR —— 转大写，原地改写该变量（3.2 没有大写展开语法）
 
+**稳定性**：experimental
+
 **退出码**
 
 - 0 成功
@@ -144,6 +170,8 @@ str_upper VAR —— 转大写，原地改写该变量（3.2 没有大写展开�
 ### `str_contains`
 
 str_contains HAYSTACK NEEDLE —— 返回码；空 needle 恒返回 1
+
+**稳定性**：experimental
 
 **退出码**
 
@@ -154,6 +182,8 @@ str_contains HAYSTACK NEEDLE —— 返回码；空 needle 恒返回 1
 
 str_starts_with STR PREFIX —— 前缀匹配；用返回码而不是布尔值
 
+**稳定性**：experimental
+
 **退出码**
 
 - 0 匹配
@@ -162,6 +192,8 @@ str_starts_with STR PREFIX —— 前缀匹配；用返回码而不是布尔值
 ### `str_ends_with`
 
 str_ends_with STR SUFFIX —— 后缀匹配；用返回码而不是布尔值
+
+**稳定性**：experimental
 
 **退出码**
 
@@ -172,6 +204,8 @@ str_ends_with STR SUFFIX —— 后缀匹配；用返回码而不是布尔值
 
 str_repeat VAR COUNT STRING —— 把字符串重复 N 次写进变量
 
+**稳定性**：experimental
+
 **退出码**
 
 - 0 成功
@@ -180,6 +214,8 @@ str_repeat VAR COUNT STRING —— 把字符串重复 N 次写进变量
 ### `str_suggest`
 
 距离相同时取先给的那个；没有候选时返回 1。
+
+**稳定性**：experimental
 
 **参数**
 
@@ -197,6 +233,8 @@ str_repeat VAR COUNT STRING —— 把字符串重复 N 次写进变量
 
 validate_not_empty VALUE —— 非空校验；失败原因写进 SK_VALIDATE_ERR
 
+**稳定性**：experimental
+
 **退出码**
 
 - 0 非空
@@ -205,6 +243,8 @@ validate_not_empty VALUE —— 非空校验；失败原因写进 SK_VALIDATE_ER
 ### `validate_single_line`
 
 validate_single_line VALUE —— 单行文本；配置项的值不允许带换行 —— 配置文件的值不允许换行
+
+**稳定性**：experimental
 
 **退出码**
 
@@ -215,6 +255,8 @@ validate_single_line VALUE —— 单行文本；配置项的值不允许带换�
 
 validate_key VALUE —— 合法配置键名
 
+**稳定性**：experimental
+
 **退出码**
 
 - 0 键名合法
@@ -223,6 +265,8 @@ validate_key VALUE —— 合法配置键名
 ### `validate_port`
 
 validate_port VALUE —— 1-65535 的端口号
+
+**稳定性**：experimental
 
 **退出码**
 
@@ -244,6 +288,8 @@ validate_ip VALUE —— 四段十进制，每段 0-255，且不接受前导零�
 
 validate_version VALUE —— x.y.z 或 v1.2.3 形式的版本号
 
+**稳定性**：experimental
+
 **退出码**
 
 - 0 版本号合法
@@ -252,6 +298,8 @@ validate_version VALUE —— x.y.z 或 v1.2.3 形式的版本号
 ### `validate_abs_path`
 
 validate_abs_path VALUE —— 绝对路径
+
+**稳定性**：experimental
 
 **退出码**
 
@@ -262,6 +310,8 @@ validate_abs_path VALUE —— 绝对路径
 
 validate_url VALUE —— http/https URL
 
+**稳定性**：experimental
+
 **退出码**
 
 - 0 是 URL
@@ -270,6 +320,8 @@ validate_url VALUE —— http/https URL
 ### `validate_enum`
 
 validate_enum VALUE "a|b|c" —— 取值必须在给定集合内
+
+**稳定性**：experimental
 
 **退出码**
 
@@ -293,6 +345,8 @@ trap_push CMD... —— 注册一个清理动作；后注册的先执行
 
 trap_pop —— 丢弃最近注册的一个动作（不执行）
 
+**稳定性**：experimental
+
 **退出码**
 
 - 0 弹栈成功（或栈本来就是空的）
@@ -301,6 +355,8 @@ trap_pop —— 丢弃最近注册的一个动作（不执行）
 
 trap_list —— 逐行输出已注册的动作（调试用）
 
+**稳定性**：experimental
+
 **退出码**
 
 - 0 总是成功（stdout 逐行输出栈里的命令）
@@ -308,6 +364,8 @@ trap_list —— 逐行输出已注册的动作（调试用）
 ### `trap_cleanup`
 
 trap_cleanup —— 逆序执行全部清理动作；幂等；单个失败不中断其余
+
+**稳定性**：experimental
 
 **退出码**
 
@@ -461,6 +519,8 @@ run_concurrent N [--timeout SEC] -- CMD... —— 把同一条命令并发跑 N 
 
 parallel_map N [--timeout SEC] -- CMD... —— 把一批不同的目标分给 N 个并发实例 与 run_concurrent 明确区分：   run_concurrent —— 同一条命令并发跑 N 份（每个实例自己从环境变量读目标）   parallel_map   —— 每个实例跑一条不同的目标，条目从标准输入读 条目一行一个（空行跳过），每个实例执行的命令是「CMD... 条目」—— 条目作为最后一个参数追加在后面：   printf '%s\n' web1 web2 web3 | parallel_map 3 -- ./restart-service 输出约定（stdout 只给数据）：   stdout —— 每行一条结果：`<条目>`\t`<退出码>`（条目里有制表符时，取最后一个制表符之后的部分）   stderr —— 每个实例的 stdout/stderr，逐行带 [i/N] 前缀；失败明细也在这里 返回码：全部成功返回 0；有条目失败则返回第一个失败条目的退出码。 并发是「按批」的：一批最多 N 个，跑完这一批再下一批。这样不需要锁， 也不会有两个实例抢同一条目；代价是一批里最慢的那个会拖住整批。
 
+**稳定性**：experimental
+
 **退出码**
 
 - 0 全部条目成功（stdout 输出每个条目的结果）
@@ -470,6 +530,8 @@ parallel_map N [--timeout SEC] -- CMD... —— 把一批不同的目标分给 N
 ### `run_timeout`
 
 没有 perl 时退化为不带超时（直接执行）；SEC 为 0 表示不设超时。
+
+**稳定性**：experimental
 
 **参数**
 
@@ -486,6 +548,8 @@ parallel_map N [--timeout SEC] -- CMD... —— 把一批不同的目标分给 N
 ### `run_func_timeout`
 
 函数在子 shell 里跑（所以改不到调用方的变量）；stdout 收集后输出，stderr 丢弃。
+
+**稳定性**：experimental
 
 **参数**
 
@@ -504,6 +568,8 @@ parallel_map N [--timeout SEC] -- CMD... —— 把一批不同的目标分给 N
 
 这是全局副作用（改了当前 shell 的命令解析），所以必须显式调用才生效。
 
+**稳定性**：experimental
+
 **退出码**
 
 - 0 总是成功
@@ -514,6 +580,8 @@ parallel_map N [--timeout SEC] -- CMD... —— 把一批不同的目标分给 N
 
 os_name —— linux | darwin | other
 
+**稳定性**：experimental
+
 **退出码**
 
 - 0 总是成功（stdout 输出 darwin/linux）
@@ -522,6 +590,8 @@ os_name —— linux | darwin | other
 
 os_arch —— x86_64 | aarch64 | other
 
+**稳定性**：experimental
+
 **退出码**
 
 - 0 总是成功（stdout 输出架构）
@@ -529,6 +599,8 @@ os_arch —— x86_64 | aarch64 | other
 ### `os_is_root`
 
 os_is_root —— 当前是否以 root 身份运行
+
+**稳定性**：experimental
 
 **退出码**
 
@@ -551,6 +623,8 @@ os_has_cmd CMD... —— 零参数返回 SK_USAGE（空真会让前置检查静�
 
 os_pkg_manager —— 本机的包管理器名（apt-get/yum/dnf/zypper/apk）；没有则返回 1
 
+**稳定性**：experimental
+
 **退出码**
 
 - 0 找到了（stdout 输出包管理器名）
@@ -559,6 +633,8 @@ os_pkg_manager —— 本机的包管理器名（apt-get/yum/dnf/zypper/apk）�
 ### `os_pkg_update`
 
 os_pkg_update —— 刷新包索引；没有受支持的包管理器返回 SK_PRECOND(3)
+
+**稳定性**：experimental
 
 **退出码**
 
@@ -570,6 +646,8 @@ os_pkg_update —— 刷新包索引；没有受支持的包管理器返回 SK_P
 
 os_pkg_install PKG... —— 用本机包管理器装包；没有受支持的包管理器返回 SK_PRECOND(3)
 
+**稳定性**：experimental
+
 **退出码**
 
 - 0 安装成功
@@ -580,6 +658,8 @@ os_pkg_install PKG... —— 用本机包管理器装包；没有受支持的包
 
 os_sed_i ARGS... —— 就地编辑；Darwin 的 sed 必须给个备份后缀
 
+**稳定性**：experimental
+
 **退出码**
 
 - 0 成功
@@ -588,6 +668,8 @@ os_sed_i ARGS... —— 就地编辑；Darwin 的 sed 必须给个备份后缀
 ### `os_md5`
 
 os_md5 FILE —— 文件的 md5；两种工具都没有时返回 1
+
+**稳定性**：experimental
 
 **退出码**
 
@@ -599,6 +681,8 @@ os_md5 FILE —— 文件的 md5；两种工具都没有时返回 1
 
 os_sha256 FILE —— 文件的 sha256；两种工具都没有时返回 1
 
+**稳定性**：experimental
+
 **退出码**
 
 - 0 成功（stdout 输出校验和）
@@ -608,6 +692,8 @@ os_sha256 FILE —— 文件的 sha256；两种工具都没有时返回 1
 ### `os_release_field`
 
 os_release_field KEY [FILE] —— 读 os-release 风格文件的字段值
+
+**稳定性**：experimental
 
 **参数**
 
@@ -623,6 +709,8 @@ os_release_field KEY [FILE] —— 读 os-release 风格文件的字段值
 
 os_distro_id [FILE] —— 小写的发行版 ID
 
+**稳定性**：experimental
+
 **参数**
 
 - FILE os-release 文件路径；缺省读本机的
@@ -634,6 +722,8 @@ os_distro_id [FILE] —— 小写的发行版 ID
 ### `os_distro_name`
 
 os_distro_name [FILE] —— 发行版显示名（PRETTY_NAME，空则回退 NAME）
+
+**稳定性**：experimental
 
 **参数**
 
@@ -647,6 +737,8 @@ os_distro_name [FILE] —— 发行版显示名（PRETTY_NAME，空则回退 NAM
 
 os_distro_family [FILE] —— 发行版族：debian|rhel|suse|arch|alpine|unknown 判定顺序：包管理器实测 -> ID_LIKE 词表 -> ID 词表
 
+**稳定性**：experimental
+
 **参数**
 
 - FILE os-release 文件路径；缺省走主机模式（先按包管理器实测）
@@ -659,6 +751,8 @@ os_distro_family [FILE] —— 发行版族：debian|rhel|suse|arch|alpine|unkno
 
 os_desktop_env —— 桌面环境：ukui|dde|gnome|kde|xfce|mate|cinnamon|lxqt|budgie|none 判定口径与 unix_script 的 detect_desktop 逐字等价：所有线索拼成一个串， 再按桌面类型优先级匹配（ukui > dde > kde > gnome > xfce > mate > cinnamon > lxqt > budgie）
 
+**稳定性**：experimental
+
 **退出码**
 
 - 0 总是成功（没有线索时输出 none）
@@ -666,6 +760,8 @@ os_desktop_env —— 桌面环境：ukui|dde|gnome|kde|xfce|mate|cinnamon|lxqt|
 ### `os_is_desktop`
 
 os_is_desktop —— 当前是否在桌面环境
+
+**稳定性**：experimental
 
 **退出码**
 
@@ -676,6 +772,8 @@ os_is_desktop —— 当前是否在桌面环境
 
 os_pkg_manager_full —— 本机包管理器名（含 pacman/brew）   既有 os_pkg_manager 不认 pacman/brew，这是另一套口径（unix_script 的   detect_pkg_manager 认这两个）—— 两套并存，不改既有函数。
 
+**稳定性**：experimental
+
 **退出码**
 
 - 0 找到包管理器，stdout 是包管理器名
@@ -685,6 +783,8 @@ os_pkg_manager_full —— 本机包管理器名（含 pacman/brew）   既有 o
 
 os_sudo_ready —— 确保 sudo 可用（不要求已经是 root）   已是 root 直接放行；否则先试免密（sudo -n true），不行则提示输入一次（sudo -v）。
 
+**稳定性**：experimental
+
 **退出码**
 
 - 0 sudo 可用
@@ -693,6 +793,8 @@ os_sudo_ready —— 确保 sudo 可用（不要求已经是 root）   已是 ro
 ### `os_pkg_install_root`
 
 os_pkg_install_root PKG... —— 提权安装（root 直跑，否则 sudo）
+
+**稳定性**：experimental
 
 **退出码**
 
@@ -705,6 +807,8 @@ os_pkg_install_root PKG... —— 提权安装（root 直跑，否则 sudo）
 
 os_pkg_remove_root PKG... —— 提权卸载
 
+**稳定性**：experimental
+
 **退出码**
 
 - 0 卸载成功
@@ -716,6 +820,8 @@ os_pkg_remove_root PKG... —— 提权卸载
 
 os_pkg_update_root —— 提权刷新包索引
 
+**稳定性**：experimental
+
 **退出码**
 
 - 0 成功
@@ -725,6 +831,8 @@ os_pkg_update_root —— 提权刷新包索引
 ### `os_pkg_installed`
 
 os_pkg_installed PKG —— 包是否已安装（不需要提权）
+
+**稳定性**：experimental
 
 **退出码**
 
@@ -739,6 +847,8 @@ os_pkg_installed PKG —— 包是否已安装（不需要提权）
 
 svc_platform —— 当前平台的服务管理器   可用 SK_SVC_PLATFORM 覆盖（测试与特殊环境用）。
 
+**稳定性**：experimental
+
 **退出码**
 
 - 0 总是成功（stdout 输出 systemd|launchd|none）
@@ -746,6 +856,8 @@ svc_platform —— 当前平台的服务管理器   可用 SK_SVC_PLATFORM 覆�
 ### `svc_start`
 
 svc_start UNIT —— 启动服务
+
+**稳定性**：experimental
 
 **退出码**
 
@@ -758,6 +870,8 @@ svc_start UNIT —— 启动服务
 
 svc_stop UNIT —— 停止服务
 
+**稳定性**：experimental
+
 **退出码**
 
 - 0 成功
@@ -768,6 +882,8 @@ svc_stop UNIT —— 停止服务
 ### `svc_restart`
 
 svc_restart UNIT —— 重启服务
+
+**稳定性**：experimental
 
 **退出码**
 
@@ -780,6 +896,8 @@ svc_restart UNIT —— 重启服务
 
 svc_reload UNIT —— 重载服务配置
 
+**稳定性**：experimental
+
 **退出码**
 
 - 0 成功
@@ -790,6 +908,8 @@ svc_reload UNIT —— 重载服务配置
 ### `svc_enable`
 
 svc_enable UNIT —— 开机自启
+
+**稳定性**：experimental
 
 **退出码**
 
@@ -802,6 +922,8 @@ svc_enable UNIT —— 开机自启
 
 svc_disable UNIT —— 取消开机自启
 
+**稳定性**：experimental
+
 **退出码**
 
 - 0 成功
@@ -812,6 +934,8 @@ svc_disable UNIT —— 取消开机自启
 ### `svc_enable_now`
 
 svc_enable_now UNIT —— 开机自启并立即启动
+
+**稳定性**：experimental
 
 **退出码**
 
@@ -824,6 +948,8 @@ svc_enable_now UNIT —— 开机自启并立即启动
 
 svc_disable_now UNIT —— 取消开机自启并立即停止
 
+**稳定性**：experimental
+
 **退出码**
 
 - 0 成功
@@ -834,6 +960,8 @@ svc_disable_now UNIT —— 取消开机自启并立即停止
 ### `svc_is_active`
 
 svc_is_active UNIT —— 服务是否在跑（只读，不套 dry-run）
+
+**稳定性**：experimental
 
 **退出码**
 
@@ -846,6 +974,8 @@ svc_is_active UNIT —— 服务是否在跑（只读，不套 dry-run）
 
 svc_is_enabled UNIT —— 服务是否开机自启（只读，不套 dry-run）
 
+**稳定性**：experimental
+
 **退出码**
 
 - 0 是
@@ -857,6 +987,8 @@ svc_is_enabled UNIT —— 服务是否开机自启（只读，不套 dry-run）
 
 svc_daemon_reload —— 让 systemd 重新读 unit 文件
 
+**稳定性**：experimental
+
 **退出码**
 
 - 0 成功
@@ -866,6 +998,8 @@ svc_daemon_reload —— 让 systemd 重新读 unit 文件
 ### `svc_install_unit`
 
 svc_install_unit NAME —— 从 stdin 读 unit 内容写入系统目录并 daemon-reload NAME 必须是单个合法文件名（字母数字与 :_.@+-）：它会被拼进 /etc/systemd/system/ 后面，带路径组件就能写到那个目录之外。 root 下直接写、不套 sudo（极简容器里常有 root 但没有 sudo）。
+
+**稳定性**：experimental
 
 **退出码**
 
@@ -929,6 +1063,8 @@ ver_eq A B —— 两个版本是否相等
 
 status_is_machine —— 机器模式返回 0，人类模式返回 1
 
+**稳定性**：experimental
+
 **退出码**
 
 - 0 机器模式
@@ -937,6 +1073,8 @@ status_is_machine —— 机器模式返回 0，人类模式返回 1
 ### `status_state_valid`
 
 status_state_valid STATE —— 状态码是否在有限集里
+
+**稳定性**：experimental
 
 **退出码**
 
@@ -947,6 +1085,8 @@ status_state_valid STATE —— 状态码是否在有限集里
 
 status_emit STATE HUMAN_MSG —— 输出状态   人类模式用 printf %b：文案里的颜色是 ESC[... 这样的**字面转义序列**，   用 %s 会原样打印 —— 颜色会变成一堆反斜杠文本。
 
+**稳定性**：experimental
+
 **退出码**
 
 - 0 总是成功
@@ -955,6 +1095,8 @@ status_emit STATE HUMAN_MSG —— 输出状态   人类模式用 printf %b：�
 
 status_version VERSION —— 机器模式下输出 VERSION 行（人类模式不重复输出）
 
+**稳定性**：experimental
+
 **退出码**
 
 - 0 总是成功
@@ -962,6 +1104,8 @@ status_version VERSION —— 机器模式下输出 VERSION 行（人类模式�
 ### `status_extra`
 
 status_extra KEY=VALUE —— 机器模式下输出 EXTRA 行（人类模式不重复输出）
+
+**稳定性**：experimental
 
 **退出码**
 
@@ -998,6 +1142,8 @@ registry_scan ROOT PATTERN —— 扫描清单文件并建立索引 条目名 = 
 
 （如 unix_script 的 `<分类>`/`<模块>`/.manifest 布局：每个分类目录各扫一次）。
 
+**稳定性**：experimental
+
 **参数**
 
 - PATTERN 清单文件名模式（如 .manifest）
@@ -1020,6 +1166,8 @@ registry_get NAME KEY —— 取字段值（未声明时为空） KEY 以**字�
 ### `registry_list`
 
 registry_list —— 列出全部条目名（每行一个）
+
+**稳定性**：experimental
 
 **退出码**
 
@@ -1064,6 +1212,8 @@ registry_topo FIELD —— 全体拓扑序（空格分隔）
 
 profile_write FILE —— 创建/清空 profile 文件
 
+**稳定性**：experimental
+
 **退出码**
 
 - 0 成功
@@ -1073,6 +1223,8 @@ profile_write FILE —— 创建/清空 profile 文件
 ### `profile_append`
 
 profile_append FILE MODULE [KEY=VALUE...] —— 追加一条
+
+**稳定性**：experimental
 
 **退出码**
 
@@ -1084,6 +1236,8 @@ profile_append FILE MODULE [KEY=VALUE...] —— 追加一条
 
 profile_parse FILE —— 解析 profile 输出：`<模块名>``<TAB>``<k=v,k=v>`（每行一个） 注释从**第一个 #** 起截断（与 unix_script 的 profile 解析同口径）。
 
+**稳定性**：experimental
+
 **退出码**
 
 - 0 总是成功
@@ -1091,6 +1245,8 @@ profile_parse FILE —— 解析 profile 输出：`<模块名>``<TAB>``<k=v,k=v>
 ### `profile_env`
 
 profile_env MODULE_TAB_KV PREFIX —— 把键值对变成环境变量赋值（每行一个）
+
+**稳定性**：experimental
 
 **退出码**
 
@@ -1102,6 +1258,8 @@ profile_env MODULE_TAB_KV PREFIX —— 把键值对变成环境变量赋值（�
 
 scaffold_vars_set KEY VALUE —— 设一个模板变量
 
+**稳定性**：experimental
+
 **退出码**
 
 - 0 设置成功
@@ -1110,6 +1268,8 @@ scaffold_vars_set KEY VALUE —— 设一个模板变量
 ### `scaffold_vars_get`
 
 scaffold_vars_get KEY [DEFAULT] —— 读一个模板变量；未设置时给默认值
+
+**稳定性**：experimental
 
 **退出码**
 
@@ -1120,6 +1280,8 @@ scaffold_vars_get KEY [DEFAULT] —— 读一个模板变量；未设置时给�
 
 scaffold_vars_list —— 逐行输出 KEY=VALUE
 
+**稳定性**：experimental
+
 **退出码**
 
 - 0 总是成功（stdout 逐行输出变量名）
@@ -1127,6 +1289,8 @@ scaffold_vars_list —— 逐行输出 KEY=VALUE
 ### `scaffold_config_load`
 
 scaffold_config_load FILE —— 从 template.config 载入模板变量 格式与 conf 模块一致：KEY=VALUE，# 开头是注释。 值为空是合法的（表示「这个变量默认没有值，生成时问用户」）。
+
+**稳定性**：experimental
 
 **退出码**
 
@@ -1138,6 +1302,8 @@ scaffold_config_load FILE —— 从 template.config 载入模板变量 格式�
 
 scaffold_render SRC DST —— 用当前模板变量渲染文件 未声明的 {{KEY}} 原样保留（这样模板里的示例占位符不会被误伤）。 返回非 0 表示没写出来，调用方必须判。
 
+**稳定性**：experimental
+
 **退出码**
 
 - 0 渲染成功（stdout 输出渲染后的文本）
@@ -1147,6 +1313,8 @@ scaffold_render SRC DST —— 用当前模板变量渲染文件 未声明的 {{
 ### `scaffold_manifest_write`
 
 scaffold_manifest_write DIR NAME COMDS TEMPLATE_VERSION [FILELIST] 写 DIR/.shellkit-manifest。FILELIST 是换行分隔的相对路径（模板自有的文件）， 每个文件记一个 sha256 —— 升级时靠它判断「这个文件用户动过没有」。 记的是**基线**：上次成功应用的模板内容的指纹。生成工程时文件刚由模板渲染出来， 当前内容 == 模板内容，两者一样，所以这里直接取当前文件的 sha256。 升级时的基线由 scaffold_manifest_write_baselines 推进 —— 跳过的文件基线不动，否则下一次升级就会把用户的修改当成「没动过」而覆盖掉。
+
+**稳定性**：experimental
 
 **退出码**
 
@@ -1158,6 +1326,8 @@ scaffold_manifest_write DIR NAME COMDS TEMPLATE_VERSION [FILELIST] 写 DIR/.shel
 
 scaffold_manifest_write_baselines DIR NAME COMDS TEMPLATE_VERSION FILELIST BASELINES 与 scaffold_manifest_write 写同一个格式的清单，但基线由调用方给： BASELINES 是换行分隔的「相对路径=指纹」，指纹可以为空（表示没有指纹）。 BASELINES 里没提到的文件，基线记为空。 为什么要有这个入口：升级时「用户改过、被跳过的文件」不能把基线推进到用户 的内容上 —— 推进了下一次升级就会覆盖掉用户的修改。只有真正成功应用了 模板的文件才能推进基线。
 
+**稳定性**：experimental
+
 **退出码**
 
 - 0 清单写好
@@ -1168,6 +1338,8 @@ scaffold_manifest_write_baselines DIR NAME COMDS TEMPLATE_VERSION FILELIST BASEL
 
 scaffold_manifest_read DIR —— 读 DIR/.shellkit-manifest 标量进 SK_MANIFEST_* 公开变量，@var 条目进模板变量表。
 
+**稳定性**：experimental
+
 **退出码**
 
 - 0 清单读到了
@@ -1176,6 +1348,8 @@ scaffold_manifest_read DIR —— 读 DIR/.shellkit-manifest 标量进 SK_MANIFE
 ### `scaffold_manifest_get`
 
 scaffold_manifest_get KEY —— 读 manifest 里的一个标量
+
+**稳定性**：experimental
 
 **退出码**
 
@@ -1186,6 +1360,8 @@ scaffold_manifest_get KEY —— 读 manifest 里的一个标量
 
 scaffold_manifest_list_files —— 逐行输出模板自有的文件（相对路径）
 
+**稳定性**：experimental
+
 **退出码**
 
 - 0 总是成功（stdout 逐行输出清单里的文件）
@@ -1193,6 +1369,8 @@ scaffold_manifest_list_files —— 逐行输出模板自有的文件（相对�
 ### `scaffold_manifest_file_sum`
 
 scaffold_manifest_file_sum DIR RELPATH —— 读 manifest 里记的某个文件的 sha256
+
+**稳定性**：experimental
 
 **退出码**
 
@@ -1202,6 +1380,8 @@ scaffold_manifest_file_sum DIR RELPATH —— 读 manifest 里记的某个文件
 ### `scaffold_run_hook`
 
 scaffold_run_hook FILE PROJECT_DIR —— 跑一个模板钩子 钩子是模板目录里的可执行脚本（template.hooks.d/pre、template.hooks.d/post）。 环境变量里会带上：SHELLKIT_PROJECT_DIR / SHELLKIT_PROJECT_NAME / SHELLKIT_PROJECT_COMMANDS / SHELLKIT_TEMPLATE_VERSION，以及每个模板变量。 钩子不存在就跳过；不可执行就跳过并告警（不因为钩子没设执行位就让生成失败）。
+
+**稳定性**：experimental
 
 **退出码**
 
@@ -1267,6 +1447,8 @@ lock_held NAME —— 返回码判断是否被占；被占时 stdout 输出持�
 
 net_sha256 FILE —— 文件的 sha256；两种工具都没有时返回 1
 
+**稳定性**：experimental
+
 **退出码**
 
 - 0 成功（stdout 输出校验和）
@@ -1277,6 +1459,8 @@ net_sha256 FILE —— 文件的 sha256；两种工具都没有时返回 1
 
 net_verify FILE SHA256 —— 校验文件的 sha256；对不上返回 SK_VERIFY(5)
 
+**稳定性**：experimental
+
 **退出码**
 
 - 0 校验通过
@@ -1286,6 +1470,8 @@ net_verify FILE SHA256 —— 校验文件的 sha256；对不上返回 SK_VERIFY
 ### `net_download`
 
 net_download URL DEST [SHA256] —— 下载并可选校验 sha256；已有本地缓存且校验通过就不重下
+
+**稳定性**：experimental
 
 **退出码**
 
@@ -1300,6 +1486,8 @@ net_download URL DEST [SHA256] —— 下载并可选校验 sha256；已有本�
 
 net_wait_port HOST PORT [TIMEOUT] —— 等端口可连；超时返回 SK_NET(4)
 
+**稳定性**：experimental
+
 **退出码**
 
 - 0 端口已就绪
@@ -1309,6 +1497,8 @@ net_wait_port HOST PORT [TIMEOUT] —— 等端口可连；超时返回 SK_NET(4
 ### `net_wait_http`
 
 net_wait_http URL [TIMEOUT] —— 等 HTTP 可用；超时返回 SK_NET(4)
+
+**稳定性**：experimental
 
 **退出码**
 
@@ -1322,6 +1512,8 @@ net_wait_http URL [TIMEOUT] —— 等 HTTP 可用；超时返回 SK_NET(4)
 ### `net_request`
 
 METHOD 不区分大小写；请求完成返回 0，状态码不算错误。
+
+**稳定性**：experimental
 
 **参数**
 
@@ -1349,6 +1541,8 @@ METHOD 不区分大小写；请求完成返回 0，状态码不算错误。
 
 有 jq 用 jq，有 python3 用 python3，都没有返回 SK_PRECOND(3)。
 
+**稳定性**：experimental
+
 **参数**
 
 - --path KEY 点号路径（data.items.0.name）；不给就输出整个 JSON 文本
@@ -1369,6 +1563,8 @@ METHOD 不区分大小写；请求完成返回 0，状态码不算错误。
 
 优先 jq，其次 python3；都没有时走内置降级路径。
 
+**稳定性**：experimental
+
 **参数**
 
 - TEXT 原始文本
@@ -1385,6 +1581,8 @@ METHOD 不区分大小写；请求完成返回 0，状态码不算错误。
 
 查询失败时输出空串并返回 0 —— 调用方把它当「没有新版本」处理。
 
+**稳定性**：experimental
+
 **参数**
 
 - REPO 形如 owner/repo
@@ -1397,6 +1595,8 @@ METHOD 不区分大小写；请求完成返回 0，状态码不算错误。
 ### `http_github_release_asset`
 
 PATTERN 是正则（匹配 browser_download_url）；没有匹配时输出空串并返回 0。
+
+**稳定性**：experimental
 
 **参数**
 
@@ -1607,6 +1807,8 @@ confirm PROMPT [DEFAULT=n] [TIMEOUT] —— 只返回码
 
 cli_group TITLE —— 后续注册的命令归入该分组
 
+**稳定性**：experimental
+
 **退出码**
 
 - 0 成功
@@ -1615,6 +1817,8 @@ cli_group TITLE —— 后续注册的命令归入该分组
 ### `cli_cmd`
 
 cli_cmd NAME DESC [USAGE] —— 注册一个子命令；要写在命令文件末尾
+
+**稳定性**：experimental
 
 **退出码**
 
@@ -1625,6 +1829,8 @@ cli_cmd NAME DESC [USAGE] —— 注册一个子命令；要写在命令文件�
 
 cli_has NAME —— 该命令是否已注册
 
+**稳定性**：experimental
+
 **退出码**
 
 - 0 有这个命令
@@ -1634,6 +1840,8 @@ cli_has NAME —— 该命令是否已注册
 
 cli_usage_cmd NAME —— 打印单个子命令的用法行
 
+**稳定性**：experimental
+
 **退出码**
 
 - 0 总是成功（把用法打到 stdout）
@@ -1642,6 +1850,8 @@ cli_usage_cmd NAME —— 打印单个子命令的用法行
 
 cli_usage_global —— 打印总用法：命令按分组，选项固定五条
 
+**稳定性**：experimental
+
 **退出码**
 
 - 0 总是成功（把用法打到 stdout）
@@ -1649,6 +1859,8 @@ cli_usage_global —— 打印总用法：命令按分组，选项固定五条
 ### `cli_completion_script`
 
 cli_completion_script [bash|zsh] —— 生成补全脚本 子命令名取自注册表，所以新加一个 cli_cmd，补全里自动就有了 —— 不用像别的框架那样单独维护一份命令列表。 程序名取 SK_PROG（生成出来的工程可以在自己的入口里设成自己的名字）。
+
+**稳定性**：experimental
 
 **退出码**
 
@@ -1671,6 +1883,8 @@ cli_run ARGS... —— 分发入口：吃全局选项后按名字找同名 cmd_ 
 ### `cli_opt_init`
 
 cli_opt_init —— 清空选项注册表。不接受参数；变量默认值请自己先赋好
+
+**稳定性**：experimental
 
 **退出码**
 
@@ -1704,6 +1918,8 @@ cli_opts ARGS... —— 按 cli_opt 注册的规则解析子命令选项；剩�
 
 man_modules —— 输出模块名，一行一个
 
+**稳定性**：experimental
+
 **退出码**
 
 - 0 总是成功
@@ -1712,6 +1928,8 @@ man_modules —— 输出模块名，一行一个
 
 man_page —— 输出 shellkit(1) 的 roff 正文
 
+**稳定性**：experimental
+
 **退出码**
 
 - 0 总是成功
@@ -1719,6 +1937,8 @@ man_page —— 输出 shellkit(1) 的 roff 正文
 ### `man_module_page`
 
 man_module_page MODULE —— 输出某模块第 3 节的 roff 正文
+
+**稳定性**：experimental
 
 **退出码**
 
@@ -1729,6 +1949,8 @@ man_module_page MODULE —— 输出某模块第 3 节的 roff 正文
 
 man_write_all DIR —— 把所有页面写进 DIR
 
+**稳定性**：experimental
+
 **退出码**
 
 - 0 全部写成功
@@ -1737,6 +1959,8 @@ man_write_all DIR —— 把所有页面写进 DIR
 ### `man_count_functions`
 
 man_count_functions —— 公开函数总数
+
+**稳定性**：experimental
 
 **退出码**
 

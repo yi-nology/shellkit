@@ -455,6 +455,7 @@ _sk_http_json_validate() {
 # @exitcode 3 没有 curl
 # @exitcode 4 网络层失败（连不上、超时、DNS 失败）
 # @see net_json
+# @stability experimental
 net_request() {
   _sk_need_args "$#" 2 "net_request METHOD URL [--header 'K: V'] [--data STR] [--json STR] [--timeout SEC] [--connect-timeout SEC] [--output FILE]" || return $?
   _sk_http_parse "$@" || return $?
@@ -475,6 +476,7 @@ net_request() {
 # @exitcode 4 网络层失败
 # @exitcode 5 响应不是合法 JSON，或路径取不到
 # @see net_request
+# @stability experimental
 net_json() {
   _sk_need_args "$#" 2 "net_json METHOD URL [--header 'K: V'] [--data STR] [--json STR] [--path KEY]" || return $?
   # 先查解析器：连解析器都没有，就不该把请求发出去
@@ -502,6 +504,7 @@ net_json() {
 # @param TEXT 原始文本
 # @exitcode 0 转义成功
 # @see net_json
+# @stability experimental
 net_escape_json() {
   local __text=${1:-} __out="" __rc
   if command -v jq >/dev/null 2>&1; then
@@ -630,6 +633,7 @@ _sk_http_github_asset() {
 # @param REPO 形如 owner/repo
 # @exitcode 0 完成（stdout 输出 tag；查不到时为空串）
 # @exitcode 2 缺参数
+# @stability experimental
 http_github_latest_tag() {
   local __repo=${1:-} __body __tag
   if [ -z "$__repo" ]; then
@@ -650,6 +654,7 @@ http_github_latest_tag() {
 # @param PATTERN 匹配 browser_download_url 的正则
 # @exitcode 0 完成（stdout 输出 URL；没有匹配时为空串）
 # @exitcode 2 缺参数
+# @stability experimental
 http_github_release_asset() {
   local __repo=${1:-} __pat=${2:-} __body __url
   if [ -z "$__repo" ] || [ -z "$__pat" ]; then
