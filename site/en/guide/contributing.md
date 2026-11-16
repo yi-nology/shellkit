@@ -57,7 +57,11 @@ make release VERSION=x.y.z
 
 The first is a dry run: bump the version → regenerate pot and docs → sync version references in the site → run
 the gate → **restore the working tree**. The second really ships: commit, tag, push, and the tag triggers the
-release workflow. Details in [Releasing](./releasing.md).
+release workflow.
+
+<ShotFigure src="/diagrams/release-chain.svg" caption="The tag triggers: build, smoke the artifact, sign, create a draft, verify independently, publish. A failed verification stays a draft, so users never see the assets." />
+
+Details in [Releasing](./releasing.md).
 
 ## Documentation
 

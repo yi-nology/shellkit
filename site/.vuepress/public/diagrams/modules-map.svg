@@ -1,0 +1,82 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1000 640" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" role="img" aria-label="23 modules in five layers; dependencies only point upward">
+  <defs>
+    <marker id="ah-up" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0 0 L10 5 L0 10 z" fill="#58a6ff"/>
+    </marker>
+  </defs>
+
+  <rect x="0" y="0" width="1000" height="640" rx="14" fill="#161b22" stroke="#2f3a48"/>
+
+  <text x="24" y="36" font-size="18" font-weight="700" fill="#e6edf3">23 个模块，五层：依赖只能向上</text>
+  <text x="24" y="60" font-size="13" fill="#9aa6b2">唯一真相源是 lib/modules.txt（bootstrap 按它加载、shdoc 按它生成参考、站点按它同步）</text>
+
+  <!-- 基础 -->
+  <rect x="24" y="78" width="952" height="84" rx="10" fill="#151b23" stroke="#232c38"/>
+  <text x="46" y="125" font-size="14" font-weight="700" fill="#58a6ff">基础</text>
+    <rect x="150" y="92" width="146" height="32" rx="8" fill="#1c2430" stroke="#58a6ff" stroke-width="1.2"/>
+    <text x="162" y="113" font-size="13" fill="#e6edf3">i18n</text>
+    <rect x="310" y="92" width="146" height="32" rx="8" fill="#1c2430" stroke="#58a6ff" stroke-width="1.2"/>
+    <text x="322" y="113" font-size="13" fill="#e6edf3">log</text>
+    <rect x="470" y="92" width="146" height="32" rx="8" fill="#1c2430" stroke="#58a6ff" stroke-width="1.2"/>
+    <text x="482" y="113" font-size="13" fill="#e6edf3">error</text>
+    <rect x="630" y="92" width="146" height="32" rx="8" fill="#1c2430" stroke="#58a6ff" stroke-width="1.2"/>
+    <text x="642" y="113" font-size="13" fill="#e6edf3">str</text>
+    <rect x="790" y="92" width="146" height="32" rx="8" fill="#1c2430" stroke="#58a6ff" stroke-width="1.2"/>
+    <text x="802" y="113" font-size="13" fill="#e6edf3">validate</text>
+
+  <!-- 文件与系统 -->
+  <rect x="24" y="170" width="952" height="84" rx="10" fill="#151b23" stroke="#232c38"/>
+  <text x="46" y="217" font-size="14" font-weight="700" fill="#3fb950">文件与系统</text>
+    <rect x="150" y="184" width="146" height="32" rx="8" fill="#1c2430" stroke="#3fb950" stroke-width="1.2"/>
+    <text x="162" y="205" font-size="13" fill="#e6edf3">trap</text>
+    <rect x="310" y="184" width="146" height="32" rx="8" fill="#1c2430" stroke="#3fb950" stroke-width="1.2"/>
+    <text x="322" y="205" font-size="13" fill="#e6edf3">fs</text>
+    <rect x="470" y="184" width="146" height="32" rx="8" fill="#1c2430" stroke="#3fb950" stroke-width="1.2"/>
+    <text x="482" y="205" font-size="13" fill="#e6edf3">os</text>
+    <rect x="630" y="184" width="146" height="32" rx="8" fill="#1c2430" stroke="#3fb950" stroke-width="1.2"/>
+    <text x="642" y="205" font-size="13" fill="#e6edf3">svc</text>
+
+  <!-- 进程与版本 -->
+  <rect x="24" y="262" width="952" height="84" rx="10" fill="#151b23" stroke="#232c38"/>
+  <text x="46" y="309" font-size="14" font-weight="700" fill="#d29922">进程与版本</text>
+    <rect x="150" y="276" width="146" height="32" rx="8" fill="#1c2430" stroke="#d29922" stroke-width="1.2"/>
+    <text x="162" y="297" font-size="13" fill="#e6edf3">run</text>
+    <rect x="310" y="276" width="146" height="32" rx="8" fill="#1c2430" stroke="#d29922" stroke-width="1.2"/>
+    <text x="322" y="297" font-size="13" fill="#e6edf3">ver</text>
+    <rect x="470" y="276" width="146" height="32" rx="8" fill="#1c2430" stroke="#d29922" stroke-width="1.2"/>
+    <text x="482" y="297" font-size="13" fill="#e6edf3">status</text>
+
+  <!-- 集成 -->
+  <rect x="24" y="354" width="952" height="142" rx="10" fill="#151b23" stroke="#232c38"/>
+  <text x="46" y="430" font-size="14" font-weight="700" fill="#a371f7">集成</text>
+    <rect x="150" y="368" width="146" height="32" rx="8" fill="#1c2430" stroke="#a371f7" stroke-width="1.2"/>
+    <text x="162" y="389" font-size="13" fill="#e6edf3">registry</text>
+    <rect x="310" y="368" width="146" height="32" rx="8" fill="#1c2430" stroke="#a371f7" stroke-width="1.2"/>
+    <text x="322" y="389" font-size="13" fill="#e6edf3">profile</text>
+    <rect x="470" y="368" width="146" height="32" rx="8" fill="#1c2430" stroke="#a371f7" stroke-width="1.2"/>
+    <text x="482" y="389" font-size="13" fill="#e6edf3">scaffold</text>
+    <rect x="630" y="368" width="146" height="32" rx="8" fill="#1c2430" stroke="#a371f7" stroke-width="1.2"/>
+    <text x="642" y="389" font-size="13" fill="#e6edf3">retry</text>
+    <rect x="790" y="368" width="146" height="32" rx="8" fill="#1c2430" stroke="#a371f7" stroke-width="1.2"/>
+    <text x="802" y="389" font-size="13" fill="#e6edf3">lock</text>
+    <rect x="150" y="412" width="146" height="32" rx="8" fill="#1c2430" stroke="#a371f7" stroke-width="1.2"/>
+    <text x="162" y="433" font-size="13" fill="#e6edf3">net</text>
+    <rect x="310" y="412" width="146" height="32" rx="8" fill="#1c2430" stroke="#a371f7" stroke-width="1.2"/>
+    <text x="322" y="433" font-size="13" fill="#e6edf3">http</text>
+    <rect x="470" y="412" width="146" height="32" rx="8" fill="#1c2430" stroke="#a371f7" stroke-width="1.2"/>
+    <text x="482" y="433" font-size="13" fill="#e6edf3">config</text>
+
+  <!-- 交互与框架 -->
+  <rect x="24" y="504" width="952" height="84" rx="10" fill="#151b23" stroke="#232c38"/>
+  <text x="46" y="551" font-size="14" font-weight="700" fill="#79c0ff">交互与框架</text>
+    <rect x="150" y="518" width="146" height="32" rx="8" fill="#1c2430" stroke="#79c0ff" stroke-width="1.2"/>
+    <text x="162" y="539" font-size="13" fill="#e6edf3">prompt</text>
+    <rect x="310" y="518" width="146" height="32" rx="8" fill="#1c2430" stroke="#79c0ff" stroke-width="1.2"/>
+    <text x="322" y="539" font-size="13" fill="#e6edf3">cli</text>
+    <rect x="470" y="518" width="146" height="32" rx="8" fill="#1c2430" stroke="#79c0ff" stroke-width="1.2"/>
+    <text x="482" y="539" font-size="13" fill="#e6edf3">man</text>
+
+  <line x1="12" y1="560" x2="12" y2="110" stroke="#58a6ff" stroke-width="1.5" stroke-dasharray="4 6" marker-end="url(#ah-up)"/>
+  <text x="24" y="600" font-size="13" fill="#9aa6b2">下层不认识上层：lib/core/*.sh 不引用 tools/ 或 CLI。SHELLKIT_MODULES="log fs" 只加载这两个和它们的传递依赖。</text>
+  <text x="24" y="621" font-size="13" fill="#9aa6b2">放错顺序不用等运行时：make module-order-check 会指出「哪个模块调用了还没加载的函数」。</text>
+</svg>

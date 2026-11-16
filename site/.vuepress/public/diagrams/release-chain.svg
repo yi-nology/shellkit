@@ -1,0 +1,63 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1000 380" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" role="img" aria-label="release chain: build, smoke the artifact, sign, create draft, verify the draft, publish; a failed verification never becomes public">
+  <defs>
+    <marker id="ah-r" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0 0 L10 5 L0 10 z" fill="#58a6ff"/>
+    </marker>
+    <marker id="ah-red" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0 0 L10 5 L0 10 z" fill="#f85149"/>
+    </marker>
+  </defs>
+
+  <rect x="0" y="0" width="1000" height="380" rx="14" fill="#161b22" stroke="#2f3a48"/>
+
+  <text x="24" y="38" font-size="18" font-weight="700" fill="#e6edf3">发版链：验签过了才公开</text>
+  <text x="24" y="60" font-size="12" fill="#9aa6b2">v* tag 触发 release.yml —— 任何一步失败，资产都不会对外可见</text>
+
+  <g stroke-width="1.5">
+    <rect x="25"  y="76" width="140" height="120" rx="10" fill="#1c2430" stroke="#58a6ff"/>
+    <rect x="187" y="76" width="140" height="120" rx="10" fill="#1c2430" stroke="#58a6ff"/>
+    <rect x="349" y="76" width="140" height="120" rx="10" fill="#1c2430" stroke="#a371f7"/>
+    <rect x="511" y="76" width="140" height="120" rx="10" fill="#1c2430" stroke="#d29922"/>
+    <rect x="673" y="76" width="140" height="120" rx="10" fill="#1c2430" stroke="#d29922"/>
+    <rect x="835" y="76" width="140" height="120" rx="10" fill="#1c2430" stroke="#3fb950"/>
+  </g>
+
+  <text x="39"  y="106" font-size="14" font-weight="700" fill="#58a6ff">1. 打包</text>
+  <text x="39"  y="134" font-size="11" fill="#e6edf3">package_tarball</text>
+  <text x="39"  y="155" font-size="11" fill="#9aa6b2">tarball + 清单</text>
+
+  <text x="201" y="106" font-size="14" font-weight="700" fill="#58a6ff">2. 验真产物</text>
+  <text x="201" y="134" font-size="11" fill="#e6edf3">artifact smoke</text>
+  <text x="201" y="155" font-size="11" fill="#9aa6b2">与 PR 同一脚本</text>
+
+  <text x="363" y="106" font-size="14" font-weight="700" fill="#a371f7">3. 签名</text>
+  <text x="363" y="134" font-size="11" fill="#e6edf3">--require</text>
+  <text x="363" y="155" font-size="11" fill="#9aa6b2">没私钥直接失败</text>
+
+  <text x="525" y="106" font-size="14" font-weight="700" fill="#d29922">4. 建 draft</text>
+  <text x="525" y="134" font-size="11" fill="#e6edf3">13 项资产</text>
+  <text x="525" y="155" font-size="11" fill="#9aa6b2">不可变上传</text>
+
+  <text x="687" y="106" font-size="14" font-weight="700" fill="#d29922">5. 独立验签</text>
+  <text x="687" y="134" font-size="11" fill="#e6edf3">verify_release</text>
+  <text x="687" y="155" font-size="11" fill="#9aa6b2">从 draft 重新下载</text>
+
+  <text x="849" y="106" font-size="14" font-weight="700" fill="#3fb950">6. 公开</text>
+  <text x="849" y="134" font-size="11" fill="#e6edf3">--draft=false</text>
+  <text x="849" y="155" font-size="11" fill="#9aa6b2">--latest</text>
+
+  <line x1="167" y1="136" x2="181" y2="136" stroke="#58a6ff" stroke-width="2" marker-end="url(#ah-r)"/>
+  <line x1="329" y1="136" x2="343" y2="136" stroke="#58a6ff" stroke-width="2" marker-end="url(#ah-r)"/>
+  <line x1="491" y1="136" x2="505" y2="136" stroke="#58a6ff" stroke-width="2" marker-end="url(#ah-r)"/>
+  <line x1="653" y1="136" x2="667" y2="136" stroke="#58a6ff" stroke-width="2" marker-end="url(#ah-r)"/>
+  <line x1="815" y1="136" x2="829" y2="136" stroke="#58a6ff" stroke-width="2" marker-end="url(#ah-r)"/>
+
+  <line x1="743" y1="196" x2="743" y2="232" stroke="#f85149" stroke-width="1.6" marker-end="url(#ah-red)"/>
+  <text x="754" y="220" font-size="11" fill="#f85149">验不过</text>
+  <rect x="511" y="238" width="400" height="52" rx="10" fill="#24161a" stroke="#f85149" stroke-width="1.5"/>
+  <text x="531" y="262" font-size="13" font-weight="700" fill="#ff7b72">停在 draft，exit 5</text>
+  <text x="531" y="281" font-size="11" fill="#e6edf3">用户看不到任何资产（--draft=false 不会置位）</text>
+
+  <text x="24" y="330" font-size="12" fill="#3fb950">可选 job（deb / rpm）：基于已发布 tarball 打包 → --file 补签 → 不可变上传；红了不挡发布</text>
+  <text x="24" y="352" font-size="12" fill="#9aa6b2">⇒ 发完必须 gh release view --json assets 亲眼看清单：「run 是绿的」不等于「包发了」</text>
+</svg>

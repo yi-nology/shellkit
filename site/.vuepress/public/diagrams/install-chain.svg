@@ -1,4 +1,4 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1000 310" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" role="img" aria-label="install chain: fetch release, download, verify sha256, install-self; mismatch exits 5">
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1000 330" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" role="img" aria-label="install chain: fetch, download, optional minisign verification, sha256, install-self, done; any mismatch exits 5">
   <defs>
     <marker id="ah-b" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
       <path d="M0 0 L10 5 L0 10 z" fill="#58a6ff"/>
@@ -6,53 +6,57 @@
     <marker id="ah-r" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
       <path d="M0 0 L10 5 L0 10 z" fill="#f85149"/>
     </marker>
-    <marker id="ah-g" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
-      <path d="M0 0 L10 5 L0 10 z" fill="#3fb950"/>
-    </marker>
   </defs>
 
-  <rect x="0" y="0" width="1000" height="310" rx="14" fill="#161b22" stroke="#2f3a48"/>
+  <rect x="0" y="0" width="1000" height="330" rx="14" fill="#161b22" stroke="#2f3a48"/>
 
-  <!-- 五个节点 -->
+  <text x="24" y="34" font-size="16" font-weight="700" fill="#e6edf3">安装链：先锚「谁发的」，再信「没被改」</text>
+  <text x="24" y="56" font-size="12" fill="#9aa6b2">sha256 只防下载被改；minisign 把信任锚到一把公钥上（验签可选，配了公钥才走）</text>
+
   <g stroke-width="1.5">
-    <rect x="24"  y="66" width="172" height="96" rx="10" fill="#1c2430" stroke="#58a6ff"/>
-    <rect x="226" y="66" width="172" height="96" rx="10" fill="#1c2430" stroke="#58a6ff"/>
-    <rect x="428" y="66" width="172" height="96" rx="10" fill="#1c2430" stroke="#58a6ff"/>
-    <rect x="630" y="66" width="172" height="96" rx="10" fill="#1c2430" stroke="#58a6ff"/>
-    <rect x="832" y="66" width="144" height="96" rx="10" fill="#1c2430" stroke="#3fb950"/>
+    <rect x="35"  y="74" width="130" height="110" rx="10" fill="#1c2430" stroke="#58a6ff"/>
+    <rect x="195" y="74" width="130" height="110" rx="10" fill="#1c2430" stroke="#58a6ff"/>
+    <rect x="355" y="74" width="130" height="110" rx="10" fill="#1c2430" stroke="#a371f7"/>
+    <rect x="515" y="74" width="130" height="110" rx="10" fill="#1c2430" stroke="#58a6ff"/>
+    <rect x="675" y="74" width="130" height="110" rx="10" fill="#1c2430" stroke="#58a6ff"/>
+    <rect x="835" y="74" width="130" height="110" rx="10" fill="#1c2430" stroke="#3fb950"/>
   </g>
 
-  <text x="40"  y="100" font-size="14" font-weight="700" fill="#79c0ff">1. fetch</text>
-  <text x="40"  y="126" font-size="12" fill="#e6edf3">releases/latest</text>
-  <text x="40"  y="148" font-size="12" fill="#9aa6b2">download install.sh</text>
+  <text x="47"  y="101" font-size="13" font-weight="700" fill="#79c0ff">1. fetch</text>
+  <text x="47"  y="126" font-size="11" fill="#e6edf3">releases/latest</text>
+  <text x="47"  y="147" font-size="11" fill="#9aa6b2">install.sh</text>
 
-  <text x="242" y="100" font-size="14" font-weight="700" fill="#79c0ff">2. download</text>
-  <text x="242" y="126" font-size="12" fill="#e6edf3">shellkit-X.Y.Z.tar.gz</text>
-  <text x="242" y="148" font-size="12" fill="#e6edf3">+ SHA256SUMS</text>
+  <text x="207" y="101" font-size="13" font-weight="700" fill="#79c0ff">2. download</text>
+  <text x="207" y="126" font-size="11" fill="#e6edf3">tar.gz + 清单</text>
+  <text x="207" y="147" font-size="11" fill="#9aa6b2">+ .minisig</text>
 
-  <text x="444" y="100" font-size="14" font-weight="700" fill="#79c0ff">3. verify</text>
-  <text x="444" y="126" font-size="12" fill="#e6edf3">sha256sum -c</text>
-  <text x="444" y="148" font-size="12" fill="#9aa6b2">byte for byte</text>
+  <text x="367" y="101" font-size="13" font-weight="700" fill="#a371f7">3. 验签</text>
+  <text x="367" y="126" font-size="11" fill="#e6edf3">minisign -Vm</text>
+  <text x="367" y="147" font-size="11" fill="#9aa6b2">可选：谁发的</text>
 
-  <text x="646" y="100" font-size="14" font-weight="700" fill="#79c0ff">4. install</text>
-  <text x="646" y="126" font-size="12" fill="#e6edf3">shellkit install-self</text>
-  <text x="646" y="148" font-size="12" fill="#9aa6b2">one install path</text>
+  <text x="527" y="101" font-size="13" font-weight="700" fill="#79c0ff">4. sha256</text>
+  <text x="527" y="126" font-size="11" fill="#e6edf3">字节级对比</text>
+  <text x="527" y="147" font-size="11" fill="#9aa6b2">默认永远验</text>
 
-  <text x="848" y="100" font-size="14" font-weight="700" fill="#3fb950">5. done</text>
-  <text x="848" y="126" font-size="12" fill="#e6edf3">/usr/local</text>
-  <text x="848" y="148" font-size="12" fill="#9aa6b2">or ~/.local</text>
+  <text x="687" y="101" font-size="13" font-weight="700" fill="#79c0ff">5. install</text>
+  <text x="687" y="126" font-size="11" fill="#e6edf3">install-self</text>
+  <text x="687" y="147" font-size="11" fill="#9aa6b2">逻辑只有一份</text>
 
-  <!-- 水平箭头 + 通过标注 -->
-  <line x1="198" y1="114" x2="222" y2="114" stroke="#58a6ff" stroke-width="2" marker-end="url(#ah-b)"/>
-  <line x1="400" y1="114" x2="424" y2="114" stroke="#58a6ff" stroke-width="2" marker-end="url(#ah-b)"/>
-  <line x1="602" y1="114" x2="626" y2="114" stroke="#3fb950" stroke-width="2" marker-end="url(#ah-g)"/>
-  <text x="614" y="98" font-size="12" text-anchor="middle" fill="#3fb950">match &#10003;</text>
-  <line x1="804" y1="114" x2="828" y2="114" stroke="#58a6ff" stroke-width="2" marker-end="url(#ah-b)"/>
+  <text x="847" y="101" font-size="13" font-weight="700" fill="#3fb950">6. done</text>
+  <text x="847" y="126" font-size="11" fill="#e6edf3">/usr/local</text>
+  <text x="847" y="147" font-size="11" fill="#9aa6b2">或 ~/.local</text>
 
-  <!-- 校验失败分支 -->
-  <line x1="514" y1="164" x2="514" y2="216" stroke="#f85149" stroke-width="2" marker-end="url(#ah-r)"/>
-  <text x="526" y="196" font-size="12" fill="#f85149">mismatch</text>
-  <rect x="384" y="222" width="260" height="64" rx="10" fill="#24161a" stroke="#f85149" stroke-width="1.5"/>
-  <text x="404" y="250" font-size="14" font-weight="700" fill="#ff7b72">exit 5</text>
-  <text x="404" y="274" font-size="12" fill="#e6edf3">not one byte lands on disk</text>
+  <line x1="167" y1="129" x2="189" y2="129" stroke="#58a6ff" stroke-width="2" marker-end="url(#ah-b)"/>
+  <line x1="327" y1="129" x2="349" y2="129" stroke="#58a6ff" stroke-width="2" marker-end="url(#ah-b)"/>
+  <line x1="487" y1="129" x2="509" y2="129" stroke="#58a6ff" stroke-width="2" marker-end="url(#ah-b)"/>
+  <line x1="647" y1="129" x2="669" y2="129" stroke="#58a6ff" stroke-width="2" marker-end="url(#ah-b)"/>
+  <line x1="807" y1="129" x2="829" y2="129" stroke="#58a6ff" stroke-width="2" marker-end="url(#ah-b)"/>
+
+  <line x1="420" y1="186" x2="420" y2="222" stroke="#f85149" stroke-width="1.6" marker-end="url(#ah-r)"/>
+  <line x1="580" y1="186" x2="580" y2="222" stroke="#f85149" stroke-width="1.6" marker-end="url(#ah-r)"/>
+  <rect x="330" y="228" width="340" height="52" rx="10" fill="#24161a" stroke="#f85149" stroke-width="1.5"/>
+  <text x="350" y="252" font-size="13" font-weight="700" fill="#ff7b72">任何一步不过 ⇒ exit 5</text>
+  <text x="350" y="271" font-size="11" fill="#e6edf3">一个字节都不落地（install 还没开始）</text>
+
+  <text x="24" y="304" font-size="12" fill="#3fb950">安装逻辑只有一份：脚本从不往目标目录放文件，全部交给包内自带的 shellkit install-self。</text>
 </svg>

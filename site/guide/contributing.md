@@ -56,7 +56,11 @@ make release VERSION=x.y.z
 ```
 
 第一条空跑：升版本 → 重生成 pot 与文档 → 同步首页版本引用 → 跑门禁 → **还原工作树**。
-第二条真发：commit、打 tag、push，tag 触发 release 工作流。细节见 [发版](./releasing.md)。
+第二条真发：commit、打 tag、push，tag 触发 release 工作流。
+
+<ShotFigure src="/diagrams/release-chain.svg" caption="tag 触发：打包 → 验真产物 → 签名 → draft → 独立验签 → 公开；验不过就停在 draft，用户看不到资产" />
+
+细节见 [发版](./releasing.md)。
 
 ## 文档
 

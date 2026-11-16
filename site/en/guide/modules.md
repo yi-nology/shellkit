@@ -4,6 +4,8 @@
 pick and choose what to source, and you should not copy one module's implementation into your own script -- that is
 just another way of hitting the same trap twice.
 
+<ShotFigure src="/diagrams/modules-map.svg" caption="23 modules in five layers: foundations, files and system, process and version, integration, interaction and framework. Dependencies only point upward" />
+
 ## The table
 
 | Module | Responsibility | Key functions |

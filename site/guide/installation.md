@@ -20,7 +20,11 @@ curl -fsSL https://github.com/yi-nology/shellkit/releases/latest/download/instal
 **安装逻辑只有一份**，就在 `install-self` 里。安装脚本只是把它下载下来而已 —— 否则
 「一键装」和「手动装」迟早会装出两种布局。
 
-<ShotFigure src="/diagrams/install-chain.svg" caption="五步信任链：sha256 对不上就 exit 5，一个字节都不落地" />
+<ShotFigure src="/diagrams/install-chain.svg" caption="六步安装链：验签（可选）锚「谁发的」，sha256 验「没被改」；任何一步不过就 exit 5，一个字节都不落地" />
+
+配了公钥（`SHELLKIT_MINISIGN_PUBKEY` 或 `SHELLKIT_MINISIGN_PUBKEY_FILE`）时，脚本会先验 
+`SHA256SUMS.minisig` 与 tarball 的 `.minisig`，**再**读清单内容 —— 完整口径与离线校验步骤见
+[信任链](https://github.com/yi-nology/shellkit/blob/main/docs/TRUST.md)。不配公钥时整段验签跳过、默认行为不变。
 
 地址用的是 release 资产，不是 `raw.githubusercontent.com`。后者在部分网络会被重置，
 而仓库地址又是固定的，所以网页和 README 都不用 raw。
