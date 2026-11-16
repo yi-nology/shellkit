@@ -107,15 +107,20 @@ assert_not_contains "$out" "9.9.9" "a non-interactive run must not carry the hin
 # 不再进空集 select）。子进程的输出在阻塞前已全部刷出，所以有 timeout 就套一层：
 # 拿得到断言需要的输出，也不会把整个套件挂死（macOS 系统 python3 = 3.9.6 实测）。
 if command -v python3 >/dev/null 2>&1; then
+  # 上界只用来防「pty.spawn 永久阻塞」这一个缺陷，不是性能预算：10 秒在负载
+  # 200 的机器上会把 python3 启动 + shellkit 起一遍压死 ⇒ pty 还没吐出提示就被杀，
+  # 判据假红（空输出）。取 60 秒 —— 仍远小于 runner 的 TEST_TIMEOUT（默认 300），
+  # 真卡死照旧被抓；负载尖峰不再变成假红。
+  __pty_guard=60
   __pty_prefix=""
   if command -v timeout >/dev/null 2>&1; then
-    __pty_prefix="timeout 10"
+    __pty_prefix="timeout $__pty_guard"
   elif command -v gtimeout >/dev/null 2>&1; then
-    __pty_prefix="gtimeout 10"
+    __pty_prefix="gtimeout $__pty_guard"
   fi
   out=$($__pty_prefix python3 -c 'import pty, sys; pty.spawn(sys.argv[1:])' \
     "$installed/share/shellkit/shellkit" --version 2>&1)
-  assert_contains "$out" "9.9.9" "on a real tty the hint must be shown"
+  assert_contains "$out" "9.9.9" "on a real tty the hint must be shown (pty guard: ${__pty_guard}s)"
 else
   printf '%s\n' "SKIP: python3 unavailable, tty positive control not run" >&2
 fi
