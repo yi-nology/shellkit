@@ -26,6 +26,7 @@ PROG=sign_release.sh
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 dist=dist
 require=0
+only=()
 tmp=""
 
 say() { printf '[sign] %s\n' "$*" >&2; }
@@ -51,6 +52,12 @@ while [ "$#" -gt 0 ]; do
       ;;
     --require)
       require=1
+      ;;
+    # 只签指定的文件（可以重复）：deb/rpm 打包在发布之后才产出，需要单独补签名。
+    --file)
+      shift
+      [ $# -gt 0 ] || die "--file needs a path" 2
+      only[${#only[@]}]=$1
       ;;
     -h | --help)
       usage
@@ -114,7 +121,14 @@ if [ -f "$dist/SHA256SUMS" ]; then
     [ -n "$__name" ] || continue
     __name=${__name#\*}
     [ -n "$__name" ] || continue
-    files[${#files[@]}]="$dist/$__name"
+    # 清单里的条目可能在 dist（打出来的 tarball），也可能在仓库根（install.sh /
+    # repair.sh / demo.sh —— 发布资产取的是根上那份）。两处都找不到才算错。
+    __path="$dist/$__name"
+    if [ ! -f "$__path" ]; then
+      __path="$ROOT/$__name"
+    fi
+    [ -f "$__path" ] || die "SHA256SUMS lists a missing file: $__name" 1
+    files[${#files[@]}]="$__path"
   done <"$dist/SHA256SUMS"
 else
   say "warning: $dist/SHA256SUMS not found — only SHA256SUMS itself and install.sh will be signed"
@@ -122,6 +136,11 @@ fi
 files[${#files[@]}]="$dist/SHA256SUMS"
 if [ -f install.sh ]; then
   files[${#files[@]}]="install.sh"
+fi
+
+# --file：只签点名的那些（发布后的 deb/rpm 用这种方式补签）
+if [ "${#only[@]}" -gt 0 ]; then
+  files=("${only[@]}")
 fi
 
 # ---------------------------------------------------------------- 签

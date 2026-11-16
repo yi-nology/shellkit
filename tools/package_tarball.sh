@@ -89,7 +89,23 @@ cp -R skills/shellkit "$dist/skill/shellkit" || die "cannot copy skills/shellkit
 tar -C "$dist/skill" -czf "$dist/shellkit-skill-$version.tar.gz" shellkit ||
   die "cannot build $dist/shellkit-skill-$version.tar.gz" 1
 
-(cd "$dist" && sha256sum "$name.tar.gz" "shellkit-skill-$version.tar.gz" >SHA256SUMS) ||
-  die "cannot write $dist/SHA256SUMS" 1
+# 校验和要覆盖**每一个**直接分发的文件，不只是两个 tarball：install.sh / repair.sh /
+# demo.sh 都是用户会直接执行的脚本，只给 tarball 出校验和 = 「同一个版本、不同渠道、
+# 不同完整性保证」（评估 2026-11-16）。脚本本身留在仓库根（发布资产取的就是根上那份），
+# 这里只把它们的摘要一并写进清单。
+sums=("$name.tar.gz" "shellkit-skill-$version.tar.gz")
+for __f in install.sh repair.sh demo.sh; do
+  if [ -f "$ROOT/$__f" ]; then
+    sums[${#sums[@]}]="$__f"
+  fi
+done
+: >"$dist/SHA256SUMS" || die "cannot write $dist/SHA256SUMS" 1
+for __f in "${sums[@]}"; do
+  if [ -f "$dist/$__f" ]; then
+    (cd "$dist" && sha256sum "$__f") >>"$dist/SHA256SUMS" || die "cannot add $__f to SHA256SUMS" 1
+  else
+    (cd "$ROOT" && sha256sum "$__f") >>"$dist/SHA256SUMS" || die "cannot add $__f to SHA256SUMS" 1
+  fi
+done
 cat "$dist/SHA256SUMS"
 exit 0
