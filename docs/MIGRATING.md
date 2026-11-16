@@ -726,6 +726,13 @@ job 双跑与 bench job 的 profile check 都不改变本地 `make check` 的行
 就重生成不了行为基线（判据见 `tests/test_api_stability.sh`）。
 
 
+### 0.26.2 → 0.27.0：卸载链路的数据安全修复
+
+| 变化 | 以前 | 现在 | 你会在哪里撞到 |
+|---|---|---|---|
+| 卸载保留用户修改后的重装/更新 | 所有权基线随卸载被删；重装认不出用户改过，静默覆盖 | 保留项的**旧基线**写回指纹清单（墓碑基线）；没有基线的同名文件默认保留并告警 `no ownership baseline`，只有 `--force` 覆盖 | 卸载后又重装/更新的人：编辑不会再消失 |
+| 无指纹清单的旧安装卸载 | 只告警，然后按 `MANIFEST` 全删 | 默认 fail-closed（退出码 3，什么都不删）；显式 `--legacy` 才按旧语义全删 | 从 0.26 之前装的机器：先 `install-self --force` 采纳指纹（会覆盖本地修改），或 `--legacy` |
+
 ### 0.25.0 → 0.26.0：会改变结果的行为变化
 
 | 变化 | 以前 | 现在 | 你会在哪里撞到 |
@@ -740,8 +747,9 @@ job 双跑与 bench job 的 profile check 都不改变本地 `make check` 的行
 shellkit uninstall-self --purge
 ```
 
-> 老安装（只有 `MANIFEST`、没有 `.shellkit-install-manifest`）无法区分归属，卸载仍按旧语义全删，
-> 并打印一条明确告警；先重装一次（`install-self`）即可获得指纹清单。
+> 老安装（只有 `MANIFEST`、没有 `.shellkit-install-manifest`）无法区分归属：0.27.0 起普通卸载
+> 默认拒绝（退出码 3），不再按旧语义全删。先 `install-self --force` 采纳指纹（会覆盖本地修改）
+> 再卸载；确需旧语义时显式用 `uninstall-self --legacy`。
 
 ### 0.26.0 → 0.26.1：会改变结果的行为变化
 

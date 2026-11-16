@@ -136,5 +136,54 @@ assert_eq "0" "$rc" "the forced install must succeed"
 assert_eq "$(sum "$TEST_ROOT/lib/core/log.sh")" "$(sum "$d4/lib/core/log.sh")" \
   "an explicit --force must overwrite a same-name file without a baseline"
 
+# ---------- #124：没有指纹清单的旧安装，普通卸载默认 fail-closed ----------
+#
+# 旧 MANIFEST 由 find 生成，里面的用户文件/用户修改无法与新装的文件区分。
+# 只告警就按 MANIFEST 全删，与「默认保护用户文件」契约冲突；默认必须拒绝，
+# 把旧语义留给显式 --legacy。
+p5="$d/prefix5"
+"$SK" install-self --prefix "$p5" >/dev/null 2>&1 || _fail "the fifth install must succeed"
+d5="$p5/share/shellkit"
+rm -f "$d5/.shellkit-install-manifest"
+printf '\n# legacy user edit\n' >>"$d5/lib/core/log.sh"
+legacy_sum=$(sum "$d5/lib/core/log.sh")
+untouched_sum=$(sum "$d5/LICENSE")
+
+lout="$d/legacy-default.log"
+rc=0
+"$SK" uninstall-self --prefix "$p5" >"$lout" 2>&1 || rc=$?
+assert_eq "3" "$rc" "a legacy install without fingerprints must be refused by default"
+assert_contains "$(cat "$lout")" "refusing to remove a legacy install without ownership fingerprints" \
+  "the refusal must explain why nothing was removed"
+assert_contains "$(cat "$lout")" "--legacy" "the refusal must point at the explicit escape hatch"
+assert_eq "$legacy_sum" "$(sum "$d5/lib/core/log.sh")" \
+  "the default legacy uninstall must not delete the user's edited file"
+assert_eq "$untouched_sum" "$(sum "$d5/LICENSE")" \
+  "the default legacy uninstall must not delete even untouched files"
+assert_true test -f "$d5/MANIFEST"
+
+# 显式 --legacy：旧语义（按 MANIFEST 全删）必须是可用的逃逸口
+rc=0
+"$SK" uninstall-self --prefix "$p5" --legacy >"$d/legacy-explicit.log" 2>&1 || rc=$?
+assert_eq "0" "$rc" "an explicit --legacy uninstall must succeed"
+assert_false test -e "$d5/lib/core/log.sh"
+assert_false test -e "$d5/LICENSE"
+assert_contains "$(cat "$d/legacy-explicit.log")" "MANIFEST will be removed (--legacy)" \
+  "the explicit legacy mode must say what it deletes"
+
+# 有指纹清单时 --legacy 不许绕过所有权保护（全清请用 --purge）
+p6="$d/prefix6"
+"$SK" install-self --prefix "$p6" >/dev/null 2>&1 || _fail "the sixth install must succeed"
+d6="$p6/share/shellkit"
+printf '\n# own edit\n' >>"$d6/lib/core/log.sh"
+own_sum=$(sum "$d6/lib/core/log.sh")
+rc=0
+"$SK" uninstall-self --prefix "$p6" --legacy >"$d/legacy-ignored.log" 2>&1 || rc=$?
+assert_eq "0" "$rc" "uninstall with fingerprints and --legacy must still succeed"
+assert_eq "$own_sum" "$(sum "$d6/lib/core/log.sh")" \
+  "--legacy must not delete user edits when ownership fingerprints exist"
+assert_contains "$(cat "$d/legacy-ignored.log")" "using the default ownership checks" \
+  "--legacy must say it is ignored for fingerprinted installs"
+
 
 exit 0

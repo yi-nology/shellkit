@@ -32,6 +32,7 @@ shellkit 是 Bash 库 + 脚手架。用它，你不用再手写日志、配置�
     shellkit update            # 之后一条命令更新
     shellkit uninstall-self    # 不想要了：只删「我们装的、内容还是原样」的（用户文件默认保留）
     shellkit uninstall-self --purge   # 连安装目录里用户自己放的一起清掉
+    shellkit uninstall-self --legacy  # 旧安装（无指纹清单）的显式兼容清理：按 MANIFEST 全删
 
     # 已经 clone 下来时也可以直接装，或用 --prefix 换目录
     shellkit install-self --prefix ~/.local

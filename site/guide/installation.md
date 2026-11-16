@@ -101,12 +101,16 @@ shellkit update --from shellkit-0.26.2.tar.gz --sha256 "$SUM"
 ## 卸载
 
 ```bash
-shellkit uninstall-self
+shellkit uninstall-self            # 只删「我们装的、内容还是原样」的，用户文件默认保留
+shellkit uninstall-self --purge    # 连安装目录里用户自己放的一起清掉
+shellkit uninstall-self --legacy   # 旧安装（只有 MANIFEST、无指纹清单）的显式兼容清理
 ```
 
-安装时会把真实落盘的文件写成 `PREFIX/share/shellkit/MANIFEST`；卸载只删清单里列出的
-相对路径，`../` 一律跳过并告警。**没有清单就报错退出（退出码 3）**，交给人决定 ——
-猜着删是最容易删掉别人东西的做法。
+安装时把真实落盘的文件与指纹写成 `PREFIX/share/shellkit/.shellkit-install-manifest`；卸载逐条比对，
+`../` 一律跳过并告警，用户改过/新增的文件保留并打印 `kept files that are not ours: N`。
+没有清单时普通卸载报错退出（退出码 3），交给人决定 —— 猜着删是最容易删掉别人东西的做法。
+只有 `MANIFEST`、没有指纹清单的旧安装默认 fail-closed；先 `install-self --force` 采纳指纹（会覆盖
+本地修改）再卸载，或显式用 `--legacy` 按旧语义全删。
 
 ## 装到哪了
 
@@ -116,7 +120,8 @@ PREFIX/share/shellkit/lib/          库（bootstrap.sh + core/*.sh）
 PREFIX/share/shellkit/locale/       译文
 PREFIX/share/shellkit/templates/    shellkit new 的模板
 PREFIX/share/shellkit/tests/        测试断言与执行器（装好的副本也能自测）
-PREFIX/share/shellkit/MANIFEST      卸载依据
+PREFIX/share/shellkit/MANIFEST      安装文件表
+PREFIX/share/shellkit/.shellkit-install-manifest  所有权与指纹基线（卸载/重装依据）
 ```
 
 ## 退出码
