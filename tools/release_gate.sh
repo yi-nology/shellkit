@@ -133,8 +133,13 @@ _gate_one() {
 
 # 自动重跑：每个检查最多争取一次。状态记在临时目录里 —— 进程重启就重来，
 # 这正是想要的（一次失败的发布流程重新跑，等于又给了它一次机会）。
+#
+# 建不出来不致命：下面 _rerun_once 建标记时同样会失败 ⇒ 被取消的检查按失败
+# 处理（fail-closed），不会「以为重跑过」。这里刻意不写 `|| true` ——
+# 那个右臂永远走不到（mkdir -p 极少失败），留着只会变成一条没人覆盖、
+# 只能靠白名单兜着的分支。
 RERUN_DIR="${TMPDIR:-/tmp}/release-gate-rerun.$$"
-mkdir -p "$RERUN_DIR" 2>/dev/null || true
+mkdir -p "$RERUN_DIR" 2>/dev/null
 trap 'rm -rf "${RERUN_DIR:?}"' EXIT INT TERM HUP
 
 # _rerun_once NAME DETAILS_URL —— 请求重跑一次；返回 0 = 已经请求、继续等
@@ -156,10 +161,12 @@ _rerun_once() {
   case "$__name" in
     */* | .* | '') return 1 ;;
   esac
-  if [ -e "$RERUN_DIR/$__name" ]; then
+  # 用「建目录」当一次性标记：已存在 = 这个检查的机会已经用掉；
+  # 建不出来（不可写等）= 也不放行（fail-closed）。两种情况都走同一条臂，
+  # 省掉一个永远注入不出来的「写标记失败」分支。
+  if ! mkdir "$RERUN_DIR/$__name" 2>/dev/null; then
     return 1
   fi
-  : >"$RERUN_DIR/$__name" || return 1
   _say "  [RETRY] $__name — the runner cancelled it; requesting one re-run of run $__runid"
   # --failed 覆盖「有失败/被取消的 job」；老版本 gh 不认就退回整轮重跑
   if gh run rerun "$__runid" --failed >/dev/null 2>&1; then
@@ -172,39 +179,52 @@ _rerun_once() {
   return 1
 }
 
-# _gate_count LIST —— 清单里实际有几条必需检查
+# 必需检查清单只拆一次，拆成数组；后面计数与判定都用这一份。
 #
-# ⚠ 不能用 `printf '%s' "$LIST" | tr '|' '\n' | wc -l`：printf 不补尾换行，
-# wc -l 数的是**换行符个数**而不是行数 ⇒ 永远比实际条数少 1（issue #70：
-# 清单 13 条却报 12，跟下面 verdict 行的 13 对不上 —— 同一个清单两个数）。
-# 这里按 | 逐段拆、空段丢掉 —— 与判定循环的口径完全一致。
-_gate_count() {
-  local __rest=${1:-} __n=0 __item
-  while [ -n "$__rest" ]; do
-    case "$__rest" in
-      *'|'*)
-        __item=${__rest%%|*}
-        __rest=${__rest#*|}
-        ;;
-      *)
-        __item=$__rest
-        __rest=""
-        ;;
-    esac
-    [ -n "$__item" ] || continue
-    __n=$((__n + 1))
-  done
-  printf '%s' "$__n"
-}
+# 两个理由（都不是洁癖）：
+#   ① 拆法按 | 逐段拆、空段丢掉 —— 与判定口径完全一致。
+#      ⚠ 不能用 `printf '%s' "$LIST" | tr '|' '\n' | wc -l`：printf 不补尾换行，
+#      wc -l 数的是**换行符个数**而不是行数 ⇒ 永远比实际条数少 1（issue #70：
+#      清单 13 条却报 12，跟下面 verdict 行的 13 对不上 —— 同一个清单两个数）。
+#   ② 老写法把清单拆在「管道 + 临时文件」里：管道右侧是子 shell，计数器出不来，
+#      只好再写一遍文件读回来。而那个文件写在
+#      ${TMPDIR:-/tmp}/release-gate-results.$$ —— 路径可预测、写不出来时读回来
+#      是空的 ⇒ 计数全是 0 ⇒ 门禁打出「all 0 required checks succeeded」并放行。
+#      **查不了状态却放行**，正是这个脚本最不能犯的错（fail-closed）。
+#      数组活在同一个 shell 里，不跨进程、不落盘，那条路整个没有。
+_CHECK_NAMES=()
+__rest=$CHECKS
+while [ -n "$__rest" ]; do
+  case "$__rest" in
+    *'|'*)
+      __item=${__rest%%|*}
+      __rest=${__rest#*|}
+      ;;
+    *)
+      __item=$__rest
+      __rest=""
+      ;;
+  esac
+  [ -n "$__item" ] || continue
+  _CHECK_NAMES[${#_CHECK_NAMES[@]}]=$__item
+done
+
+# 一条都没有 = 这次发布什么都没验过 ⇒ 绝不能当成「全部通过」。
+[ "${#_CHECK_NAMES[@]}" -gt 0 ] || _die "the required-check list is empty (SHELLKIT_GATE_CHECKS)" 2
 
 _say "repository: $GATE_REPO"
 _say "commit: $SHA"
-_say "required checks: $(_gate_count "$CHECKS")"
+_say "required checks: ${#_CHECK_NAMES[@]}"
 
 __waited=0
 while :; do
-  printf '%s\n' "$CHECKS" | tr '|' '\n' | while IFS= read -r __name; do
-    [ -n "$__name" ] || continue
+  # 计数与判定都在这个 shell 里 —— 不跨子进程、不落盘（理由见上面
+  # _CHECK_NAMES 那段：落盘那份曾经会在写不出来时让门禁「零检查通过」）。
+  # missing 与 pending 是两类「还没有结论」：前者是检查尚未注册，
+  # 窗口内等、超时才判失败（issue #85）；后者照旧等。
+  __pending=0 __failed=0 __passed=0 __missing=0 __retried=0
+  __first_bad="" __first_missing=""
+  for __name in ${_CHECK_NAMES[@]+"${_CHECK_NAMES[@]}"}; do
     __raw=$(_gate_one "$__name")
     __url=""
     case "$__raw" in
@@ -231,17 +251,6 @@ while :; do
       completed/*) __v=fail ;;
       *) __v=pending ;;
     esac
-    # 循环体在管道子 shell 里：计数器出不来，结论打进 stdout，
-    # 由外层从结果文件里重新统计（见下）。
-    printf '%s\t%s\t%s\n' "$__v" "$__name" "$__verdict"
-  done >"${TMPDIR:-/tmp}/release-gate-results.$$"
-
-  # 子 shell 计数器出不来，用结果文件重新统计。
-  # missing 与 pending 是两类「还没有结论」：前者是检查尚未注册，
-  # 窗口内等、超时才判失败（issue #85）；后者照旧等。
-  __pending=0 __failed=0 __passed=0 __missing=0 __retried=0
-  __first_bad="" __first_missing=""
-  while IFS=$'\t' read -r __v __name __raw; do
     case "$__v" in
       ok) __passed=$((__passed + 1)) ;;
       pending) __pending=$((__pending + 1)) ;;
@@ -263,8 +272,6 @@ while :; do
         [ -n "$__first_bad" ] || __first_bad="$__name ($__v)"
         ;;
     esac
-  done <"${TMPDIR:-/tmp}/release-gate-results.$$"
-  while IFS=$'\t' read -r __v __name __raw; do
     case "$__v" in
       ok) _say "  [ OK ] $__name" ;;
       pending) _say "  [....] $__name (pending)" ;;
@@ -274,8 +281,7 @@ while :; do
       cancelled-blocked) _say "  [FAIL] $__name (cancelled by the runner; the one re-run is spent or unavailable)" ;;
       fail) _say "  [FAIL] $__name" ;;
     esac
-  done <"${TMPDIR:-/tmp}/release-gate-results.$$"
-  rm -f "${TMPDIR:-/tmp}/release-gate-results.$$"
+  done
 
   if [ "$__failed" -gt 0 ]; then
     _say "verdict: NOT PASSED — $__failed required check(s) failed (first: $__first_bad)"

@@ -121,7 +121,8 @@ v0.24.0 暴露的缺口是：源码矩阵全绿、系统包构建也全绿，但
 |---|---|
 | **兼容承诺文档** `docs/COMPATIBILITY.md` | semver 口径、什么算破坏性变更、弃用窗口（至少一个 minor）、experimental 边界；`tools/check_compatibility.sh` 对账小节、分级数量与豁免名单 |
 | **每个公开函数都有等级** | 162 个公开函数：50 `stable` / 112 `experimental`；`tools/stability_exempt.txt` 清空并禁止回填；`tools/api_baseline.sh` 三规则 + 基线重生成 |
-| **取消检查有限自动重跑** | `tools/release_gate.sh`：`completed/cancelled` 时从 `details_url` 取 run id，每个检查最多重跑一次；重跑后仍取消 ⇒ 失败（fail-closed）。`tests/test_release_gate_cancelled.sh` 五个场景（成功、再次取消、`--no-rerun`、无 URL、绿路径不受影响） |
+| **取消检查有限自动重跑** | `tools/release_gate.sh`：`completed/cancelled` 时从 `details_url` 取 run id，每个检查最多重跑一次；重跑后仍取消 ⇒ 失败（fail-closed）。`tests/test_release_gate_cancelled.sh` 十个场景（成功、再次取消、`--no-rerun`、无 URL、绿路径不受影响、查询失败、URL 不是运行页、run id 非法、检查名带路径分隔符、`gh` 不认 `--failed` 退回整轮重跑） |
+| **门禁不许「零检查通过」** | 结论不再经临时文件中转 —— 那条路在文件写不出来时会数出 0 条 ⇒ 打出 `verdict: PASSED — all 0 required checks succeeded` 并放行（查不了状态却放行）；清单为空也从「静默通过」改为用法错（退 2）。判据在 `tests/test_release_gate.sh`（含把旧实现放回去必须变红的自证） |
 | **可选 job 失败不再静默** | 新增 `tools/release_selfcheck.sh` + `release.yml` 的不可选 `self-check` job：等 `packages` 跑完，逐项点名主资产 / 签名 / deb+rpm，缺一个就红；`tests/test_release_selfcheck.sh` 含结构判据与自证 |
 | **升级矩阵加格与生命周期** | 默认版本补 `0.26.2`；每个版本多跑一圈 `install-self → uninstall-self → 重装 → 用装出来的 CLI 再升级`；`docs/RELEASING.md` 要求 1.0 前连续三次全矩阵绿并留证据 |
 

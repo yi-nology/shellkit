@@ -101,6 +101,83 @@ rc=$?
 assert_eq "0" "$rc" "green checks must still pass"
 assert_eq "" "$(cat "$d/log5")" "nothing to rerun on a green run"
 
+# CASE: 查询检查状态本身失败（gh api 报错）⇒ fail-closed，点名 query failed
+qv="$TEST_TMP_ROOT/gate-cancel-query"
+mkdir -p "$qv"
+cat >"$qv/gh" <<'EOF'
+#!/usr/bin/env bash
+exit 1
+EOF
+chmod 755 "$qv/gh"
+out=$(env PATH="$qv:$PATH" "$CHECKS" bash "$GATE" "$SHA" --once 2>&1)
+rc=$?
+assert_eq "1" "$rc" "a failed check-runs query must block the release"
+assert_contains "$out" "query failed" "the verdict must say the query failed"
+
+# 下面三条：取消原因有了，但**无处/无法重跑** —— 一律按失败处理，别假装能救。
+
+# CASE: details_url 不是 Actions 运行页 ⇒ 不重跑
+printf 'alpha\tcompleted/success\t\tcompleted/success\nbeta\tcompleted/cancelled\thttps://github.com/o/r/checks/123\tcompleted/success\n' >"$d/state6"
+: >"$d/log6"
+bin6=$(mk_gh "$d/state6" "$d/log6")
+out=$(env PATH="$bin6:$PATH" "$CHECKS" bash "$GATE" "$SHA" --once 2>&1)
+rc=$?
+assert_eq "1" "$rc" "a cancelled check without an Actions run URL must fail closed"
+assert_eq "" "$(cat "$d/log6")" "no run URL means no re-run request"
+
+# CASE: run id 不是数字 ⇒ 不重跑
+printf 'alpha\tcompleted/success\t\tcompleted/success\nbeta\tcompleted/cancelled\thttps://github.com/o/r/actions/runs/not-a-number/job/9\tcompleted/success\n' >"$d/state7"
+: >"$d/log7"
+bin7=$(mk_gh "$d/state7" "$d/log7")
+out=$(env PATH="$bin7:$PATH" "$CHECKS" bash "$GATE" "$SHA" --once 2>&1)
+rc=$?
+assert_eq "1" "$rc" "a non-numeric run id must fail closed"
+assert_eq "" "$(cat "$d/log7")" "a bad run id means no re-run request"
+
+# CASE: 检查名带路径分隔符（会变成文件名）⇒ 拒绝重跑（坑 7 的边界）
+printf 'alpha\tcompleted/success\t\tcompleted/success\nbad/name\tcompleted/cancelled\thttps://github.com/o/r/actions/runs/4242/job/9\tcompleted/success\n' >"$d/state8"
+: >"$d/log8"
+bin8=$(mk_gh "$d/state8" "$d/log8")
+out=$(env PATH="$bin8:$PATH" SHELLKIT_GATE_CHECKS='alpha|bad/name' bash "$GATE" "$SHA" --once 2>&1)
+rc=$?
+assert_eq "1" "$rc" "an unsafe check name must not drive the re-run state path"
+assert_eq "" "$(cat "$d/log8")" "an unsafe check name means no re-run request"
+
+# CASE: gh 不认 rerun --failed ⇒ 退回整轮重跑（老版本 gh 的兼容臂）
+printf 'alpha\tcompleted/success\t\tcompleted/success\nbeta\tcompleted/cancelled\thttps://github.com/o/r/actions/runs/4242/job/9\tcompleted/success\n' >"$d/state9"
+: >"$d/log9"
+fb=$(mktemp -d "$TEST_TMP_ROOT/ghbin.XXXXXX") || _fail "mktemp failed"
+sed -e "s|@STATE@|$d/state9|" -e "s|@LOG@|$d/log9|" >"$fb/gh" <<'STUB'
+#!/usr/bin/env bash
+state='@STATE@'
+log='@LOG@'
+if [ "${1:-}" = "run" ] && [ "${2:-}" = "rerun" ]; then
+  for a in "$@"; do
+    case "$a" in
+      --failed) printf '%s\n' "failed-attempt" >>"$log"; exit 1 ;;
+    esac
+  done
+  printf '%s\n' "plain-attempt" >>"$log"
+  tmp=$(mktemp)
+  awk -F'\t' 'BEGIN{OFS="\t"} { $2 = $4; print }' "$state" >"$tmp" && mv "$tmp" "$state"
+  exit 0
+fi
+name=""
+for a in "$@"; do
+  case "$a" in
+    check_name=*) name=${a#check_name=} ;;
+  esac
+done
+awk -F'\t' -v n="$name" '$1 == n { printf "%s\t%s", $2, $3; found = 1; exit } END { if (!found) printf "MISSING" }' "$state" 2>/dev/null
+STUB
+chmod 755 "$fb/gh"
+# 顺便覆盖 --timeout= / --interval= 的等号写法（两种写法都得能用）
+out=$(env PATH="$fb:$PATH" "$CHECKS" bash "$GATE" "$SHA" --timeout=10 --interval=1 2>&1)
+rc=$?
+assert_eq "0" "$rc" "the plain-rerun fallback must let the gate pass"
+assert_contains "$(cat "$d/log9")" "failed-attempt" "the gate must first try rerun --failed"
+assert_contains "$(cat "$d/log9")" "plain-attempt" "the gate must fall back to a full rerun when --failed is rejected"
+
 # --- 结构判据：自动重跑要 Actions 的写权限 ---
 # release.yml 的 GITHUB_TOKEN 默认只有 contents: write；gh run rerun 需要
 # actions: write，缺了它重跑请求会被拒 —— 自动重跑形同虚设（还会 fail-closed）。

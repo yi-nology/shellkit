@@ -760,6 +760,17 @@ shellkit uninstall-self --purge
 |---|---|---|---|
 | `tools/sign_release.sh --file` | 点名补签也会枚举整份 `SHA256SUMS`：`dist/` 里缺任一清单文件就 `[FAIL] SHA256SUMS lists a missing file: shellkit-skill-x.y.z.tar.gz` | 点名模式**跳过整份枚举**，只签点名的文件（也不再顺手重签 `SHA256SUMS` / `install.sh`） | 发布之后补签 deb/rpm / 镜像清单的流水线：从必红变为可用 |
 
+### 0.26.2 → 0.27.0：会改变结果的行为变化
+
+库本身（`lib/core/*.sh`）只多了 `@stability` 承诺标注（注释），行为零变化；变的是**发布门禁** `tools/release_gate.sh`。**调用方不用改任何代码。**
+
+| 变化 | 以前 | 现在 | 你会在哪里撞到 |
+|---|---|---|---|
+| 必需检查被 runner 取消（`conclusion=cancelled`） | 直接判失败 —— 一次 macOS runner 的配额取消就得人工盯网页重跑 | 每个检查**自动重跑一次**（从 check-run 的 `details_url` 取 run id，请求 `gh run rerun --failed`）；重跑后仍被取消 ⇒ 按失败处理（fail-closed）。`--no-rerun` 可关掉 | 发版的人：runner 取消不再要手动重来。靠「取消即失败」来提醒自己的脚本，请改看 `[WAIT]` / `one re-run requested` |
+| 门禁计数的结果文件 | 结论先写进 `${TMPDIR}/release-gate-results.$$` 再读回来计数（管道右侧是子 shell，计数器出不来） | 结论在同一个 shell 里数，不落盘、不跨进程 | 跑门禁时去盯 `/tmp/release-gate-results.*` 的脚本：那个文件没有了 |
+| 门禁**写不出结果文件**时 | 计数全是 0 ⇒ 打出 `verdict: PASSED — all 0 required checks succeeded` 并**放行**（退出码 0）—— 查不了状态却放行 | 门禁照样数清每一条检查；任何一条没结论就 fail-closed（退出码 1） | `TMPDIR` 不可写的老环境：以前是静默放行，现在会红 |
+| 必需检查清单为空（`SHELLKIT_GATE_CHECKS='|'`） | 0 条检查 ⇒「全部通过」，退出码 0 | 用法错，退出码 **2**，并点名 `the required-check list is empty` | 误设空清单的发版脚本：从「静默放行」变成「明确报错」 |
+
 ## 0.23.0 → 0.24.0：会改变结果的行为变化
 
 这一版是 v1.0.0 阶段四的门禁收口段。一处会改变结果的修复：

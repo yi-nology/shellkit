@@ -73,6 +73,17 @@ rc=$?
 assert_eq "0" "$rc" "all required checks green must pass the gate"
 assert_contains "$out" "verdict: PASSED" "the verdict must say passed"
 
+# CASE: 结论是裸的 SUCCESS（不带 status/conclusion 前缀）⇒ 也要认成功
+# gh 的 jq 永远吐 "status/conclusion"，但桩与旧版输出可能只给 SUCCESS。
+# 这条臂一旦没人走，就只能靠白名单兜着 —— 而白名单正是覆盖回退的遮羞布
+# （坑 15）。显式钉住它，白名单里就不会躺着这条臂。
+printf 'alpha\tSUCCESS\nbeta\tSUCCESS\ngamma\tSUCCESS\n' >"$d/state-success"
+bin_success=$(mk_gh "$d/state-success")
+out=$(env PATH="$bin_success:$PATH" "$GATE_ENV" bash "$GATE" "$SHA" --once 2>&1)
+rc=$?
+assert_eq "0" "$rc" "a bare SUCCESS verdict must pass the gate"
+assert_contains "$out" "verdict: PASSED" "the verdict must say passed"
+
 # CASE: 「required checks: N」必须等于清单的实际条数（issue #70）
 #
 # 旧写法是 `printf '%s' "$CHECKS" | tr '|' '\n' | wc -l`：printf 不补尾换行，
@@ -168,6 +179,46 @@ assert_eq "3" "$rc" "no gh means no verification means no release"
 rc=0
 env PATH="$bin:$PATH" "$GATE_ENV" bash "$GATE" >/dev/null 2>&1 || rc=$?
 assert_eq "2" "$rc" "a missing SHA must be a usage error"
+
+# CASE: --help 必须能用（这条臂没人走，就只剩白名单兜着 —— 而白名单正是
+# 覆盖回退的遮羞布，坑 15）
+rc=0
+out=$(bash "$GATE" --help 2>&1) || rc=$?
+assert_eq "0" "$rc" "--help must exit 0"
+assert_contains "$out" "usage: bash" "--help must print the usage"
+
+# CASE: 选项缺值 ⇒ 用法错（退 2），不能把空值当秒数用
+for __opt in --timeout --interval; do
+  rc=0
+  out=$(env PATH="$bin:$PATH" bash "$GATE" "$SHA" "$__opt" 2>&1) || rc=$?
+  assert_eq "2" "$rc" "$__opt without a value must be a usage error"
+  assert_contains "$out" "needs a value" "$__opt without a value must name the cause"
+done
+
+# CASE: 清单里一条都没有 ⇒ 用法错（退 2），绝不能「零检查通过」
+# 「没有必需检查」= 这次发布什么都没验过；当成「全部通过」放行，
+# 就是这个脚本最不能犯的错（fail-closed）。
+rc=0
+out=$(env PATH="$bin:$PATH" SHELLKIT_GATE_CHECKS='|' bash "$GATE" "$SHA" --once 2>&1) || rc=$?
+assert_eq "2" "$rc" "an empty required-check list must be a usage error"
+assert_contains "$out" "required-check list is empty" "the error must name the cause"
+
+# CASE: TMPDIR 不可写 ⇒ 门禁必须照样数清每一条检查，绝不许「零检查通过」
+#
+# 老实现把结论写进 ${TMPDIR}/release-gate-results.$$ 再读回来计数：那个文件
+# 写不出来 ⇒ 读回来是空的 ⇒ 计数全是 0 ⇒ 门禁打出「all 0 required checks
+# succeeded」并放行（退出码 0）。**查不了状态却放行** —— 正是这个脚本
+# 声明自己绝不能犯的错。TMPDIR 指向一个普通文件 ⇒ mkdir -p 必然失败。
+d_tmp=$(mktemp -d "$TEST_TMP_ROOT/gate-tmpdir.XXXXXX") || _fail "mktemp failed"
+printf 'alpha\tcompleted/success\nbeta\tcompleted/cancelled\n' >"$d_tmp/state"
+bin_tmp=$(mk_gh "$d_tmp/state")
+: >"$d_tmp/notadir"
+out=$(env PATH="$bin_tmp:$PATH" TMPDIR="$d_tmp/notadir" "$GATE_ENV" bash "$GATE" "$SHA" --once 2>&1)
+rc=$?
+assert_eq "1" "$rc" "a cancelled check must still fail closed when TMPDIR is unwritable"
+assert_contains "$out" "[ OK ] alpha" "the gate must still evaluate every check when TMPDIR is unwritable"
+assert_not_contains "$out" "all 0 required checks" "the gate must never report a vacuous pass"
+assert_not_contains "$out" "verdict: PASSED" "the gate must not pass when a check was cancelled"
 
 # CASE: 没有 GITHUB_REPOSITORY 时从 origin 反推 —— 三条解析分支都要被走到：
 # git@ 前缀、https 前缀、非 GitHub 远端（必须 die 2）。桩 git 只回答
