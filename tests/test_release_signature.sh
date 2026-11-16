@@ -87,4 +87,27 @@ bash "$root/tools/verify_release.sh" --dist "$rel" --pub "$keydir/k.pub" >"$d/ba
 assert_ne "0" "$rc" "a tampered asset must fail the verification"
 assert_contains "$(cat "$d/bad.log")" "does not verify" "the failure must say the signature does not verify"
 
+# 4) --file 点名补签：dist 里只有点名那份 + 清单（清单仍然列着别的资产）
+#    ⇒ 必须成功。发布之后才打出来的 deb/rpm 就是这个形态：那个 job 只下载
+#    tarball 与 SHA256SUMS，拿「清单是否整份齐全」去卡它必然红
+#    （v0.26.1 首发事故：exit 1 "SHA256SUMS lists a missing file: shellkit-skill-*.tar.gz"）。
+partial="$d/partial"
+mkdir -p "$partial"
+cp "$dist/SHA256SUMS" "$partial/"
+printf 'deb only\n' >"$partial/shellkit-9.9.9.deb"
+rc=0
+SHELLKIT_MINISIGN_KEY="$keydir/k.key" SHELLKIT_MINISIGN_PUBKEY="$keydir/k.pub" \
+  bash "$root/tools/sign_release.sh" --dist "$partial" --require \
+  --file "$partial/shellkit-9.9.9.deb" >"$d/partial.log" 2>&1 || rc=$?
+assert_eq "0" "$rc" "naming a file must sign just that file, even when the manifest lists assets that are not in dist: $(tail -2 "$d/partial.log")"
+assert_true test -f "$partial/shellkit-9.9.9.deb.minisig"
+
+# 4a) 自证：同一份 partial dist 不点名（整份签名）⇒ 仍必须因清单缺件而红
+rc=0
+SHELLKIT_MINISIGN_KEY="$keydir/k.key" SHELLKIT_MINISIGN_PUBKEY="$keydir/k.pub" \
+  bash "$root/tools/sign_release.sh" --dist "$partial" --require >"$d/partial-all.log" 2>&1 || rc=$?
+assert_eq "1" "$rc" "signing the whole set must still refuse a manifest whose files are not in dist"
+assert_contains "$(cat "$d/partial-all.log")" "lists a missing file" \
+  "the refusal must name the missing file"
+
 exit 0
