@@ -14,6 +14,21 @@ sha256 只证明「下载没被改」，不证明「这个包是我们发的」�
 | `install.sh` 自身 | 默认**无** | —— | 脚本在任何校验之前就执行；离线路径里用 `install.sh.minisig` 验 |
 | deb / rpm | 同一 tarball 封装 + 逐项自检 | 包内容与已验签 tarball 逐字节一致 | 独立的 apt/rpm 仓库签名（未建仓库，见下） |
 
+## 发布顺序：draft → 独立验签 → 公开（v0.26 起）
+
+正式发布的顺序是固定的，任何一步失败都不会让资产对外可见：
+
+1. **构建**：tarball / skill 包 / 脚本 / 校验和；
+2. **建成 draft Release**：资产先挂在一个未公开的 draft 上；
+3. **独立验签**：从这个 draft 重新下载资产，用本文件钉住的公钥逐份验签、并与
+   `SHA256SUMS` 对账（`tools/verify_release.sh <tag>`）；签名没配齐或有任何一份验不过
+   ⇒ 停在这里，draft 不会变成公开版本；
+4. **公开**：`gh release edit <tag> --draft=false --latest`。
+
+判据在 `tests/test_release_publish_order.sh`：`gh release create` 必须带 `--draft`、
+验签步骤必须排在 `--draft=false` 之前、公开动作只能出现一次；把 `--draft` 去掉或把两步
+对调，用例都会红。
+
 ## install.sh 验什么、不验什么
 
 **验**（仅远端安装路径；本地 git 检出安装不联网、无此环节）：

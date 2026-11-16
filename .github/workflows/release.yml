@@ -94,7 +94,10 @@ jobs:
             echo "unsigned release (no key configured); pin check skipped"
           fi
 
-      - name: publish
+      # 发布分两步走（评估 2026-11-16）：先建成 **draft**，独立验签通过后再公开。
+      # 以前是「先公开发布、再下载验签」—— 验签失败时资产已经挂在网页上了，
+      # 用户能下到一个没通过校验的版本。
+      - name: create a draft release
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
@@ -125,16 +128,27 @@ jobs:
           else
             gh release create "$tag" "${assets[@]}" \
               --title "shellkit $(cat VERSION)" \
-              --generate-notes
+              --generate-notes \
+              --draft
           fi
 
-      - name: verify the published assets
-        # 发布后从 Release 重新取回资产，用固定公钥独立验签（路线图 v0.27.0）。
+      - name: verify the draft assets
+        # 从 draft Release 重新取回资产，用固定公钥独立验签（路线图 v0.27.0）。
         # 只在 dist/ 上验签证明不了「下载到的那份」与签名对得上，也证明不了公钥
         # 没被换过 —— 这里走的是与用户 docs/TRUST.md 手动验签完全一致的口径。
+        # draft 还没对外可见，所以这一步失败时用户什么都看不到。
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: bash tools/verify_release.sh "$GITHUB_REF_NAME"
+
+      - name: publish the draft
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          tag="$GITHUB_REF_NAME"
+          # 验签过了才让它变成正式 Release；--latest 让 latest/download/* 指向这一版。
+          gh release edit "$tag" --draft=false --latest
 
   # deb / rpm（issue #65）：基于**已发布**的那份 tarball 打包 —— 下载 release
   # 资产并对 SHA256SUMS，确保包的是「发出去的那份」，不是本地重建的第二份。
