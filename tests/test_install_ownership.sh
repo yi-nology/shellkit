@@ -63,4 +63,78 @@ assert_eq "0" "$rc" "the purge must succeed"
 assert_false test -d "$dest2"
 assert_false test -e "$prefix2/bin/shellkit"
 
+# ---------- #123：卸载保留用户修改后，重装不许静默覆盖 ----------
+#
+# 卸载（不带 --purge）保留用户改过的文件时，所有权基线不能随卸载消失：
+# 重装/更新要能认出「这份不是我们装的原文」而继续保留；只有 --force 才覆盖。
+p3="$d/prefix3"
+"$SK" install-self --prefix "$p3" >/dev/null 2>&1 || _fail "the third install must succeed"
+d3="$p3/share/shellkit"
+orig_log_sum=$(sum "$d3/lib/core/log.sh")
+printf '\n# user edit survived uninstall\n' >>"$d3/lib/core/log.sh"
+edit_log_sum=$(sum "$d3/lib/core/log.sh")
+printf 'MINE\n' >"$d3/my-own-3.sh"
+mine3_sum=$(sum "$d3/my-own-3.sh")
+
+unlog="$d/uninstall3.log"
+rc=0
+"$SK" uninstall-self --prefix "$p3" >"$unlog" 2>&1 || rc=$?
+assert_eq "0" "$rc" "the uninstall keeping user edits must succeed"
+assert_eq "$edit_log_sum" "$(sum "$d3/lib/core/log.sh")" "the user edit must survive uninstall"
+assert_contains "$(cat "$unlog")" "kept files that are not ours" \
+  "the uninstall must report the kept files"
+# 卸载后基线必须留下：没有它，重装就分不清「上游原文」与「用户改过」
+assert_true test -f "$d3/.shellkit-install-manifest"
+
+relog="$d/reinstall3.log"
+rc=0
+"$SK" install-self --prefix "$p3" >"$relog" 2>&1 || rc=$?
+assert_eq "0" "$rc" "the reinstall after uninstall must succeed"
+assert_eq "$edit_log_sum" "$(sum "$d3/lib/core/log.sh")" \
+  "the reinstall must not silently overwrite the user edit kept by uninstall"
+assert_eq "$mine3_sum" "$(sum "$d3/my-own-3.sh")" \
+  "the reinstall must keep the user-added file"
+assert_contains "$(cat "$relog")" "modified locally, left alone" \
+  "the reinstall must report the kept user edit"
+# 基线仍是上游原文的指纹 —— 推进成用户内容就等于把编辑记成「我们装的原文」
+if grep -q "$(printf '%s\t%s' 'lib/core/log.sh' "$edit_log_sum")" "$d3/.shellkit-install-manifest"; then
+  _fail "the ownership baseline must not advance to the user's edited content"
+fi
+assert_contains "$(cat "$d3/.shellkit-install-manifest")" "lib/core/log.sh" \
+  "the kept file must stay in the ownership baseline"
+assert_not_contains "$(cat "$d3/.shellkit-install-manifest")" "my-own-3.sh" \
+  "user-added files must not enter the ownership baseline"
+
+# 反例：同一条链路带上 --force，用户修改必须被显式覆盖（逃逸口只对开关开）
+frc=0
+"$SK" install-self --prefix "$p3" --force >/dev/null 2>&1 || frc=$?
+assert_eq "0" "$frc" "the forced reinstall must succeed"
+assert_eq "$(sum "$TEST_ROOT/lib/core/log.sh")" "$(sum "$d3/lib/core/log.sh")" \
+  "an explicit --force must overwrite the user edit"
+assert_ne "$orig_log_sum" "$edit_log_sum" "the fixture edit must change the hash"
+assert_eq "$mine3_sum" "$(sum "$d3/my-own-3.sh")" \
+  "--force must not delete the user's own files"
+
+# 没有基线的既有同名文件（旧安装 / 资产目录里的同名文件）：默认保留并告警，
+# 只有 --force 才允许覆盖。这是 #123 的另一半：不能靠「没基线」就落进 W。
+p4="$d/prefix4"
+d4="$p4/share/shellkit"
+mkdir -p "$d4/lib/core"
+printf '# pre-existing local file\n' >"$d4/lib/core/log.sh"
+pre_sum=$(sum "$d4/lib/core/log.sh")
+inc="$d/install4.log"
+rc=0
+"$SK" install-self --prefix "$p4" >"$inc" 2>&1 || rc=$?
+assert_eq "0" "$rc" "installing over a pre-existing same-name file must succeed"
+assert_eq "$pre_sum" "$(sum "$d4/lib/core/log.sh")" \
+  "a same-name file without an ownership baseline must not be overwritten by default"
+assert_contains "$(cat "$inc")" "no ownership baseline" \
+  "the install must explain that the file was kept for lack of a baseline"
+rc=0
+"$SK" install-self --prefix "$p4" --force >/dev/null 2>&1 || rc=$?
+assert_eq "0" "$rc" "the forced install must succeed"
+assert_eq "$(sum "$TEST_ROOT/lib/core/log.sh")" "$(sum "$d4/lib/core/log.sh")" \
+  "an explicit --force must overwrite a same-name file without a baseline"
+
+
 exit 0

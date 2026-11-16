@@ -164,6 +164,7 @@ _sk_msg_lookup_shellkit() {
     'not a regular file, left alone') printf '%s' '不是普通檔案，保留不動' ;;
     'modified locally, left alone') printf '%s' '本地已修改，保持原樣' ;;
     'cannot stage the file to keep') printf '%s' '無法暫存需要保留的檔案' ;;
+    'no ownership baseline, left alone (use --force to overwrite)') printf '%s' '沒有所有權基線，原樣保留（要覆蓋請用 --force）' ;;
     'the staged copy of a kept file is missing') printf '%s' '需要保留的檔案的暫存副本不見了' ;;
     'cannot restore the file kept for the user') printf '%s' '無法把為使用者保留的檔案放回去' ;;
     'the restored file does not match the kept copy') printf '%s' '放回去的檔案與暫存副本內容不一致' ;;
@@ -331,6 +332,7 @@ _sk_msg_lookup_shellkit() {
     'removing') printf '%s' '正在刪除：' ;;
     'legacy install without ownership fingerprints; every listed file will be removed') printf '%s' '舊安裝沒有所有權指紋清單，清單裡列出的檔案會被全部刪除' ;;
     'failed to remove') printf '%s' '刪除失敗：' ;;
+    'failed to write the ownership baseline') printf '%s' '寫所有權基線失敗' ;;
     'kept files that are not ours') printf '%s' '保留了不屬於我們的檔案' ;;
     'use --purge to remove them too') printf '%s' '要一併刪除請用 --purge' ;;
     'leftover files were kept') printf '%s' '保留了未清理的檔案：' ;;

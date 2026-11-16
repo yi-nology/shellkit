@@ -4,7 +4,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: shellkit\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-11-16 12:07+0800\n"
+"POT-Creation-Date: 2026-11-17 05:26+0800\n"
 "PO-Revision-Date: 2026-11-08 00:00+0800\n"
 "Last-Translator: shellkit contributors\n"
 "Language-Team: shellkit contributors\n"
@@ -498,6 +498,9 @@ msgstr "本地已修改，保持原樣"
 
 msgid "cannot stage the file to keep"
 msgstr "無法暫存需要保留的檔案"
+
+msgid "no ownership baseline, left alone (use --force to overwrite)"
+msgstr "沒有所有權基線，原樣保留（要覆蓋請用 --force）"
 
 msgid "the staged copy of a kept file is missing"
 msgstr "需要保留的檔案的暫存副本不見了"
@@ -1012,6 +1015,9 @@ msgstr "舊安裝沒有所有權指紋清單，清單裡列出的檔案會被全
 
 msgid "failed to remove"
 msgstr "刪除失敗："
+
+msgid "failed to write the ownership baseline"
+msgstr "寫所有權基線失敗"
 
 msgid "kept files that are not ours"
 msgstr "保留了不屬於我們的檔案"

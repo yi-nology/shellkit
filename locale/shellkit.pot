@@ -8,7 +8,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: shellkit 0.26.2\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-11-16 13:22+0800\n"
+"POT-Creation-Date: 2026-11-17 05:26+0800\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language-Team: LANGUAGE <LL@li.org>\n"
@@ -500,6 +500,9 @@ msgid "modified locally, left alone"
 msgstr ""
 
 msgid "cannot stage the file to keep"
+msgstr ""
+
+msgid "no ownership baseline, left alone (use --force to overwrite)"
 msgstr ""
 
 msgid "the staged copy of a kept file is missing"
@@ -1012,6 +1015,9 @@ msgid ""
 msgstr ""
 
 msgid "failed to remove"
+msgstr ""
+
+msgid "failed to write the ownership baseline"
 msgstr ""
 
 msgid "kept files that are not ours"

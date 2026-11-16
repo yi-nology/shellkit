@@ -169,6 +169,7 @@ shellkit uninstall-self --purge   # 连安装目录里用户自己放的文件�
 `PREFIX/share/shellkit/.shellkit-install-manifest`（**所有权清单**），卸载逐条比对 ——
 用户新增的文件不在清单里、用户改过的文件指纹对不上，都会保留并打印
 `kept files that are not ours: N`；**故意保留不算失败**（退出码 0），只有真的删不掉才是非 0。
+保留下来的文件基线也会留下：之后重装/更新仍认得出「这份是用户改过的」，不会静默覆盖。
 `--purge` 是唯一的「整个目录清掉」开关。
 
 老安装只有 `MANIFEST`、没有指纹清单，分不清归属 ⇒ 仍按旧语义全删并告警；

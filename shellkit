@@ -616,6 +616,13 @@ _sk_own_sync() {
       # 有基线、内容又对不上 ⇒ 用户改过
       log_warn "$(_t 'modified locally, left alone'): $__rel ($(_sk_err_path_info "$__destroot/$__rel"))"
       __act="K"
+    else
+      # 目标存在、内容与上游不同，但没有基线（旧安装 / 卸载后基线丢失 /
+      # 用户自己放的同名文件）：分不清「旧版本原文」与「用户改过」。
+      # 默认按保留处理（issue #123）—— 没有证据时绝不静默覆盖用户内容；
+      # 只有 --force 才允许覆盖。基线不推进：没证据证明这是我们装的。
+      log_warn "$(_t 'no ownership baseline, left alone (use --force to overwrite)'): $__rel ($(_sk_err_path_info "$__destroot/$__rel"))"
+      __act="K"
     fi
     case "$__act" in
       W)
@@ -4491,6 +4498,7 @@ cmd_install_self() {
 cmd_uninstall_self() {
   local __prefix __run __dest __bin __line __path __n=0 __fail=0 __link __rbin
   local __purge=0 __own __legacy=0 __rel __want __cur __lock __kept=0
+  local __keep_rels=() __keep_sums=() __i=0 __txt=""
   __run=$(_sk_running_prefix)
   __prefix=${__run:-/usr/local}
   while [ "$#" -gt 0 ]; do
@@ -4593,12 +4601,20 @@ cmd_uninstall_self() {
         if [ -L "$__path" ]; then
           log_warn "$(_t 'the target is a symlink, left alone'): $__rel"
           __kept=$((__kept + 1))
+          if [ -n "$__want" ]; then
+            __keep_rels[${#__keep_rels[@]}]=$__rel
+            __keep_sums[${#__keep_sums[@]}]=$__want
+          fi
           continue
         fi
         __cur=$(os_sha256 "$__path" 2>/dev/null) || __cur=""
         if [ -z "$__want" ] || [ "$__cur" != "$__want" ]; then
           log_warn "$(_t 'modified locally, left alone'): $__rel"
           __kept=$((__kept + 1))
+          if [ -n "$__want" ]; then
+            __keep_rels[${#__keep_rels[@]}]=$__rel
+            __keep_sums[${#__keep_sums[@]}]=$__want
+          fi
           continue
         fi
       fi
@@ -4611,7 +4627,31 @@ cmd_uninstall_self() {
     done <"$__own"
   fi
 
-  rm -f "$__dest/MANIFEST" "$__dest/.shellkit-install-manifest"
+  # issue #123：保留用户修改时，所有权基线不能随卸载一起消失 —— 保留项的
+  # **旧基线**写回指纹清单（墓碑基线），重装/更新才能继续认出「这份不是
+  # 我们装的原文」。MANIFEST 可以删（卸载的文件表已经完成使命）。
+  if [ "$__kept" -gt 0 ] && [ "${#__keep_rels[@]}" -gt 0 ]; then
+    _SK_OWN_RELS=()
+    _SK_OWN_SUMS=()
+    __i=0
+    while [ "$__i" -lt "${#__keep_rels[@]}" ]; do
+      _SK_OWN_RELS[${#_SK_OWN_RELS[@]}]=${__keep_rels[$__i]}
+      _SK_OWN_SUMS[${#_SK_OWN_SUMS[@]}]=${__keep_sums[$__i]}
+      __i=$((__i + 1))
+    done
+    __txt=$(_sk_fs_own_render)
+    if fs_atomic_write "$__own" "$__txt" 644; then
+      rm -f "$__dest/MANIFEST"
+    else
+      log_error "$(_t 'failed to write the ownership baseline'): $__own"
+      __fail=$((__fail + 1))
+    fi
+  elif [ "$__kept" -gt 0 ]; then
+    # 清单损坏、没记下可用基线：保留原清单（宁可多留，不可错删）
+    rm -f "$__dest/MANIFEST"
+  else
+    rm -f "$__dest/MANIFEST" "$__dest/.shellkit-install-manifest"
+  fi
   # 由深到浅删空目录；rmdir 只删空目录，碰到别人的东西会失败而不是删掉
   find "$__dest" -depth -type d -exec rmdir {} \; 2>/dev/null || true
 
