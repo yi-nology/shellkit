@@ -22,8 +22,13 @@
 #      等于假定用户永远不卸载重装。
 #
 # 离网时显式 SKIP 并返回 0 —— 绝不因为「下不到」而假绿。
+# **--strict（CI / 正式发布用）下 skip 不再放行**：声明的每个源版本都必须
+# 真跑通（ran == 声明数、skipped == 0、fails == 0），任何跳过都判失败并点名
+# 版本与原因——「一个跑通、两个跳过」不是「所有声明支持的旧版本可升级」
+#（issue #126：跳过可能是老 CLI 不可执行/建不出工程，那是兼容性事实）。
 #
-# 退出码：0 全过（或全部跳过）/ 1 有用例失败 / 2 用法错 / 3 缺前置条件
+# 退出码：0 全过（非 strict 时含跳过）/ 1 有用例失败或 strict 下存在跳过 /
+#         2 用法错 / 3 缺前置条件
 set -u
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
@@ -84,10 +89,18 @@ sum() {
 
 fails=0
 ran=0
+passed=0
 skipped=0
+declared=0
+results=""
+
+# result 记一行逐版本结局（passed / skipped(原因) / failed(原因)）。
+# 非 strict 也输出——只给一行 ran/skipped 计数看不出哪个版本发生了什么。
+result() { results="${results}$*"$'\n'; }
 
 for v in $versions; do
   [ -n "$v" ] || continue
+  declared=$((declared + 1))
   say "== $v -> $current"
   dir="$work/$v"
   mkdir -p "$dir"
@@ -96,6 +109,7 @@ for v in $versions; do
     --pattern "shellkit-$v.tar.gz" --clobber >/dev/null 2>&1; then
     say "   SKIP: cannot download v$v (offline or the release has no tarball)"
     skipped=$((skipped + 1))
+    result "$v: skipped (cannot download the release tarball)"
     printf '%s\n' "NA upgrade-matrix|$v: 取不到已发布资产（离线或该版本无 tarball）"
     continue
   fi
@@ -103,12 +117,14 @@ for v in $versions; do
   tar -C "$dir" -xzf "$dir/shellkit-$v.tar.gz" || {
     say "   FAIL: cannot extract v$v"
     fails=$((fails + 1))
+    result "$v: failed (cannot extract the release tarball)"
     continue
   }
   oldcli="$dir/shellkit-$v/shellkit"
   [ -x "$oldcli" ] || {
     say "   SKIP: v$v has no executable CLI (too old to scaffold)"
     skipped=$((skipped + 1))
+    result "$v: skipped (the release has no executable CLI)"
     continue
   }
 
@@ -116,6 +132,7 @@ for v in $versions; do
   if ! bash "$oldcli" new "$proj" --name tool --cmd run --yes >"$dir/new.log" 2>&1; then
     say "   SKIP: v$v CLI cannot scaffold a project (see $dir/new.log)"
     skipped=$((skipped + 1))
+    result "$v: skipped (the old CLI cannot scaffold a project)"
     continue
   fi
 
@@ -129,6 +146,7 @@ for v in $versions; do
     say "   FAIL: upgrade from $v exited $rc"
     printf '%s\n' "$out" | tail -5 >&2
     fails=$((fails + 1))
+    result "$v: failed (upgrade exited $rc)"
     continue
   fi
 
@@ -137,17 +155,20 @@ for v in $versions; do
   [ "$got" = "$current" ] || {
     say "   FAIL: VERSION is '$got', want '$current'"
     fails=$((fails + 1))
+    result "$v: failed (project VERSION is '$got')"
     continue
   }
   [ "$(sum "$proj/user-note.txt")" = "$mine_before" ] || {
     say "   FAIL: the user's own file changed"
     fails=$((fails + 1))
+    result "$v: failed (the user's own file changed)"
     continue
   }
 
   if [ -e "$proj/.shellkit-new" ] || [ -e "$proj/.shellkit-old" ]; then
     say "   FAIL: the upgrade left .shellkit-new/.shellkit-old behind"
     fails=$((fails + 1))
+    result "$v: failed (upgrade left staging directories behind)"
     continue
   fi
   leftovers=0
@@ -158,6 +179,7 @@ for v in $versions; do
   [ "$leftovers" -eq 0 ] || {
     say "   FAIL: the manifest left $leftovers temp file(s)"
     fails=$((fails + 1))
+    result "$v: failed (manifest left $leftovers temp file(s))"
     continue
   }
 
@@ -167,6 +189,7 @@ for v in $versions; do
     say "   FAIL: a second upgrade exited $rc2 (not idempotent)"
     printf '%s\n' "$out2" | tail -5 >&2
     fails=$((fails + 1))
+    result "$v: failed (second upgrade exited $rc2)"
     continue
   fi
   case "$out2" in
@@ -179,31 +202,37 @@ for v in $versions; do
   if ! "$SK" install-self --prefix "$prefix" >"$dir/install.log" 2>&1; then
     say "   FAIL: install-self into a temp prefix exited non-zero (see $dir/install.log)"
     fails=$((fails + 1))
+    result "$v: failed (install-self exited non-zero)"
     continue
   fi
   [ -x "$prefix/bin/shellkit" ] || {
     say "   FAIL: install-self did not produce $prefix/bin/shellkit"
     fails=$((fails + 1))
+    result "$v: failed (install-self produced no CLI)"
     continue
   }
   if ! "$SK" uninstall-self --prefix "$prefix" >"$dir/uninstall.log" 2>&1; then
     say "   FAIL: uninstall-self exited non-zero (see $dir/uninstall.log)"
     fails=$((fails + 1))
+    result "$v: failed (uninstall-self exited non-zero)"
     continue
   fi
   [ ! -e "$prefix/bin/shellkit" ] || {
     say "   FAIL: uninstall-self left the CLI behind"
     fails=$((fails + 1))
+    result "$v: failed (uninstall-self left the CLI behind)"
     continue
   }
   [ ! -e "$prefix/share/shellkit/.shellkit-install-manifest" ] || {
     say "   FAIL: uninstall-self left its install manifest behind"
     fails=$((fails + 1))
+    result "$v: failed (uninstall-self left the install manifest behind)"
     continue
   }
   if ! "$SK" install-self --prefix "$prefix" >"$dir/reinstall.log" 2>&1; then
     say "   FAIL: reinstall into the same prefix failed (see $dir/reinstall.log)"
     fails=$((fails + 1))
+    result "$v: failed (reinstall into the same prefix failed)"
     continue
   fi
   out3=$("$prefix/bin/shellkit" upgrade "$proj" 2>&1)
@@ -212,28 +241,45 @@ for v in $versions; do
     say "   FAIL: the reinstalled CLI cannot upgrade the project (exited $rc3)"
     printf '%s\n' "$out3" | tail -5 >&2
     fails=$((fails + 1))
+    result "$v: failed (the reinstalled CLI cannot upgrade)"
     continue
   fi
   got3=$(tr -d '[:space:]' <"$proj/vendor/shellkit/VERSION" 2>/dev/null)
   [ "$got3" = "$current" ] || {
     say "   FAIL: after the reinstall the project VERSION is '$got3', want '$current'"
     fails=$((fails + 1))
+    result "$v: failed (VERSION after reinstall is '$got3')"
     continue
   }
   [ "$(sum "$proj/user-note.txt")" = "$mine_before" ] || {
     say "   FAIL: the user's own file changed during the lifecycle round"
     fails=$((fails + 1))
+    result "$v: failed (the user's own file changed during the lifecycle round)"
     continue
   }
 
+  passed=$((passed + 1))
   say "   ok: $v -> $current (install → uninstall → reinstall → upgrade)"
+  result "$v: passed (upgrade + install/uninstall/reinstall lifecycle)"
   printf '%s\n' "CELL upgrade-matrix|$v -> $current: passed"
   printf '%s\n' "CELL upgrade-matrix|$v lifecycle (install/uninstall/reinstall): passed"
 done
 
-say "summary: ran=$ran skipped=$skipped fails=$fails"
+# 逐版本结局总是打印：非 strict 也要能一眼看到哪个版本跳过/失败了。
+say "summary: declared=$declared ran=$ran passed=$passed skipped=$skipped fails=$fails"
+if [ -n "$results" ]; then
+  printf '%s' "$results" >&2
+fi
 [ "$fails" -eq 0 ] || exit 1
-if [ "$strict" = "1" ] && [ "$ran" -eq 0 ]; then
-  die "strict mode: not a single upgrade source was actually tested (every version was skipped)" 1
+if [ "$strict" = "1" ]; then
+  # strict = 声明的每个源版本都真跑通。跳过不是通过：资产下载不到、老 CLI
+  # 不可执行、建不出工程，都意味着「这一版本能否升级」没有被证明（issue
+  # #126：ran=1/skipped=2 曾经照样绿）。
+  if [ "$skipped" -gt 0 ]; then
+    die "strict mode: $skipped of $declared declared upgrade source(s) were skipped — a skip is not a pass (see the per-version summary above)" 1
+  fi
+  if [ "$ran" -ne "$declared" ]; then
+    die "strict mode: only $ran of $declared declared upgrade sources were actually tested" 1
+  fi
 fi
 exit 0
