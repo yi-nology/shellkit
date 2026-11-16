@@ -197,6 +197,18 @@ jobs:
           bash tools/package_syspkg.sh --tarball "dist/shellkit-$ver.tar.gz" --out dist rpm
           bash tools/package_smoke.sh --tarball "dist/shellkit-$ver.tar.gz" "dist/shellkit-$ver.rpm"
 
+      # 签名工具：这个 job 也要签名，就必须自己装 minisign —— runner 默认没有。
+      # v0.26.0 首发正是漏了这一步：「sign the packages」报 exit 3
+      # （SHELLKIT_MINISIGN_KEY 配置了但工具缺失），而 continue-on-error 把红
+      # 吞掉了 ⇒ 那一版没带 deb/rpm。上面 release job 里同样的坑（v0.21.0）写在了注释里，
+      # 但没人保证新 job 会照做 —— 现在由 tests/test_release_signing_tool.sh 盯着。
+      - name: install minisign
+        run: |
+          set -euo pipefail
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq minisign
+          minisign -v || true
+
       # deb/rpm 在发布之后才打出来，所以在这里补签名：签名覆盖范围要与 tarball 一致，
       # 否则同一个版本里「有的资产能验、有的不能验」（评估 2026-11-16）。没配私钥时
       # --require 直接失败 ⇒ 宁可不附加，也不发布无签名的系统包。
