@@ -2,6 +2,19 @@
 本文件由 `tools/release.sh` 在发版时自动追加，已发布的小节不要手改。
 最新的在最前面。每一条对应一个提交 —— 要看「为什么」而不是「改了什么」，读 `docs/MIGRATING.md`。
 
+## 0.26.0 — 2026-11-16
+
+689f1dc docs(roadmap): v0.24.2 / v0.25.0 标记为已发布，并说明 0.26/0.27 为何随 0.25.0 发布
+670eb0f docs(roadmap): 状态行跟上实际发版（v0.24.1 -> v0.25.0）
+528603f fix(release): 新 CI job 补进发布门禁 + 双向对账用例 + 升级矩阵 --strict
+eefffe1 fix(coverage): 副本带上 .github，对账用例在没 ci.yml 时显式 NA
+ab39e65 fix(uninstall): 卸载只删「我们装的、内容还是原样」的文件，用户文件默认保留（P0）
+c634c5e chore(coverage): 按 CI 清单补 uninstall 改动的 15 条臂、删掉 5 条已覆盖的
+6672409 fix(release): 签名覆盖全部发布资产（脚本 / deb / rpm），验签改成「一个都不能少」
+8dd5933 feat(release): 发布改成 draft -> 独立验签 -> 公开，验签失败不会露出资产
+22ca746 fix(test): 发布顺序用例改成纯 bash 扫描，不再踩 pipe-safety 门禁
+06e6f33 fix(test): pty 正向控制的超时上界抬到 60 秒，负载尖峰不再假红
+
 ## 0.25.0 — 2026-11-16
 
 1da6376 feat(release): 跨版本升级矩阵 —— 用已发布旧版本建工程再用当前 CLI 升级（路线图 v0.25.0）
