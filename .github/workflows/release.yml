@@ -171,6 +171,8 @@ jobs:
           set -euo pipefail
           ver=$(cat VERSION)
           mkdir -p dist
+          # 只取 tarball 与清单就够：后面用 --file 点名补签，那种模式不再要求
+          # 「SHA256SUMS 整份齐全」（v0.26.1 首发因这个前提挂过，见 sign_release.sh 的注释）。
           gh release download "$GITHUB_REF_NAME" --dir dist --clobber \
             --pattern "shellkit-$ver.tar.gz" --pattern SHA256SUMS
           # 下载的东西先对校验和，再拿去打包

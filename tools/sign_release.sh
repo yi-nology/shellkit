@@ -115,32 +115,36 @@ command -v minisign >/dev/null 2>&1 ||
 # ---------------------------------------------------------------- 收集签名对象
 # SHA256SUMS 每行「哈希  文件名」：里面列出的每个文件都要有签名，
 # 否则「清单有、签名无」会变成验签时的死角。
+#
+# --file 只签点名的那些文件（发布之后才打出来的 deb/rpm 用这种方式补签）——
+# 那种场景下 dist 里天然只有一部分资产，拿「清单是否整份齐全」去卡它必然红：
+# v0.26.1 首发就是这么挂的（"SHA256SUMS lists a missing file: shellkit-skill-*.tar.gz"）。
+# 所以点名模式**跳过整份清单的枚举**，只在整份签名（默认）时要求清单自洽。
 files=()
-if [ -f "$dist/SHA256SUMS" ]; then
-  while read -r __hash __name; do
-    [ -n "$__name" ] || continue
-    __name=${__name#\*}
-    [ -n "$__name" ] || continue
-    # 清单里的条目可能在 dist（打出来的 tarball），也可能在仓库根（install.sh /
-    # repair.sh / demo.sh —— 发布资产取的是根上那份）。两处都找不到才算错。
-    __path="$dist/$__name"
-    if [ ! -f "$__path" ]; then
-      __path="$ROOT/$__name"
-    fi
-    [ -f "$__path" ] || die "SHA256SUMS lists a missing file: $__name" 1
-    files[${#files[@]}]="$__path"
-  done <"$dist/SHA256SUMS"
-else
-  say "warning: $dist/SHA256SUMS not found — only SHA256SUMS itself and install.sh will be signed"
-fi
-files[${#files[@]}]="$dist/SHA256SUMS"
-if [ -f install.sh ]; then
-  files[${#files[@]}]="install.sh"
-fi
-
-# --file：只签点名的那些（发布后的 deb/rpm 用这种方式补签）
 if [ "${#only[@]}" -gt 0 ]; then
   files=("${only[@]}")
+else
+  if [ -f "$dist/SHA256SUMS" ]; then
+    while read -r __hash __name; do
+      [ -n "$__name" ] || continue
+      __name=${__name#\*}
+      [ -n "$__name" ] || continue
+      # 清单里的条目可能在 dist（打出来的 tarball），也可能在仓库根（install.sh /
+      # repair.sh / demo.sh —— 发布资产取的是根上那份）。两处都找不到才算错。
+      __path="$dist/$__name"
+      if [ ! -f "$__path" ]; then
+        __path="$ROOT/$__name"
+      fi
+      [ -f "$__path" ] || die "SHA256SUMS lists a missing file: $__name" 1
+      files[${#files[@]}]="$__path"
+    done <"$dist/SHA256SUMS"
+  else
+    say "warning: $dist/SHA256SUMS not found — only SHA256SUMS itself and install.sh will be signed"
+  fi
+  files[${#files[@]}]="$dist/SHA256SUMS"
+  if [ -f install.sh ]; then
+    files[${#files[@]}]="install.sh"
+  fi
 fi
 
 # ---------------------------------------------------------------- 签
