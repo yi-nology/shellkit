@@ -253,4 +253,17 @@ assert_true test -f "$p9/share/shellkit/keep.txt"
 assert_contains "$(cat "$d/purge-scope.log")" "refusing to purge: not a shellkit install directory" \
   "the refusal must name the scope check"
 
+# 目标本身是软链也拒绝：--purge 绝不顺着链接删到别处
+p10="$d/purge-symlink"
+real10="$d/real-purge-target"
+mkdir -p "$p10/share" "$real10"
+printf 'keep me\n' >"$real10/keep.txt"
+ln -s "$real10" "$p10/share/shellkit"
+rc=0
+"$SK" uninstall-self --prefix "$p10" --purge >"$d/purge-symlink.log" 2>&1 || rc=$?
+assert_eq "3" "$rc" "purging a symlinked install directory must be refused"
+assert_true test -f "$real10/keep.txt"
+assert_contains "$(cat "$d/purge-symlink.log")" "refusing to purge: not a shellkit install directory" \
+  "the symlink refusal must name the scope check"
+
 exit 0
