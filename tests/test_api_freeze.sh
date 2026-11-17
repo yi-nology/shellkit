@@ -39,8 +39,8 @@ rc=0
 out=$(bash "$SCRIPT" --check 2>&1) || rc=$?
 assert_eq "0" "$rc" "the freeze gate must be green on the current tree"
 assert_contains "$out" "50 个 stable" "the gate must report the stable count"
-assert_contains "$(cat "$DOC")" "frozen-at: $(tr -d '[:space:]' <"$TEST_ROOT/VERSION")" \
-  "the freeze document must be stamped with the current VERSION"
+assert_contains "$(cat "$DOC")" "冻结基线：v1.0.0" \
+  "the freeze document must carry the fixed 1.x baseline (it must not drift with each release)"
 assert_contains "$(cat "$DOC")" "\`fs_atomic_write\`" "a known stable function must be listed"
 assert_contains "$(cat "$DOC")" "112 个 \`@stability experimental\` 函数" \
   "the document must say the experimental surface is not promised"
