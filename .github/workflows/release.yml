@@ -207,8 +207,17 @@ jobs:
         run: |
           set -euo pipefail
           tag="$GITHUB_REF_NAME"
-          # 验签过了才让它变成正式 Release；--latest 让 latest/download/* 指向这一版。
-          gh release edit "$tag" --draft=false --latest
+          # 验签过了才让它变成正式 Release。
+          # 预发布（tag 里带 "-"，如 v1.0.0-rc.1）：公开但**不**占用 latest ——
+          # install.sh 的 releases/latest 必须继续指向 GA，RC 只能按显式版本装。
+          if [ "${tag#*-}" != "$tag" ]; then
+            echo "prerelease tag detected: publishing as a prerelease, latest stays on GA"
+            extra=(--prerelease)
+          else
+            # --latest 让 latest/download/* 指向这一版。
+            extra=(--latest)
+          fi
+          gh release edit "$tag" --draft=false "${extra[@]}"
 
   # 发布后自检（v0.27.0，issue #127 起不再是「可选 job 的补丁」）：发布前
   # release job 已硬失败保证 deb/rpm 齐全；这里再从**已发布**的 Release 独立

@@ -82,8 +82,9 @@ unset VERSION
 
 # ---------- 1. 校验 ----------
 
-if ! printf '%s\n' "$VER" | grep -Eq '^[0-9]+\.[0-9]+\.[0-9]+$'; then
-  _die "version must look like x.y.z: <$VER>" 2
+# 允许 semver 预发布后缀：1.0.0-rc.1（发布 RC 用；后缀里的标识符用点分隔）
+if ! printf '%s\n' "$VER" | grep -Eq '^[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z][0-9A-Za-z.-]*)?$'; then
+  _die "version must look like x.y.z or x.y.z-pre: <$VER>" 2
 fi
 
 cd "$ROOT"
@@ -96,9 +97,100 @@ fi
 
 CUR="$(tr -d '[:space:]' <VERSION)"
 
+# _ver_pre_cmp A B —— 预发布串比较（semver 口径：数字段按数值、数字段 < 非数字段、
+# 非数字段按字典序；前缀相同段数多者大）。输出 -1/0/1。
+_ver_pre_cmp() {
+  local __a=$1 __b=$2 __x __y
+  while [ -n "$__a" ] || [ -n "$__b" ]; do
+    case "$__a" in
+      *.*)
+        __x=${__a%%.*}
+        __a=${__a#*.}
+        ;;
+      *)
+        __x=$__a
+        __a=''
+        ;;
+    esac
+    case "$__b" in
+      *.*)
+        __y=${__b%%.*}
+        __b=${__b#*.}
+        ;;
+      *)
+        __y=$__b
+        __b=''
+        ;;
+    esac
+    if [ -z "$__x" ] && [ -n "$__y" ]; then
+      printf '%s' '-1'
+      return 0
+    fi
+    if [ -n "$__x" ] && [ -z "$__y" ]; then
+      printf '%s' '1'
+      return 0
+    fi
+    [ -n "$__x" ] || {
+      printf '%s' '0'
+      return 0
+    }
+    case "$__x" in
+      *[!0-9]*)
+        case "$__y" in
+          *[!0-9]*)
+            if [ "$__x" \< "$__y" ]; then
+              printf '%s' '-1'
+              return 0
+            fi
+            if [ "$__x" \> "$__y" ]; then
+              printf '%s' '1'
+              return 0
+            fi
+            ;;
+          *)
+            printf '%s' '1'
+            return 0
+            ;;
+        esac
+        ;;
+      *)
+        case "$__y" in
+          *[!0-9]*)
+            printf '%s' '-1'
+            return 0
+            ;;
+          *)
+            if [ "$((10#$__x))" -lt "$((10#$__y))" ]; then
+              printf '%s' '-1'
+              return 0
+            fi
+            if [ "$((10#$__x))" -gt "$((10#$__y))" ]; then
+              printf '%s' '1'
+              return 0
+            fi
+            ;;
+        esac
+        ;;
+    esac
+  done
+  printf '%s' '0'
+}
+
 # _ver_gt A B —— A > B 时返回 0（不走 sort -V：BSD sort 没有它）
+# 核心三段按数值比；核心相等时按 semver 预发布规则：正式版 > 预发布，
+# 预发布之间由 _ver_pre_cmp 决定。
 _ver_gt() {
-  local __a=$1 __b=$2 __i=1 __x __y
+  local __a=$1 __b=$2 __i=1 __x __y __pa='' __pb='' __r=''
+  case "$__a" in *-*)
+    __pa=${__a#*-}
+    __a=${__a%%-*}
+    ;;
+  esac
+  case "$__b" in *-*)
+    __pb=${__b#*-}
+    __b=${__b%%-*}
+    ;;
+  esac
   while [ "$__i" -le 3 ]; do
     __x=$(printf '%s' "$__a" | cut -d. -f"$__i")
     __y=$(printf '%s' "$__b" | cut -d. -f"$__i")
@@ -110,7 +202,15 @@ _ver_gt() {
     fi
     __i=$((__i + 1))
   done
-  return 1
+  if [ -z "$__pa" ] && [ -n "$__pb" ]; then
+    return 0
+  fi
+  if [ -n "$__pa" ] && [ -z "$__pb" ]; then
+    return 1
+  fi
+  [ -n "$__pa" ] || return 1
+  __r=$(_ver_pre_cmp "$__pa" "$__pb")
+  [ "$__r" = '1' ]
 }
 
 _ver_gt "$VER" "$CUR" || _die "new version $VER must be greater than current $CUR" 2
@@ -195,11 +295,22 @@ _bump_refs() {
     _die "missing $__f" 3
   fi
   sed -E -i.bak \
-    -e "s/VERSION=[0-9]+\.[0-9]+\.[0-9]+/VERSION=$VER/g" \
-    -e "s/下载 [0-9]+\.[0-9]+\.[0-9]+/下载 $VER/g" \
-    -e "s/Download [0-9]+\.[0-9]+\.[0-9]+/Download $VER/g" \
-    -e "s/shellkit-[0-9]+\.[0-9]+\.[0-9]+\.tar\.gz/shellkit-$VER.tar.gz/g" \
+    -e "s/VERSION=[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.]+)?/VERSION=$VER/g" \
+    -e "s/下载 [0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.]+)?/下载 $VER/g" \
+    -e "s/Download [0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.]+)?/Download $VER/g" \
+    -e "s/shellkit-[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.]+)?\.tar\.gz/shellkit-$VER.tar.gz/g" \
     "$__f"
+  rm -f "$__f.bak"
+  # 站点的「下载 x.y.z」按钮：预发布要指向本 tag（releases/latest 只指向 GA）；
+  # 正式版要把上一轮 RC 留下的 tag 链接改回 releases/latest。
+  case "$VER" in
+    *-*)
+      sed -E -i.bak "s#(\*\*\[(下载|Download) $VER\]\()https://github\.com/yi-nology/shellkit/releases/latest#\1https://github.com/yi-nology/shellkit/releases/tag/v$VER#" "$__f"
+      ;;
+    *)
+      sed -E -i.bak "s#https://github\.com/yi-nology/shellkit/releases/tag/v[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.]+)?#https://github.com/yi-nology/shellkit/releases/latest#g" "$__f"
+      ;;
+  esac
   rm -f "$__f.bak"
 }
 _bump_refs README.md

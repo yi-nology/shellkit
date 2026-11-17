@@ -25,7 +25,20 @@ assert_exit_code 2 ver_cmp "not-a-version" 1.0.0
 assert_exit_code 2 ver_cmp 1.0.0 ""
 assert_exit_code 2 ver_cmp
 assert_exit_code 2 ver_gt "not-a-version" 1.0.0
-assert_exit_code 2 ver_gt 1.0.0-rc1 1.0.0
+# 预发布（semver 口径）：同核心时正式版 > 预发布；段按数值/字典序比较
+assert_eq "-1" "$(ver_cmp 1.0.0-rc.1 1.0.0)" "a prerelease is older than the same core"
+assert_eq "1" "$(ver_cmp 1.0.0 1.0.0-rc.1)" "the final release is newer than its prerelease"
+assert_eq "1" "$(ver_cmp 1.0.0-rc.2 1.0.0-rc.1)" "rc.2 is newer than rc.1"
+assert_eq "1" "$(ver_cmp 1.0.0-rc.10 1.0.0-rc.9)" "numeric identifiers compare numerically"
+assert_eq "-1" "$(ver_cmp 1.0.0-alpha 1.0.0-beta)" "alpha sorts before beta"
+assert_eq "-1" "$(ver_cmp 1.0.0-alpha.1 1.0.0-alpha.2)" "later alpha identifier is newer"
+assert_eq "0" "$(ver_cmp 1.0.0-rc.1 v1.0.0-rc.1)" "the leading v is stripped before comparing prereleases"
+assert_true ver_lt 1.0.0-rc.1 1.0.0
+assert_true ver_gt 1.0.0 1.0.0-rc.1
+# 非法预发布串同样返回 2（空后缀 / 空标识符 / 非法字符）
+assert_exit_code 2 ver_cmp 1.0.0- 1.0.0
+assert_exit_code 2 ver_cmp 1.0.0-rc..1 1.0.0
+assert_exit_code 2 ver_cmp 1.0.0-rc_1 1.0.0
 assert_exit_code 2 ver_lt "" ""
 assert_exit_code 2 ver_eq
 assert_eq "" "$(ver_cmp not-a-version 1.0.0)" "invalid input must print no comparison"

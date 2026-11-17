@@ -10,17 +10,134 @@
 # 分段比较：缺段当 0 ⇒ 1.0 与 1.0.0 判等。sort -V 会认为 1.0 < 1.0.0，
 # 这里按分段语义走（设计文档选定「纯 bash 分段比较」）。
 
-# _sk_ver_valid V —— 版本串是否合法（以数字开头，其后只允许数字与点）
+# _sk_ver_valid V —— 版本串是否合法
+#
+# 形态：MAJOR.MINOR.PATCH[-PRE]（去前导 v/V 之后判断）。
+#   - 核心只允许数字与点，且以数字开头；
+#   - 预发布后缀以 `-` 开头，标识符用点分隔，只允许字母、数字与点；
+#     不允许空后缀、空标识符（`1.0.0-` / `1.0.0-rc..1` 都非法）。
 # @exitcode 0 合法
 # @exitcode 1 不合法
 _sk_ver_valid() {
-  case "${1:-}" in
+  local __v=${1:-} __core='' __pre=''
+  case "$__v" in
+    '' | *[!0-9A-Za-z.-]*) return 1 ;;
+  esac
+  case "$__v" in
+    [0-9]*) ;;
+    *) return 1 ;;
+  esac
+  case "$__v" in
+    *-*)
+      __core=${__v%%-*}
+      __pre=${__v#*-}
+      # 后缀单独校验：非空、无空标识符、无首尾点
+      case "$__pre" in
+        '' | .* | *. | *..*) return 1 ;;
+      esac
+      case "$__pre" in
+        *[!0-9A-Za-z.]*) return 1 ;;
+      esac
+      ;;
+    *) __core=$__v ;;
+  esac
+  case "$__core" in
     '' | *[!0-9.]*) return 1 ;;
   esac
-  case "${1:-}" in
+  case "$__core" in
     [0-9]*) return 0 ;;
   esac
   return 1
+}
+
+# _sk_ver_split V —— 输出「核心<TAB>预发布」；无预发布时第二列为空
+_sk_ver_split() {
+  local __v=${1:-}
+  case "$__v" in
+    *-*) printf '%s\t%s' "${__v%%-*}" "${__v#*-}" ;;
+    *) printf '%s\t' "$__v" ;;
+  esac
+}
+
+# _sk_ver_pre_cmp A B —— 两个预发布串比较（调用方保证都非空且合法）
+# 口径按 semver：点分段；数字段按数值比，数字段 < 非数字段，
+# 非数字段按 C locale 字节序比；前缀相同则段数多者大。
+_sk_ver_pre_cmp() {
+  local __a=${1:-} __b=${2:-} __x __y
+  while [ -n "$__a" ] || [ -n "$__b" ]; do
+    case "$__a" in
+      *.*)
+        __x=${__a%%.*}
+        __a=${__a#*.}
+        ;;
+      *)
+        __x=$__a
+        __a=''
+        ;;
+    esac
+    case "$__b" in
+      *.*)
+        __y=${__b%%.*}
+        __b=${__b#*.}
+        ;;
+      *)
+        __y=$__b
+        __b=''
+        ;;
+    esac
+    if [ -z "$__x" ] && [ -n "$__y" ]; then
+      printf '%s' '-1'
+      return 0
+    fi
+    if [ -n "$__x" ] && [ -z "$__y" ]; then
+      printf '%s' '1'
+      return 0
+    fi
+    [ -n "$__x" ] || {
+      printf '%s' '0'
+      return 0
+    }
+    case "$__x" in
+      *[!0-9]*)
+        case "$__y" in
+          *[!0-9]*)
+            if [ "$__x" = "$__y" ]; then
+              :
+            elif [ "$__x" \< "$__y" ]; then
+              printf '%s' '-1'
+              return 0
+            else
+              printf '%s' '1'
+              return 0
+            fi
+            ;;
+          *)
+            printf '%s' '1'
+            return 0
+            ;;
+        esac
+        ;;
+      *)
+        case "$__y" in
+          *[!0-9]*)
+            printf '%s' '-1'
+            return 0
+            ;;
+          *)
+            if [ "$((10#$__x))" -lt "$((10#$__y))" ]; then
+              printf '%s' '-1'
+              return 0
+            fi
+            if [ "$((10#$__x))" -gt "$((10#$__y))" ]; then
+              printf '%s' '1'
+              return 0
+            fi
+            ;;
+        esac
+        ;;
+    esac
+  done
+  printf '%s' '0'
 }
 
 # _sk_ver_field V N —— 取第 N 段（0 起）；不足的段当 0
@@ -58,7 +175,7 @@ _sk_ver_field() {
 # @exitcode 2 有版本串非法或缺参数（stdout 空）
 # @stability stable
 ver_cmp() {
-  local __a=${1:-} __b=${2:-} __i=0 __x __y
+  local __a=${1:-} __b=${2:-} __i=0 __x __y __pre_a __pre_b __core_a __core_b
   __a=${__a#v}
   __a=${__a#V}
   __b=${__b#v}
@@ -66,6 +183,14 @@ ver_cmp() {
   if ! _sk_ver_valid "$__a" || ! _sk_ver_valid "$__b"; then
     return "$SK_USAGE"
   fi
+  __core_a=${__a%%-*}
+  __core_b=${__b%%-*}
+  __pre_a=''
+  __pre_b=''
+  case "$__a" in *-*) __pre_a=${__a#*-} ;; esac
+  case "$__b" in *-*) __pre_b=${__b#*-} ;; esac
+  __a=$__core_a
+  __b=$__core_b
   while [ "$__i" -lt 32 ]; do
     __x=$(_sk_ver_field "$__a" "$__i")
     __y=$(_sk_ver_field "$__b" "$__i")
@@ -79,7 +204,20 @@ ver_cmp() {
     fi
     __i=$((__i + 1))
   done
-  printf '%s' '0'
+  # 核心相等，接着比预发布（semver 口径：正式版 > 同核心的预发布）
+  if [ -z "$__pre_a" ] && [ -z "$__pre_b" ]; then
+    printf '%s' '0'
+    return 0
+  fi
+  if [ -z "$__pre_a" ]; then
+    printf '%s' '1'
+    return 0
+  fi
+  if [ -z "$__pre_b" ]; then
+    printf '%s' '-1'
+    return 0
+  fi
+  printf '%s' "$(_sk_ver_pre_cmp "$__pre_a" "$__pre_b")"
   return 0
 }
 

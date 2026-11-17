@@ -160,6 +160,21 @@ gh release view "v$version" --json assets --jq '.assets[].name'
 （前者 job 没装 minisign，后者 `--file` 补签仍要求 `SHA256SUMS` 整份齐全）对应的
 「发布后补打」路径已随 #127 删除。
 
+## 预发布（RC）
+
+RC 走同一条命令，只是版本号带后缀：
+
+```bash
+make release-dry VERSION=1.0.0-rc.1
+make release VERSION=1.0.0-rc.1
+```
+
+- tag 是 `v1.0.0-rc.1`，`VERSION` 文件与资产名（`shellkit-1.0.0-rc.1.tar.gz` 等）都带后缀；
+- 公开那步识别 tag 里的 `-`：走 `gh release edit --draft=false --prerelease`，**不**置 `--latest` ——
+  `releases/latest`（`install.sh` 的默认路径）继续指向正式版；
+- 装 RC 必须显式给版本：`curl -fsSL .../install.sh | VERSION=1.0.0-rc.1 bash`；
+- Homebrew formula 只跟正式版，RC 不回填 tap；
+- 版本比较由 `ver_cmp` 处理：同核心时正式版 > 预发布，`rc.2 > rc.1`（口径见 `docs/COMPATIBILITY.md`）。
 ## 发布前：连续三次全矩阵绿
 
 跨版本升级矩阵（`tools/upgrade_matrix.sh`）每天只跑一遍，一次绿证明不了稳定：

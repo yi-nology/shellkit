@@ -761,6 +761,15 @@ shellkit uninstall-self --purge
 |---|---|---|---|
 | `tools/sign_release.sh --file` | 点名补签也会枚举整份 `SHA256SUMS`：`dist/` 里缺任一清单文件就 `[FAIL] SHA256SUMS lists a missing file: shellkit-skill-x.y.z.tar.gz` | 点名模式**跳过整份枚举**，只签点名的文件（也不再顺手重签 `SHA256SUMS` / `install.sh`） | 发布之后补签 deb/rpm / 镜像清单的流水线：从必红变为可用 |
 
+### 0.27.0 → 1.0.0-rc.1：会改变结果的行为变化
+
+这一版加的是**预发布版本语义**（发 RC 用），库本身的其余行为不变。
+
+| 变化 | 以前 | 现在 | 你会在哪里撞到 |
+|---|---|---|---|
+| `ver_cmp` 接受预发布版本 | `1.0.0-rc.1` 被判非法（返回 `2`），`ver_gt` / `ver_lt` / `ver_eq` 跟着没法比较 | 接受 semver 预发布后缀：同核心时**正式版 > 预发布**，`rc.2 > rc.1`，标识符按 semver 比较（数字段按数值、数字段 < 字母段） | 之前靠「返回 2」来判断「不是版本号」的调用方：RC 现在是合法版本；`1.0.0-` / `1.0.0-rc..1` 这类空后缀仍然返回 2 |
+
+发布侧同步改了三处：`tools/release.sh` 接受 `x.y.z-pre` 且按新规则排序；`tools/check_versions.sh` 的版本引用与替换规则接受后缀；`release.yml` 对带 `-` 的 tag 走 `--prerelease`、**不**占用 `releases/latest`。
 ### 0.26.2 → 0.27.0：会改变结果的行为变化
 
 这一版除了发布门禁 `tools/release_gate.sh`，还收紧了安装/卸载链路的数据安全语义。

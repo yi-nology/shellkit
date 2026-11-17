@@ -108,4 +108,12 @@ PY
 assert_contains "$(_order_violations "$d/b.yml")" "published before it is verified" \
   "swapping the two steps must break the check"
 
+# 预发布：tag 带 "-" 时公开但不许占用 latest —— install.sh 的 releases/latest 必须指向 GA。
+CI_TEXT=$(cat "$CI")
+assert_contains "$CI_TEXT" "--prerelease" "the publish step must know about prerelease tags"
+assert_contains "$CI_TEXT" "extra=(--prerelease)" "the prerelease branch must use --prerelease"
+assert_contains "$CI_TEXT" "extra=(--latest)" "the GA branch must still mark the release latest"
+pre_branch=$(sed -n '/prerelease tag detected/,/extra=(--prerelease)/p' "$CI")
+assert_not_contains "$pre_branch" "--latest" "the prerelease branch must not use --latest"
+
 exit 0

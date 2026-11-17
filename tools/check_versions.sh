@@ -16,7 +16,7 @@ ROOT="${SHELLKIT_CHECK_ROOT:-$(cd "$(dirname "${BASH_SOURCE[0]}")/.." &>/dev/nul
 _fail=0
 
 _ver="$(tr -d '[:space:]' <"$ROOT/VERSION" 2>/dev/null || true)"
-if ! printf '%s\n' "$_ver" | grep -Eq '^[0-9]+\.[0-9]+\.[0-9]+$'; then
+if ! printf '%s\n' "$_ver" | grep -Eq '^[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.]+)?$'; then
   printf 'versions-check: VERSION is not x.y.z: <%s>\n' "$_ver" >&2
   exit 5
 fi
@@ -42,23 +42,23 @@ _check() {
 
 # shellcheck disable=SC2046
 _check "README.md" "VERSION=" \
-  $(grep -Eo 'VERSION=[0-9]+\.[0-9]+\.[0-9]+' "$ROOT/README.md" | sed 's/^VERSION=//')
+  $(grep -Eo 'VERSION=[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.]+)?' "$ROOT/README.md" | sed 's/^VERSION=//')
 
 # shellcheck disable=SC2046
 _check "site/index.md" "VERSION=" \
-  $(grep -Eo 'VERSION=[0-9]+\.[0-9]+\.[0-9]+' "$ROOT/site/index.md" | sed 's/^VERSION=//')
+  $(grep -Eo 'VERSION=[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.]+)?' "$ROOT/site/index.md" | sed 's/^VERSION=//')
 
 # shellcheck disable=SC2046
 _check "site/index.md" "download button" \
-  $(grep -Eo '下载 [0-9]+\.[0-9]+\.[0-9]+' "$ROOT/site/index.md" | sed 's/^下载 //')
+  $(grep -Eo '下载 [0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.]+)?' "$ROOT/site/index.md" | sed 's/^下载 //')
 
 # shellcheck disable=SC2046
 _check "site/en/index.md" "VERSION=" \
-  $(grep -Eo 'VERSION=[0-9]+\.[0-9]+\.[0-9]+' "$ROOT/site/en/index.md" | sed 's/^VERSION=//')
+  $(grep -Eo 'VERSION=[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.]+)?' "$ROOT/site/en/index.md" | sed 's/^VERSION=//')
 
 # shellcheck disable=SC2046
 _check "site/en/index.md" "download button" \
-  $(grep -Eo 'Download [0-9]+\.[0-9]+\.[0-9]+' "$ROOT/site/en/index.md" | sed 's/^Download //')
+  $(grep -Eo 'Download [0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.]+)?' "$ROOT/site/en/index.md" | sed 's/^Download //')
 
 # CHANGELOG 的最新一节必须就是当前版本 —— 否则发版了但变更记录停在上一版，
 # 用户看到的「最近改了什么」是过期的。
@@ -79,19 +79,19 @@ fi
 # 安装页里也有钉版本的示例：漏改就会教人装上一版
 # shellcheck disable=SC2046
 _check "site/guide/installation.md" "VERSION=" \
-  $(grep -Eo 'VERSION=[0-9]+\.[0-9]+\.[0-9]+' "$ROOT/site/guide/installation.md" | sed 's/^VERSION=//')
+  $(grep -Eo 'VERSION=[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.]+)?' "$ROOT/site/guide/installation.md" | sed 's/^VERSION=//')
 
 # shellcheck disable=SC2046
 _check "site/guide/installation.md" "tarball name" \
-  $(grep -Eo 'shellkit-[0-9]+\.[0-9]+\.[0-9]+\.tar\.gz' "$ROOT/site/guide/installation.md" | sed 's/^shellkit-//; s/\.tar\.gz$//')
+  $(grep -Eo 'shellkit-[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.]+)?\.tar\.gz' "$ROOT/site/guide/installation.md" | sed 's/^shellkit-//; s/\.tar\.gz$//')
 
 # shellcheck disable=SC2046
 _check "site/en/guide/installation.md" "VERSION=" \
-  $(grep -Eo 'VERSION=[0-9]+\.[0-9]+\.[0-9]+' "$ROOT/site/en/guide/installation.md" | sed 's/^VERSION=//')
+  $(grep -Eo 'VERSION=[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.]+)?' "$ROOT/site/en/guide/installation.md" | sed 's/^VERSION=//')
 
 # shellcheck disable=SC2046
 _check "site/en/guide/installation.md" "tarball name" \
-  $(grep -Eo 'shellkit-[0-9]+\.[0-9]+\.[0-9]+\.tar\.gz' "$ROOT/site/en/guide/installation.md" | sed 's/^shellkit-//; s/\.tar\.gz$//')
+  $(grep -Eo 'shellkit-[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.]+)?\.tar\.gz' "$ROOT/site/en/guide/installation.md" | sed 's/^shellkit-//; s/\.tar\.gz$//')
 
 # _check_no_stray FILE LABEL —— 页面里出现任何 x.y.z 形态的串，都必须等于 VERSION。
 #
@@ -105,7 +105,7 @@ _check "site/en/guide/installation.md" "tarball name" \
 #   - 四段及以上的点分数字（10.0.0.5 这类 IP），它们出现在示例里，不是版本号。
 _check_no_stray() {
   local __file=$1 __label=$2 __v
-  for __v in $(grep -Eo '[0-9]+\.[0-9]+\.[0-9]+(\.[0-9]+)*' "$ROOT/$__file" 2>/dev/null | sort -u); do
+  for __v in $(grep -Eo '[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.]+)?(\.[0-9]+)*' "$ROOT/$__file" 2>/dev/null | sort -u); do
     case "$__v" in
       *.*.*.*) continue ;;
       3.2.*) continue ;;
@@ -126,7 +126,7 @@ _check_no_stray "site/en/guide/installation.md" "install guide"
 
 # shellcheck disable=SC2046
 _check "locale/shellkit.pot" "Project-Id-Version" \
-  $(grep -Eo 'Project-Id-Version: shellkit [0-9]+\.[0-9]+\.[0-9]+' "$ROOT/locale/shellkit.pot" |
+  $(grep -Eo 'Project-Id-Version: shellkit [0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.]+)?' "$ROOT/locale/shellkit.pot" |
     sed 's/.*shellkit //')
 
 if [ "$_fail" -ne 0 ]; then
