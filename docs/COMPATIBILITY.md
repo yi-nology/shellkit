@@ -52,6 +52,8 @@
 
 **从 experimental 升 stable** 是承诺扩张：必须走一个 minor，写进迁移表，并补齐该函数的
 `@exitcode`、探针与 `docs/STABLE-CANDIDATES.md` 的三条入选标准。
+晋升之后还要重生成 [`docs/API-FREEZE.md`](https://github.com/yi-nology/shellkit/blob/main/docs/API-FREEZE.md) —— 那是 1.0 承诺面的快照
+（表内函数的返回码、退出码表、CLI 形状），门禁会要求它与源码一致。
 **反向（stable → experimental）在 1.0 后等于破坏承诺**，只能 major；0.x 期间允许，但要声明。
 
 ## 弃用流程
@@ -97,4 +99,5 @@
 | 行为变化必须有迁移声明 | `_sk_ab_scan_migrating`：只认迁移表里反引号包住的函数名，版本必须新于上次声明 |
 | 删除公开函数必须声明 | 同上（基线里 `removed` 状态只能在声明之后出现） |
 | 本文与源码不漂移 | `tools/check_compatibility.sh` |
+| 1.0 承诺面有可 diff 的快照 | `tools/api_freeze.sh --check`（`docs/API-FREEZE.md`） |
 | 版本号投影一致 | `bash tools/check_versions.sh` |

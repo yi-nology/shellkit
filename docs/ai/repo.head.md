@@ -58,9 +58,9 @@
     make check     # syntax + test + lint + module-order-check + check-exitcode-docs +
                   # local-names-check + ident-boundary-check + module-count-check +
                   # pipe-safety-check + dup-functions-check + security-check +
-                  # api-baseline-check + compatibility-check + docs-check +
-                  # versions-check + check-docs + cookbook-check + messages-check +
-                  # examples + fmt，CI 也是这组
+                  # api-baseline-check + api-freeze-check + compatibility-check +
+                  # docs-check + versions-check + check-docs + cookbook-check +
+                  # messages-check + examples + fmt，CI 也是这组
                   # 步骤清单的唯一真相源是 Makefile 的 check 目标（上面这份是投影）
     make bats-check  # tests/bats 下的 bats 用例（bats 是外部依赖，不进 check）
 
@@ -75,6 +75,9 @@
 `compatibility-check` 拦的是「承诺文档说了却没兑现」：`docs/COMPATIBILITY.md` 声称
 每个公开函数都有等级，就要求 `tools/stability_exempt.txt` 为空、文档里的
 stable / experimental 数量与源码一致、四个必备小节都在。
+`api-freeze-check` 拦的是「承诺面悄悄变了」：`docs/API-FREEZE.md` 是 1.0 的快照
+（50 个 stable 的返回码、退出码表、CLI 子命令形状），源码变了没重生成清单就红；
+新增语义未知的 `SK_*` 常量也红（宁可失败，也不静默漏写进承诺表）。
 
 ## 清单里的指纹是「模板基线」，不是「文件当前内容」
 
