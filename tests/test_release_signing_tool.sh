@@ -3,9 +3,10 @@
 #
 # 为什么要有这条（评估 2026-11-16 / v0.26.0 首发事故）：Ubuntu runner 默认没有
 # minisign，而 sign_release.sh 在「配了私钥但工具缺失」时按设计红（退出码 3）。
-# release job 里这条坑在 v0.21.0 就踩过并写进了注释，但 packages job 是后加的、
-# 没照做 —— 更糟的是那个 job 带 continue-on-error：红被吞掉，那一版静默地
-# 少了 deb/rpm 两个资产（网页上看不出来，只是「这一版没有系统包」）。
+# release job 里这条坑在 v0.21.0 就踩过并写进了注释，但后来新增的 packages
+# job 没照做，而且带 continue-on-error：红被吞掉，那一版静默地少了 deb/rpm
+# 两个资产（网页上看不出来，只是「这一版没有系统包」）。#127 起 deb/rpm 已
+# 并入 release job、公开前硬失败，但「新增 job 忘记装工具」的教训仍适用：
 # 注释管不住新增的 job，所以用一条结构判据盯住所有 workflow 文件。
 #
 # 全文纯 bash 扫描，不写 `grep | head`（pipe-safety 门禁会判 SIGPIPE 风险）。
@@ -107,21 +108,18 @@ assert_eq "" "$_bad" "every job that signs the release must install minisign fir
 d=$(tmpdir)
 cp "$TEST_ROOT/.github/workflows/release.yml" "$d/w.yml"
 python3 - "$d/w.yml" <<'PY'
-import re
 import sys
 path = sys.argv[1]
 text = open(path, encoding="utf-8").read()
-# 删掉 packages job 里那个 install minisign 步骤（它是最后一个 install minisign 块）
-blocks = text.split("      - name: install minisign\n")
-assert len(blocks) >= 2, "expected at least two install minisign steps"
-tail = blocks[-1]
-# 步骤体到下一个 "      - name:" 为止
-cut = tail.index("\n      - name:")
-open(path, "w", encoding="utf-8").write(
-    "      - name: install minisign\n".join(blocks[:-1]) + tail[cut + 1:]
-)
+# 删掉 release job 里唯一的 install minisign 步骤（步骤体到下一个 "      - name:" 为止）
+marker = "      - name: install minisign\n"
+assert text.count(marker) == 1, "expected exactly one install minisign step in release.yml"
+i = text.index(marker)
+tail = text[i + len(marker):]
+end = tail.index("\n      - name:")
+open(path, "w", encoding="utf-8").write(text[:i] + tail[end + 1:])
 PY
-assert_contains "$(_violations "$d/w.yml")" 'job "packages"' \
-  "dropping the tool install from the packages job must break the check"
+assert_contains "$(_violations "$d/w.yml")" 'job "release"' \
+  "dropping the tool install from the release job must break the check"
 
 exit 0

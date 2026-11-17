@@ -1,11 +1,11 @@
 #!/usr/bin/env bash
 # 发布后自检（tools/release_selfcheck.sh）与它在 release.yml 里的接线。
 #
-# 要守的事：**可选 job 失败不许静默**。deb/rpm 由 release.yml 的 packages job
-# 打出来，那个 job 带 continue-on-error —— v0.26.0 / v0.26.1 两版就是这样
-# 静默地少了系统包（run 全绿、网页上只是没有 .deb/.rpm）。所以：
+# 要守的事：**发布后的资产清单必须被独立点名**。v0.26.0 / v0.26.1 两版
+# 静默地少了系统包（run 全绿、网页上只是没有 .deb/.rpm）；#127 起 deb/rpm
+# 已在公开前硬失败，但「发布后可见面」仍需独立复核。所以：
 #   1. 自检脚本必须点名缺了哪个资产（而不是只说「不完整」）；
-#   2. release.yml 必须有一个**不可选**的 job 调它，且那个 job 等 packages 跑完。
+#   2. release.yml 必须有一个**不可选**的 self-check job 调它（needs: release）。
 set -u
 . "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/test_helper.sh"
 
@@ -109,7 +109,7 @@ rc=0
 env PATH="$bin:$PATH" bash "$SELF" >/dev/null 2>&1 || rc=$?
 assert_eq "2" "$rc" "a missing tag must be a usage error"
 
-# --- 结构判据：release.yml 必须有一个不可选的自检 job，且等 packages 跑完 ---
+# --- 结构判据：release.yml 必须有一个不可选的自检 job，发布后独立复核 ---
 WF="$TEST_ROOT/.github/workflows/release.yml"
 if [ ! -f "$WF" ]; then
   printf 'NA: .github/workflows/release.yml is not in this tree — the self-check wiring was not verified\n'
@@ -137,8 +137,8 @@ self_block=$(_job_block self-check)
 assert_contains "$self_block" "release_selfcheck.sh" "release.yml must run the self-check"
 assert_contains "$self_block" "--require-packages" "the self-check must require the deb/rpm assets"
 assert_not_contains "$self_block" "continue-on-error" "the self-check itself must not be optional"
-assert_contains "$self_block" "needs:" "the self-check must declare its dependencies"
-assert_contains "$self_block" "packages" "the self-check must wait for the optional packages job"
+assert_contains "$self_block" "needs: release" "the self-check must run after the release job"
+assert_not_contains "$self_block" "needs: [release, packages]" "there is no optional packages job any more (#127)"
 
 # 自证：把自检 job 改成可选，上面那条必须红
 d2=$(mktemp -d "$TEST_TMP_ROOT/sc.XXXXXX") || _fail "mktemp failed"
