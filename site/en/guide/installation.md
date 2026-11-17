@@ -2,6 +2,38 @@
 
 Three ways to install. Pick one: a single command, a local checkout, or an offline internal mirror.
 
+## Secure install (three steps, recommended)
+
+sha256 proves the download was not altered; it does not prove who published it -- the checksum list and
+the archive travel the same channel, so both can be replaced together. High-assurance environments use
+these three steps (the default `curl | bash` path still works, see below):
+
+```bash
+# 1) Check the public key: docs/TRUST.md pins this base64, and it must match
+#    shellkit.minisign.pub from the release (or the raw TRUST.md at the same tag).
+#    RWQSCu8f5lvakshhMkZ2zgn+hbB0s0EJ2Wpx+rUgfHw7MmcQ5gcmPBao
+
+# 2) Verify offline, before executing anything
+#    Requires minisign: brew install minisign / apt-get install -y minisign
+VERSION=0.27.0
+base="https://github.com/yi-nology/shellkit/releases/download/v$VERSION"
+work=$(mktemp -d) && cd "$work" || exit 1
+for f in "shellkit-$VERSION.tar.gz" install.sh SHA256SUMS shellkit.minisign.pub; do
+  curl -fsSLO "$base/$f" || exit 1
+  case "$f" in *.pub) ;; *) curl -fsSLO "$base/$f.minisig" || exit 1 ;; esac
+done
+minisign -Vm "shellkit-$VERSION.tar.gz" -p shellkit.minisign.pub
+minisign -Vm install.sh -p shellkit.minisign.pub
+minisign -Vm SHA256SUMS -p shellkit.minisign.pub
+sha256sum -c SHA256SUMS            # macOS: shasum -a 256 -c SHA256SUMS
+
+# 3) Install from the verified, checksum-clean tree (no more downloads)
+tar -xzf "shellkit-$VERSION.tar.gz" && cd "shellkit-$VERSION" || exit 1
+./install.sh --prefix "$HOME/.local"
+```
+
+The other key channels, verifying `install.sh` itself (offline path), and the deb/rpm trust chain are in
+[docs/TRUST.md](https://github.com/yi-nology/shellkit/blob/main/docs/TRUST.md).
 ## One command
 
 ```bash
