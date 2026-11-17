@@ -45,6 +45,7 @@ https://yi-nology.github.io/shellkit/ —— 中文在 `/`，英文在 `/en/`。
 | 想先看完整工程长什么样 | [examples/deploy-service](examples/deploy-service)、[examples/fetch-release](examples/fetch-release) |
 | 要发版 | [docs/RELEASING.md](docs/RELEASING.md)：一条命令升版本，附带发版后的验收清单 |
 | 要判断「升级会不会弄坏我」 | [docs/COMPATIBILITY.md](docs/COMPATIBILITY.md)：什么算破坏性变更、弃用窗口、哪些函数不承诺 |
+| 要查「哪些函数在 1.0 的承诺面内」 | [docs/API-FREEZE.md](docs/API-FREEZE.md)：50 个 stable 函数、退出码与 CLI 形状的快照 |
 
 ## 三十秒
 
@@ -485,9 +486,9 @@ net_download() {
 make check     # syntax + test + lint + module-order-check + check-exitcode-docs
                # + local-names-check + ident-boundary-check + module-count-check
                # + pipe-safety-check + dup-functions-check + security-check
-               # + api-baseline-check + compatibility-check + docs-check
-               # + versions-check + check-docs + cookbook-check + messages-check
-               # + examples + fmt
+               # + api-baseline-check + api-freeze-check + compatibility-check
+               # + docs-check + versions-check + check-docs + cookbook-check
+               # + messages-check + examples + fmt
 ```
 
 - `docs-check`：公开函数缺注释、生成物与源码不一致 ⇒ 红。
@@ -504,6 +505,8 @@ make check     # syntax + test + lint + module-order-check + check-exitcode-docs
   或改了 Stable 行为却没写进 `docs/MIGRATING.md` ⇒ 红。
 - `compatibility-check`：`docs/COMPATIBILITY.md` 说「每个公开函数都有等级」，就得真有 ——
   豁免名单一旦非空、或文档里的 stable/experimental 数量与源码对不上 ⇒ 红。
+- `api-freeze-check`：`docs/API-FREEZE.md` 是 1.0 承诺面的快照（50 个 stable 函数、
+  退出码、CLI 子命令形状）。改承诺面却没重生成清单 ⇒ 红；多出语义未知的 `SK_*` 常量也红。
 - `local-names-check` / `pipe-safety-check` / `dup-functions-check`：分别拦「出参名撞局部变量导致
   静默写丢」「`grep -q` 早退把上游 SIGPIPE 打死」「同名函数定义两遍、先写的那份失效」——
   三种都不报错、不崩，只是你以为在跑 A。
