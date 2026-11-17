@@ -2,6 +2,14 @@
 本文件由 `tools/release.sh` 在发版时自动追加，已发布的小节不要手改。
 最新的在最前面。每一条对应一个提交 —— 要看「为什么」而不是「改了什么」，读 `docs/MIGRATING.md`。
 
+## 0.27.0 — 2026-11-17
+
+a104b04 docs(roadmap): 记上 v0.26.2 与系统包的回归
+b29ea13 feat(1.0): 0.27.0 契约批 —— 兼容承诺、取消重跑、发布自检、矩阵 lifecycle
+b8981a7 fix(release): 门禁不再「零检查通过」+ 补齐新分支臂的覆盖
+a6ea128 fix(uninstall): 卸载链路数据安全四单（#123 #124 #125 #128） (#131)
+4484ef1 fix(ci/release): #126 upgrade_matrix strict 全版本跑通 + #127 DEB/RPM 公开前硬门禁 (#132)
+
 ## 0.26.2 — 2026-11-16
 
 569df9a fix(sign): --file 点名补签不再要求 SHA256SUMS 整份齐全

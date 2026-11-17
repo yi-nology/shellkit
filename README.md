@@ -106,7 +106,7 @@ curl -fsSL https://github.com/yi-nology/shellkit/releases/latest/download/instal
 
 ```bash
 curl -fsSL .../install.sh | PREFIX="$HOME/.local" bash   # 换目录
-curl -fsSL .../install.sh | VERSION=0.26.2 bash           # 钉版本
+curl -fsSL .../install.sh | VERSION=0.27.0 bash           # 钉版本
 ./install.sh --prefix /opt/shellkit                     # 在检出目录里直接跑，装当前工作树
 ```
 
