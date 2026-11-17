@@ -51,10 +51,10 @@ curl -fsSL https://github.com/yi-nology/shellkit/releases/latest/download/instal
 
 ```bash
 curl -fsSL https://github.com/yi-nology/shellkit/releases/latest/download/install.sh | PREFIX="$HOME/.local" bash
-curl -fsSL https://github.com/yi-nology/shellkit/releases/latest/download/install.sh | VERSION=0.27.0 bash
+curl -fsSL https://github.com/yi-nology/shellkit/releases/latest/download/install.sh | VERSION=1.0.0-rc.1 bash
 ```
 
-当前版本 **[下载 0.27.0](https://github.com/yi-nology/shellkit/releases/latest)**。
+当前版本 **[下载 1.0.0-rc.1](https://github.com/yi-nology/shellkit/releases/tag/v1.0.0-rc.1)**。
 sha256 对不上就 `exit 5`，一个字节都不落地。
 
 ## 真跑出来的终端输出

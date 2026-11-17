@@ -2,6 +2,23 @@
 本文件由 `tools/release.sh` 在发版时自动追加，已发布的小节不要手改。
 最新的在最前面。每一条对应一个提交 —— 要看「为什么」而不是「改了什么」，读 `docs/MIGRATING.md`。
 
+## 1.0.0-rc.1 — 2026-11-17
+
+2a17079 docs(roadmap): 记上 v0.27.0 发版与独立验签结果
+cc5b660 docs(releasing): 记 0.27.0 发版窗口事故与 --no-push 流程
+2780c90 feat(api): 1.0 API 冻结清单（docs/API-FREEZE.md）+ 对账门禁
+d8ad99b docs(install): 安全安装三步提到 README 顶部与安装页（中英）
+25d3f2e feat(rc): 真实项目 RC 验证脚本 tools/rc_check.sh（v1.0.0 门槛）
+2ff165f feat(rc): rc_check 支持 vendor 型工程 + --test-cmd（RC 证据可复跑）
+942a6f0 fix(ci): compat 容器绕开 GITHUB_PATH 的 PATH 破坏 + 按需装 bash（#136）
+2646d39 fix(vendor): 同步后核对版本，无所有权基线时 fail-closed（#137）
+e76f79d fix(i18n): 补 #137 两条新词条的中文翻译（test_i18n 要求 zh_CN 全覆盖）
+c23212e fix(vendor): 报错点名「N 个文件因缺所有权基线被保留」（#137）
+c787e98 feat(ver): 预发布版本语义（-rc.N）+ RC 发版链路
+6e96a0d fix(api-freeze): 冻结基线固定为 v1.0.0，不再随 VERSION 漂移
+232e35d fix(versions): CHANGELOG 版本解析支持预发布后缀（RC 发版前置）
+e3ebf51 test(api-freeze): 断言固定冻结基线，不再跟 VERSION 走
+
 ## 0.27.0 — 2026-11-17
 
 a104b04 docs(roadmap): 记上 v0.26.2 与系统包的回归
