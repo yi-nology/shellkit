@@ -313,7 +313,16 @@ EOF
 }
 
 _build_rpm() {
-  local __stage=$1 __out=$2 __top="$tmp/rpmbuild" __found=""
+  local __stage=$1 __out=$2 __top="$tmp/rpmbuild" __found="" __rpmver=$ver __rpmrel=1
+  # RPM 的 Version 字段不允许 "-"（1.0.0-rc.1 会让 rpmbuild 报 Illegal char '-'）。
+  # 预发布映射成 semver 的写法：Version=1.0.0 / Release=0.rc.1；
+  # 正式版保持 Release=1。载荷里的 VERSION 文件仍是完整版本号，冒烟按它判。
+  case "$ver" in
+    *-*)
+      __rpmver=${ver%%-*}
+      __rpmrel=0.${ver#*-}
+      ;;
+  esac
   command -v rpmbuild >/dev/null 2>&1 ||
     die "rpmbuild not found (install it with: apt-get install rpm / dnf install rpm-build) — run --stage to check content without it" 3
   mkdir -p "$__top/BUILD" "$__top/BUILDROOT" "$__top/RPMS" "$__top/SOURCES" "$__top/SPECS" "$__top/SRPMS" ||
@@ -321,8 +330,8 @@ _build_rpm() {
   # spec 是 heredoc 模板：$__stage 是真实 stage 路径，%{buildroot} 留给 rpm 展开。
   cat >"$__top/SPECS/shellkit.spec" <<EOF
 Name: shellkit
-Version: $ver
-Release: 1
+Version: $__rpmver
+Release: $__rpmrel
 Summary: bash 3.2+ library and project scaffold generator
 License: MIT
 URL: https://github.com/yi-nology/shellkit
