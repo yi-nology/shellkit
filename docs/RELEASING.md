@@ -40,6 +40,50 @@ bash tools/release.sh x.y.z --no-push # 本地提交与打 tag，推远端留给
 所以 `tools/release.sh` 先 `unset VERSION`，再用 `env -u VERSION -u MAKEFLAGS -u MFLAGS make check`
 跑门禁 —— 它只从 `VERSION` 文件读版本。
 
+## 发版窗口：`main` 会在你跑门禁时前进
+
+`make release` 里最长的一步是 `make check`（本机约 30–40 分钟，CI runner 也接近这个量级）。
+这段时间里**别的 PR 可能合进 `main`** —— 而脚本最后一步才 push。窗口足够长，就不是理论风险：
+
+> **2026-11-17 / v0.27.0 的实际事故**：第一次发版，改版本、重生成、门禁全绿，
+> 本地已经建好 `chore(release): 0.27.0` 与 `v0.27.0` tag；`git push origin main`
+> 被拒（`! [rejected] HEAD -> main (fetch first)`）—— 窗口内 PR #132 合入了 `main`。
+> 当时 **tag 没推出去、Release 没产生**，所以只是本地多了一次提交，没有任何对外影响。
+
+### 恢复步骤（不要 rebase，重跑）
+
+```bash
+git tag -d vx.y.z                  # 本地 tag 必须先删，否则重跑时第 2 步会判「tag 已占用」
+git reset --hard origin/main      # 丢掉本地那次 chore(release) 提交
+git pull --ff-only origin main
+make release VERSION=x.y.z        # 重跑：CHANGELOG / pot / 文档按新 base 重新生成
+```
+
+**为什么不 rebase**：`CHANGELOG.md` 是从 `git log` 生成的。rebase 只会把那一次提交挪到新 base 上，
+窗口内合入的 PR **不会进 changelog**（发布说明会漏条目），而重跑会按新历史重新生成。
+
+### 缩短窗口：`--no-push`
+
+`tools/release.sh` 支持 `--no-push`：门禁跑完只做本地 commit + tag，把两条 push 命令打印出来。
+你确认远端没动之后立刻推，竞态窗口从「整个 make check」缩到秒级：
+
+```bash
+bash tools/release.sh x.y.z --no-push   # 门禁 + commit + tag，不推
+git push origin main                     # 先推主线
+git push origin vx.y.z                   # 再推 tag：release.yml 由 tag 触发
+gh run list --workflow=release.yml --limit 1
+```
+
+推 tag 前顺手看一眼 `git log --oneline origin/main -3` 是不是你本地的那条 `chore(release)`；
+不是就先回到上面的恢复步骤，**不要** `git push --force` 到 `main`。
+
+### 判据在哪
+
+- `tools/release.sh` 第 2 步：`v<version>` 已存在 ⇒ 退 `3`（所以恢复必须先删本地 tag）；
+- 第 11 步 push 失败 ⇒ 整个发版退 `1`，**不会**留下半个 Release（tag 没推 = `release.yml` 没被触发）；
+- 发布之后用 `gh release view "v$version" --json isDraft,assets` 与
+  `bash tools/release_selfcheck.sh "v$version" --require-packages` 确认资产真的在。
+
 ## 版本号出现在哪里
 
 `VERSION` 是唯一真相源，其余全是投影，而投影是手抄的：
@@ -191,7 +235,7 @@ tap 仓是 [yi-nology/homebrew-shellkit](https://github.com/yi-nology/homebrew-s
 得手工回填一次（Homebrew 要求逐字节一致，早填必错）：
 
 ```bash
-version=0.26.1
+version=0.27.0
 gh release download "v$version" --repo yi-nology/shellkit \
   --pattern SHA256SUMS --dir "/tmp/sk-$version" --clobber
 sha=$(awk -v n="shellkit-$version.tar.gz" '$2==n{print $1}' "/tmp/sk-$version/SHA256SUMS")
