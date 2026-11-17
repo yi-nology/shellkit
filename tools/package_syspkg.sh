@@ -365,7 +365,9 @@ cp -R -p "$__stage/." %{buildroot}/
 EOF
   rpmbuild -bb --define "_topdir $__top" "$__top/SPECS/shellkit.spec" >&2 ||
     die "rpmbuild failed to build the rpm" 1
-  find "$__top/RPMS" -type f -name "shellkit-$ver-*.rpm" >"$__top/found"
+  # 产物名用的是 spec 里的 Version（预发布已拆成 1.0.0 + Release 0.rc.1），
+  # 不是完整版本号；按 __rpmver 找，再按调用方给的 $__out 命名。
+  find "$__top/RPMS" -type f -name "shellkit-$__rpmver-*.rpm" >"$__top/found"
   IFS= read -r __found <"$__top/found"
   [ -n "$__found" ] || die "rpmbuild reported success but no rpm was produced" 1
   cp -p "$__found" "$__out" || die "cannot copy the rpm to $__out" 1
