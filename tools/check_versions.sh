@@ -64,7 +64,8 @@ _check "site/en/index.md" "download button" \
 # 用户看到的「最近改了什么」是过期的。
 if [ -f "$ROOT/CHANGELOG.md" ]; then
   # 取第一行匹配，但不让 head 提前退出把 sed 打死（SIGPIPE → 141）
-  _cl=$(sed -n 's/^## \([0-9][0-9]*\.[0-9][0-9]*\.[0-9][0-9]*\).*/\1/p' "$ROOT/CHANGELOG.md")
+  # 允许预发布后缀（1.0.0-rc.1）；否则 RC 发版时这里会把 "1.0.0" 当最新版
+  _cl=$(sed -n 's/^## \([0-9][0-9]*\.[0-9][0-9]*\.[0-9][0-9]*\(-[0-9A-Za-z.]*\)\{0,1\}\).*/\1/p' "$ROOT/CHANGELOG.md")
   _cl=${_cl%%$'\n'*}
   if [ -z "$_cl" ]; then
     printf 'versions-check: CHANGELOG.md has no version section\n' >&2
