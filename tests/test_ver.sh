@@ -48,6 +48,8 @@ assert_exit_code 2 ver_cmp 1.0.0-.rc 1.0.0
 assert_exit_code 2 ver_cmp 1.0.0-rc. 1.0.0
 assert_exit_code 2 ver_cmp 1.0.0-rc..1 1.0.0
 assert_exit_code 2 ver_cmp 1.0.0-rc_1 1.0.0
+# 核心段里有字母（首字符仍是数字，所以能过第一道字符集检查）⇒ 非法
+assert_exit_code 2 ver_cmp 1a.0.0 1.0.0
 assert_exit_code 2 ver_lt "" ""
 assert_exit_code 2 ver_eq
 assert_eq "" "$(ver_cmp not-a-version 1.0.0)" "invalid input must print no comparison"
