@@ -50,15 +50,6 @@ _sk_ver_valid() {
   return 1
 }
 
-# _sk_ver_split V —— 输出「核心<TAB>预发布」；无预发布时第二列为空
-_sk_ver_split() {
-  local __v=${1:-}
-  case "$__v" in
-    *-*) printf '%s\t%s' "${__v%%-*}" "${__v#*-}" ;;
-    *) printf '%s\t' "$__v" ;;
-  esac
-}
-
 # _sk_ver_pre_cmp A B —— 两个预发布串比较（调用方保证都非空且合法）
 # 口径按 semver：点分段；数字段按数值比，数字段 < 非数字段，
 # 非数字段按 C locale 字节序比；前缀相同则段数多者大。

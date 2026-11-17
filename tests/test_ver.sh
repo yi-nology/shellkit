@@ -35,8 +35,17 @@ assert_eq "-1" "$(ver_cmp 1.0.0-alpha.1 1.0.0-alpha.2)" "later alpha identifier 
 assert_eq "0" "$(ver_cmp 1.0.0-rc.1 v1.0.0-rc.1)" "the leading v is stripped before comparing prereleases"
 assert_true ver_lt 1.0.0-rc.1 1.0.0
 assert_true ver_gt 1.0.0 1.0.0-rc.1
-# 非法预发布串同样返回 2（空后缀 / 空标识符 / 非法字符）
+# 预发布的段数：前缀相同则段数多者大（alpha < alpha.1，反之亦然）
+assert_eq "-1" "$(ver_cmp 1.0.0-alpha 1.0.0-alpha.1)" "a shorter prerelease is older"
+assert_eq "1" "$(ver_cmp 1.0.0-alpha.1 1.0.0-alpha)" "a longer prerelease is newer"
+# 数字段 < 字母段（semver 口径），两个方向都要走到
+assert_eq "1" "$(ver_cmp 1.0.0-alpha 1.0.0-1)" "an alphanumeric identifier outranks a numeric one"
+assert_eq "-1" "$(ver_cmp 1.0.0-1 1.0.0-alpha)" "a numeric identifier is older than an alphanumeric one"
+assert_eq "1" "$(ver_cmp 1.0.0-beta 1.0.0-alpha)" "alphanumeric identifiers compare lexicographically (both directions)"
+# 非法预发布串同样返回 2（空后缀 / 首尾点 / 空标识符 / 非法字符）
 assert_exit_code 2 ver_cmp 1.0.0- 1.0.0
+assert_exit_code 2 ver_cmp 1.0.0-.rc 1.0.0
+assert_exit_code 2 ver_cmp 1.0.0-rc. 1.0.0
 assert_exit_code 2 ver_cmp 1.0.0-rc..1 1.0.0
 assert_exit_code 2 ver_cmp 1.0.0-rc_1 1.0.0
 assert_exit_code 2 ver_lt "" ""
