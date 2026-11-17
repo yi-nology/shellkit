@@ -4,7 +4,7 @@
 > `lib/core/*.sh`、`lib/modules.txt`、`lib/bootstrap.sh` 与 `shellkit` 的
 > `cli_cmd` 注册生成 —— **不要手改**。
 >
-> frozen-at: 0.27.0
+> 冻结基线：v1.0.0（1.x 内不变；变更必须走 minor + docs/MIGRATING.md）
 > 承诺面：50 个 `@stability stable` 公开函数 + 退出码表 + CLI 子命令形状。
 > 其余 112 个 `@stability experimental` 函数**不在兼容承诺内**（见 `docs/COMPATIBILITY.md`）。
 

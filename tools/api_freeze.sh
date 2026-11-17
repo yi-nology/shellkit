@@ -62,9 +62,6 @@ for __f in "$BASELINE" "$MODULES" "$BOOT" "$CLI" "$VERSION_FILE"; do
 done
 [ -d "$LIB" ] || die "missing library directory: $LIB" 3
 
-version=$(tr -d '[:space:]' <"$VERSION_FILE")
-[ -n "$version" ] || die "cannot read VERSION" 3
-
 work=$(mktemp -d "${TMPDIR:-/tmp}/shellkit-freeze.XXXXXX") || die "cannot create a temp dir" 3
 trap 'rm -rf "${work:?}"' EXIT INT TERM HUP
 
@@ -217,7 +214,9 @@ awk '
   printf '> `lib/core/*.sh`、`lib/modules.txt`、`lib/bootstrap.sh` 与 `shellkit` 的\n'
   printf '> `cli_cmd` 注册生成 —— **不要手改**。\n'
   printf '>\n'
-  printf '> frozen-at: %s\n' "$version"
+  # 不写当前 VERSION：清单是「1.x 承诺面」的快照，不该每次发版都漂移
+  # （否则每次 release 的 make check 都会因 frozen-at 变化而红）。
+  printf '> 冻结基线：v1.0.0（1.x 内不变；变更必须走 minor + docs/MIGRATING.md）\n'
   printf '> 承诺面：%s 个 `@stability stable` 公开函数 + 退出码表 + CLI 子命令形状。\n' "$stable_count"
   printf '> 其余 %s 个 `@stability experimental` 函数**不在兼容承诺内**（见 `docs/COMPATIBILITY.md`）。\n\n' "$exp"
   printf '## 冻结口径（1.x）\n\n'
@@ -256,7 +255,7 @@ if [ "$MODE" = "write" ]; then
   mkdir -p "$(dirname "$TARGET")" || die "cannot create $(dirname "$TARGET")" 3
   cp "$work/API-FREEZE.md" "$TARGET.tmp.$$" && mv -f "$TARGET.tmp.$$" "$TARGET" ||
     die "cannot write $TARGET" 3
-  say "已重生成 ${TARGET}（${stable_count} 个 stable / ${exp} 个 experimental，frozen-at ${version}）"
+  say "已重生成 ${TARGET}（${stable_count} 个 stable / ${exp} 个 experimental，冻结基线 v1.0.0）"
   exit 0
 fi
 
@@ -268,5 +267,5 @@ if ! cmp -s "$TARGET" "$work/API-FREEZE.md"; then
   exit 5
 fi
 
-say "ok（${stable_count} 个 stable / ${exp} 个 experimental，frozen-at ${version}）"
+say "ok（${stable_count} 个 stable / ${exp} 个 experimental，冻结基线 v1.0.0）"
 exit 0
