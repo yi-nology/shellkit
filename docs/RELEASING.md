@@ -184,6 +184,27 @@ done
 > 而它依赖外部 Release 资产与网络路径 —— 一次通过可能只是一次运气。
 > 三次连续通过才值得写进发布说明。
 
+## RC 验证：拿真实项目跑一圈（v1.0.0 前置）
+
+升级矩阵证明的是「已发布的旧版本 → 当前」，证明不了「**你自己的工程**」。
+v1.0.0 起，发 RC 前用它跑至少两个**非夹具**项目（不是 `examples/` 里的示例）：
+
+```bash
+bash tools/rc_check.sh /path/to/project-a /path/to/project-b
+```
+
+每个项目它都先**整目录复制到临时目录**（绝不改你的工程），然后在副本上断言：
+
+1. `shellkit upgrade` 退出 0，`vendor/shellkit/VERSION` 跟上当前版本；
+2. 清单里没记的、`vendor/` 之外的用户文件**字节不变**；
+3. 没有 `.shellkit-new` / `.shellkit-old` / 清单 `.tmp` 残骸；
+4. 再升一次是幂等（`already up to date`）；
+5. `install-self → uninstall-self` 之后 `bin/shellkit` 与安装清单都消失；
+6. 重装出来的 CLI 还能再升级同一个项目，版本仍正确。
+
+输出每个项目的 PASS/FAIL 与 `ran=/fails=` 汇总；任何一项失败退出 `1`，
+项目目录不是 shellkit 工程时点名 `no .shellkit-manifest`。
+`--keep` 保留临时目录，便于看现场。
 ## 迟到的资产：--file 补签
 
 发布之后才打出来的资产（例如镜像清单）用点名补签，不要重跑整份签名：
