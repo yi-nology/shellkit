@@ -478,12 +478,13 @@ _sk_own_sync() {
   local __destroot=${7:-$__stage}
   local __rel __srcf __dstf __cur __new __base __act __txt __ownf __tree __expect
   local __rc __j __dup
-  local __srcsums __dstsums __table __keep __ka __kb __n_w=0 __n_s=0 __n_k=0 __n_del=0
+  local __srcsums __dstsums __table __keep __ka __kb __n_w=0 __n_s=0 __n_k=0 __n_nb=0 __n_del=0
   local __i=0
 
   _SK_OWN_N_W=0
   _SK_OWN_N_S=0
   _SK_OWN_N_K=0
+  _SK_OWN_N_NB=0
   _SK_OWN_N_DEL=0
 
   [ -n "$__src" ] && [ -n "$__stage" ] && [ -n "$__manifest" ] && [ -n "$__rels" ] || return 1
@@ -623,6 +624,9 @@ _sk_own_sync() {
       # 只有 --force 才允许覆盖。基线不推进：没证据证明这是我们装的。
       log_warn "$(_t 'no ownership baseline, left alone (use --force to overwrite)'): $__rel ($(_sk_err_path_info "$__destroot/$__rel"))"
       __act="K"
+      # 单独计数（issue #137）：这一类是「旧副本/基线丢失」，与「用户改过」
+      # 不同——版本没跟上时报错要能点名真正的原因与规模（「N 个文件」）。
+      __n_nb=$((__n_nb + 1))
     fi
     case "$__act" in
       W)
@@ -733,6 +737,7 @@ _sk_own_sync() {
   _SK_OWN_N_W=$__n_w
   _SK_OWN_N_S=$__n_s
   _SK_OWN_N_K=$__n_k
+  _SK_OWN_N_NB=$__n_nb
   _SK_OWN_N_DEL=$__n_del
   return 0
 }
@@ -3020,7 +3025,7 @@ cmd_vendor() {
   fi
   if [ "$__got" != "$SK_VERSION" ]; then
     log_error "$(_t 'the vendored library was not updated'): vendor/shellkit/VERSION is ${__got:-missing}, want $SK_VERSION"
-    log_info "$(_t 'files without an ownership baseline are kept; re-run with --force to overwrite them'): shellkit vendor --force $__dir"
+    log_info "$(_t 'files without an ownership baseline are kept; re-run with --force to overwrite them'): ${_SK_OWN_N_NB:-0} (shellkit vendor --force $__dir)"
     return "$SK_VERIFY"
   fi
 
