@@ -2,6 +2,37 @@
 
 三种装法，选一种就行：一条命令、本地检出、内网离线。
 
+## 安全安装（三步，推荐）
+
+sha256 只证明「下载没被改」，证明不了「这个包是 shellkit 发的」—— 清单和包走同一条下载通道，
+中间人可以一起换掉。高保障环境按这三步走（默认的 `curl | bash` 仍然可用，见下文）：
+
+```bash
+# 1) 核对公钥：docs/TRUST.md「当前公钥」钉的是这一把；
+#    再与 release 资产里的 shellkit.minisign.pub、该 tag 的 raw TRUST.md 比对
+#    RWQSCu8f5lvakshhMkZ2zgn+hbB0s0EJ2Wpx+rUgfHw7MmcQ5gcmPBao
+
+# 2) 离线验签：先下载、先验，最后才执行任何脚本
+#    需要 minisign：brew install minisign / apt-get install -y minisign
+VERSION=0.27.0
+base="https://github.com/yi-nology/shellkit/releases/download/v$VERSION"
+work=$(mktemp -d) && cd "$work" || exit 1
+for f in "shellkit-$VERSION.tar.gz" install.sh SHA256SUMS shellkit.minisign.pub; do
+  curl -fsSLO "$base/$f" || exit 1
+  case "$f" in *.pub) ;; *) curl -fsSLO "$base/$f.minisig" || exit 1 ;; esac
+done
+minisign -Vm "shellkit-$VERSION.tar.gz" -p shellkit.minisign.pub
+minisign -Vm install.sh -p shellkit.minisign.pub
+minisign -Vm SHA256SUMS -p shellkit.minisign.pub
+sha256sum -c SHA256SUMS            # macOS 没有 sha256sum 时：shasum -a 256 -c SHA256SUMS
+
+# 3) 再安装：用已经验签、已经校验的本地树，不再联网
+tar -xzf "shellkit-$VERSION.tar.gz" && cd "shellkit-$VERSION" || exit 1
+./install.sh --prefix "$HOME/.local"
+```
+
+公钥的另外两个核对渠道、`install.sh` 自身怎么验（离线路径）、deb/rpm 的信任链，
+见 [docs/TRUST.md](https://github.com/yi-nology/shellkit/blob/main/docs/TRUST.md)。
 ## 一条命令
 
 ```bash
