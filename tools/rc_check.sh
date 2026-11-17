@@ -164,8 +164,16 @@ for proj in $projects; do
       continue
     fi
   else
-    out=$("$SK" vendor "$copy" 2>&1)
-    rc=$?
+    if [ -f "$copy/vendor/shellkit/.shellkit-vendor-manifest" ]; then
+      out=$("$SK" vendor "$copy" 2>&1)
+      rc=$?
+    else
+      # 没有所有权基线的旧副本：vendor 会保留每个文件并 fail-closed（issue #137）。
+      # 副本里没有用户改动可保护，用 --force 走「明确选择覆盖」这条合法路径。
+      say "   note: legacy vendor copy (no ownership baseline) — using vendor --force"
+      out=$("$SK" vendor --force "$copy" 2>&1)
+      rc=$?
+    fi
     if [ "$rc" -ne 0 ]; then
       say "   FAIL: vendor sync exited $rc"
       printf "%s\n" "$out" | tail -5 >&2

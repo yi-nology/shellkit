@@ -3011,6 +3011,19 @@ cmd_vendor() {
     return "$SK_ERR"
   fi
 
+  # 同步后核对：VERSION 必须真的等于当前版本（issue #137）。
+  # 没有所有权基线的旧副本会把每个文件 left alone —— 以前这里无条件打
+  # OK(当前版本)、退出 0，用户以为升了、实际一个文件没换（fail-open）。
+  __got=""
+  if [ -f "$__dest/VERSION" ]; then
+    __got=$(tr -d '[:space:]' <"$__dest/VERSION")
+  fi
+  if [ "$__got" != "$SK_VERSION" ]; then
+    log_error "$(_t 'the vendored library was not updated'): vendor/shellkit/VERSION is ${__got:-missing}, want $SK_VERSION"
+    log_info "$(_t 'files without an ownership baseline are kept; re-run with --force to overwrite them'): shellkit vendor --force $__dir"
+    return "$SK_VERIFY"
+  fi
+
   log_ok "$(_t 'vendored library'): vendor/shellkit ($SK_VERSION)"
   printf '  %s\n' "$(_t 'load it from your scripts'):"
   printf '    . "$(cd "$(dirname "$0")/.." && pwd)/vendor/shellkit/lib/bootstrap.sh"\n'
