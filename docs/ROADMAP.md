@@ -1,6 +1,6 @@
 # ShellKit 路线图：三层架构与版本验收状态
 
-状态：2026-11-17 更新（当前 **v0.26.2** 已发布；**v0.27.0「1.0 契约」**已落地，待发版）。
+状态：2026-11-17 更新（当前 **v0.27.0「1.0 契约」**已发布：标签、17 项资产与系统包全部验签通过）。
 本文是**方向**，不是承诺 ——
 每个版本的退出条件写清楚，条件不满足就不进下一个版本（见「迭代节奏」）。
 
@@ -37,6 +37,7 @@
 | v0.26.0 | 发版原子性 + 卸载所有权（两处 P0） | draft → 独立验签 → 公开；`uninstall-self` 只删「我们装的、内容还是原样」的；`packages` job 自装 minisign + 结构判据 |
 | v0.26.2 | 补签语义修复 | `sign_release.sh --file` 不再要求 `SHA256SUMS` 整份齐全（`dist` 只有一部分资产是补签的常态）；17 项资产全签名并经独立验签 |
 | v0.26.1 | 系统包 job 的两处附产品：签名工具与补签前提 | `packages` job 自装 minisign；`sign_release.sh --file` 点名模式不再要求 `SHA256SUMS` 整份齐全（`tests/test_release_signing_tool.sh` 盯着签名 job） |
+| v0.27.0 | 1.0 契约批：兼容承诺 + 全量分级 + 取消重跑 + 发布自检 + 矩阵 lifecycle | `docs/COMPATIBILITY.md` + `compatibility-check`；162 个公开函数 50 stable / 112 experimental、豁免名单为空；`tests/test_release_gate_cancelled.sh`；`tools/release_selfcheck.sh` + 不可选 self-check job；`upgrade_matrix` lifecycle 一格 |
 
 ### v0.24.2 —— 数据安全收口（已发布 2026-11-16）
 
@@ -112,7 +113,7 @@ v0.24.0 暴露的缺口是：源码矩阵全绿、系统包构建也全绿，但
 `packages` job 三个 job 全绿（quality gate → build/verify/publish → deb/rpm），
 两版缺包在 `v0.26.2` 收口：`gh release view v0.26.2` 的资产清单里有 `.deb` / `.rpm` 且各带 `.minisig`。
 
-### v0.27.0 —— 1.0 契约（已落地，待发布）
+### v0.27.0 —— 1.0 契约（已发布 2026-11-17）
 
 这一批不加功能，只补「1.0 一发出去就没有回头路」的那几件事：承诺面、取消重跑的
 发布门禁、以及「可选 job 失败不许静默」的自检。
@@ -128,6 +129,12 @@ v0.24.0 暴露的缺口是：源码矩阵全绿、系统包构建也全绿，但
 
 退出条件：`make check` 全绿（含新增 compatibility-check）、CI 全矩阵绿、
 升级矩阵在 `0.20.0 / 0.23.0 / 0.24.1 / 0.26.2` 四格上全部通过且 lifecycle 一圈全过。
+
+**结果**：`bbfd9ea` 发车，`v0.27.0` 17 项资产（含 `.deb` / `.rpm`）全部签名，
+`tools/verify_release.sh v0.27.0` 逐份验签通过；发布后自检
+`tools/release_selfcheck.sh v0.27.0 --require-packages` 通过；从 Release 取回
+`install.sh` 端到端装一遍（doctor / new / docs --check）全绿。CI 16/16；
+分支覆盖棘轮 `whitelist 1011`、三条 `#42` 守卫臂全命中。
 
 ### API 与配置契约冻结（已随 v0.25.0 发布）
 
