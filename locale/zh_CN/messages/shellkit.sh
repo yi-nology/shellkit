@@ -275,6 +275,8 @@ _sk_msg_lookup_shellkit() {
     'run without --check to sync (locally modified files are kept)') printf '%s' '去掉 --check 重跑即可同步（用户改过的文件会保留）' ;;
     'vendored library is up to date') printf '%s' '工程里的库副本已是最新' ;;
     'refusing to overwrite a directory that is not a shellkit vendor') printf '%s' '拒绝覆盖不是 shellkit 副本的目录' ;;
+    'the vendored library was not updated') printf '%s' 'vendored 库没有更新' ;;
+    'files without an ownership baseline are kept; re-run with --force to overwrite them') printf '%s' '没有所有权基线的文件被保留；确认要覆盖请加 --force 重跑' ;;
     'load it from your scripts') printf '%s' '在脚本里这样加载' ;;
     'failed to check doc comments') printf '%s' '注释覆盖检查失败' ;;
     'public function has no doc comment') printf '%s' '公开函数缺少文档注释' ;;

@@ -92,6 +92,11 @@ jobs:
     name: compat on ${{ matrix.image }} (${{ matrix.runner }})
     runs-on: ${{ matrix.runner }}
     container: ${{ matrix.image }}
+    # 有限超时（issue #136）：openeuler job 曾卡 30+ 分钟不结束。慢可以解释、
+    # 卡死不行——超时把「等一个永远不会结束的 job」变成一条明确的失败信号。
+    # 取 40 分钟：实测 openeuler 完整一轮约 6 分钟（本地容器），但共享 runner
+    # 的包下载/CPU 波动可能到 20+ 分钟；超时只该杀「卡死」，不该杀「慢」。
+    timeout-minutes: 40
     strategy:
       fail-fast: false
       matrix:
@@ -112,25 +117,54 @@ jobs:
     steps:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
 
-      - name: install tooling
-        # 容器 job 的默认 shell 是 sh -e {0}：set -o pipefail 在 dash 里是非法选项，
-        # 所以这里显式用 bash。
-        shell: bash
+      # 容器 job 的 run 步骤由 runner 用 `docker exec ... <shell>` 启动。
+      # 显式写 shell: bash 时，镜像里没有 bash 会在 **exec 阶段**直接失败
+      # （exit 127，issue #136 的现场）。这里先用 sh 跑一步（容器 job 的默认
+      # shell，镜像必须提供），把 bash 装好并打印解析结果；后续步骤显式用
+      # `$(command -v bash)`，不再赌 runner 的 exec 查找。
+      - name: ensure bash
+        shell: sh
         run: |
-          set -euo pipefail
+          set -eu
+          if ! command -v bash >/dev/null 2>&1; then
+            if command -v dnf >/dev/null 2>&1; then
+              dnf install -y bash
+            elif command -v microdnf >/dev/null 2>&1; then
+              microdnf install -y bash
+            elif command -v apt-get >/dev/null 2>&1; then
+              apt-get update -qq
+              apt-get install -y -qq bash
+            elif command -v apk >/dev/null 2>&1; then
+              apk add --no-cache bash
+            else
+              echo 'bash is missing and no supported package manager is available' >&2
+              exit 1
+            fi
+          fi
+          command -v bash
+          bash --version | head -1
+
+      - name: install tooling
+        # POSIX sh：容器 job 默认 shell 就是 sh，不写 shell: bash 就不会在
+        # exec 阶段因 bash 缺失而 127（issue #136）。本脚本保持 POSIX 兼容，
+        # 不用 set -o pipefail（dash 会把它当非法选项）。
+        shell: sh
+        run: |
+          set -eu
           if command -v apt-get >/dev/null 2>&1; then
             apt-get update -qq
             # python3：tests/test_doctor.sh 的 JSON 值断言靠它解析（jget/jlen）；
-            # git：让容器走 git archive 的正常副本路径（没有它只剩 worktree 退路，
-            # 退路由 coverage ratchet 那条 job 覆盖）。
-            apt-get install -y -qq gettext ca-certificates curl tar xz-utils make python3 git
+            # git：check_security 的 secret.tracked 判据要用它（缺 git 会明确报
+            # 「这条判据查不了」并让门禁变红），同时让容器走 git archive 的
+            # 正常副本路径。
+            apt-get install -y -qq gettext ca-certificates curl tar xz-utils make python3 git bash
           else
             # Rocky 9 基础镜像自带 curl-minimal，它和同名 curl 包互斥：
             # 硬装 curl 会报 "curl-minimal ... conflicts with curl"。
             # curl-minimal 已经能下载文件（-fsSL 都支持），所以这里不装 curl，
             # 只补真正缺的包；下载器在下面统一兜底。
             dnf install -y -qq --allowerasing \
-              gettext ca-certificates tar xz make python3 git \
+              bash gettext ca-certificates tar xz make python3 git \
               grep sed gawk findutils diffutils coreutils \
               gmp ncurses-libs
           fi
@@ -163,26 +197,38 @@ jobs:
             echo "no downloader available (curl/wget/python3)" >&2
             exit 1
           fi
-          mkdir -p "$HOME/.local/bin"
+          # 工具装到镜像默认 PATH 里的 /usr/local/bin，**不写 GITHUB_PATH**：
+          # 实测 runner 在容器 job 里应用 GITHUB_PATH 后，下一步的 PATH 只剩
+          # 追加的那一项——连 sh 都 exec 不到（issue #136 的 gate 步骤现场：
+          # OCI runtime exec ... exec: "sh": executable file not found in $PATH）。
+          # 容器以 root 运行；不可写时显式失败，不静默退化成「门禁跳过」。
+          bin_dir=/usr/local/bin
+          if [ ! -d "$bin_dir" ] || [ ! -w "$bin_dir" ]; then
+            echo "$bin_dir is not writable; the compat job must run as root" >&2
+            exit 1
+          fi
           case "$(uname -m)" in
             arm64 | aarch64) arch=aarch64 ;;
             *) arch=x86_64 ;;
           esac
           sk_fetch "https://github.com/koalaman/shellcheck/releases/download/${SHELLCHECK_VERSION}/shellcheck-${SHELLCHECK_VERSION}.linux.${arch}.tar.xz" /tmp/sc.tar.xz
           tar -xJf /tmp/sc.tar.xz -C /tmp
-          install -m 0755 "/tmp/shellcheck-${SHELLCHECK_VERSION}/shellcheck" "$HOME/.local/bin/shellcheck"
+          install -m 0755 "/tmp/shellcheck-${SHELLCHECK_VERSION}/shellcheck" "$bin_dir/shellcheck"
           case "$arch" in
             aarch64) sf="shfmt_${SHFMT_VERSION}_linux_arm64" ;;
             *) sf="shfmt_${SHFMT_VERSION}_linux_amd64" ;;
           esac
-          sk_fetch "https://github.com/mvdan/sh/releases/download/${SHFMT_VERSION}/${sf}" "$HOME/.local/bin/shfmt"
-          chmod 0755 "$HOME/.local/bin/shfmt"
-          echo "$HOME/.local/bin" >> "$GITHUB_PATH"
+          sk_fetch "https://github.com/mvdan/sh/releases/download/${SHFMT_VERSION}/${sf}" "$bin_dir/shfmt"
+          chmod 0755 "$bin_dir/shfmt"
+          command -v shellcheck
+          command -v shfmt
           bash --version | head -1
 
       - name: gate
-        shell: bash
-        run: make check
+        # 同样用 sh 启动；BASH 显式指向 ensure bash 解析出的可执行文件，
+        # 门禁本体仍是同一份 make check（issue #136）。
+        shell: sh
+        run: make check BASH="$(command -v bash)"
 
   # bats 用例：真正独立的测试用例（每个 @test 一个进程）。
   # 不进 make check —— bats 是外部依赖；这里单独一个 job 装好再跑。

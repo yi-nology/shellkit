@@ -4,7 +4,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: shellkit\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-11-17 05:27+0800\n"
+"POT-Creation-Date: 2026-11-17 17:38+0800\n"
 "PO-Revision-Date: 2026-11-08 00:00+0800\n"
 "Last-Translator: shellkit contributors\n"
 "Language-Team: shellkit contributors\n"
@@ -840,6 +840,14 @@ msgstr "專案內的程式庫副本已是最新"
 
 msgid "refusing to overwrite a directory that is not a shellkit vendor"
 msgstr "拒絕覆蓋不是 shellkit 副本的目錄"
+
+msgid "the vendored library was not updated"
+msgstr "vendored 庫沒有更新"
+
+msgid ""
+"files without an ownership baseline are kept; re-run with --force to "
+"overwrite them"
+msgstr "沒有所有權基線的檔案被保留；確認要覆蓋請加 --force 重跑"
 
 msgid "load it from your scripts"
 msgstr "在腳本裡這樣載入"

@@ -82,3 +82,23 @@ assert_eq "$(cat "$TEST_ROOT/VERSION")" "$(cat "$proj/vendor/shellkit/VERSION")"
   "self-sync still lands the right version"
 assert_exit_code 0 bash "$proj/bin/app" --version
 assert_exit_code 0 "$TEST_ROOT/shellkit" vendor "$proj" --check
+
+# 没有所有权基线的旧副本（issue #137）：同步后版本没变 ⇒ fail-closed，不许报 OK。
+# 以前这里会打「vendored library ... (当前版本)」并退出 0，实际一个文件都没换。
+legacy="$work/legacy"
+mkdir -p "$legacy/vendor/shellkit/lib"
+printf '0.0.1\n' >"$legacy/vendor/shellkit/VERSION"
+printf '# old bootstrap\n' >"$legacy/vendor/shellkit/lib/bootstrap.sh"
+out=$(bash "$TEST_ROOT/shellkit" vendor "$legacy" 2>&1) && rc=0 || rc=$?
+assert_eq 5 "$rc" "a legacy copy that cannot be updated must fail closed with SK_VERIFY"
+assert_contains "$out" "was not updated" "the failure must say the copy was not updated"
+assert_contains "$out" "ownership baseline are kept; re-run with --force to overwrite them: 2" \
+  "the failure must name the number of files kept for lack of a baseline (issue #137)"
+assert_contains "$out" "--force" "the failure must point at --force"
+assert_eq "0.0.1" "$(cat "$legacy/vendor/shellkit/VERSION")" "nothing may be silently replaced"
+
+# --force 是明确的覆盖通道：版本必须真的跟上，随后 --check 绿
+assert_exit_code 0 "$TEST_ROOT/shellkit" vendor "$legacy" --force
+assert_eq "$(cat "$TEST_ROOT/VERSION")" "$(cat "$legacy/vendor/shellkit/VERSION")" \
+  "--force must land the current version"
+assert_exit_code 0 "$TEST_ROOT/shellkit" vendor "$legacy" --check

@@ -41,7 +41,7 @@ manifest1=$(sum "$p1/.shellkit-manifest")
 rc=0
 out=$(bash "$RC" "$p1" "$p2" 2>&1) || rc=$?
 assert_eq "0" "$rc" "rc_check must pass on two freshly generated projects"
-assert_contains "$out" "ok: upgrade" "the run must report success per project"
+assert_contains "$out" "ok: scaffold" "the run must report success per project"
 assert_contains "$out" "ran=2 fails=0" "the summary must count both projects"
 
 # 2) 传入的工程必须一个字节都没变（脚本只改副本）
@@ -56,7 +56,7 @@ mkdir -p "$empty"
 rc=0
 out=$(bash "$RC" "$empty" 2>&1) || rc=$?
 assert_eq "1" "$rc" "a directory without a manifest must fail"
-assert_contains "$out" "no .shellkit-manifest" "the failure must say why"
+assert_contains "$out" "neither a scaffolded project" "the failure must say why"
 
 # 4) 参数缺失与 --help
 rc=0
@@ -65,5 +65,27 @@ assert_eq "0" "$rc" "--help must exit 0"
 rc=0
 bash "$RC" >/dev/null 2>&1 || rc=$?
 assert_eq "2" "$rc" "no arguments must be a usage error"
+
+# 5) vendor 型工程（只有 vendor/shellkit，没有清单）：同样跑完一圈
+p3="$d/p3"
+mkdir -p "$p3"
+printf 'consumer files\n' >"$p3/keep.txt"
+"$SK" vendor "$p3" >/dev/null 2>&1 || _fail "cannot create the vendor fixture"
+before4=$(sum "$p3/keep.txt")
+rc=0
+out=$(bash "$RC" "$p3" 2>&1) || rc=$?
+assert_eq "0" "$rc" "rc_check must pass on a vendor-consumer project"
+assert_contains "$out" "mode: vendor" "the vendor mode must be reported"
+assert_eq "$before4" "$(sum "$p3/keep.txt")" "the vendor project input must stay untouched"
+
+# 6) --test-cmd：同步前绿、同步后红 ⇒ 判 RC 失败（新增失败不许放过）
+p4="$d/p4"
+mkdir -p "$p4"
+printf 'x\n' >"$p4/keep.txt"
+"$SK" vendor "$p4" >/dev/null 2>&1 || _fail "cannot create the second vendor fixture"
+rc=0
+out=$(bash "$RC" --test-cmd 'test ! -e rcmk || exit 9; : > rcmk' "$p4" 2>&1) || rc=$?
+assert_eq "1" "$rc" "a test that turns red after the sync must fail the RC run"
+assert_contains "$out" "turned red after the sync" "the failure must explain the regression"
 
 exit 0
