@@ -330,6 +330,19 @@ jobs:
       - name: branch coverage
         run: make coverage-branch
 
+      # TEMP: 在 ubuntu 环境重生成分支覆盖基线并上传（issue #140 编号漂移）。
+      # 基线是「当前确实未覆盖的分支臂」名单，而分支 ID 含函数内顺序号 ——
+      # 改了函数里的分支就会让编号漂移，棘轮必然红。基线必须在**同环境**
+      # 重生成（环境分叉臂跨机器对不上），所以这个 job 跑在 ubuntu 上。
+      - name: rewrite branch baseline (temp)
+        run: bash tools/coverage.sh --branch --write-baseline
+
+      - name: upload rewritten baseline (temp)
+        uses: actions/upload-artifact@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          name: branch-baseline-ubuntu
+          path: tools/coverage_branch_baseline.txt
+
   # 性能基准：出报告，不阻断。
   #
   # 为什么不是硬门禁：共享 runner 的波动比代码的性能差异大得多，
