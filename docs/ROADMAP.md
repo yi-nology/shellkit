@@ -40,6 +40,7 @@
 | v0.26.1 | 系统包 job 的两处附产品：签名工具与补签前提 | `packages` job 自装 minisign；`sign_release.sh --file` 点名模式不再要求 `SHA256SUMS` 整份齐全（`tests/test_release_signing_tool.sh` 盯着签名 job） |
 | v0.27.0 | 1.0 契约批：兼容承诺 + 全量分级 + 取消重跑 + 发布自检 + 矩阵 lifecycle | `docs/COMPATIBILITY.md` + `compatibility-check`；162 个公开函数 50 stable / 112 experimental、豁免名单为空；`tests/test_release_gate_cancelled.sh`；`tools/release_selfcheck.sh` + 不可选 self-check job；`upgrade_matrix` lifecycle 一格 |
 | v1.0.0-rc.1 | 预发布版本语义（semver 后缀）+ RC 真实验证 | `lib/core/ver.sh` 接受并排序 `x.y.z-pre`；`tools/rc_check.sh`（对输入工程只读、先复制再跑）+ `--test-cmd`；tag 含 `-` ⇒ `--prerelease` 不占 `latest`；RPM 预发布拆 `Version`/`Release` |
+| v1.1.0 | skill 旧副本的升级通道（#140）：无所有权基线时不再静默不更新 | 措辞区分「用户改过」与「无所有权基线」；装完核对 `VERSION`，没跟上退 5 并点名 N 个文件 + `--force` 逃逸口；「装不成」仍是 3 |
 
 ### v0.24.2 —— 数据安全收口（已发布 2026-11-16）
 
@@ -193,6 +194,22 @@ gates 兜底，只需扩集合）。
 `SHELLKIT_MINISIGN_PUBKEY` 配了公钥时强制验签通过；发布资产公钥与 `docs/TRUST.md`
 钉住值逐字一致（跨渠道核对）。CI：`quality` 全矩阵绿（含 debian:12 / rockylinux:9 /
 openeuler amd64+arm64 四个 compat 格），`release` 流水线两个 job 全 success。
+
+### v1.1.0 —— skill 旧副本的升级通道（已发布 2026-11-18）
+
+GA 之后的第一版，只修一个真缺陷：**旧版（清单机制引入前）装的 skill 副本，升级通道被永久冻结**。
+
+| 交付 | 判据 |
+|---|---|
+| **措辞分类** | 用户改过的报 `modified locally`；**没有所有权基线**的（旧副本 / 基线丢失）报 `no ownership baseline, left alone (use --force to overwrite)` —— 混报会把人指向错误的修复动作 |
+| **fail-closed** | 装完核对 `VERSION`：没跟上 ⇒ 退出码 **5** + 点名「N 个文件」+ 给出 `shellkit skill install --force` 逃逸口。**两处路径都查**（「没有要写的文件」的提前返回 + 正常提交路径） |
+| **退出码分流** | 「装不成」（软链 / 包残缺 / 目录不可写）仍是 **3**；「装上了但版本没跟上」是 **5**（校验失败） |
+| **核对基准** | 用「包里携带的 VERSION」而不是 `$SK_VERSION` —— 发行包里的版本可能与本机 CLI 不同，拿一把尺子量所有副本会把合法安装误判成失败 |
+
+**结果**：PR #141 合并（`b2d4baf`）；判据承重做过反向验证（把两处核对分别撤掉，用例都转红）。
+覆盖率棘轮的基线在 **ubuntu 同环境**重生成（分支 ID 含函数内顺序号，改函数里的分支会漂移；
+环境分叉臂跨机器对不上），差异只落在 skill 安装相关条目。
+
 
 ## 三、战略取舍
 
