@@ -243,3 +243,32 @@ out=$(bash "$fake/tests/run.sh" --filter 'no_such_file_*' </dev/null 2>&1) || rc
 assert_eq "2" "$rc" "a filter that matches nothing must be a usage error"
 assert_not_contains "$out" "All 0 test files passed." "a filter that matches nothing must not report success"
 assert_contains "$out" "test_aaa_ok.sh" "the error must list the available test files"
+
+# ---------------------------------------------------------------------------
+# 并行模式必须保留默认的信号处置
+#
+# 后台作业默认继承 SIGINT/SIGQUIT 的**忽略**状态（POSIX：非 job control 的
+# shell 启动的后台进程把这两个信号置成忽略）⇒ 子 shell 里 trap INT 不生效
+# ⇒ 凡是测信号处理的用例在并行模式下必然假红（实测 test_trap.sh 并行必挂、
+# 串行必过 —— 假红比不跑更坏：它让人以为库坏了）。
+#
+# 这里用一条只测「能不能 trap INT」的受控用例把这件事钉住：并行跑它必须过。
+# ---------------------------------------------------------------------------
+sig="$d/sig"
+mkdir -p "$sig/tests" || _fail "mkdir failed"
+cp "$TEST_ROOT/tests/run.sh" "$sig/tests/run.sh" || _fail "copy failed"
+cat >"$sig/tests/test_sig_int.sh" <<'FIXTURE'
+#!/usr/bin/env bash
+# 能不能 trap INT？被内核置成忽略时（后台作业的默认情形）这条退出 1。
+handler='printf "got-int\n"'
+out=$(bash -c 'trap "$1" INT; kill -INT $$; sleep 2' _ "$handler" 2>/dev/null)
+case "$out" in
+  *got-int*) exit 0 ;;
+  *) exit 1 ;;
+esac
+FIXTURE
+rc=0
+out=$(bash "$sig/tests/run.sh" --jobs 2 </dev/null 2>&1) || rc=$?
+assert_eq "0" "$rc" "a parallel run must not break signal handling inside the test files"
+assert_not_contains "$out" "FAILED: test_sig_int.sh" \
+  "the signal fixture must pass in parallel mode"
