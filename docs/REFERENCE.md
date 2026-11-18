@@ -2042,3 +2042,143 @@ vendor_dir_detect PROJECT_DIR —— 工程里「别处」的库副本   扫一�
 - 0 找到了（stdout 是相对工程目录的路径）
 - 1 没找到
 
+## proc
+
+### `proc_start`
+
+proc_start NAME COMMAND... —— 后台拉起一个进程组 脱离终端：nohup 忽略 SIGHUP + 标准输入接 /dev/null + 作业控制让它自带进程组。 pid 文件：$DIR/NAME.pid（原子写）。日志：$DIR/NAME.log（**追加**，不截断 —— 截断会把上次的现场抹掉，出事时没得查）。
+
+**稳定性**：experimental
+
+**退出码**
+
+- 0 成功（进程已拉起）
+- 2 用法错（名字非法 / 没有命令）
+- 3 前置条件不满足（已经在跑 / 运行目录不可用 / 命令不存在）
+- 1 拉起失败（命令自己起不来）
+
+### `proc_stop`
+
+proc_stop NAME —— 停掉整个进程组 只 kill 主进程 ⇒ 子进程残留、端口还占着 —— 这是手写最常见的坑。 这里先给整组 TERM，留收尾的时间；还在就 KILL 整组。
+
+**稳定性**：experimental
+
+**退出码**
+
+- 0 已停（或本来就没在跑）
+- 2 用法错
+- 3 停不掉
+
+### `proc_is_running`
+
+proc_is_running NAME —— 探活 僵尸 pid 文件会被清掉：文件还在、进程早没了 —— 手写看门狗最常见的另一种坑 （探活永远失败，但没人清理，重启就一直起不来）。
+
+**稳定性**：experimental
+
+**退出码**
+
+- 0 在跑
+- 1 没在跑（僵尸 pid 文件会被清掉）
+- 2 用法错
+- 3 运行目录不可用
+
+### `proc_watchdog`
+
+proc_watchdog [--interval SEC] [--max-backoff SEC] [--max-restarts N] NAME COMMAND... 看门狗：进程挂了拉起来，带退避。 退避：连续失败时按 1→2→4… 翻倍（上限 --max-backoff）—— 没有退避的重启是**风暴**：进程起来就崩 ⇒ 无限循环重启，把机器打满。 进程连续活过几个周期 ⇒ 退避归零（不是一直用最大退避）。 --max-restarts N：连续 N 次拉起失败就放弃并返回非 0（0 = 不限）。 无人值守设备上「放弃了」必须有人看得见，所以放弃时是**非 0 退出**。
+
+**稳定性**：experimental
+
+**退出码**
+
+- 0 被信号停掉（正常退出）
+- 2 用法错
+- 1 放弃（连续拉起失败超过上限）
+
+## git
+
+### `git_default_branch`
+
+git_default_branch REPO —— 解析默认分支 顺序：origin/HEAD 的符号引用（正常 clone 都有）→ 本地已有的 origin/main 或 origin/master → 远端只有一个分支时就是它 → 多个远端分支且认不出 ⇒ 报歧义。 认不出就报错，不猜 —— 猜错了的代价是「拉错分支」。
+
+**稳定性**：experimental
+
+**退出码**
+
+- 0 成功（stdout 是分支名）
+- 3 解析不出来（不是 git 仓 / 远端分支有歧义 / 没有远端）
+
+### `git_is_dirty`
+
+git_is_dirty REPO —— 脏仓守卫 有未提交改动（含未跟踪文件）⇒ 退出码 1，stdout 是 porcelain 摘要。 未跟踪文件也算脏：另一个会话刚建的文件，被 pull 冲掉一样是事故。
+
+**稳定性**：experimental
+
+**退出码**
+
+- 0 干净
+- 1 有未提交改动
+- 3 不是 git 仓
+
+### `git_tag`
+
+git_tag REPO —— 取版本号（浅克隆安全） 浅克隆里 git describe --tags 会退化成哈希 ⇒ 产物版本变成 (devel)。 三层回退：   1) HEAD 上的精确 tag；   2) 浅克隆且拿不到 ⇒ 补取 tag（tag 跟不下来是浅克隆的常态）；   3) 还是拿不到 ⇒ 补深度（--deepen）：tag 指向的是**祖先**提交时，      只补 tag 不够 —— 浅边界把祖先链截断了，describe 仍认不出这个 tag      是不是 HEAD 的祖先，于是仍然失败。 第 2、3 步要联网；不想联网就设 SHELLKIT_GIT_NO_FETCH=1。
+
+**稳定性**：experimental
+
+**退出码**
+
+- 0 成功（stdout 是 tag）
+- 3 拿不到（不是 git 仓 / 没有 tag / 浅克隆且不允许联网）
+
+### `git_fetch`
+
+git_fetch REPO BRANCH —— 受控取数 脏仓直接拒绝：同机并行会话的工作不能被无声冲掉（我们被冲掉过两次）。 只取不改工作树，但仍然守脏仓 —— 「干净才动」是这一族函数的统一口径。
+
+**稳定性**：experimental
+
+**退出码**
+
+- 0 成功
+- 2 用法错
+- 3 脏仓 / 不是 git 仓
+- 1 git 自己失败
+
+### `git_fast_forward`
+
+git_fast_forward REPO BRANCH —— 只快进，绝不丢本地提交 能快进 ⇒ merge --ff-only；不能快进（本地有分叉）⇒ **明确报错，不动工作树**。 「快进 vs 强制重置」的区别就在这里：强制重置会丢本地提交，所以它另有 一个名字更直白的函数（git_reset_hard），要的人自己明说。
+
+**稳定性**：experimental
+
+**退出码**
+
+- 0 成功
+- 2 用法错
+- 3 脏仓 / 不能快进 / 远端分支不存在
+- 1 git 自己失败
+
+### `git_reset_hard`
+
+git_reset_hard REPO REF —— 显式的破坏性重置 会丢本地提交 —— 名字里就写着 hard，调用方必须自己确认过。 想要「不丢」的语义就用 git_fast_forward。
+
+**稳定性**：experimental
+
+**退出码**
+
+- 0 成功
+- 2 用法错
+- 3 不是 git 仓
+- 1 git 自己失败
+
+### `git_worktree_add`
+
+git_worktree_add REPO PATH BRANCH [START_POINT] —— 检出到工作树 多仓并行改动的标准做法：每个改动一个工作树，互不干扰， 也不会把别人的工作区冲掉（这正是脏仓守卫要防的那类事故）。 PATH 不能在 REPO 里面（git 也不允许），也不能是软链。
+
+**稳定性**：experimental
+
+**退出码**
+
+- 0 成功
+- 2 用法错
+- 3 不是 git 仓 / 路径不合法
+- 1 git 自己失败
+
