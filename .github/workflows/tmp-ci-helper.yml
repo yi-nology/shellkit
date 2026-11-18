@@ -10,6 +10,11 @@ name: tmp-ci-helper
 #   - 这个文件**只**放在 tmp/ci-helper 分支上，功能分支一行都不带
 #     ⇒ 合并进 main 的树是干净的；
 #   - 跑完把 tmp/ci-helper 与 tmp/ci-helper-log 两个分支删掉。
+#
+# ⚠ GitHub Actions 的 run: 默认用 `bash -e {0}` —— 任何一条命令非 0 就中断整步。
+# 所以每一步第一行都写 `set +e`：我们要的是「把失败记进日志、继续往下走」，
+# 而不是「第一步失败就什么都不干」（上一次就是被 -e 掐在重生成那一步，
+# PR 根本没建起来）。
 
 on:
   push:
@@ -53,93 +58,125 @@ jobs:
           path: helper
 
       - name: install gettext
-        run: sudo apt-get update -qq && sudo apt-get install -y -qq gettext
+        run: |
+          set +e
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq gettext
 
       - name: regenerate the coverage and bench baselines (runner environment)
         run: |
+          set +e
           set -uo pipefail
           cd repo
+          rc=0
           {
             echo "=== regenerate baselines on $(uname -s) $(uname -m) ==="
-            bash tools/coverage.sh --write-baseline
-            bash tools/coverage.sh --branch --write-baseline
-            bash tools/bench.sh --profile --write-baseline
+            echo "--- coverage (function level) ---"
+          } >> /tmp/helper.log
+          bash tools/coverage.sh --write-baseline >/tmp/cov.log 2>&1 || rc=1
+          cat /tmp/cov.log >> /tmp/helper.log
+          {
+            echo "--- coverage (branch level) ---"
+          } >> /tmp/helper.log
+          bash tools/coverage.sh --branch --write-baseline >/tmp/covb.log 2>&1 || rc=1
+          cat /tmp/covb.log >> /tmp/helper.log
+          {
+            echo "--- bench profile ---"
+          } >> /tmp/helper.log
+          bash tools/bench.sh --profile --write-baseline >/tmp/bench.log 2>&1 || rc=1
+          cat /tmp/bench.log >> /tmp/helper.log
+          {
+            echo "--- diff stat ---"
             git --no-pager diff --stat -- tools/coverage_baseline.txt tools/coverage_branch_baseline.txt tools/bench_profile_baseline.txt
-          } 2>&1 | tee -a /tmp/helper.log
-          exit 0
+            echo "regenerate rc=$rc"
+          } >> /tmp/helper.log 2>&1
+          exit $rc
 
       - name: push the regenerated baselines back to the feature branch
         run: |
+          set +e
           set -uo pipefail
           cd repo
           if git diff --quiet -- tools/coverage_baseline.txt tools/coverage_branch_baseline.txt tools/bench_profile_baseline.txt; then
-            echo "baselines unchanged" | tee -a /tmp/helper.log
+            echo "baselines unchanged" >> /tmp/helper.log
           else
             git config user.name "github-actions[bot]"
             git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
             git add tools/coverage_baseline.txt tools/coverage_branch_baseline.txt tools/bench_profile_baseline.txt
-            git commit -m "chore(baselines): regenerate the coverage and bench baselines on ubuntu-latest" | tee -a /tmp/helper.log
-            git push origin "HEAD:$BRANCH" 2>&1 | tee -a /tmp/helper.log
+            git commit -m "chore(baselines): regenerate the coverage and bench baselines on ubuntu-latest" >> /tmp/helper.log 2>&1
+            git push origin "HEAD:$BRANCH" >> /tmp/helper.log 2>&1
           fi
           exit 0
 
       - name: open the pull request
         run: |
+          set +e
           set -uo pipefail
           if gh pr view "$BRANCH" --json number >/dev/null 2>&1; then
-            echo "PR already exists: $(gh pr view "$BRANCH" --json number -q .number)" | tee -a /tmp/helper.log
+            echo "PR already exists: $(gh pr view "$BRANCH" --json number -q .number)" >> /tmp/helper.log
           else
             gh pr create --base main --head "$BRANCH" \
               --title "feat(git,proc): git 领域抽象 + 进程组/看门狗原语 (#146)" \
-              --body-file helper/pr-body.md 2>&1 | tee -a /tmp/helper.log
+              --body-file helper/pr-body.md >> /tmp/helper.log 2>&1
           fi
           exit 0
 
       - name: wait for the required checks, merge, close the issue
         run: |
+          set +e
           set -uo pipefail
           cd repo
-          pr=$(gh pr view "$BRANCH" --json number -q .number)
-          echo "PR number: $pr" | tee -a /tmp/helper.log
+          pr=$(gh pr view "$BRANCH" --json number -q .number 2>/dev/null)
+          {
+            echo "PR number: $pr"
+          } >> /tmp/helper.log
+          if [ -z "$pr" ]; then
+            echo "NO PR — the PR creation step failed" >> /tmp/helper.log
+            exit 1
+          fi
           merge_sha=$(git ls-remote origin "refs/pull/$pr/merge" 2>/dev/null | cut -f1)
           if [ -z "$merge_sha" ]; then
             merge_sha=$(git rev-parse HEAD)
-            echo "no merge ref; falling back to the head SHA" | tee -a /tmp/helper.log
+            echo "no merge ref; falling back to the head SHA" >> /tmp/helper.log
           fi
-          echo "gate SHA: $merge_sha" | tee -a /tmp/helper.log
-          if ! bash tools/release_gate.sh "$merge_sha" --timeout 5400 2>&1 | tee -a /tmp/helper.log; then
-            echo "GATE FAILED" | tee -a /tmp/helper.log
-            gh pr checks "$pr" 2>&1 | tee -a /tmp/helper.log || true
+          echo "gate SHA: $merge_sha" >> /tmp/helper.log
+          bash tools/release_gate.sh "$merge_sha" --timeout 5400 >> /tmp/helper.log 2>&1
+          gate_rc=$?
+          if [ "$gate_rc" -ne 0 ]; then
+            echo "GATE FAILED rc=$gate_rc" >> /tmp/helper.log
+            gh pr checks "$pr" >> /tmp/helper.log 2>&1
             exit 1
           fi
-          echo "gate passed" | tee -a /tmp/helper.log
-          if gh pr merge "$pr" --squash --delete-branch 2>&1 | tee -a /tmp/helper.log; then
-            echo "merged" | tee -a /tmp/helper.log
-          else
-            echo "MERGE FAILED" | tee -a /tmp/helper.log
+          echo "gate passed" >> /tmp/helper.log
+          gh pr merge "$pr" --squash --delete-branch >> /tmp/helper.log 2>&1
+          merge_rc=$?
+          if [ "$merge_rc" -ne 0 ]; then
+            echo "MERGE FAILED rc=$merge_rc" >> /tmp/helper.log
             exit 1
           fi
+          echo "merged" >> /tmp/helper.log
           {
             echo "已交付：PR #$pr（squash 合并）。"
             echo
             cat helper/issue-close.md
           } > /tmp/issue-comment.md
-          gh issue close "$ISSUE" --comment "$(cat /tmp/issue-comment.md)" 2>&1 | tee -a /tmp/helper.log || true
+          gh issue close "$ISSUE" --comment "$(cat /tmp/issue-comment.md)" >> /tmp/helper.log 2>&1
           exit 0
 
       - name: publish the run log (always)
         if: always()
         run: |
+          set +e
           set -uo pipefail
           cd repo
-          git worktree add -f /tmp/logwt -B "$LOG_BRANCH" origin/main 2>&1 | tee -a /tmp/helper.log || true
+          git worktree add -f /tmp/logwt -B "$LOG_BRANCH" origin/main >> /tmp/helper.log 2>&1
           if [ -d /tmp/logwt ]; then
-            cp /tmp/helper.log /tmp/logwt/helper-log.txt 2>/dev/null || true
+            cp /tmp/helper.log /tmp/logwt/helper-log.txt 2>/dev/null
             cd /tmp/logwt
             git config user.name "github-actions[bot]"
             git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-            git add helper-log.txt 2>/dev/null || true
-            git commit -q -m "log: ci helper run" 2>/dev/null || true
-            git push -f origin "HEAD:$LOG_BRANCH" 2>&1 | tee -a /tmp/helper.log || true
+            git add helper-log.txt 2>/dev/null
+            git commit -q -m "log: ci helper run" 2>/dev/null
+            git push -f origin "HEAD:$LOG_BRANCH" >> /tmp/helper.log 2>&1
           fi
           exit 0
