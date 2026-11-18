@@ -88,14 +88,35 @@ jobs:
               fi
               {
                 echo "--- FAIL lines ---"
-                grep -n "FAIL" "/tmp/job-$job_id.log" | head -20
+                grep -n "FAIL" "/tmp/job-$job_id.log" | head -30
                 echo "--- error lines ---"
-                grep -nE "not ok|Error|error:|assert" "/tmp/job-$job_id.log" | head -20
+                grep -nE "not ok|Error|error:|assert" "/tmp/job-$job_id.log" | head -30
                 echo "--- tail ---"
-                tail -60 "/tmp/job-$job_id.log"
+                tail -300 "/tmp/job-$job_id.log"
               } >> /tmp/helper.log 2>&1
             done
           done
+          exit 0
+
+      - name: publish the diagnostics early (the run log comes at the end)
+        run: |
+          set +e
+          set -uo pipefail
+          cd repo
+          # 诊断日志必须**早**发布：整轮流程（重生成基线 + 等门禁）要跑一个多小时，
+          # 等到最后一刻才拿到日志 ⇒ 白等。
+          git worktree add -f /tmp/logwt -B "$LOG_BRANCH" origin/main >> /tmp/helper.log 2>&1
+          if [ -d /tmp/logwt ]; then
+            cp /tmp/helper.log /tmp/logwt/helper-log.txt 2>/dev/null
+            mkdir -p /tmp/logwt/job-logs 2>/dev/null
+            cp /tmp/job-*.log /tmp/logwt/job-logs/ 2>/dev/null
+            cd /tmp/logwt
+            git config user.name "github-actions[bot]"
+            git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+            git add -A helper-log.txt job-logs 2>/dev/null
+            git commit -q -m "log: ci helper diagnostics" 2>/dev/null
+            git push -f origin "HEAD:$LOG_BRANCH" >> /tmp/helper.log 2>&1
+          fi
           exit 0
 
       - name: open the pull request
