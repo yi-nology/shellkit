@@ -79,6 +79,12 @@ stable / experimental 数量与源码一致、四个必备小节都在。
 （50 个 stable 的返回码、退出码表、CLI 子命令形状），源码变了没重生成清单就红；
 新增语义未知的 `SK_*` 常量也红（宁可失败，也不静默漏写进承诺表）。
 
+`main` 有分支保护：PR 进 `main` 必须跑满 **15 个必需检查** —— 那份清单就是
+`tools/release_gate.sh` 的 `DEFAULT_CHECKS`（job 名逐字一致；改 ci.yml 的 job 名
+要同步改两处，否则 PR 永远卡在等一个不会来的检查）。**没有 review 要求**
+（agent 驱动、链路上没有人审）；`main` 不可强推、不可删；owner 直推仍然允许
+（发版链要把 release 提交推上去）。细节见 `docs/RELEASING.md` 的「main 的保护规则」。
+
 ## 清单里的指纹是「模板基线」，不是「文件当前内容」
 
 `.shellkit-manifest` 里每个文件记的是**上次成功应用的模板内容的 sha256**。
