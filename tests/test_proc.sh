@@ -101,12 +101,17 @@ fi
 # 同一条判据在别的 locale 下也得成立：locale 决定方括号区间怎么匹配，
 # 判据不该被 locale 牵着走（macOS 的 CI 就是 en_US.UTF-8 ⇒ [a-z] 把大写也算进去）。
 # 承重：把白名单改回 [a-z] 区间 ⇒ 子进程里这条判据就会红（locale 没装时跳过）。
-if command -v locale >/dev/null 2>&1 && locale -a 2>/dev/null | grep -q 'zh_CN.UTF-8'; then
-  if ! SK_TEST_PROC_SELFTEST=header LC_ALL=zh_CN.UTF-8 LC_COLLATE=zh_CN.UTF-8 \
-    "$BASH" "$TEST_ROOT/tests/test_proc.sh" >/dev/null 2>&1; then
-    _fail "the process-state judgment is not affected by the locale (a ps header is not a state)"
-  fi
-fi
+# locale -a 的输出用纯 bash 判：不接管道 —— grep -q 命中即退会把上游 SIGPIPE 打死
+# （调用方开 pipefail 时整条管道判失败，坑 5）。
+_sk_locales=$(locale -a 2>/dev/null || true)
+case "$_sk_locales" in
+  *zh_CN.UTF-8*)
+    if ! SK_TEST_PROC_SELFTEST=header LC_ALL=zh_CN.UTF-8 LC_COLLATE=zh_CN.UTF-8 \
+      "$BASH" "$TEST_ROOT/tests/test_proc.sh" >/dev/null 2>&1; then
+      _fail "the process-state judgment is not affected by the locale (a ps header is not a state)"
+    fi
+    ;;
+esac
 if ! sk_stat_is_real Ss; then
   _fail "a sleeping process state is recognized"
 fi
