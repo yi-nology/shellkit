@@ -134,6 +134,14 @@ mut_replace_line() {
     printf 'MUTATION TARGET NOT FOUND: %s in %s\n' "$pat" "$file" >&2
     return 1
   fi
+  # 锚点必须唯一。命中多处时「改第一处」大概率改错了地方 ——
+  # 变异没落在被测的那条路径上，用例照样绿，元测试于是报「这个用例没有判据能力」，
+  # 而真因是「变异打偏了」。两种失败长得极像，分不开就会一直查错方向
+  # （真出现过：新增的同名守卫让锚点不再唯一，变异打在新代码上，原守卫毫发无损）。
+  if [ "$n" -gt 1 ]; then
+    printf 'MUTATION TARGET AMBIGUOUS: %s matches for %s in %s\n' "$n" "$pat" "$file" >&2
+    return 1
+  fi
   tmp=$(mut_tmp) || return 1
   awk -v pat="$pat" -v repl="$repl" '
     !done && index($0, pat) > 0 { print repl; done = 1; next }
@@ -157,6 +165,11 @@ mut_replace_block() {
   esac
   if [ "$n" -eq 0 ]; then
     printf 'MUTATION TARGET NOT FOUND: %s in %s\n' "$start" "$file" >&2
+    return 1
+  fi
+  # 锚点唯一（同 mut_replace_line）：命中多处就判红，不猜改哪一处。
+  if [ "$n" -gt 1 ]; then
+    printf 'MUTATION TARGET AMBIGUOUS: %s matches for %s in %s\n' "$n" "$start" "$file" >&2
     return 1
   fi
   tmp=$(mut_tmp) || return 1

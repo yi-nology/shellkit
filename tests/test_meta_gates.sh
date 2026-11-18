@@ -62,7 +62,7 @@ _meta_expect_red() {
   rm -rf "${dir:?}"
   _meta_copy_tree "$dir" || _fail "meta[$label]: cannot copy the tree"
   if ! "$mutator" "$dir"; then
-    _fail "meta[$label]: the mutation target is gone — the library was refactored, so this meta test needs an update (log: $log)"
+    _fail "meta[$label]: the mutation could not be applied (target gone or ambiguous) — the library was refactored, so this meta test needs an update (log: $log)"
   fi
   rc=$(_meta_run "$dir" "$target" "$log")
   if [ "$rc" -eq 0 ]; then
