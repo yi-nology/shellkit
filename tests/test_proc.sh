@@ -204,7 +204,7 @@ kill "$fakez2" 2>/dev/null || true
 # 把 Z 分支写成 * （一律判成没活着）⇒ 这一条变红。
 sleep 30 &
 alivez=$!
-if ! SK_FAKE_ZOMBIE= PATH="$fakebin:$PATH" sk_alive "$alivez"; then
+if ! SK_FAKE_ZOMBIE='' PATH="$fakebin:$PATH" sk_alive "$alivez"; then
   kill "$alivez" 2>/dev/null || true
   _fail "a running process is alive"
 fi
