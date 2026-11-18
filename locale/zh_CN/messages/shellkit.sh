@@ -297,6 +297,7 @@ _sk_msg_lookup_shellkit() {
     'what to try next') printf '%s' '接下来试试' ;;
     'where to read more') printf '%s' '再往下读' ;;
     'remembered the client in') printf '%s' '客户端已记入' ;;
+    'the skill was not updated') printf '%s' 'skill 没有更新' ;;
     'the skill package is incomplete') printf '%s' 'skill 包不完整' ;;
     'the target exists and is not a directory') printf '%s' '目标已存在且不是目录' ;;
     'recovering the skill copy after an interrupted install') printf '%s' '恢复被打断的 skill 安装：正在从旧副本还原' ;;
