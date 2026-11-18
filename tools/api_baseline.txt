@@ -177,6 +177,10 @@ validate_port	0,1	active	-	probe	0,1	-	experimental
 validate_single_line	0,1	active	-	probe	0,1	-	experimental
 validate_url	0,1	active	-	probe	0,1	-	experimental
 validate_version	0,1	active	-	probe	0,1	-	experimental
+vendor_dir	0,3	active	-	probe	0,3	-	experimental
+vendor_dir_detect	0,1	active	-	probe	0,1	-	experimental
+vendor_dir_rel	0,3	active	-	probe	0,3	-	experimental
+vendor_dir_source	0	active	-	probe	0	-	experimental
 ver_cmp	0,2	active	-	probe	0	-	stable
 ver_eq	0,1,2	active	-	probe	0,1,2	-	stable
 ver_gt	0,1,2	active	-	probe	0,1,2	-	stable

@@ -102,3 +102,151 @@ assert_exit_code 0 "$TEST_ROOT/shellkit" vendor "$legacy" --force
 assert_eq "$(cat "$TEST_ROOT/VERSION")" "$(cat "$legacy/vendor/shellkit/VERSION")" \
   "--force must land the current version"
 assert_exit_code 0 "$TEST_ROOT/shellkit" vendor "$legacy" --check
+
+# ---- 库副本落点可配置（issue #143）----
+#
+# 落点必须只有**一个**真相源：环境变量 > 工程配置文件 > 默认 vendor/shellkit。
+# doctor / upgrade / repair.sh 三处读同一个解析结果 —— 各写各的路径字符串，
+# 迟早漂：装在一个地方、查在另一个地方，是最难查的那类 bug。
+#
+# Go 模块仓的仓根不能放 vendor/（Go 会切 vendor 模式然后报 inconsistent
+# vendoring），所以落点必须能挪走；挪走之后三处还得都跟得上。
+. "$TEST_ROOT/lib/bootstrap.sh"
+
+d2=$(tmpdir)
+p1="$d2/p1"
+mkdir -p "$p1"
+
+# 默认落点
+assert_eq "vendor/shellkit" "$(vendor_dir_rel "$p1")" "the default vendor location is vendor/shellkit"
+assert_eq "default" "$(vendor_dir_source "$p1")" "the default location comes from the default"
+
+# 工程配置文件：第一行有效内容（# 开头是注释）
+printf '# comment line\nthird_party/shellkit\n' >"$p1/.shellkit-vendor-dir"
+assert_eq "third_party/shellkit" "$(vendor_dir_rel "$p1")" "the project config file sets the location"
+assert_eq "file" "$(vendor_dir_source "$p1")" "the location comes from the config file"
+
+# 环境变量优先于配置文件
+out=$(SHELLKIT_VENDOR_DIR=env_dir/shellkit vendor_dir_rel "$p1")
+assert_eq "env_dir/shellkit" "$out" "the environment variable wins over the config file"
+out=$(SHELLKIT_VENDOR_DIR=env_dir/shellkit vendor_dir_source "$p1")
+assert_eq "env" "$out" "the location comes from the environment"
+
+# 越界取值一律拒绝：名字会变成路径，带 .. 的取值能写到工程之外（坑 7）
+out=$(SHELLKIT_VENDOR_DIR=../outside vendor_dir_rel "$p1" 2>/dev/null) && rc=0 || rc=$?
+assert_eq 3 "$rc" "a location with .. is rejected"
+out=$(SHELLKIT_VENDOR_DIR=/tmp/elsewhere vendor_dir_rel "$p1" 2>/dev/null) && rc=0 || rc=$?
+assert_eq 3 "$rc" "a location outside the project is rejected"
+out=$(SHELLKIT_VENDOR_DIR=. vendor_dir_rel "$p1" 2>/dev/null) && rc=0 || rc=$?
+assert_eq 3 "$rc" "the project directory itself is not a valid location"
+out=$(vendor_dir_rel "$d2/does-not-exist" 2>/dev/null) && rc=0 || rc=$?
+assert_eq 3 "$rc" "a missing project directory is rejected"
+
+# 落在工程内的绝对路径是允许的
+abs_in="$p1/third_party/shellkit"
+out=$(SHELLKIT_VENDOR_DIR="$abs_in" vendor_dir_rel "$p1")
+assert_eq "$abs_in" "$out" "an absolute location inside the project is accepted"
+
+# 绝对路径解析成绝对落点
+# 用一个干净的目录（p1 的配置已指向 third_party），期望值取规范化路径：
+# macOS 上 TMPDIR 在 /var 后面，而 pwd -P 给的是 /private/var
+p0="$d2/p0"
+mkdir -p "$p0"
+p0abs="$(cd "$p0" && pwd -P)"
+out=$(vendor_dir "$p0")
+assert_eq "$p0abs/vendor/shellkit" "$out" "vendor_dir resolves to an absolute path"
+
+# 别处的副本：doctor / vendor 靠它给出「指过来」的提示
+p2="$d2/p2"
+mkdir -p "$p2/third_party/shellkit/lib"
+printf '# bootstrap\n' >"$p2/third_party/shellkit/lib/bootstrap.sh"
+assert_eq "third_party/shellkit" "$(vendor_dir_detect "$p2")" "a copy elsewhere is detected"
+out=$(vendor_dir_detect "$d2" 2>/dev/null) && rc=0 || rc=$?
+assert_eq 1 "$rc" "no copy elsewhere means nothing is detected"
+
+# ---- 生成工程：副本落在配置的位置，工程自己也要记得住 ----
+p3="$d2/p3"
+SHELLKIT_VENDOR_DIR=third_party/shellkit "$TEST_ROOT/shellkit" new "$p3" >/dev/null 2>&1 ||
+  _fail "shellkit new failed with a custom vendor location"
+if [ ! -f "$p3/third_party/shellkit/lib/bootstrap.sh" ]; then
+  _fail "the copy is installed at the configured location"
+fi
+if [ -d "$p3/vendor" ]; then
+  _fail "no default vendor/ directory may be created (Go repos break on it)"
+fi
+assert_eq "third_party/shellkit" "$(cat "$p3/.shellkit-vendor-dir")" "the project records its own location"
+if ! grep -q 'VENDOR_DIR := third_party/shellkit' "$p3/Makefile"; then
+  _fail "the generated Makefile points at the configured location"
+fi
+if ! grep -q 'third_party/shellkit/lib/bootstrap.sh' "$p3/bin/"*; then
+  _fail "the generated entry point loads the copy from the configured location"
+fi
+# 生成的工程照常能跑
+assert_exit_code 0 bash "$p3/bin/"* --version
+
+# doctor 必须认出配置过的落点（issue 的头号抱怨：副本在 third_party/shellkit，
+# doctor 却说「没有副本」）
+out=$("$TEST_ROOT/shellkit" doctor --dir "$p3" 2>&1) && rc=0 || rc=$?
+assert_eq 0 "$rc" "doctor succeeds on a project with a configured location"
+assert_contains "$out" "vendor copy matches the bundled library" "doctor finds the copy at the configured location"
+
+# ---- 副本在别处、而没配置：必须拒绝，而不是静默新建一份 ----
+p4="$d2/p4"
+"$TEST_ROOT/shellkit" new "$p4" >/dev/null 2>&1 || _fail "shellkit new failed"
+mkdir -p "$p4/third_party"
+mv "$p4/vendor/shellkit" "$p4/third_party/shellkit"
+rmdir "$p4/vendor" 2>/dev/null || true
+out=$("$TEST_ROOT/shellkit" vendor "$p4" 2>&1) && rc=0 || rc=$?
+assert_eq 3 "$rc" "vendor refuses to create a second copy somewhere else"
+assert_contains "$out" "at a different location" "the refusal says where the copy actually is"
+assert_contains "$out" "SHELLKIT_VENDOR_DIR=third_party/shellkit" "the refusal says how to point at it"
+if [ -d "$p4/vendor" ]; then
+  _fail "vendor must not create a default vendor/ directory when the copy is elsewhere"
+fi
+out=$("$TEST_ROOT/shellkit" upgrade "$p4" 2>&1) && rc=0 || rc=$?
+if [ "$rc" = "0" ]; then
+  _fail "upgrade must not silently create a second copy"
+fi
+if [ -d "$p4/vendor" ]; then
+  _fail "upgrade must not create a default vendor/ directory when the copy is elsewhere"
+fi
+# doctor 对「副本在别处」要给可操作的提示，而不是一句「没找到」
+# （必须在「指过去」之前查：指过去之后副本就落在配置的位置上了）
+out=$("$TEST_ROOT/shellkit" doctor --dir "$p4" 2>&1) && rc=0 || rc=$?
+assert_contains "$out" "third_party/shellkit" "doctor reports where the copy actually is"
+assert_contains "$out" "SHELLKIT_VENDOR_DIR=third_party/shellkit" "doctor says how to point at it"
+# 指过去之后就能正常干活
+out=$(SHELLKIT_VENDOR_DIR=third_party/shellkit "$TEST_ROOT/shellkit" upgrade "$p4" 2>&1) && rc=0 || rc=$?
+assert_eq 0 "$rc" "upgrade works once the location is pointed at"
+if [ -d "$p4/vendor" ]; then
+  _fail "upgrade must not create a default vendor/ directory even when pointed elsewhere"
+fi
+
+# ---- 非法落点配置：doctor 判 invalid，vendor 拒绝 ----
+p5="$d2/p5"
+mkdir -p "$p5"
+printf '/etc/evil\n' >"$p5/.shellkit-vendor-dir"
+out=$("$TEST_ROOT/shellkit" vendor "$p5" 2>&1) && rc=0 || rc=$?
+assert_eq 3 "$rc" "vendor refuses an illegal location"
+out=$("$TEST_ROOT/shellkit" doctor --dir "$p5" 2>&1) && rc=0 || rc=$?
+assert_contains "$out" "the vendored library path is invalid" "doctor reports an illegal location"
+
+# ---- repair.sh 必须认得新落点 ----
+# 用 --prefix 指到临时目录：绝不碰本机真装了的那份
+p6="$d2/p6"
+SHELLKIT_VENDOR_DIR=third_party/shellkit "$TEST_ROOT/shellkit" new "$p6" >/dev/null 2>&1 ||
+  _fail "shellkit new failed"
+mkdir -p "$p6/third_party/.shellkit-new"
+printf 'residue\n' >"$p6/third_party/.shellkit-new/leftover"
+"$TEST_ROOT/repair.sh" --prefix "$d2/prefix" --project "$p6" >/dev/null 2>&1 ||
+  _fail "repair.sh failed on a project with a configured location"
+if [ -d "$p6/third_party/.shellkit-new" ]; then
+  _fail "repair.sh cleans the residue at the configured location"
+fi
+# 非法落点 ⇒ fail-closed：什么都不删，并且明确报错
+p7="$d2/p7"
+mkdir -p "$p7"
+printf '../outside\n' >"$p7/.shellkit-vendor-dir"
+out=$("$TEST_ROOT/repair.sh" --prefix "$d2/prefix" --project "$p7" 2>&1) && rc=0 || rc=$?
+assert_eq 1 "$rc" "repair.sh fails closed on an illegal location"
+assert_contains "$out" "invalid library copy location" "repair.sh says why it refused"
