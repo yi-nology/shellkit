@@ -31,7 +31,7 @@ done
 
 # 在临时仓库里跑（脚本用 git tag -l ⇒ 必须在该仓库的上下文里跑）
 prev_in() {
-  ( cd "$REPO" && bash "$PREV" "$1" 2>/dev/null ) || true
+  (cd "$REPO" && bash "$PREV" "$1" 2>/dev/null) || true
 }
 
 # CASE: GA 发版 ⇒ 基准是上一个**正式版**（跳过 RC）
