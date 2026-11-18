@@ -139,6 +139,8 @@ _sk_msg_lookup_shellkit() {
     'invalid version') printf '%s' '非法的版本号' ;;
     'path must be absolute') printf '%s' '路径必须是绝对路径' ;;
     'value not in allowed set') printf '%s' '值不在允许的集合里' ;;
+    'target directory does not exist') printf '%s' '目标目录不存在' ;;
+    'the vendor directory must be inside the project directory') printf '%s' '库副本目录必须在工程目录之内' ;;
     'the library is only partially loaded') printf '%s' '库只加载了一部分' ;;
     'project generation') printf '%s' '生成工程' ;;
     'create a new project skeleton') printf '%s' '生成一个新工程骨架' ;;
@@ -171,6 +173,10 @@ _sk_msg_lookup_shellkit() {
     'cannot restore the file kept for the user') printf '%s' '无法把为用户保留的文件放回去' ;;
     'the restored file does not match the kept copy') printf '%s' '放回去的文件与暂存副本内容不一致' ;;
     'both copies are broken, nothing was removed, reinstall shellkit') printf '%s' '两份副本都不完整；什么都没删，请重装 shellkit' ;;
+    'the vendored library is at a different location') printf '%s' '库副本在别的位置' ;;
+    'point shellkit at it instead of creating a second copy') printf '%s' '把 shellkit 指过去，而不是再建一份' ;;
+    'refusing to write outside the project directory') printf '%s' '拒绝写到工程目录之外' ;;
+    'refusing to write through a symlink') printf '%s' '拒绝顺着符号链接写入' ;;
     'syncing') printf '%s' '正在同步' ;;
     'the vendor directory is a symlink, refusing to install') printf '%s' 'vendor 目录是符号链接，拒绝安装' ;;
     'the vendored library is a symlink, refusing to install') printf '%s' 'vendor 出来的库是符号链接，拒绝安装' ;;
@@ -210,7 +216,6 @@ _sk_msg_lookup_shellkit() {
     'next steps') printf '%s' '下一步' ;;
     'the upgrade journal is damaged; entries were ignored') printf '%s' '升级日志已损坏；部分条目被忽略' ;;
     '--diff requires --check') printf '%s' '--diff 必须与 --check 一起用' ;;
-    'target directory does not exist') printf '%s' '目标目录不存在' ;;
     'it does not look like a shellkit-generated project') printf '%s' '看起来不是 shellkit 生成的工程' ;;
     'the manifest does not record a project name') printf '%s' 'manifest 里没有记录工程名' ;;
     'the project name in the manifest is not a valid name') printf '%s' 'manifest 里的工程名不是合法名字' ;;
@@ -218,7 +223,6 @@ _sk_msg_lookup_shellkit() {
     'upgrading') printf '%s' '正在升级' ;;
     'template version') printf '%s' '模板版本' ;;
     'the manifest predates the fingerprint baseline; files that cannot be verified are left alone') printf '%s' '清单早于指纹基线；无法核对的文件保持原样' ;;
-    'refusing to write outside the project directory') printf '%s' '拒绝写到工程目录之外' ;;
     'the target path is blocked by a file') printf '%s' '目标的父路径是个文件，建不出来' ;;
     'the target is a directory, refusing to overwrite') printf '%s' '目标位置是个目录，拒绝覆盖' ;;
     'recovered from an interrupted upgrade') printf '%s' '从被中断的升级中恢复' ;;
@@ -256,7 +260,9 @@ _sk_msg_lookup_shellkit() {
     'vendor check') printf '%s' 'vendor 校验' ;;
     'vendor copy has drifted') printf '%s' 'vendor 副本已漂移' ;;
     'the vendored library path is not a directory') printf '%s' 'vendor 库路径不是目录' ;;
+    'the vendored library path is invalid') printf '%s' '库副本路径非法' ;;
     'vendor copy matches the bundled library') printf '%s' 'vendor 副本与自带库一致' ;;
+    'point shellkit at it') printf '%s' '把 shellkit 指过去' ;;
     'no vendored library found') printf '%s' '未找到 vendor 库' ;;
     'library integrity check failed') printf '%s' '库完整性检查未通过' ;;
     'required tooling is missing') printf '%s' '缺少必需的工具' ;;
@@ -303,7 +309,6 @@ _sk_msg_lookup_shellkit() {
     'the skill package is incomplete') printf '%s' 'skill 包不完整' ;;
     'the target exists and is not a directory') printf '%s' '目标已存在且不是目录' ;;
     'recovering the skill copy after an interrupted install') printf '%s' '恢复被打断的 skill 安装：正在从旧副本还原' ;;
-    'refusing to write through a symlink') printf '%s' '拒绝顺着符号链接写入' ;;
     'the skill is up to date') printf '%s' 'skill 已是最新' ;;
     'the staged skill copy failed verification') printf '%s' '阶段目录里的 skill 副本校验不过' ;;
     'the staged skill copy could not be committed') printf '%s' '阶段目录里的 skill 副本无法提交' ;;
