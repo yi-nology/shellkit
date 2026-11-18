@@ -2,6 +2,15 @@
 本文件由 `tools/release.sh` 在发版时自动追加，已发布的小节不要手改。
 最新的在最前面。每一条对应一个提交 —— 要看「为什么」而不是「改了什么」，读 `docs/MIGRATING.md`。
 
+## 1.1.0 — 2026-11-18
+
+3c7b350 docs(roadmap): 记录 v1.0.0 GA 已发布与验收结果
+3febab7 refactor(skill): 版本核对抽成独立函数，避免分支编号漂移 (#140)
+9a8bd53 ci: 临时 job 在 ubuntu 上重生成分支覆盖基线并上传 (#140)
+308e584 fix(i18n): 重生成消息表并补「the skill was not updated」译文 (#140)
+a2bf199 fix(coverage): 按 ubuntu 环境重生成分支覆盖基线并移除临时 job (#140)
+26e6a9b docs(migrating): 补 1.0.0 → 1.1.0 行为变化表（#140 的退出码变化）
+
 ## 1.0.0 — 2026-11-18
 
 
