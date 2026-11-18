@@ -295,6 +295,7 @@ jobs:
         with:
           ref: feat/issue-146-skeleton
           path: repo
+          fetch-depth: 0
 
       - name: checkout the helper branch (the probe script)
         uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
