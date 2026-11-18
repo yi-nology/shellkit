@@ -325,20 +325,6 @@ jobs:
       - name: coverage
         run: make coverage
 
-      # TEMP: 在 ubuntu 环境重生成分支覆盖基线并上传（issue #140 编号漂移）。
-      # 基线是「当前确实没被覆盖的分支臂」名单，而分支 ID 含函数内顺序号 ——
-      # 改了函数里的分支就会让编号漂移，棘轮必然红。基线必须在**同环境**
-      # 重生成（环境分叉臂跨机器对不上），所以这个 job 跑在 ubuntu 上。
-      # 顺序：先重生成（跳过棘轮判定）再上传，最后跑常规检查（用新基线，应绿）。
-      - name: rewrite branch baseline (temp)
-        run: bash tools/coverage.sh --branch --write-baseline
-
-      - name: upload rewritten baseline (temp)
-        uses: actions/upload-artifact@b4b15b8c7c6ac21ea08fcf65892d2ee8f75cf882 # v4.4.3
-        with:
-          name: branch-baseline-ubuntu
-          path: tools/coverage_branch_baseline.txt
-
       # 分支级棘轮（路线图 v0.23.0「分支覆盖缺口收敛」）：基线与判据同函数级，
       # 考核范围是四条关键路径（Upgrade / Install / Skill / Repair）与 release gate。
       - name: branch coverage

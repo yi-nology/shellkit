@@ -1,7 +1,4 @@
 # 分支覆盖白名单：当前确实没被测试覆盖的分支臂。
-# 口径与执行门禁的 CI runner（ubuntu-latest）同源：环境分叉臂（shasum/sha256sum、
-# BSD/GNU stat、发行版探测）无法跨机器同时满足双向棘轮 —— 换环境必须在同环境
-# 重跑 --write-baseline，或按该环境的 check 输出双向差集重算。
 # 由 bash tools/coverage.sh --branch --write-baseline 生成，不要手工维护。
 # 棘轮规则：这里面的分支一旦被覆盖，CI 就要求把它移出（防覆盖回退）。
 install.sh:<toplevel>:10
@@ -763,8 +760,11 @@ shellkit:_sk_skill_discover:5
 shellkit:_sk_skill_discover:7
 shellkit:_sk_skill_discover:8
 shellkit:_sk_skill_discover:9
-shellkit:_sk_skill_install:12
-shellkit:_sk_skill_install:13
+shellkit:_sk_skill_install:10
+shellkit:_sk_skill_install:11
+shellkit:_sk_skill_install:14
+shellkit:_sk_skill_install:15
+shellkit:_sk_skill_install:16
 shellkit:_sk_skill_install:6
 shellkit:_sk_skill_install_into:1
 shellkit:_sk_skill_install_into:10
@@ -772,25 +772,28 @@ shellkit:_sk_skill_install_into:2
 shellkit:_sk_skill_install_into:25
 shellkit:_sk_skill_install_into:26
 shellkit:_sk_skill_install_into:30
+shellkit:_sk_skill_install_into:35
 shellkit:_sk_skill_install_into:4
-shellkit:_sk_skill_install_into:41
 shellkit:_sk_skill_install_into:42
 shellkit:_sk_skill_install_into:43
-shellkit:_sk_skill_install_into:47
-shellkit:_sk_skill_install_into:48
+shellkit:_sk_skill_install_into:44
+shellkit:_sk_skill_install_into:45
+shellkit:_sk_skill_install_into:49
 shellkit:_sk_skill_install_into:5
-shellkit:_sk_skill_install_into:51
+shellkit:_sk_skill_install_into:50
 shellkit:_sk_skill_install_into:53
-shellkit:_sk_skill_install_into:59
+shellkit:_sk_skill_install_into:55
 shellkit:_sk_skill_install_into:6
 shellkit:_sk_skill_install_into:61
 shellkit:_sk_skill_install_into:63
-shellkit:_sk_skill_install_into:64
 shellkit:_sk_skill_install_into:65
+shellkit:_sk_skill_install_into:66
 shellkit:_sk_skill_install_into:67
-shellkit:_sk_skill_install_into:68
-shellkit:_sk_skill_install_into:72
-shellkit:_sk_skill_install_into:73
+shellkit:_sk_skill_install_into:69
+shellkit:_sk_skill_install_into:70
+shellkit:_sk_skill_install_into:74
+shellkit:_sk_skill_install_into:75
+shellkit:_sk_skill_install_into:76
 shellkit:_sk_skill_list:13
 shellkit:_sk_skill_list:2
 shellkit:_sk_skill_list:7
