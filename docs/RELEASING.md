@@ -84,6 +84,51 @@ gh run list --workflow=release.yml --limit 1
 - 发布之后用 `gh release view "v$version" --json isDraft,assets` 与
   `bash tools/release_selfcheck.sh "v$version" --require-packages` 确认资产真的在。
 
+## 发版窗口：2026-11-18 / v1.1.0 —— 一次发布，四次连环事故
+
+这一版发得不顺。四次事故串在一起，每一次的根因都不是「运气不好」，而是**每一步都少了一条判据**：
+
+1. **一个空格让 CI 全矩阵红**。新增的 `tests/test_changelog_prev.sh` 有一行 shfmt 不合规
+   （`( cmd )` vs `(cmd)`）⇒ `make fmt` 红 ⇒ macOS / Ubuntu / compat 五个 job 全红。
+   本地空演跑在**这个提交之前**，所以本地绿、CI 红。
+   ⇒ **纪律：改动落地前，本地 `make check` 必须跑过这个提交** —— 哪怕只新增了一个文件。
+
+2. **openeuler 的 compat job 被 40 分钟的 job 总超时砍掉** —— 砍掉的是「装包慢」
+   （容器里 `dnf install` 花了 39 分钟），不是「卡死」。tag 已经推了，但门禁 fail-closed
+   ⇒ **没有产生 Release**（行为正确：对外可见的半成品比没有发布糟糕得多）。
+
+3. **修超时修出新问题**。内层超时先取 900 秒，但同一批共享 runner 上实测过**合法**的
+   慢安装 1069 秒（17 分 49 秒）—— 900 秒会把「慢但没卡死」误杀成失败。
+   ⇒ 改成 1800 秒，并补 `tests/test_ci_timeouts.sh`：内层超时不得短于实测最慢装包，
+   也不得把 job 的总预算吃光。**手抄的超时数必须有判据盯着**，否则下次改 CI 又抄错。
+
+4. **发布门禁的 40 分钟等待窗口险些不够**。质量门禁从 08:18 等到 08:55（37 分钟）
+   才放行，慢的那一格是 coverage ratchet。
+   ⇒ 窗口不够时的处置：`gh run rerun <release_run_id> --failed` —— 此时检查已经绿了，
+   门禁立即放行。
+
+### 尚无 Release 对象时：删 tag 重打
+
+tag `v1.1.0` 最初指向一个不含 #142 / #143 与格式修复的提交。远端**没有 Release 对象**
+（`gh release view v1.1.0` → not found）⇒ 此时删 tag、重打不会留下对外可见的半成品：
+
+```bash
+git push origin :refs/tags/v1.1.0     # 删远端 tag（没有 Release 对象才允许）
+git tag -f -a v1.1.0 NEW_SHA -m 'shellkit 1.1.0'
+git push origin v1.1.0                # 重新推 ⇒ release.yml 由 tag 触发，重新走门禁
+```
+
+**前提是先确认没有 Release 对象**。有对象时删 tag：Release 页面仍在（对象与 tag 是分离的），
+但它指向的 tag 已经变了 ⇒ 页面上的「Source」指向新提交、资产却还是旧的 —— 那比慢发布糟糕得多。
+
+### 共享工作树里，分支会被别的会话动
+
+同一次发版里另一个会话在同一工作树把分支从 `main` 切到了它自己的 feature 分支 ⇒
+那次「修格式」的提交因此落到了**它的分支**上（HEAD 已经不是 main），而 `git status` 当时还是干净的。
+⇒ 提交前先确认 `git rev-parse --abbrev-ref HEAD`；发现分支被别人动过就**用独立 worktree**
+（`git worktree add --detach`）做自己的提交 —— 不要在共享工作树里切分支：切分支会把别人
+正在写的分支从他们脚下抽走。
+
 ## 版本号出现在哪里
 
 `VERSION` 是唯一真相源，其余全是投影，而投影是手抄的：
