@@ -99,8 +99,8 @@ jq '.result.exit_code' report.json
 
 | 字段 | 类型 | 含义 |
 | --- | --- | --- |
-| `state` | string | `none` / `ok` / `drift` / `notdir` / `unknown` |
-| `detail` | string | 补充说明（没有 vendor 副本时是原因） |
+| `state` | string | `none` / `ok` / `drift` / `notdir` / `invalid` / `unknown` |
+| `detail` | string | 补充说明（没有 vendor 副本时是原因；副本在**别的位置**时是它的相对路径） |
 
 ### `result`
 
