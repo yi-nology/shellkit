@@ -17,6 +17,9 @@
     lib/modules.txt           模块清单的唯一真相源：两列 —— 模块名 + 它依赖的模块
                               （bootstrap、shdoc、站点都读它）
     lib/core/<module>.sh      24 个模块，一个模块一个主题
+    lib/posix/                POSIX 子集（设备侧）：busybox ash / dash 上能跑的那一小撮
+                              shellkit-posix.sh（只写 POSIX 语法的库）
+                              capabilities.tsv（能力清单：哪些函数设备侧有、哪些没有；机器生成）
     templates/                shellkit new 的模板（含 __NAME__ / __CMD__ 占位符）
     tests/                    自研断言 + 逐文件执行器 + 每个模块一个测试
     tests/bats/               bats-core 用例（每个 @test 一个独立进程）；不进 make check，
@@ -59,7 +62,8 @@
                   # local-names-check + ident-boundary-check + module-count-check +
                   # pipe-safety-check + dup-functions-check + security-check +
                   # api-baseline-check + api-freeze-check + compatibility-check +
-                  # docs-check + versions-check + check-docs + cookbook-check +
+                  # docs-check + versions-check + check-docs + posix-check +
+                  # cookbook-check +
                   # messages-check + examples + fmt，CI 也是这组
                   # 步骤清单的唯一真相源是 Makefile 的 check 目标（上面这份是投影）
     make bats-check  # tests/bats 下的 bats 用例（bats 是外部依赖，不进 check）
@@ -75,6 +79,10 @@
 `compatibility-check` 拦的是「承诺文档说了却没兑现」：`docs/COMPATIBILITY.md` 声称
 每个公开函数都有等级，就要求 `tools/stability_exempt.txt` 为空、文档里的
 stable / experimental 数量与源码一致、四个必备小节都在。
+`posix-check` 拦的是「POSIX 子集里混进 bash 专有语法」：设备侧脚本跑在
+busybox ash 上，混进一个 `local` 或 `[[ ]]` 不是报错，是**整个脚本起不来**
+（现场装不了 shellkit 补救）。它同时对账能力清单 `lib/posix/capabilities.tsv` ——
+清单与源码漂了就红。
 `api-freeze-check` 拦的是「承诺面悄悄变了」：`docs/API-FREEZE.md` 是 1.0 的快照
 （50 个 stable 的返回码、退出码表、CLI 子命令形状），源码变了没重生成清单就红；
 新增语义未知的 `SK_*` 常量也红（宁可失败，也不静默漏写进承诺表）。
