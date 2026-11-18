@@ -770,6 +770,16 @@ shellkit uninstall-self --purge
 | `ver_cmp` 接受预发布版本 | `1.0.0-rc.1` 被判非法（返回 `2`），`ver_gt` / `ver_lt` / `ver_eq` 跟着没法比较 | 接受 semver 预发布后缀：同核心时**正式版 > 预发布**，`rc.2 > rc.1`，标识符按 semver 比较（数字段按数值、数字段 < 字母段） | 之前靠「返回 2」来判断「不是版本号」的调用方：RC 现在是合法版本；`1.0.0-` / `1.0.0-rc..1` 这类空后缀仍然返回 2 |
 
 发布侧同步改了三处：`tools/release.sh` 接受 `x.y.z-pre` 且按新规则排序；`tools/check_versions.sh` 的版本引用与替换规则接受后缀；`release.yml` 对带 `-` 的 tag 走 `--prerelease`、**不**占用 `releases/latest`。
+
+### 1.0.0 → 1.1.0：会改变结果的行为变化
+
+| 变化 | 以前 | 现在 | 你会在哪里撞到 |
+|---|---|---|---|
+| `shellkit skill install` 装旧版 skill 副本 | 清单机制（0.18.0）之前装的副本没有所有权基线 ⇒ 每个内容变过的文件都被报成「modified locally, left alone」（**用户其实一个字都没改过**），而且安装照样打「installed」、退出码 **0** —— 看着像装成了，实际一个文件没换（fail-open） | 措辞分成两类：用户改过的仍报 `modified locally`；**没有所有权基线**的报 `no ownership baseline, left alone (use --force to overwrite)`。装完核对 `VERSION`：没跟上就**退出码 5** 并点名「N 个文件」与逃逸口（`shellkit skill install --force`） | 0.18.0 之前装过 skill 的机器：以前 `skill install` 静默不生效，现在会红并告诉你怎么修。自动化里跑 `skill install` 的脚本：以前恒 0，现在旧副本会退 5 |
+| `shellkit skill install` 的失败退出码 | 软链 / 包残缺 / 目录不可写等「装不成」与「装上了但版本没跟上」都压成同一个码 **3** | 「装不成」仍是 **3**；「装上了但版本没跟上」是 **5**（校验失败） | 按退出码分流「重试」与「人工处理」的脚本：现在能分开了 |
+
+与 `shellkit vendor`（#137）同一套判据：**同步/安装后核对版本，没跟上就 fail-closed 并点名规模**。
+
 ### 0.26.2 → 0.27.0：会改变结果的行为变化
 
 这一版除了发布门禁 `tools/release_gate.sh`，还收紧了安装/卸载链路的数据安全语义。
