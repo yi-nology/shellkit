@@ -113,3 +113,112 @@ EOF
 if [ "$maxwait" -le 1 ]; then
   _fail "the watchdog backs off longer between restarts (max wait: ${maxwait}s)"
 fi
+
+# ---- 僵尸进程不算活着（kill -0 对僵尸也成功）----
+# 造一个**真僵尸**：子进程退出、父亲还活着且不回收 ⇒ 进程表里留着 Z 态。
+# exec 是关键：exec 把那个 shell 换掉，换掉的进程才是僵尸原来的父亲 ——
+# 于是没人回收它。pid 不存在（999999）那种只测到「没了」，测不到 Z 分支。
+zpidfile="$d/zombie.pid"
+sh -c 'sleep 0.05 & echo $! > '"$zpidfile"'; exec sleep 5' &
+zparent=$!
+zpid=""
+zstate=""
+i=0
+while [ "$i" -lt 60 ]; do
+  zpid=$(cat "$zpidfile" 2>/dev/null || true)
+  if [ -n "$zpid" ]; then
+    zstate=$(ps -o stat= -p "$zpid" 2>/dev/null | tr -d '[:space:]')
+    case "$zstate" in
+      Z*) break ;;
+    esac
+  fi
+  sleep 0.1
+  i=$((i + 1))
+done
+if [ -z "$zpid" ] || [ "$zstate" = "${zstate#Z}" ]; then
+  _fail "the test could not create a real zombie process (state: ${zstate:-none})"
+fi
+printf '%s\n' "$zpid" >"$SHELLKIT_PROC_DIR/zombie.pid"
+assert_exit_code 1 proc_is_running zombie
+if [ -f "$SHELLKIT_PROC_DIR/zombie.pid" ]; then
+  _fail "a zombie pid file is cleaned up"
+fi
+kill "$zparent" 2>/dev/null || true
+
+# ---- 整组停：目标那个组**就是调用方自己的组** ⇒ 不能整组杀（否则自杀）----
+#
+# 场景：调用方是组长的子进程（同一个组）。组杀会把调用方一起带走 ——
+# 退出码 143，看起来像「被信号停掉」，其实是我们自己动的手。
+# 判据承重：把「排除自己那个组」的判断去掉，调用方会被自己组的 SIGTERM 打死，
+# 下面的 SURVIVED 永远不会打印。
+mkdir -p "$d/selfgrp"
+cat >"$d/selfgrp/outer.sh" <<'EOS'
+#!/usr/bin/env bash
+export SK_LEADER_PID=$$
+bash "$SK_TEST_SELF/inner.sh"
+EOS
+cat >"$d/selfgrp/inner.sh" <<'EOS'
+#!/usr/bin/env bash
+. "$SK_TEST_ROOT/lib/bootstrap.sh"
+export SHELLKIT_PROC_DIR="$SK_TEST_PROC_DIR"
+mkdir -p "$SHELLKIT_PROC_DIR"
+printf '%s\n' "$SK_LEADER_PID" >"$SHELLKIT_PROC_DIR/self.pid"
+proc_stop self
+printf 'SURVIVED rc=%s\n' "$?"
+EOS
+# 作业控制：让 outer.sh 自成进程组（组长 = 它自己），inner.sh 是它的子进程
+# ⇒ 两者同组，但 inner.sh 的 pid 不是组长
+had_m=0
+case "$-" in
+  *m*) had_m=1 ;;
+esac
+set -m
+SK_TEST_ROOT="$TEST_ROOT" SK_TEST_SELF="$d/selfgrp" SK_TEST_PROC_DIR="$d/selfgrp/run" \
+  bash "$d/selfgrp/outer.sh" >"$d/selfgrp/out.txt" 2>&1 &
+selfpid=$!
+if [ "$had_m" = "0" ]; then
+  set +m
+fi
+i=0
+while [ "$i" -lt 100 ]; do
+  case "$(cat "$d/selfgrp/out.txt" 2>/dev/null || true)" in
+    *SURVIVED*) break ;;
+  esac
+  sleep 0.1
+  i=$((i + 1))
+done
+out=$(cat "$d/selfgrp/out.txt" 2>/dev/null || true)
+case "$out" in
+  *SURVIVED*) ;;
+  *) _fail "stopping a group that contains the caller does not kill the caller (out: ${out:-none})" ;;
+esac
+kill "$selfpid" 2>/dev/null || true
+
+# ---- 看门狗：进程挂了要能真的拉起来（这是看门狗存在的唯一理由）----
+# 命令每次起来都往文件里追加一行；进程只活 2 秒 ⇒ 看门狗必须重启它。
+# 判据承重：把「拉起」这一步去掉，文件里永远只有 0 行 ⇒ 断言会红。
+counter="$d/restarts.txt"
+: >"$counter"
+proc_watchdog --interval 1 --max-backoff 1 --max-restarts 0 wd4 \
+  sh -c 'echo x >> '"$counter"'; sleep 2' >"$d/wd4.log" 2>&1 &
+wdpid=$!
+restarts=0
+i=0
+while [ "$i" -lt 200 ]; do
+  restarts=$(wc -l <"$counter" 2>/dev/null | tr -d '[:space:]')
+  case "$restarts" in
+    '' | *[!0-9]*) restarts=0 ;;
+  esac
+  [ "$restarts" -ge 2 ] && break
+  sleep 0.1
+  i=$((i + 1))
+done
+kill "$wdpid" 2>/dev/null || true
+wait "$wdpid" 2>/dev/null || true
+if [ "$restarts" -lt 2 ]; then
+  _fail "the watchdog restarts a process that keeps dying (restarts: $restarts)"
+fi
+
+# ---- 看门狗：0 秒间隔是热循环、0 秒退避是重启风暴 ⇒ 用法错 ----
+assert_exit_code 2 proc_watchdog --interval 0 wd5 sleep 30
+assert_exit_code 2 proc_watchdog --max-backoff 0 wd5 sleep 30

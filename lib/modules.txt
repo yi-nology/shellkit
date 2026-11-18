@@ -45,4 +45,4 @@ cli          error i18n log str
 man          cli error i18n log str
 vendor       i18n log
 proc        error fs i18n log trap
-git         error i18n log
+git         error fs i18n log

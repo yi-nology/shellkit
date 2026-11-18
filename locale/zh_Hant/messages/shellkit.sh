@@ -60,9 +60,14 @@ _sk_msg_lookup_shellkit() {
     'the branch name is required') printf '%s' '分支名是必須的' ;;
     'the repository has uncommitted changes') printf '%s' '倉庫有未提交的改動' ;;
     'the remote branch does not exist') printf '%s' '遠端分支不存在' ;;
+    'the working tree is in a detached HEAD state') printf '%s' '工作樹處於分離 HEAD 狀態' ;;
+    'the working tree is on another branch') printf '%s' '工作樹在另一個分支上' ;;
     'the branch cannot fast-forward; local commits would be lost') printf '%s' '分支不能快進：會丟掉本地提交' ;;
     'the target reference is required') printf '%s' '目標引用是必須的' ;;
     'refusing to write through a symlink') printf '%s' '拒絕順著符號連結寫入' ;;
+    'cannot resolve the target directory') printf '%s' '解析目標目錄失敗' ;;
+    'the worktree path must be outside the repository') printf '%s' '工作樹路徑必須在倉庫之外' ;;
+    'the branch already exists; the start point must be omitted') printf '%s' '分支已存在，不能再指定起點' ;;
     'URL is required') printf '%s' '必須提供 URL' ;;
     'invalid HTTP method') printf '%s' '非法的 HTTP 方法' ;;
     'missing value for option') printf '%s' '選項缺少取值' ;;
@@ -103,9 +108,11 @@ _sk_msg_lookup_shellkit() {
     'the process is already running') printf '%s' '進程已經在跑' ;;
     'the process group is unavailable; only the main process can be stopped') printf '%s' '進程組不可用：只能停主進程' ;;
     'the process exited immediately') printf '%s' '進程立刻退出了' ;;
+    'cannot stop the process') printf '%s' '停不掉這個進程' ;;
     'invalid interval') printf '%s' '間隔非法' ;;
     'invalid backoff') printf '%s' '退避上限非法' ;;
     'invalid restart limit') printf '%s' '重啟次數上限非法' ;;
+    'waiting before the next restart') printf '%s' '下次重啟前等待' ;;
     'the watchdog could not start the process') printf '%s' '看門狗拉不起進程' ;;
     'the watchdog gave up after too many failed restarts') printf '%s' '看門狗連續重啟失敗太多次，放棄' ;;
     'Non-interactive mode requires a default value') printf '%s' '非互動模式必須有預設值' ;;
@@ -241,7 +248,6 @@ _sk_msg_lookup_shellkit() {
     'it does not look like a shellkit-generated project') printf '%s' '看起來不是 shellkit 產生的工程' ;;
     'the manifest does not record a project name') printf '%s' 'manifest 裡沒有記錄工程名' ;;
     'the project name in the manifest is not a valid name') printf '%s' 'manifest 裡的工程名不是合法名字' ;;
-    'cannot resolve the target directory') printf '%s' '解析目標目錄失敗' ;;
     'upgrading') printf '%s' '正在升級' ;;
     'template version') printf '%s' '模板版本' ;;
     'the manifest predates the fingerprint baseline; files that cannot be verified are left alone') printf '%s' '清單早於指紋基線；無法核對的檔案保持原樣' ;;

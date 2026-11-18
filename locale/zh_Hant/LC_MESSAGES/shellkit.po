@@ -4,7 +4,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: shellkit\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-11-19 02:02+0800\n"
+"POT-Creation-Date: 2026-11-19 03:00+0800\n"
 "PO-Revision-Date: 2026-11-08 00:00+0800\n"
 "Last-Translator: shellkit contributors\n"
 "Language-Team: shellkit contributors\n"
@@ -187,6 +187,12 @@ msgstr "倉庫有未提交的改動"
 msgid "the remote branch does not exist"
 msgstr "遠端分支不存在"
 
+msgid "the working tree is in a detached HEAD state"
+msgstr "工作樹處於分離 HEAD 狀態"
+
+msgid "the working tree is on another branch"
+msgstr "工作樹在另一個分支上"
+
 msgid "the branch cannot fast-forward; local commits would be lost"
 msgstr "分支不能快進：會丟掉本地提交"
 
@@ -195,6 +201,15 @@ msgstr "目標引用是必須的"
 
 msgid "refusing to write through a symlink"
 msgstr "拒絕順著符號連結寫入"
+
+msgid "cannot resolve the target directory"
+msgstr "解析目標目錄失敗"
+
+msgid "the worktree path must be outside the repository"
+msgstr "工作樹路徑必須在倉庫之外"
+
+msgid "the branch already exists; the start point must be omitted"
+msgstr "分支已存在，不能再指定起點"
 
 msgid "URL is required"
 msgstr "必須提供 URL"
@@ -316,6 +331,9 @@ msgstr "進程組不可用：只能停主進程"
 msgid "the process exited immediately"
 msgstr "進程立刻退出了"
 
+msgid "cannot stop the process"
+msgstr "停不掉這個進程"
+
 msgid "invalid interval"
 msgstr "間隔非法"
 
@@ -326,7 +344,7 @@ msgid "invalid restart limit"
 msgstr "重啟次數上限非法"
 
 msgid "waiting before the next restart"
-msgstr ""
+msgstr "下次重啟前等待"
 
 msgid "the watchdog could not start the process"
 msgstr "看門狗拉不起進程"
@@ -739,9 +757,6 @@ msgstr "manifest 裡沒有記錄工程名"
 
 msgid "the project name in the manifest is not a valid name"
 msgstr "manifest 裡的工程名不是合法名字"
-
-msgid "cannot resolve the target directory"
-msgstr "解析目標目錄失敗"
 
 msgid "upgrading"
 msgstr "正在升級"

@@ -8,7 +8,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: shellkit 1.1.0\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-11-19 02:12+0800\n"
+"POT-Creation-Date: 2026-11-19 03:00+0800\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language-Team: LANGUAGE <LL@li.org>\n"
@@ -190,6 +190,12 @@ msgstr ""
 msgid "the remote branch does not exist"
 msgstr ""
 
+msgid "the working tree is in a detached HEAD state"
+msgstr ""
+
+msgid "the working tree is on another branch"
+msgstr ""
+
 msgid "the branch cannot fast-forward; local commits would be lost"
 msgstr ""
 
@@ -197,6 +203,15 @@ msgid "the target reference is required"
 msgstr ""
 
 msgid "refusing to write through a symlink"
+msgstr ""
+
+msgid "cannot resolve the target directory"
+msgstr ""
+
+msgid "the worktree path must be outside the repository"
+msgstr ""
+
+msgid "the branch already exists; the start point must be omitted"
 msgstr ""
 
 msgid "URL is required"
@@ -317,6 +332,9 @@ msgid "the process group is unavailable; only the main process can be stopped"
 msgstr ""
 
 msgid "the process exited immediately"
+msgstr ""
+
+msgid "cannot stop the process"
 msgstr ""
 
 msgid "invalid interval"
@@ -739,9 +757,6 @@ msgid "the manifest does not record a project name"
 msgstr ""
 
 msgid "the project name in the manifest is not a valid name"
-msgstr ""
-
-msgid "cannot resolve the target directory"
 msgstr ""
 
 msgid "upgrading"

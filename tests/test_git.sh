@@ -204,3 +204,71 @@ assert_exit_code 2 git_fetch "$work"
 assert_exit_code 2 git_fast_forward "$work"
 assert_exit_code 2 git_reset_hard "$work"
 assert_exit_code 2 git_worktree_add "$work" "$d/wt2"
+
+# ---- 默认分支：origin/main 与 origin/master 并存、又没有 origin/HEAD ⇒ 优先 main ----
+#
+# 判据承重：把「main/master 回退环」改成空循环，这里就变成「两个远端分支 ⇒ 报歧义」，
+# 断言会红。（只留一个远端分支的旧用例区分不了这两条路径。）
+both="$d/both"
+git clone -q "$origin" "$both" 2>/dev/null || _fail "cannot clone for the both case"
+cd "$both" || exit 1
+git fetch -q origin master:refs/remotes/origin/master || _fail "cannot fetch master"
+git symbolic-ref -d refs/remotes/origin/HEAD || true
+cd "$TEST_ROOT" || exit 1
+assert_eq "main" "$(git_default_branch "$both")" "main wins over master when both remote branches exist"
+
+# ---- 快进：HEAD 不在目标分支上 ⇒ 明确报错、**不动工作树** ----
+#
+# 判据承重：把「HEAD 是不是目标分支」这个检查去掉，git 会把 origin/main 合进
+# 当前分支并返回 0 —— 调用方以为快进了 main，其实动的是别的分支。
+# 这里远端的 main 正好是当前分支的祖先 ⇒ 那条「假快进」会真的成功并改掉分支指针，
+# 所以断言不只看返回码，还看分支指针有没有被动。
+fforigin="$d/fforigin.git"
+git init -q --bare "$fforigin" || _fail "cannot create the fast-forward origin"
+git --git-dir="$fforigin" symbolic-ref HEAD refs/heads/main || _fail "cannot set the fast-forward origin HEAD"
+ffwork="$d/ffwork"
+git clone -q "$fforigin" "$ffwork" 2>/dev/null || _fail "cannot clone for the fast-forward guard"
+cd "$ffwork" || exit 1
+git config user.email "probe@example.com"
+git config user.name "probe"
+printf 'one\n' >a.txt
+git add a.txt
+git commit -qm "one" || _fail "cannot commit the first commit"
+git push -q origin HEAD:refs/heads/main || _fail "cannot push the first commit"
+# 从第一个提交拉一个旁支（它是 main 的祖先 ⇒ 假快进会成功）
+git checkout -q -b sidebranch || _fail "cannot create the side branch"
+cd "$TEST_ROOT" || exit 1
+# 远端 main 往前走一个提交
+git -C "$ffwork" checkout -q main || _fail "cannot switch back to main"
+printf 'two\n' >>"$ffwork/a.txt"
+git -C "$ffwork" commit -qam "two" || _fail "cannot commit the second commit"
+git -C "$ffwork" push -q origin HEAD:refs/heads/main || _fail "cannot push the second commit"
+git -C "$ffwork" checkout -q sidebranch || _fail "cannot switch back to the side branch"
+before=$(git -C "$ffwork" rev-parse sidebranch)
+out=$(git_fast_forward "$ffwork" main 2>&1) && rc=0 || rc=$?
+assert_eq 3 "$rc" "fast-forwarding a branch the working tree is not on is refused"
+assert_contains "$out" "another branch" "the refusal says the working tree is on another branch"
+after=$(git -C "$ffwork" rev-parse sidebranch)
+assert_eq "$before" "$after" "the refused fast-forward does not move the current branch"
+
+# ---- worktree 不能建在仓里 ----
+# 建在仓里 ⇒ 主仓多出一堆未跟踪文件 ⇒ 主仓**永久变脏** ⇒ 脏仓守卫把取数与快进
+# 全锁死（而且没人知道为什么）。这条守卫的意义就在「主仓还得是干净的」。
+inside="$work/inside-wt"
+out=$(git_worktree_add "$work" "$inside" probe-inside 2>&1) && rc=0 || rc=$?
+assert_eq 3 "$rc" "a worktree inside the repository is refused"
+assert_contains "$out" "outside the repository" "the refusal says the path must be outside the repository"
+if [ -e "$inside" ]; then
+  _fail "the refused worktree was not created"
+fi
+assert_exit_code 0 git_is_dirty "$work"
+
+# ---- worktree 检出已有分支（不必每次都新建）----
+wt2="$d/wt2"
+git -C "$work" branch -q existing-branch || _fail "cannot create the branch for the worktree"
+assert_exit_code 0 git_worktree_add "$work" "$wt2" existing-branch
+if [ ! -f "$wt2/a.txt" ]; then
+  _fail "the existing branch is checked out in the worktree"
+fi
+# 已有分支 + 又给起点 ⇒ 用法错（两件事互相矛盾）
+assert_exit_code 2 git_worktree_add "$work" "$d/wt3" existing-branch HEAD

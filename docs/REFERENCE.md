@@ -2059,7 +2059,7 @@ proc_start NAME COMMAND... —— 后台拉起一个进程组 脱离终端：noh
 
 ### `proc_stop`
 
-proc_stop NAME —— 停掉整个进程组 只 kill 主进程 ⇒ 子进程残留、端口还占着 —— 这是手写最常见的坑。 这里先给整组 TERM，留收尾的时间；还在就 KILL 整组。
+proc_stop NAME —— 停掉整个进程组 只 kill 主进程 ⇒ 子进程残留、端口还占着 —— 这是手写最常见的坑。 这里先给整组 TERM，留收尾的时间；还在就 KILL 整组。 「整组停」有两条硬约束（判据在 _sk_proc_group_of，只此一处）：   目标得自己就是组长，且那个组不是**我们自己的组** ——   否则 kill -- -PGID 会把调用方一起杀掉（静默自杀，退出码 143）。   满足不了就退化成只杀那个 pid（宁可留子进程，也不能自杀）。
 
 **稳定性**：experimental
 
@@ -2067,7 +2067,7 @@ proc_stop NAME —— 停掉整个进程组 只 kill 主进程 ⇒ 子进程残�
 
 - 0 已停（或本来就没在跑）
 - 2 用法错
-- 3 停不掉
+- 3 停不掉（TERM 与 KILL 之后还在）
 
 ### `proc_is_running`
 
@@ -2098,7 +2098,7 @@ proc_watchdog [--interval SEC] [--max-backoff SEC] [--max-restarts N] NAME COMMA
 
 ### `git_default_branch`
 
-git_default_branch REPO —— 解析默认分支 顺序：origin/HEAD 的符号引用（正常 clone 都有）→ 本地已有的 origin/main 或 origin/master → 远端只有一个分支时就是它 → 多个远端分支且认不出 ⇒ 报歧义。 认不出就报错，不猜 —— 猜错了的代价是「拉错分支」。
+git_default_branch REPO —— 解析默认分支 顺序：origin/HEAD 的符号引用（正常 clone 都有）→ 本地已有的 origin/main 或 origin/master → 远端只有一个分支时就是它 → 多个远端分支且认不出 ⇒ 报歧义。 认不出就报错，不猜 —— 猜错了的代价是「拉错分支」。 只看 origin 这一个远端：默认分支是「这个仓的」概念，多远端时猜哪个远端 同样是猜 —— 与其猜，不如让调用方显式指定分支名。
 
 **稳定性**：experimental
 
@@ -2121,13 +2121,13 @@ git_is_dirty REPO —— 脏仓守卫 有未提交改动（含未跟踪文件）
 
 ### `git_tag`
 
-git_tag REPO —— 取版本号（浅克隆安全） 浅克隆里 git describe --tags 会退化成哈希 ⇒ 产物版本变成 (devel)。 三层回退：   1) HEAD 上的精确 tag；   2) 浅克隆且拿不到 ⇒ 补取 tag（tag 跟不下来是浅克隆的常态）；   3) 还是拿不到 ⇒ 补深度（--deepen）：tag 指向的是**祖先**提交时，      只补 tag 不够 —— 浅边界把祖先链截断了，describe 仍认不出这个 tag      是不是 HEAD 的祖先，于是仍然失败。 第 2、3 步要联网；不想联网就设 SHELLKIT_GIT_NO_FETCH=1。
+git_tag REPO —— 取版本号（浅克隆安全） 浅克隆里 git describe --tags 会退化成哈希 ⇒ 产物版本变成 (devel)。 三层回退：   1) HEAD 上的精确 tag；   2) 浅克隆且拿不到 ⇒ 补取 tag（tag 跟不下来是浅克隆的常态）；   3) 还是拿不到 ⇒ 补深度（--deepen）：tag 指向的是**祖先**提交时，      只补 tag 不够 —— 浅边界把祖先链截断了，describe 仍认不出这个 tag      是不是 HEAD 的祖先，于是仍然失败。 第 2、3 步要联网；不想联网就设 SHELLKIT_GIT_NO_FETCH=1。 都取不到时退到「最近的可达 tag」：那个 tag **可能在祖先上**（HEAD 已经 往前走了几个提交）—— 它是这条提交链的版本号，不是 HEAD 自己的版本号。
 
 **稳定性**：experimental
 
 **退出码**
 
-- 0 成功（stdout 是 tag）
+- 0 成功（stdout 是 tag；HEAD 上没有精确 tag 时是最近的可达 tag）
 - 3 拿不到（不是 git 仓 / 没有 tag / 浅克隆且不允许联网）
 
 ### `git_fetch`
@@ -2145,7 +2145,7 @@ git_fetch REPO BRANCH —— 受控取数 脏仓直接拒绝：同机并行会�
 
 ### `git_fast_forward`
 
-git_fast_forward REPO BRANCH —— 只快进，绝不丢本地提交 能快进 ⇒ merge --ff-only；不能快进（本地有分叉）⇒ **明确报错，不动工作树**。 「快进 vs 强制重置」的区别就在这里：强制重置会丢本地提交，所以它另有 一个名字更直白的函数（git_reset_hard），要的人自己明说。
+git_fast_forward REPO BRANCH —— 只快进，绝不丢本地提交 能快进 ⇒ merge --ff-only；不能快进（本地有分叉）⇒ **明确报错，不动工作树**。 「快进 vs 强制重置」的区别就在这里：强制重置会丢本地提交，所以它另有 一个名字更直白的函数（git_reset_hard），要的人自己明说。 **只快进当前工作树所在的分支**：本地已有这个分支、而 HEAD 不在它上面时， 明确报错、不动工作树。不这么判的后果是「把 origin/main 合进当前分支」还 返回 0 —— 调用方以为快进了 main，其实被合进去的是另一个分支， 两边的提交也搅在了一起（假成功比报错坏得多）。
 
 **稳定性**：experimental
 
@@ -2153,7 +2153,7 @@ git_fast_forward REPO BRANCH —— 只快进，绝不丢本地提交 能快进 
 
 - 0 成功
 - 2 用法错
-- 3 脏仓 / 不能快进 / 远端分支不存在
+- 3 脏仓 / 不能快进 / 远端分支不存在 / HEAD 不在目标分支上
 - 1 git 自己失败
 
 ### `git_reset_hard`
@@ -2171,7 +2171,7 @@ git_reset_hard REPO REF —— 显式的破坏性重置 会丢本地提交 —�
 
 ### `git_worktree_add`
 
-git_worktree_add REPO PATH BRANCH [START_POINT] —— 检出到工作树 多仓并行改动的标准做法：每个改动一个工作树，互不干扰， 也不会把别人的工作区冲掉（这正是脏仓守卫要防的那类事故）。 PATH 不能在 REPO 里面（git 也不允许），也不能是软链。
+git_worktree_add REPO PATH BRANCH [START_POINT] —— 检出到工作树 多仓并行改动的标准做法：每个改动一个工作树，互不干扰， 也不会把别人的工作区冲掉（这正是脏仓守卫要防的那类事故）。 PATH 不能落在仓里：工作树建在仓内 ⇒ 主仓多出一堆未跟踪文件 ⇒ 主仓**永久变脏** ⇒ 脏仓守卫把取数与快进全锁死（而且没人知道为什么）。也不能是软链， 父目录必须已经存在（git 自己也要求）。 BRANCH 本地已有 ⇒ 检出那个分支（此时不能再给 START_POINT）；没有 ⇒ 新建并跟住。
 
 **稳定性**：experimental
 
@@ -2179,6 +2179,6 @@ git_worktree_add REPO PATH BRANCH [START_POINT] —— 检出到工作树 多仓
 
 - 0 成功
 - 2 用法错
-- 3 不是 git 仓 / 路径不合法
+- 3 不是 git 仓 / 路径不合法（落在仓里 / 是软链 / 父目录不存在）
 - 1 git 自己失败
 

@@ -43,8 +43,10 @@ _sk_git_describe() {
   if [ "$__exact" = "1" ]; then
     __args="--exact-match"
   fi
+  # 不带 --dirty：版本号要的就是 tag 本身。工作区脏不脏是另一件事
+  #（git_is_dirty 说了算），混进版本号里会让「v1.0.0」变成「v1.0.0-dirty」。
   # shellcheck disable=SC2086
-  git -C "$__repo" describe --tags $__args --dirty 2>/dev/null || return 1
+  git -C "$__repo" describe --tags $__args 2>/dev/null || return 1
 }
 
 # git_default_branch REPO —— 解析默认分支
@@ -52,6 +54,9 @@ _sk_git_describe() {
 # 顺序：origin/HEAD 的符号引用（正常 clone 都有）→ 本地已有的 origin/main 或
 # origin/master → 远端只有一个分支时就是它 → 多个远端分支且认不出 ⇒ 报歧义。
 # 认不出就报错，不猜 —— 猜错了的代价是「拉错分支」。
+#
+# 只看 origin 这一个远端：默认分支是「这个仓的」概念，多远端时猜哪个远端
+# 同样是猜 —— 与其猜，不如让调用方显式指定分支名。
 #
 # @exitcode 0 成功（stdout 是分支名）
 # @exitcode 3 解析不出来（不是 git 仓 / 远端分支有歧义 / 没有远端）
@@ -66,6 +71,8 @@ git_default_branch() {
     return 0
   fi
   # 2) 老仓没建 origin/HEAD ⇒ 看本地有没有 origin/main / origin/master
+  #    两个都认得时优先 main（GitHub / GitLab 新仓的默认分支都是 main；
+  #    认不出优先级才是「猜」，main 优先是约定不是猜）
   for __ref in main master; do
     if git -C "$__repo" show-ref --verify --quiet "refs/remotes/origin/$__ref"; then
       printf '%s\n' "$__ref"
@@ -129,11 +136,14 @@ git_is_dirty() {
 #      是不是 HEAD 的祖先，于是仍然失败。
 # 第 2、3 步要联网；不想联网就设 SHELLKIT_GIT_NO_FETCH=1。
 #
-# @exitcode 0 成功（stdout 是 tag）
+# 都取不到时退到「最近的可达 tag」：那个 tag **可能在祖先上**（HEAD 已经
+# 往前走了几个提交）—— 它是这条提交链的版本号，不是 HEAD 自己的版本号。
+#
+# @exitcode 0 成功（stdout 是 tag；HEAD 上没有精确 tag 时是最近的可达 tag）
 # @exitcode 3 拿不到（不是 git 仓 / 没有 tag / 浅克隆且不允许联网）
 # @stability experimental
 git_tag() {
-  local __repo="${1:-}" __tag="" __shallow="false"
+  local __repo="${1:-}" __tag="" __shallow="false" __deepen=""
   _sk_git_need_repo "$__repo" || return $?
   __tag=$(_sk_git_describe 1 "$__repo" 2>/dev/null || true)
   if [ -z "$__tag" ]; then
@@ -156,7 +166,7 @@ git_tag() {
     fi
   fi
   if [ -z "$__tag" ]; then
-    # 退一步：最近的 tag（不一定在 HEAD 上）
+    # 退一步：最近的 tag（不一定在 HEAD 上，可能在祖先上）
     __tag=$(git -C "$__repo" describe --tags --abbrev=0 2>/dev/null || true)
   fi
   if [ -z "$__tag" ]; then
@@ -197,13 +207,18 @@ git_fetch() {
 # 「快进 vs 强制重置」的区别就在这里：强制重置会丢本地提交，所以它另有
 # 一个名字更直白的函数（git_reset_hard），要的人自己明说。
 #
+# **只快进当前工作树所在的分支**：本地已有这个分支、而 HEAD 不在它上面时，
+# 明确报错、不动工作树。不这么判的后果是「把 origin/main 合进当前分支」还
+# 返回 0 —— 调用方以为快进了 main，其实被合进去的是另一个分支，
+# 两边的提交也搅在了一起（假成功比报错坏得多）。
+#
 # @exitcode 0 成功
 # @exitcode 2 用法错
-# @exitcode 3 脏仓 / 不能快进 / 远端分支不存在
+# @exitcode 3 脏仓 / 不能快进 / 远端分支不存在 / HEAD 不在目标分支上
 # @exitcode 1 git 自己失败
 # @stability experimental
 git_fast_forward() {
-  local __repo="${1:-}" __branch="${2:-}" __remote
+  local __repo="${1:-}" __branch="${2:-}" __remote __head
   _sk_git_need_repo "$__repo" || return $?
   if [ -z "$__branch" ]; then
     log_error "$(_t 'the branch name is required')"
@@ -219,9 +234,20 @@ git_fast_forward() {
     return "$SK_PRECOND"
   fi
   if ! git -C "$__repo" show-ref --verify --quiet "refs/heads/$__branch"; then
-    # 本地还没有这个分支 ⇒ 从远端建一个并跟住
+    # 本地还没有这个分支 ⇒ 从远端建一个并跟住。
+    # 新建分支不动当前分支的提交，所以这里不需要「HEAD 必须是目标分支」。
     git -C "$__repo" checkout --quiet -b "$__branch" --track "$__remote" || return 1
     return 0
+  fi
+  # 本地有这个分支 ⇒ 只能快进**当前工作树所在的那个分支**
+  __head=$(git -C "$__repo" symbolic-ref --quiet --short HEAD 2>/dev/null || true)
+  if [ -z "$__head" ]; then
+    log_error "$(_t 'the working tree is in a detached HEAD state'): $__repo"
+    return "$SK_PRECOND"
+  fi
+  if [ "$__head" != "$__branch" ]; then
+    log_error "$(_t 'the working tree is on another branch'): $__head (expected $__branch)"
+    return "$SK_PRECOND"
   fi
   if ! git -C "$__repo" merge --ff-only --quiet "$__remote"; then
     log_error "$(_t 'the branch cannot fast-forward; local commits would be lost'): $__branch"
@@ -256,15 +282,20 @@ git_reset_hard() {
 # 多仓并行改动的标准做法：每个改动一个工作树，互不干扰，
 # 也不会把别人的工作区冲掉（这正是脏仓守卫要防的那类事故）。
 #
-# PATH 不能在 REPO 里面（git 也不允许），也不能是软链。
+# PATH 不能落在仓里：工作树建在仓内 ⇒ 主仓多出一堆未跟踪文件 ⇒ 主仓**永久变脏**
+# ⇒ 脏仓守卫把取数与快进全锁死（而且没人知道为什么）。也不能是软链，
+# 父目录必须已经存在（git 自己也要求）。
+#
+# BRANCH 本地已有 ⇒ 检出那个分支（此时不能再给 START_POINT）；没有 ⇒ 新建并跟住。
 #
 # @exitcode 0 成功
 # @exitcode 2 用法错
-# @exitcode 3 不是 git 仓 / 路径不合法
+# @exitcode 3 不是 git 仓 / 路径不合法（落在仓里 / 是软链 / 父目录不存在）
 # @exitcode 1 git 自己失败
 # @stability experimental
 git_worktree_add() {
-  local __repo="${1:-}" __path="${2:-}" __branch="${3:-}" __start="${4:-}" __base
+  local __repo="${1:-}" __path="${2:-}" __branch="${3:-}" __start="${4:-}"
+  local __base="HEAD" __abs __pdir __wt __top __common __bare __b1 __b2 __b
   _sk_git_need_repo "$__repo" || return $?
   if [ -z "$__path" ] || [ -z "$__branch" ]; then
     log_error "$(_t 'Usage'): git_worktree_add REPO PATH BRANCH [START_POINT]"
@@ -274,12 +305,67 @@ git_worktree_add() {
     log_error "$(_t 'refusing to write through a symlink'): $__path"
     return "$SK_PRECOND"
   fi
+  # git -C REPO 会把工作目录切到 REPO ⇒ 相对路径是相对 REPO 解析的
+  case "$__path" in
+    /*) __abs="$__path" ;;
+    *) __abs="$__repo/$__path" ;;
+  esac
+  __pdir=$(dirname "$__abs")
+  if [ ! -d "$__pdir" ]; then
+    log_error "$(_t 'target directory does not exist'): $__pdir"
+    return "$SK_PRECOND"
+  fi
+  # 父目录解析成真实路径（pwd -P）：中间的软链也要算进去 ——
+  # 软链指向仓内 ⇒ 一样是「建在仓里」
+  __pdir=$(cd "$__pdir" 2>/dev/null && pwd -P) || {
+    log_error "$(_t 'cannot resolve the target directory'): $__pdir"
+    return "$SK_PRECOND"
+  }
+  __wt="$__pdir/$(basename "$__abs")"
+  # 仓边界：这个仓的工作树根；若这是链接工作树，还有主仓的根
+  __top=$(git -C "$__repo" rev-parse --show-toplevel 2>/dev/null || true)
+  __bare=$(git -C "$__repo" rev-parse --is-bare-repository 2>/dev/null || printf 'false')
+  __common=$(git -C "$__repo" rev-parse --git-common-dir 2>/dev/null || true)
+  case "$__common" in
+    /*) : ;;
+    *) __common="$__repo/$__common" ;;
+  esac
+  __common=$(cd "$__common" 2>/dev/null && pwd -P) || __common=""
+  __b1=""
+  __b2=""
+  if [ "$__bare" = "true" ]; then
+    # 裸仓：仓目录本身就是边界（父目录不是 —— 那会把整个 /tmp 都封掉）
+    __b1="$__common"
+  else
+    if [ -n "$__top" ]; then
+      __b1=$(cd "$__top" 2>/dev/null && pwd -P) || __b1=""
+    fi
+    if [ -n "$__common" ]; then
+      __b2=$(dirname "$__common")
+    fi
+  fi
+  for __b in "$__b1" "$__b2"; do
+    [ -n "$__b" ] || continue
+    if [ "$__wt" = "$__b" ] || _sk_fs_in_dir "$__b" "$__wt"; then
+      log_error "$(_t 'the worktree path must be outside the repository'): $__wt"
+      return "$SK_PRECOND"
+    fi
+  done
+  if git -C "$__repo" show-ref --verify --quiet "refs/heads/$__branch"; then
+    if [ -n "$__start" ]; then
+      log_error "$(_t 'the branch already exists; the start point must be omitted'): $__branch"
+      return "$SK_USAGE"
+    fi
+    if ! git -C "$__repo" worktree add --quiet "$__wt" "$__branch"; then
+      return 1
+    fi
+    return 0
+  fi
   # 起点默认是当前 HEAD（不是仓库路径 —— 那是 invalid reference）
-  __base="HEAD"
   if [ -n "$__start" ]; then
     __base="$__start"
   fi
-  if ! git -C "$__repo" worktree add --quiet -b "$__branch" "$__path" "$__base"; then
+  if ! git -C "$__repo" worktree add --quiet -b "$__branch" "$__wt" "$__base"; then
     return 1
   fi
   return 0
