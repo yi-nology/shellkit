@@ -14,20 +14,46 @@ have_stat=0
 have_pgid=0
 # 真状态是 S / Ss / R / Z+ 这种形状：首字母大写，后面的修饰符是小写或符号。
 # busybox 的 ps 不认 `stat=`，它会打一行表头 STAT ⇒ 表头不是状态，不能当真
-# （表头 STAT 的第二个字母是大写 T，真状态的第二个字母一定是小写或符号 ⇒ 据此分辨）。
+# （表头 STAT 的第二个字母起全是大写，真状态的后续字符是小写字母或符号）。
 #
 # ⚠ 判据里不能出现 < 或 >：那是 shell 的重定向元字符，词法器会把 case 模式
 # 从中间切开 ⇒ bash 报 "case patterns must be separated with `|'"，3.2 上必炸。
+#
+# ⚠⚠ 判据里也不能用 [a-z] 这种**区间**：方括号区间按 locale 的排序规则匹配 ——
+# 在 en_US.UTF-8 / zh_CN.UTF-8 下 [a-z] 连大写字母都算进去 ⇒ 表头 STAT 会被
+# 当成真状态。同一条判据，本机（C.UTF-8）绿、macOS 的 CI（en_US.UTF-8）红，
+# 就是这个原因（locale 决定区间怎么匹配，判据却没写明）。
+# ⇒ 只用**逐个列出的字符集**（[RSZTWDI]、[ABC...]）：它们与 locale 无关。
 sk_stat_is_real() {
-  case "${1:-}" in
-    [RSZTWDI] | [RSZTWDI][a-z]* | [RSZTWDI]+*) return 0 ;;
+  local __s="${1:-}" __rest
+  [ -n "$__s" ] || return 1
+  case "$__s" in
+    [RSZTWDIU]) return 0 ;;
   esac
-  return 1
+  __rest=${__s#?}
+  case "$__rest" in
+    '') return 0 ;;
+    # 后续还有大写字母 ⇒ 表头（STAT 的 T/A/T）
+    *[ABCDEFGHIJKLMNOPQRSTUVWXYZ]*) return 1 ;;
+  esac
+  return 0
 }
 # 取输出的最后一行（busybox 的表头在第一行），再抹掉空白。
 sk_stat_of() {
   ps -o stat= -p "$1" 2>/dev/null | tail -n 1 | tr -d '[:space:]'
 }
+# 判据自检入口：给**子进程**用。
+# 为什么必须在子进程里验 locale：进程内改 LC_ALL 不会改已经跑起来的 setlocale
+# ⇒ 在本进程里换 locale 是验不出来的（要重开进程才生效）。
+# 用法：SK_TEST_PROC_SELFTEST=header ⇒ 判据若把表头 STAT 当成真状态就退 1。
+if [ -n "${SK_TEST_PROC_SELFTEST:-}" ]; then
+  case "$SK_TEST_PROC_SELFTEST" in
+    header)
+      if sk_stat_is_real STAT; then exit 1; fi
+      exit 0
+      ;;
+  esac
+fi
 # 假 ps：一个**桩**，不是转发。
 # 转发（把请求转给环境里真实的 ps）会把判据绑死在环境上：macOS 的 CI 上真实 ps
 # 的 stat= 行为与本地不同 ⇒ 同一条判据时绿时红 ⇒ 判据没有判据能力。
@@ -72,6 +98,15 @@ fi
 if sk_stat_is_real STAT; then
   _fail "a ps header is not a process state"
 fi
+# 同一条判据在别的 locale 下也得成立：locale 决定方括号区间怎么匹配，
+# 判据不该被 locale 牵着走（macOS 的 CI 就是 en_US.UTF-8 ⇒ [a-z] 把大写也算进去）。
+# 承重：把白名单改回 [a-z] 区间 ⇒ 子进程里这条判据就会红（locale 没装时跳过）。
+if command -v locale >/dev/null 2>&1 && locale -a 2>/dev/null | grep -q 'zh_CN.UTF-8'; then
+  if ! SK_TEST_PROC_SELFTEST=header LC_ALL=zh_CN.UTF-8 LC_COLLATE=zh_CN.UTF-8 \
+    "$BASH" "$TEST_ROOT/tests/test_proc.sh" >/dev/null 2>&1; then
+    _fail "the process-state judgment is not affected by the locale (a ps header is not a state)"
+  fi
+fi
 if ! sk_stat_is_real Ss; then
   _fail "a sleeping process state is recognized"
 fi
@@ -86,7 +121,7 @@ if sk_stat_is_real "$(sk_stat_of $$)"; then
 fi
 _pg=$(ps -o pgid= -p $$ 2>/dev/null | tr -d '[:space:]')
 case "$_pg" in
-  '' | *[!0-9]*) have_pgid=0 ;;
+  '' | *[!0123456789]*) have_pgid=0 ;;
   *) have_pgid=1 ;;
 esac
 
