@@ -1,6 +1,7 @@
 # 分支覆盖白名单：当前确实没被测试覆盖的分支臂。
 # 由 bash tools/coverage.sh --branch --write-baseline 生成，不要手工维护。
 # 棘轮规则：这里面的分支一旦被覆盖，CI 就要求把它移出（防覆盖回退）。
+# 生成环境: os=linux arch=x86_64 jq=yes python3=yes
 install.sh:<toplevel>:10
 install.sh:<toplevel>:12
 install.sh:<toplevel>:17
@@ -154,12 +155,9 @@ lib/core/fs.sh:fs_atomic_copy:12
 lib/core/fs.sh:fs_atomic_copy:3
 lib/core/fs.sh:fs_atomic_copy:6
 lib/core/fs.sh:fs_atomic_copy:8
-lib/core/fs.sh:fs_atomic_copy:9
 lib/core/fs.sh:fs_atomic_write:2
-lib/core/fs.sh:fs_atomic_write:3
 lib/core/fs.sh:fs_atomic_write:4
 lib/core/fs.sh:fs_atomic_write:5
-lib/core/fs.sh:fs_atomic_write:6
 lib/core/fs.sh:fs_backup:4
 lib/core/fs.sh:fs_backup:5
 lib/core/fs.sh:fs_backup:6
@@ -169,7 +167,6 @@ lib/core/fs.sh:fs_ensure_block:5
 lib/core/fs.sh:fs_ensure_block:6
 lib/core/fs.sh:fs_ensure_block:7
 lib/core/fs.sh:fs_ensure_block:8
-lib/core/fs.sh:fs_ensure_dir:3
 lib/core/fs.sh:fs_ensure_dir:5
 lib/core/fs.sh:fs_ensure_line:6
 lib/core/fs.sh:fs_ensure_line:7
@@ -187,27 +184,26 @@ lib/core/http.sh:_sk_http_escape_fallback:7
 lib/core/http.sh:_sk_http_exec:2
 lib/core/http.sh:_sk_http_exec:4
 lib/core/http.sh:_sk_http_exec:7
-lib/core/http.sh:_sk_http_github_asset:1
 lib/core/http.sh:_sk_http_github_asset:2
+lib/core/http.sh:_sk_http_github_asset:3
+lib/core/http.sh:_sk_http_github_asset:4
 lib/core/http.sh:_sk_http_github_asset:6
-lib/core/http.sh:_sk_http_github_tag:1
 lib/core/http.sh:_sk_http_github_tag:2
+lib/core/http.sh:_sk_http_github_tag:3
 lib/core/http.sh:_sk_http_github_tag:4
 lib/core/http.sh:_sk_http_github_tag:5
 lib/core/http.sh:_sk_http_github_tag:6
 lib/core/http.sh:_sk_http_github_tag:7
 lib/core/http.sh:_sk_http_jq_filter:1
-lib/core/http.sh:_sk_http_jq_filter:2
 lib/core/http.sh:_sk_http_jq_filter:3
-lib/core/http.sh:_sk_http_jq_filter:4
-lib/core/http.sh:_sk_http_jq_filter:5
 lib/core/http.sh:_sk_http_jq_filter:6
-lib/core/http.sh:_sk_http_json_extract:1
 lib/core/http.sh:_sk_http_json_extract:2
-lib/core/http.sh:_sk_http_json_extract:3
+lib/core/http.sh:_sk_http_json_extract:4
+lib/core/http.sh:_sk_http_json_extract:5
+lib/core/http.sh:_sk_http_json_extract:6
 lib/core/http.sh:_sk_http_json_extract:7
-lib/core/http.sh:_sk_http_json_tool:1
-lib/core/http.sh:_sk_http_json_validate:1
+lib/core/http.sh:_sk_http_json_tool:2
+lib/core/http.sh:_sk_http_json_validate:2
 lib/core/http.sh:_sk_http_parse:1
 lib/core/http.sh:_sk_http_parse:10
 lib/core/http.sh:_sk_http_parse:11
@@ -228,8 +224,8 @@ lib/core/http.sh:_sk_http_parse:7
 lib/core/http.sh:_sk_http_parse:8
 lib/core/http.sh:http_github_latest_tag:3
 lib/core/http.sh:http_github_release_asset:3
-lib/core/http.sh:net_escape_json:1
-lib/core/http.sh:net_escape_json:2
+lib/core/http.sh:net_escape_json:3
+lib/core/http.sh:net_escape_json:4
 lib/core/http.sh:net_json:1
 lib/core/http.sh:net_json:3
 lib/core/http.sh:net_json:4
@@ -305,7 +301,7 @@ lib/core/net.sh:net_verify:2
 lib/core/net.sh:net_wait_http:2
 lib/core/net.sh:net_wait_http:3
 lib/core/os.sh:_sk_os_detect:2
-lib/core/os.sh:_sk_os_detect:5
+lib/core/os.sh:_sk_os_detect:4
 lib/core/os.sh:_sk_os_pkg_family:1
 lib/core/os.sh:_sk_os_pkg_family:3
 lib/core/os.sh:_sk_os_pkg_family:4
@@ -624,7 +620,6 @@ shellkit:_sk_dir_swap_apply:6
 shellkit:_sk_dir_swap_apply:7
 shellkit:_sk_dir_swap_apply:8
 shellkit:_sk_dir_swap_recover:6
-shellkit:_sk_dir_swap_recover:7
 shellkit:_sk_docs_check_dir:1
 shellkit:_sk_docs_coverage:2
 shellkit:_sk_docs_render_dir:1
@@ -800,10 +795,6 @@ shellkit:_sk_skill_install:16
 shellkit:_sk_skill_install:6
 shellkit:_sk_skill_install_into:1
 shellkit:_sk_skill_install_into:10
-shellkit:_sk_skill_install_into:12
-shellkit:_sk_skill_install_into:15
-shellkit:_sk_skill_install_into:16
-shellkit:_sk_skill_install_into:18
 shellkit:_sk_skill_install_into:2
 shellkit:_sk_skill_install_into:25
 shellkit:_sk_skill_install_into:26
@@ -814,7 +805,6 @@ shellkit:_sk_skill_install_into:42
 shellkit:_sk_skill_install_into:43
 shellkit:_sk_skill_install_into:44
 shellkit:_sk_skill_install_into:45
-shellkit:_sk_skill_install_into:47
 shellkit:_sk_skill_install_into:49
 shellkit:_sk_skill_install_into:5
 shellkit:_sk_skill_install_into:50
@@ -828,9 +818,6 @@ shellkit:_sk_skill_install_into:66
 shellkit:_sk_skill_install_into:67
 shellkit:_sk_skill_install_into:69
 shellkit:_sk_skill_install_into:70
-shellkit:_sk_skill_install_into:71
-shellkit:_sk_skill_install_into:72
-shellkit:_sk_skill_install_into:73
 shellkit:_sk_skill_install_into:74
 shellkit:_sk_skill_install_into:75
 shellkit:_sk_skill_install_into:76
@@ -842,7 +829,6 @@ shellkit:_sk_skill_norm_dir:1
 shellkit:_sk_skill_norm_dir:3
 shellkit:_sk_skill_print:1
 shellkit:_sk_skill_uninstall:10
-shellkit:_sk_skill_uninstall:2
 shellkit:_sk_skill_uninstall:3
 shellkit:_sk_skill_uninstall:5
 shellkit:_sk_skill_uninstall:7
@@ -852,11 +838,9 @@ shellkit:_sk_skill_uninstall_from:2
 shellkit:_sk_skill_uninstall_from:21
 shellkit:_sk_skill_uninstall_from:22
 shellkit:_sk_skill_uninstall_from:3
-shellkit:_sk_skill_uninstall_from:30
 shellkit:_sk_skill_uninstall_from:32
 shellkit:_sk_skill_uninstall_from:38
 shellkit:_sk_skill_uninstall_from:4
-shellkit:_sk_skill_uninstall_from:42
 shellkit:_sk_tree_version:1
 shellkit:_sk_uninstall_purge_target:1
 shellkit:_sk_uninstall_purge_target:2
@@ -887,7 +871,6 @@ shellkit:_sk_upgrade_path_ok:2
 shellkit:_sk_upgrade_path_ok:5
 shellkit:_sk_upgrade_writable:1
 shellkit:_sk_upgrade_writable:2
-shellkit:_sk_upgrade_writable:3
 shellkit:_sk_vendor_dir_config_write:1
 shellkit:_sk_vendor_dir_config_write:2
 shellkit:_sk_vendor_dir_config_write:3
@@ -917,7 +900,6 @@ shellkit:_sk_vendor_stage:5
 shellkit:_sk_vendor_stage:6
 shellkit:cmd_completion:1
 shellkit:cmd_completion:10
-shellkit:cmd_completion:11
 shellkit:cmd_completion:7
 shellkit:cmd_demo:1
 shellkit:cmd_demo:10
@@ -941,7 +923,6 @@ shellkit:cmd_docs:3
 shellkit:cmd_docs:5
 shellkit:cmd_doctor:10
 shellkit:cmd_doctor:12
-shellkit:cmd_doctor:20
 shellkit:cmd_doctor:22
 shellkit:cmd_doctor:3
 shellkit:cmd_doctor:35
@@ -1076,7 +1057,6 @@ shellkit:cmd_upgrade:52
 shellkit:cmd_upgrade:55
 shellkit:cmd_upgrade:58
 shellkit:cmd_upgrade:59
-shellkit:cmd_upgrade:65
 shellkit:cmd_upgrade:67
 shellkit:cmd_upgrade:7
 shellkit:cmd_upgrade:70
