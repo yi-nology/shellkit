@@ -112,6 +112,8 @@ cd "$TEST_ROOT" || exit 1
 other="$d/other"
 git clone -q "$origin" "$other" 2>/dev/null || _fail "cannot clone for the divergence"
 cd "$other" || exit 1
+git config user.email "probe@example.com"
+git config user.name "probe"
 git fetch -q origin diverge
 # 从**基线**分叉（不是从 local work 之上）：两边各有一个提交才是真分叉
 git checkout -q -B diverge origin/main
