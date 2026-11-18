@@ -93,6 +93,32 @@ jobs:
           done
           exit 0
 
+      - name: reproduce the compat container failure (same image + package set as ci.yml)
+        run: |
+          set +e
+          set -uo pipefail
+          cd repo
+          {
+            echo "=== reproduce in debian:12 (same package set as ci.yml) ==="
+          } >> /tmp/helper.log
+          docker run --rm -v "$PWD:/src:ro" debian:12 bash -c '
+            set -e
+            apt-get update -qq >/dev/null 2>&1
+            apt-get install -y -qq gettext ca-certificates curl tar xz-utils make python3 git bash >/dev/null 2>&1
+            cp -a /src /repo
+            cd /repo
+            make check BASH="$(command -v bash)"
+          ' >/tmp/container.log 2>&1
+          rc=$?
+          {
+            echo "container rc=$rc"
+            echo "--- FAIL lines ---"
+            grep -n "FAIL" /tmp/container.log | head -20
+            echo "--- tail ---"
+            tail -120 /tmp/container.log
+          } >> /tmp/helper.log 2>&1
+          exit 0
+
       - name: regenerate the coverage and bench baselines (runner environment)
         run: |
           set +e
