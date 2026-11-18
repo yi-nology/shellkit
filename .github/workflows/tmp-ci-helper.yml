@@ -140,6 +140,11 @@ jobs:
           set +e
           set -uo pipefail
           cd repo
+          # 切到远端最新的 head：这一轮开始之后功能分支可能又推了新提交
+          # ⇒ 不切的话重生成出来的基线推回去会被拒（非快进）⇒ 白跑。
+          git fetch origin "$BRANCH" >> /tmp/helper.log 2>&1
+          git checkout -q FETCH_HEAD >> /tmp/helper.log 2>&1
+          echo "regenerating on $(git rev-parse HEAD)" >> /tmp/helper.log
           # 插桩范围（tools/coverage.sh 的口径）：lib/core/*.sh、lib/bootstrap.sh、
           # shellkit、install.sh、repair.sh、tools/release_gate.sh。
           # 只有这些文件变了才需要重生成：否则重生成会把一份一模一样的基线
