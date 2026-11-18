@@ -159,7 +159,13 @@ jobs:
           # runner 上实测慢到 39 分钟 —— 那不是「卡死」，是镜像源慢。
           # 慢在装包就该在这里早失败并说清原因，而不是把整个 job 的预算吃光、
           # 最后由 job 总超时背锅（「看起来像测试挂了」）。
-          PKG_TIMEOUT=900
+          #
+          # 取 1800 秒（30 分钟），不是更小：同一批共享 runner 上实测过**合法**的
+          # 慢安装 1069 秒（17 分 49 秒，2026-11-18 openeuler amd64）。内层超时
+          # 比它还短，就会把「慢但没卡死」误杀成失败 —— 修超时修出新问题。
+          # 判据见 tests/test_ci_timeouts.sh：内层超时不得短于实测最慢装包，
+          # 也不得把 job 的总预算吃光。
+          PKG_TIMEOUT=1800
           if command -v apt-get >/dev/null 2>&1; then
             apt-get update -qq
             # python3：tests/test_doctor.sh 的 JSON 值断言靠它解析（jget/jlen）；
