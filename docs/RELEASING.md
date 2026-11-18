@@ -129,6 +129,29 @@ git push origin v1.1.0                # 重新推 ⇒ release.yml 由 tag 触发
 （`git worktree add --detach`）做自己的提交 —— 不要在共享工作树里切分支：切分支会把别人
 正在写的分支从他们脚下抽走。
 
+## `main` 的保护规则（2026-11-18 起）
+
+`main` 现在带分支保护（branch protection）。规则刻意与仓库自己的发布门禁**同一份清单**：
+
+- **必需检查**：15 个 = `tools/release_gate.sh` 的 `DEFAULT_CHECKS`（ci.yml 的 job 名逐字一致）；
+- **`strict: false`**：检查不要求在 base 分支最新提交上重跑 —— `main` 在发版窗口里经常前进，
+  开了 strict 会把每个 PR 都卡成 BLOCKED（与上面「发版窗口」一节是同一个坑）；
+- **不要求 review**：这是 agent 驱动的工作流，链路上没有人类 reviewer ——
+  要求 approvals 等于把每个 PR 永久卡住；
+- **不加 push restrictions**：`main` 上的直接 push 是发版链的一部分（`make release` 要推 release 提交）；
+- **禁止 force-push 与删除**：`main` 不可被强推、不可被删；
+- **不启用 linear history**：仓库用 merge commit 合 PR。
+
+为什么要与 `release_gate.sh` 同一份清单：两处口径各写一份必然漂 —— required contexts
+的名字对不上，PR 就永远卡在「等一个永远不会来的检查」（GitHub 按名字匹配，不按 job）。
+
+**改 ci.yml 的 job 名要同步两处**：`tools/release_gate.sh` 的 `DEFAULT_CHECKS` 与
+branch protection 的 required contexts。核对当前规则：
+
+```bash
+gh api repos/yi-nology/shellkit/branches/main/protection
+```
+
 ## 版本号出现在哪里
 
 `VERSION` 是唯一真相源，其余全是投影，而投影是手抄的：
