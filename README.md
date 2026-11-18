@@ -290,6 +290,28 @@ SHELLKIT_MODULES="log fs" . ./vendor/shellkit/lib/bootstrap.sh
 
 不设这个变量就是全量加载，行为与以前逐字一致。
 
+## 设备侧（POSIX sh / busybox ash）
+
+NAS 的 start/stop、OpenWrt 的 init、busybox 容器里的部署脚本跑在**没有 bash** 的机器上，
+而且是**装机即执行**的：改坏 = 装上就挂，现场还装不了 shellkit 补救。
+
+所以另带一份 **POSIX 子集**（`lib/posix/shellkit-posix.sh`）—— 只写 POSIX 语法：
+
+```sh
+#!/bin/sh
+. /opt/pigeonbox/lib/shellkit-posix.sh
+
+log_info "starting pigeonbox"
+retry 3 fetch_config
+```
+
+给了 `log_*`、`die`、`trap_push`/`trap_install`、`retry`、`fs_ensure_dir`、
+`net_download` + sha256 校验、`conf_get_any`、`ver_cmp`、`lock_acquire`、`status_emit`。
+
+哪些能力有、哪些没有，写在 `lib/posix/capabilities.tsv` 里；运行时也能问
+`posix_capable 函数名`。设备侧别靠试 —— 试出来的失败往往就是「装上就挂」。
+细节见 [POSIX 子集](docs/POSIX.md)。
+
 ## 五条硬约定
 
 这五条是"准"的来源，不是风格偏好：

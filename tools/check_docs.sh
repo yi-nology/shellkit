@@ -22,6 +22,17 @@ awk '/^### `/{ s=$0; sub(/^### `/, "", s); sub(/`.*/, "", s); print s }' \
 if [ -f "$ROOT/tools/check_docs.allow" ]; then
   grep -v '^[[:space:]]*#' "$ROOT/tools/check_docs.allow" | grep -v '^[[:space:]]*$' >>"$TMP/allowed"
 fi
+
+# POSIX 子集的公开函数也是库函数 —— 设备侧的文档示例会用到它们。
+# REFERENCE.md 只收录 lib/core 的模块，POSIX 子集不在其中，所以这里直接
+# 从源码扫：手抄的那份名单迟早会漂。
+if [ -f "$ROOT/lib/posix/shellkit-posix.sh" ]; then
+  awk '/^[A-Za-z_][A-Za-z0-9_]*\(\)[ \t]*\{/ {
+    name = $0
+    sub(/\(.*/, "", name)
+    if (name !~ /^_/) print name
+  }' "$ROOT/lib/posix/shellkit-posix.sh" >>"$TMP/allowed"
+fi
 sort -u "$TMP/allowed" -o "$TMP/allowed"
 
 bad=0

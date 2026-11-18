@@ -55,6 +55,9 @@
 - `docs/REFERENCE.md` 每个函数末尾都有「稳定性：」一行，由 `./shellkit docs` 生成；
 - `tools/stability_exempt.txt` **必须为空** —— 空表示「没有未分级的公开函数」。
 
+> 表里数的是**主库**（`lib/core/`）的公开函数。POSIX 子集（`lib/posix/`）的函数
+> 不在这个分级里 —— 它们不在承诺面内，理由见上一节的「1.0 的承诺边界」。
+
 **从 experimental 升 stable** 是承诺扩张：必须走一个 minor，写进迁移表，并补齐该函数的
 `@exitcode`、探针与 `docs/STABLE-CANDIDATES.md` 的三条入选标准。
 晋升之后还要重生成 [`docs/API-FREEZE.md`](https://github.com/yi-nology/shellkit/blob/main/docs/API-FREEZE.md) —— 那是 1.0 承诺面的快照
@@ -85,6 +88,10 @@
 - **承诺**：Bash 3.2+ 基线、已测平台矩阵（macOS / Ubuntu / Debian / Rocky / openEuler）、
   退出码表、stdout 只给数据、日志只进 stderr、安装与卸载的所有权语义；
 - **不承诺**：`experimental` 面、stderr 措辞、性能指标、`docs/` 里明确标注「计划」的能力；
+- **不在承诺面内**：**POSIX 子集**（`lib/posix/`）—— 它是给设备侧（busybox ash / dash）
+  的附属实现，与主库不共享代码。子集的契约是**能力清单**
+  （`lib/posix/capabilities.tsv`）与它自己的测试，不是主库的稳定承诺。
+  主库的承诺不自动延伸到子集；反过来，改主库的行为也**不承诺**同步改子集。
 - **不在范围内**：跨主机编排、声明式资源管理、长生命周期控制循环（见 `docs/ROADMAP.md`）。
 
 ## 贡献者清单：改了一个公开函数之后
