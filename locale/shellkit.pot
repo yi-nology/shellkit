@@ -8,7 +8,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: shellkit 1.1.0\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-11-18 17:11+0800\n"
+"POT-Creation-Date: 2026-11-18 17:16+0800\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language-Team: LANGUAGE <LL@li.org>\n"
@@ -301,7 +301,13 @@ msgstr ""
 msgid "invalid retry count"
 msgstr ""
 
+msgid "attempt timed out, retrying"
+msgstr ""
+
 msgid "attempt failed, retrying"
+msgstr ""
+
+msgid "giving up after retries (timed out)"
 msgstr ""
 
 msgid "giving up after retries"
