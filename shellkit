@@ -338,7 +338,13 @@ _sk_own_sum_table() {
     : >"$__out"
     return 0
   fi
-  __raw=$(cd "$__root" && set -f && "${__tool[@]}" ${__args[@]+"${__args[@]}"} 2>/dev/null) || __raw=""
+  __raw=$(cd "$__root" && set -f && "${__tool[@]}" ${__args[@]+"${__args[@]}"} 2>/dev/null) || true
+  # sha256sum 遇到缺失的文件会退非零，但**已经算出来的那部分仍然有效**。
+  # 整份丢掉的后果：副本里少一个文件（上游新增了模块，旧副本还没有），
+  # 就会让「每一个文件」都判成「用户改过」⇒ 同步静默变成空操作，
+  # 副本永远停在旧版本，而退出码还是 0 —— 现场看到的现象是「升级说成功了，
+  # 但副本里的 VERSION 还是老样子」。
+  # 缺的文件在表里没有条目 ⇒ 决策循环走「目标不在 ⇒ 写」那条，正常补上。
   # sha256sum 输出「摘要 两个空格 路径」；这里拆成「路径 TAB 摘要」。
   # 用 tab 而不是空格分列：路径里可能有空格。
   printf '%s\n' "$__raw" |
@@ -981,21 +987,21 @@ _sk_vendor_dir_config_write() {
   __file="$_SK_VENDOR_DIR_FILE"
   [ -n "$__file" ] || __file='.shellkit-vendor-dir'
   __dirabs=$(cd "$__dir" 2>/dev/null && pwd -P) || return 1
-  __target="$__dirabs/$__file"
+  __cfgfile="$__dirabs/$__file"
   # 路径边界守卫：目标必须在工程目录之内，且目标本身不是符号链接。
   # fs_atomic_write 走「临时文件 + rename」，本身不写穿软链 ——
   # 但目标是个软链时宁可拒绝，让用户自己看一眼再决定。
-  if ! _sk_fs_rel_safe "$__file" || ! _sk_fs_in_dir "$__dirabs" "$__target"; then
+  if ! _sk_fs_rel_safe "$__file" || ! _sk_fs_in_dir "$__dirabs" "$__cfgfile"; then
     log_error "$(_t 'refusing to write outside the project directory'): $__file"
     return 1
   fi
-  if [ -L "$__target" ]; then
-    log_error "$(_t 'refusing to write through a symlink'): $__target"
+  if [ -L "$__cfgfile" ]; then
+    log_error "$(_t 'refusing to write through a symlink'): $__cfgfile"
     return 1
   fi
   __content="$__rel
 "
-  fs_atomic_write "$__target" "$__content" 644 || return 1
+  fs_atomic_write "$__cfgfile" "$__content" 644 || return 1
   return 0
 }
 

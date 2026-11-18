@@ -250,3 +250,37 @@ printf '../outside\n' >"$p7/.shellkit-vendor-dir"
 out=$("$TEST_ROOT/repair.sh" --prefix "$d2/prefix" --project "$p7" 2>&1) && rc=0 || rc=$?
 assert_eq 1 "$rc" "repair.sh fails closed on an illegal location"
 assert_contains "$out" "invalid library copy location" "repair.sh says why it refused"
+
+# ---- 副本里少一个文件时，同步必须把它补上（#143 的回归）----
+#
+# 背景：上游新增了模块，旧副本里还没有 ⇒ 算摘要时 sha256sum 遇到缺失的
+# 文件会退非零。**曾经把整张摘要表丢掉** ⇒ 每个文件都判成「用户改过」
+# ⇒ 同步静默变成空操作：副本的 VERSION 永远停在旧版本，退出码还是 0。
+#
+# 判据要能承重，所以副本被做成两件事：
+#   1. VERSION 伪装成旧版本（基线同步改掉 ⇒ 判成「还是我们装的原文」）；
+#   2. 少一个文件（上游新增模块、旧副本没有）。
+# 只断退出码不够 —— 那个缺陷的退出码一直是 0。
+sha_of() {
+  if command -v sha256sum >/dev/null 2>&1; then
+    sha256sum "$1" | awk '{print $1}'
+  elif command -v shasum >/dev/null 2>&1; then
+    shasum -a 256 "$1" | awk '{print $1}'
+  else
+    openssl dgst -sha256 "$1" | awk '{print $NF}'
+  fi
+}
+p8="$d2/p8"
+"$TEST_ROOT/shellkit" new "$p8" >/dev/null 2>&1 || _fail "shellkit new failed"
+printf '0.0.1\n' >"$p8/vendor/shellkit/VERSION"
+mf="$p8/vendor/shellkit/.shellkit-vendor-manifest"
+news="$(sha_of "$p8/vendor/shellkit/VERSION")"
+awk -F'\t' -v OFS='\t' -v s="$news" '$1=="VERSION" && !d {print $1, s; d=1; next} {print}' \
+  "$mf" >"$mf.new" || _fail "cannot rewrite the ownership manifest"
+mv "$mf.new" "$mf"
+rm -f "$p8/vendor/shellkit/lib/core/log.sh"
+out=$("$TEST_ROOT/shellkit" vendor "$p8" 2>&1) && rc=0 || rc=$?
+assert_eq 0 "$rc" "a copy with a missing file must still sync"
+assert_true test -f "$p8/vendor/shellkit/lib/core/log.sh"
+assert_eq "$(cat "$TEST_ROOT/VERSION")" "$(cat "$p8/vendor/shellkit/VERSION")" \
+  "the copy must reach the current version even when a file was missing"
