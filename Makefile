@@ -9,7 +9,7 @@ SOURCES := shellkit install.sh repair.sh demo.sh lib/bootstrap.sh $(wildcard lib
 TEMPLATES := $(shell find templates -type f)
 SHOTS := $(wildcard docs/shots/*.shot)
 
-.PHONY: help test syntax lint lint-templates fmt messages messages-check docs docs-check versions-check check-docs cookbook-check shots examples artifact-smoke check install release release-dry site-deps site-sync site site-serve local-names-check module-count-check pipe-safety-check dup-functions-check mutation security-check api-baseline-check api-freeze-check compatibility-check bench coverage coverage-branch upgrade-matrix ident-boundary-check
+.PHONY: help test syntax lint lint-templates fmt messages messages-check docs docs-check versions-check check-docs cookbook-check posix-check shots examples artifact-smoke check install release release-dry site-deps site-sync site site-serve local-names-check module-count-check pipe-safety-check dup-functions-check mutation security-check api-baseline-check api-freeze-check compatibility-check bench coverage coverage-branch upgrade-matrix ident-boundary-check
 
 help:
 	@printf '%s\n' \
@@ -27,6 +27,7 @@ help:
 	  'make docs        重新生成 REFERENCE.md / AGENTS.md / SKILL.md' \
 	  'make versions-check  VERSION / pot 头 / README / 站点里的版本号是否一致' \
   'make check-docs      markdown 的 bash 代码块必须 bash -n 通过；函数名必须真实存在' \
+  'make posix-check  POSIX 子集必须能在 POSIX sh 上跑，能力清单不能漂' \
   'make cookbook-check  文档里说的场景数要与 Cookbook 实际场景数一致' \
 	  'make shots       按 docs/shots/*.shot 真跑命令并渲染 SVG 截图' \
 	  'make examples    跑 examples/ 下每个工程的测试' \
@@ -94,6 +95,10 @@ check-docs:
 # 文档里手写的「N 个场景」必须与 Cookbook 里的实际场景数一致
 cookbook-check:
 	@$(BASH) tools/check_cookbook_count.sh
+
+# POSIX 子集必须真的能在 POSIX sh 上跑，能力清单不能漂
+posix-check:
+	@$(BASH) tools/check_posix.sh
 
 # 截图是真实输出渲染的，需要用 python3；没有就跳过而不是失败
 shots:
@@ -224,7 +229,7 @@ api-baseline-check:
 bench:
 	@$(BASH) tools/bench.sh
 
-check: syntax test lint module-order-check check-exitcode-docs local-names-check ident-boundary-check module-count-check pipe-safety-check dup-functions-check security-check api-baseline-check api-freeze-check compatibility-check docs-check versions-check check-docs cookbook-check messages-check examples fmt
+check: syntax test lint module-order-check check-exitcode-docs local-names-check ident-boundary-check module-count-check pipe-safety-check dup-functions-check security-check api-baseline-check api-freeze-check compatibility-check docs-check versions-check check-docs posix-check cookbook-check messages-check examples fmt
 
 install:
 	./shellkit install-self --prefix $(PREFIX)/usr
