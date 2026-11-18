@@ -42,7 +42,40 @@ assert_contains "$out" "50 个 stable" "the gate must report the stable count"
 assert_contains "$(cat "$DOC")" "冻结基线：v1.0.0" \
   "the freeze document must carry the fixed 1.x baseline (it must not drift with each release)"
 assert_contains "$(cat "$DOC")" "\`fs_atomic_write\`" "a known stable function must be listed"
-assert_contains "$(cat "$DOC")" "112 个 \`@stability experimental\` 函数" \
+# experimental 的数量从源码现算，不手抄。
+# 手抄的数字有两个坏处：加函数时忘了改 ⇒ 假红；改错了 ⇒ 假绿（文档说 112 个、
+# 实际 115 个，没人知道）。这里算一遍，文档里的数字必须与源码一致。
+exp_n=$(awk '
+  /^[A-Za-z_][A-Za-z0-9_]*\(\)/ {
+    fname = $0
+    sub(/\(.*/, "", fname)
+    blk = ""
+    if (prev ~ /^#/) {
+      blk = prev
+      for (i = NR - 2; i >= 1; i--) {
+        if (lines[i] ~ /^#/) { blk = lines[i] "\n" blk }
+        else { break }
+      }
+    }
+    if (fname !~ /^_/) {
+      stab = ""
+      n = split(blk, L, "\n")
+      for (j = 1; j <= n; j++) {
+        if (L[j] ~ /@stability[ \t]+/) {
+          rest = L[j]
+          sub(/^[^@]*@stability[ \t]+/, "", rest)
+          split(rest, W, /[ \t]+/)
+          stab = W[1]
+        }
+      }
+      if (stab == "experimental") n_exp++
+    }
+    next
+  }
+  { lines[NR] = $0; prev = $0 }
+  END { print n_exp + 0 }
+' "$TEST_ROOT"/lib/core/*.sh)
+assert_contains "$(cat "$DOC")" "$exp_n 个 \`@stability experimental\` 函数" \
   "the document must say the experimental surface is not promised"
 
 # CASE 2: 改一组合格的承诺返回码 ⇒ 已提交清单与源码对不上
