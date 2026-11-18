@@ -1,6 +1,7 @@
 # ShellKit 路线图：三层架构与版本验收状态
 
-状态：2026-11-17 更新（当前 **v0.27.0「1.0 契约」**已发布：标签、17 项资产与系统包全部验签通过）。
+状态：2026-11-18 更新（当前 **v1.0.0（GA）**已发布：标签、17 项资产与系统包全部验签通过；
+`v1.0.0-rc.1` 仍为 Pre-release，`releases/latest` 指向 GA）。
 本文是**方向**，不是承诺 ——
 每个版本的退出条件写清楚，条件不满足就不进下一个版本（见「迭代节奏」）。
 
@@ -38,6 +39,7 @@
 | v0.26.2 | 补签语义修复 | `sign_release.sh --file` 不再要求 `SHA256SUMS` 整份齐全（`dist` 只有一部分资产是补签的常态）；17 项资产全签名并经独立验签 |
 | v0.26.1 | 系统包 job 的两处附产品：签名工具与补签前提 | `packages` job 自装 minisign；`sign_release.sh --file` 点名模式不再要求 `SHA256SUMS` 整份齐全（`tests/test_release_signing_tool.sh` 盯着签名 job） |
 | v0.27.0 | 1.0 契约批：兼容承诺 + 全量分级 + 取消重跑 + 发布自检 + 矩阵 lifecycle | `docs/COMPATIBILITY.md` + `compatibility-check`；162 个公开函数 50 stable / 112 experimental、豁免名单为空；`tests/test_release_gate_cancelled.sh`；`tools/release_selfcheck.sh` + 不可选 self-check job；`upgrade_matrix` lifecycle 一格 |
+| v1.0.0-rc.1 | 预发布版本语义（semver 后缀）+ RC 真实验证 | `lib/core/ver.sh` 接受并排序 `x.y.z-pre`；`tools/rc_check.sh`（对输入工程只读、先复制再跑）+ `--test-cmd`；tag 含 `-` ⇒ `--prerelease` 不占 `latest`；RPM 预发布拆 `Version`/`Release` |
 
 ### v0.24.2 —— 数据安全收口（已发布 2026-11-16）
 
@@ -165,7 +167,7 @@ gates 兜底，只需扩集合）。
 
 退出条件：一次完整发布里，「下载 → 验签 → 安装 → 升级 → 卸载」全部由脚本自动判过。
 
-### v1.0.0 —— 稳定发行版（Planned）
+### v1.0.0 —— 稳定发行版（已发布 2026-11-18）
 
 只保留六条不能妥协的条件，其余都是加分项：
 
@@ -179,7 +181,18 @@ gates 兜底，只需扩集合）。
 6. 多平台 CI 持续稳定，真实发行包在目标系统上通过安装、升级、卸载验证
    （v0.27.0：取消自动重跑一次 + 发布后资产自检 + 连续三次全矩阵绿；lifecycle 一格已进矩阵）。
    RC 验证工具 `tools/rc_check.sh` 已就绪（对输入工程只读，先复制再跑；判据见
-   `docs/RELEASING.md`），**待用两个真实项目跑出证据**。
+   `docs/RELEASING.md`）；证据：`~/unix_script`（vendor 0.17.0→RC/GA，含
+   `tests/ci_run.sh --phase routing` 全量用例）与 `~/tools`（legacy 0.15.0→RC/GA，
+   `vendor --force` 通道），两个真实项目各跑出 install/upgrade/uninstall 证据。
+
+**结果**：`0ed8cd3` 发车，tag `v1.0.0`（GA，`releases/latest` 指向它）；
+`v1.0.0-rc.1` 保持 Pre-release（`isPrerelease=true`、`latest=false`）。
+17 项资产（含 `.deb` / `.rpm`）全部签名，`tools/verify_release.sh v1.0.0` 逐份验签通过、
+`tools/release_selfcheck.sh v1.0.0 --require-packages` 通过；从 `releases/latest` 取回
+`install.sh` 端到端安装（doctor / new / docs --check / 工程自测）全绿，且
+`SHELLKIT_MINISIGN_PUBKEY` 配了公钥时强制验签通过；发布资产公钥与 `docs/TRUST.md`
+钉住值逐字一致（跨渠道核对）。CI：`quality` 全矩阵绿（含 debian:12 / rockylinux:9 /
+openeuler amd64+arm64 四个 compat 格），`release` 流水线两个 job 全 success。
 
 ## 三、战略取舍
 
