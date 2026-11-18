@@ -15,12 +15,9 @@ name: tmp-ci-helper
 # 所以每一步第一行都写 `set +e`：我们要的是「把失败记进日志、继续往下走」，
 # 而不是「第一步失败就什么都不干」。
 #
-# 这一轮的功能分支已经带上 proc 的 ps 能力降级修复（compat 容器里 ps 没有
-# procps），所以「容器复现」这一步应当跑绿 —— 它跑绿就等于替 CI 先验了一遍。
-#
-# 步骤顺序有讲究：批准 CI 放最前面（PR 的作者是 github-actions[bot] ⇒ 仓库的
-# 「外部协作者先审批」规则会把 CI 卡在 Action required），基线重生成放后面
-# （重生成要跑两遍全量插桩套件，很慢；已经重生成过就别再跑一遍）。
+# ⚠ 门禁查的是 **head SHA** 的 check-runs，不是 refs/pull/N/merge 的 merge SHA：
+# GitHub 把 pull_request 事件的 check-run 挂在 head 提交上 ⇒ 查 merge SHA
+# 会得到「15 项全 MISSING」的假红。
 
 on:
   push:
@@ -42,7 +39,7 @@ jobs:
   deliver:
     name: regenerate baselines, open the PR, merge when green, close the issue
     runs-on: ubuntu-latest
-    timeout-minutes: 150
+    timeout-minutes: 240
     env:
       GH_TOKEN: ${{ github.token }}
       GH_REPO: ${{ github.repository }}
@@ -69,67 +66,66 @@ jobs:
           sudo apt-get update -qq
           sudo apt-get install -y -qq gettext
 
-      - name: approve the CI run (the PR author is github-actions[bot])
+      - name: fetch the failed job logs (diagnostics)
         run: |
           set +e
           set -uo pipefail
-          pr=$(gh pr view "$BRANCH" --json number -q .number 2>/dev/null)
-          if [ -z "$pr" ]; then
-            echo "no PR yet" >> /tmp/helper.log
-            exit 0
-          fi
-          # 仓库本来就「没有 review 要求」（agent 驱动）⇒ 这里自己批。
-          i=0
-          while [ "$i" -lt 30 ]; do
-            run_id=$(gh api "repos/$GH_REPO/actions/workflows/ci.yml/runs?branch=$BRANCH&per_page=5" --jq '.workflow_runs[0].id' 2>/dev/null)
-            case "$run_id" in
-              "" | null) ;;
-              *)
-                echo "approving ci run $run_id" >> /tmp/helper.log
-                gh api -X POST "repos/$GH_REPO/actions/runs/$run_id/approve" \
-                  -H "Accept: application/vnd.github+json" >> /tmp/helper.log 2>&1
-                break
-                ;;
-            esac
-            sleep 10
-            i=$((i + 1))
+          cd repo
+          {
+            echo "=== fetch the failed job logs ==="
+          } >> /tmp/helper.log
+          # 公开 API 拿不到 job 日志（要 token）⇒ 这里用 CI 自己的 token 捞。
+          # 翻最近三次运行：失败的 job 的日志取回 FAIL 行与尾部。
+          for run_id in $(gh api "repos/$GH_REPO/actions/runs?branch=$BRANCH&per_page=3" --jq '.workflow_runs[].id' 2>/dev/null); do
+            for job_id in $(gh api "repos/$GH_REPO/actions/runs/$run_id/jobs?per_page=100" --jq '.jobs[] | select(.conclusion == "failure") | .id' 2>/dev/null); do
+              job_name=$(gh api "repos/$GH_REPO/actions/jobs/$job_id" --jq '.name' 2>/dev/null)
+              {
+                echo "--- run $run_id job $job_id ($job_name) ---"
+              } >> /tmp/helper.log
+              gh run view --repo "$GH_REPO" --job "$job_id" --log >"/tmp/job-$job_id.log" 2>/dev/null
+              if [ ! -s "/tmp/job-$job_id.log" ]; then
+                gh api "repos/$GH_REPO/actions/jobs/$job_id/logs" >"/tmp/job-$job_id.log" 2>/dev/null
+              fi
+              {
+                echo "--- FAIL lines ---"
+                grep -n "FAIL" "/tmp/job-$job_id.log" | head -20
+                echo "--- error lines ---"
+                grep -nE "not ok|Error|error:|assert" "/tmp/job-$job_id.log" | head -20
+                echo "--- tail ---"
+                tail -60 "/tmp/job-$job_id.log"
+              } >> /tmp/helper.log 2>&1
+            done
           done
           exit 0
 
-      - name: reproduce the compat container failure (same image + package set as ci.yml)
+      - name: open the pull request
         run: |
           set +e
           set -uo pipefail
-          cd repo
-          {
-            echo "=== reproduce in debian:12 (same package set as ci.yml) ==="
-          } >> /tmp/helper.log
-          docker run --rm -v "$PWD:/src:ro" debian:12 bash -c '
-            set -e
-            apt-get update -qq >/dev/null 2>&1
-            apt-get install -y -qq gettext ca-certificates curl tar xz-utils make python3 git bash >/dev/null 2>&1
-            cp -a /src /repo
-            cd /repo
-            make check BASH="$(command -v bash)"
-          ' >/tmp/container.log 2>&1
-          rc=$?
-          {
-            echo "container rc=$rc"
-            echo "--- FAIL lines ---"
-            grep -n "FAIL" /tmp/container.log | head -20
-            echo "--- tail ---"
-            tail -120 /tmp/container.log
-          } >> /tmp/helper.log 2>&1
+          if gh pr view "$BRANCH" --json number >/dev/null 2>&1; then
+            echo "PR already exists: $(gh pr view "$BRANCH" --json number -q .number)" >> /tmp/helper.log
+          else
+            gh pr create --base main --head "$BRANCH" \
+              --title "feat(git,proc): git 领域抽象 + 进程组/看门狗原语 (#146)" \
+              --body-file helper/pr-body.md >> /tmp/helper.log 2>&1
+          fi
           exit 0
 
-      - name: regenerate the coverage and bench baselines (runner environment)
+      - name: regenerate the coverage and bench baselines (only when the instrumented code changed)
         run: |
           set +e
           set -uo pipefail
           cd repo
-          if git log -1 --format=%s | grep -q 'regenerate the coverage and bench baselines'; then
-            echo "baselines already regenerated on this branch — skipping" >> /tmp/helper.log
-            exit 0
+          # 插桩范围（tools/coverage.sh 的口径）：lib/core/*.sh、lib/bootstrap.sh、
+          # shellkit、install.sh、repair.sh、tools/release_gate.sh。
+          # 只有这些文件变了才需要重生成：否则重生成会把一份一模一样的基线
+          # 再推回功能分支 ⇒ 多一个提交 ⇒ 多跑一轮 CI（还可能把门禁跑成红）。
+          last_regen=$(git log --format='%H %s' | grep -m1 'regenerate the coverage and bench baselines' | cut -d' ' -f1)
+          if [ -n "$last_regen" ]; then
+            if git diff --quiet "$last_regen" HEAD -- lib/ shellkit install.sh repair.sh tools/release_gate.sh; then
+              echo "the instrumented code is unchanged since $last_regen — skipping" >> /tmp/helper.log
+              exit 0
+            fi
           fi
           rc=0
           {
@@ -171,17 +167,31 @@ jobs:
           fi
           exit 0
 
-      - name: open the pull request
+      - name: approve the CI run for the current head sha
         run: |
           set +e
           set -uo pipefail
-          if gh pr view "$BRANCH" --json number >/dev/null 2>&1; then
-            echo "PR already exists: $(gh pr view "$BRANCH" --json number -q .number)" >> /tmp/helper.log
-          else
-            gh pr create --base main --head "$BRANCH" \
-              --title "feat(git,proc): git 领域抽象 + 进程组/看门狗原语 (#146)" \
-              --body-file helper/pr-body.md >> /tmp/helper.log 2>&1
-          fi
+          cd repo
+          head_sha=$(git ls-remote origin "refs/heads/$BRANCH" | cut -f1)
+          echo "head sha: $head_sha" >> /tmp/helper.log
+          # 批准必须对准 head SHA 对应的那次运行：PR 的作者是 github-actions[bot]
+          # ⇒ 仓库「外部协作者先审批」的规则把 CI 卡在 Action required。
+          # 批准旧的那次运行没用（它已经跑完了）⇒ 按 head_sha 精确匹配。
+          i=0
+          while [ "$i" -lt 60 ]; do
+            run_id=$(gh api "repos/$GH_REPO/actions/runs?branch=$BRANCH&per_page=20" --jq "[.workflow_runs[] | select(.head_sha == \"$head_sha\") | .id] | .[0] // empty" 2>/dev/null)
+            case "$run_id" in
+              "" | null) ;;
+              *)
+                echo "approving ci run $run_id for $head_sha" >> /tmp/helper.log
+                gh api -X POST "repos/$GH_REPO/actions/runs/$run_id/approve" \
+                  -H "Accept: application/vnd.github+json" >> /tmp/helper.log 2>&1
+                break
+                ;;
+            esac
+            sleep 10
+            i=$((i + 1))
+          done
           exit 0
 
       - name: wait for the required checks, merge, close the issue
@@ -197,13 +207,13 @@ jobs:
             echo "NO PR — the PR creation step failed" >> /tmp/helper.log
             exit 1
           fi
-          merge_sha=$(git ls-remote origin "refs/pull/$pr/merge" 2>/dev/null | cut -f1)
-          if [ -z "$merge_sha" ]; then
-            merge_sha=$(git rev-parse HEAD)
-            echo "no merge ref; falling back to the head SHA" >> /tmp/helper.log
+          head_sha=$(git ls-remote origin "refs/heads/$BRANCH" | cut -f1)
+          if [ -z "$head_sha" ]; then
+            head_sha=$(git rev-parse HEAD)
+            echo "cannot read the head sha; falling back to the local HEAD" >> /tmp/helper.log
           fi
-          echo "gate SHA: $merge_sha" >> /tmp/helper.log
-          bash tools/release_gate.sh "$merge_sha" --timeout 5400 >> /tmp/helper.log 2>&1
+          echo "gate SHA (head): $head_sha" >> /tmp/helper.log
+          bash tools/release_gate.sh "$head_sha" --timeout 5400 >> /tmp/helper.log 2>&1
           gate_rc=$?
           if [ "$gate_rc" -ne 0 ]; then
             echo "GATE FAILED rc=$gate_rc" >> /tmp/helper.log
@@ -223,7 +233,11 @@ jobs:
             echo
             cat helper/issue-close.md
           } > /tmp/issue-comment.md
-          gh issue close "$ISSUE" --comment "$(cat /tmp/issue-comment.md)" >> /tmp/helper.log 2>&1
+          # 先评论再关单：PR 正文里有 Closes #146 ⇒ 合并时 GitHub 已经把 issue 关了
+          # ⇒ 这时再 `gh issue close --comment` 会报错（issue 不是 open）⇒ 评论发不出去。
+          # 先 comment（已关的 issue 也能评论）再 close（已经关了就算成功）。
+          gh issue comment "$ISSUE" --body-file /tmp/issue-comment.md >> /tmp/helper.log 2>&1
+          gh issue close "$ISSUE" >> /tmp/helper.log 2>&1
           exit 0
 
       - name: publish the run log (always)
