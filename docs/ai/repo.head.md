@@ -16,7 +16,7 @@
                               SHELLKIT_MODULES="log fs" 只加载这两个模块和它们的传递依赖
     lib/modules.txt           模块清单的唯一真相源：两列 —— 模块名 + 它依赖的模块
                               （bootstrap、shdoc、站点都读它）
-    lib/core/<module>.sh      24 个模块，一个模块一个主题
+    lib/core/<module>.sh      26 个模块，一个模块一个主题
     lib/posix/                POSIX 子集（设备侧）：busybox ash / dash 上能跑的那一小撮
                               shellkit-posix.sh（只写 POSIX 语法的库）
                               capabilities.tsv（能力清单：哪些函数设备侧有、哪些没有；机器生成）

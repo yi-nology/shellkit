@@ -49,7 +49,7 @@ shellkit vendor .
 ```
 your-project/
 └─ vendor/shellkit/
-   ├─ lib/           24 个模块（bootstrap.sh + core/*.sh）
+   ├─ lib/           26 个模块（bootstrap.sh + core/*.sh）
    ├─ locale/        gettext 译文（en / zh_CN / zh_Hant）
    ├─ templates/     脚手架模板（副本自己就能 new / upgrade）
    ├─ tests/         测试基建（test_helper.sh + run.sh）
@@ -69,7 +69,7 @@ set -euo pipefail
 . "$(cd "$(dirname "$0")/.." && pwd)/vendor/shellkit/lib/bootstrap.sh"
 ```
 
-就这些。`bootstrap.sh` 会按拓扑序把 24 个模块加载好，设置 `SK_*` 常量与退出码，
+就这些。`bootstrap.sh` 会按拓扑序把 26 个模块加载好，设置 `SK_*` 常量与退出码，
 **不改你的 shell 选项、不改 cwd**——你的脚本还是你说了算。
 
 ### 为什么是 `vendor/` 而不是装到系统里
@@ -791,6 +791,28 @@ vendor 模式，缺 `vendor/modules.txt` 直接报 `inconsistent vendoring`。�
 | `repair.sh --project DIR` | 只认 `vendor/shellkit` 这个形状，别的位置的残骸不收拾 | 按同一套规则解析落点；配置非法时**什么都不删**并明确报错（退出码 1） | 副本在 `third_party/shellkit` 的工程 |
 
 默认落点没变：不写 `.shellkit-vendor-dir`、不设环境变量时，一切与 1.1.0 完全一样。
+
+这一版还多了两个模块（**只加不改**，既有函数的行为一个字没动）：
+
+| 模块 | 干什么 | 关键函数 |
+|---|---|---|
+| `proc` | 进程组与看门狗：后台引导、整组停止、带退避的自愈 | `proc_start` `proc_stop` `proc_is_running` `proc_watchdog` |
+| `git` | git 领域的正确姿势：默认分支、脏仓守卫、浅克隆取 tag、受控快进、worktree | `git_default_branch` `git_is_dirty` `git_tag` `git_fetch` `git_fast_forward` `git_reset_hard` `git_worktree_add` |
+
+两族函数都标 `experimental`（不在 1.x 兼容承诺内）。命名上刻意**不叫** `svc_start`/`svc_stop`：
+那两个名字已经被 systemd/launchd 的服务单元语义占用了，混用等于悄悄改掉既有调用方的行为。
+「进程组级」的原语叫 `proc_*`，与「服务单元级」的 `svc_*` 是一层楼上的关系。
+
+`git_tag` 的浅克隆处理是三层回退，第三层容易被忽略：
+**tag 指向的是祖先提交**时（CI 里 `git clone --depth 1` 拉到的 tag 多半如此），
+只补 tag 不够 —— 浅边界把祖先链截断了，`git describe` 仍认不出这个 tag 是不是
+HEAD 的祖先，于是仍然失败。这一层用 `git fetch --deepen=N` 把边界推回去。
+
+| 环境变量 | 作用 | 默认 |
+|---|---|---|
+| `SHELLKIT_GIT_NO_FETCH` | `git_tag` 在浅克隆里不联网（跳过补 tag 与补深度） | `0`（联网） |
+| `SHELLKIT_GIT_DEEPEN` | `git_tag` 补深度时一次推多少个提交 | `50` |
+| `SHELLKIT_PROC_DIR` | `proc_*` 的 pid 文件与日志落点 | `${TMPDIR:-/tmp}/shellkit-proc-<uid>`（权限 700） |
 
 ### 1.0.0 → 1.1.0：会改变结果的行为变化
 

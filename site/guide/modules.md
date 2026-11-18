@@ -1,9 +1,9 @@
 # 模块地图
 
-`lib/bootstrap.sh` 是唯一入口，一次性按**拓扑序**加载全部 24 个模块。你不用挑着 source，
+`lib/bootstrap.sh` 是唯一入口，一次性按**拓扑序**加载全部 26 个模块。你不用挑着 source，
 也不该复制某个模块的实现进自己的脚本 —— 那是把「同一个坑踩两遍」的另一种写法。
 
-<ShotFigure src="/diagrams/modules-map.svg" caption="24 个模块分五层：基础 → 文件与系统 → 进程与版本 → 集成 → 交互与框架；依赖只能向上" />
+<ShotFigure src="/diagrams/modules-map.svg" caption="26 个模块分五层：基础 → 文件与系统 → 进程与版本 → 集成 → 交互与框架；依赖只能向上" />
 
 ## 一张表
 
@@ -32,6 +32,9 @@
 | [prompt](/reference/prompt.md) | 交互 | `ask` `ask_yn` `ask_choice` `confirm` |
 | [cli](/reference/cli.md) | 注册式命令框架 | `cli_group` `cli_cmd` `cli_run` `cli_opt` `cli_opts` `cli_has` `cli_usage_global` |
 | [man](/reference/man.md) | 生成 man page | `man_page` `man_module_page` `man_write_all` `man_modules` `man_count_functions` |
+| [vendor](/reference/vendor.md) | 库副本落点解析 | `vendor_dir` `vendor_dir_rel` `vendor_dir_source` `vendor_dir_detect` |
+| [proc](/reference/proc.md) | 进程组与看门狗 | `proc_start` `proc_stop` `proc_is_running` `proc_watchdog` |
+| [git](/reference/git.md) | git 领域的正确姿势 | `git_default_branch` `git_is_dirty` `git_tag` `git_fetch` `git_fast_forward` `git_reset_hard` `git_worktree_add` |
 
 ## 加载顺序不是字母序
 
@@ -56,7 +59,7 @@ str          error
 
 ## 只加载你要的模块
 
-默认全量加载（24 个模块）。真要瘦下来：
+默认全量加载（26 个模块）。真要瘦下来：
 
 ```bash
 SHELLKIT_MODULES="log fs" . ./vendor/shellkit/lib/bootstrap.sh
