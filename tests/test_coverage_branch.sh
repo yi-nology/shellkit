@@ -26,13 +26,14 @@ COV_TIMEOUT=240
 _cov_run() {
   local __outvar=$1
   shift
+  local __tool="${COV_TOOL:-$TOOL}"
   local __rc=0
   _cov_out="$TEST_TMP_ROOT/cov.stdout"
   _cov_err="$TEST_TMP_ROOT/cov.stderr"
   if command -v timeout >/dev/null 2>&1; then
-    timeout "$COV_TIMEOUT" bash "$TOOL" "$@" >"$_cov_out" 2>"$_cov_err" </dev/null || __rc=$?
+    timeout "$COV_TIMEOUT" bash "$__tool" "$@" >"$_cov_out" 2>"$_cov_err" </dev/null || __rc=$?
   else
-    bash "$TOOL" "$@" >"$_cov_out" 2>"$_cov_err" </dev/null || __rc=$?
+    bash "$__tool" "$@" >"$_cov_out" 2>"$_cov_err" </dev/null || __rc=$?
   fi
   printf -v "$__outvar" '%s' "$__rc"
   COV_STDOUT="$_cov_out"
@@ -153,9 +154,24 @@ assert_not_contains "$out" "lib/core/mini.sh:mini_alpha:1" \
 
 # -------------------------------------------------------------------------
 # CASE 2：正对照 —— 基线 = 当前未覆盖集合 ⇒ 绿
+#
+# 基线用 --write-baseline 生成：这样它带得上环境指纹（os/arch/jq/python3），
+# 守卫才有东西可比 —— 手搓的白名单没有指纹，只能走「守卫不生效」那条路。
 # -------------------------------------------------------------------------
-_cov_whitelist "$COV_STDOUT" "$base"
-[ -s "$base" ] || _fail "the parsed whitelist must not be empty"
+rc=0
+_cov_run rc --branch --root "$d" --suite 'bash tests/run.sh' --guards '' --baseline "$base" --write-baseline
+assert_eq "0" "$rc" "writing the baseline must succeed"
+[ -s "$base" ] || _fail "the written baseline must not be empty"
+
+# 报告里的白名单与写出来的基线必须一致（内容，不含指纹那一行）
+_cov_whitelist "$COV_STDOUT" "$base.arms"
+grep -v '^# ' "$base" >"$base.arms2" || true
+assert_eq "$(cat "$base.arms")" "$(cat "$base.arms2")" \
+  "the written baseline must list exactly the arms the report calls uncovered"
+
+# 基线必须记下生成环境（环境守卫靠它）
+assert_contains "$(cat "$base")" "# 生成环境: os=" \
+  "the written baseline must record the environment fingerprint"
 
 rc=0
 _cov_run rc --branch --root "$d" --suite 'bash tests/run.sh' --guards '' --baseline "$base"
@@ -248,5 +264,51 @@ _cov_whitelist "$COV_STDOUT" "$rb"
 rc=0
 _cov_run_bash rc /bin/bash --branch --suite 'bash tests/test_str.sh' --guards '' --baseline "$rb"
 assert_eq "0" "$rc" "the tool must pass under /bin/bash with a complete baseline"
+
+# -------------------------------------------------------------------------
+# CASE 9：环境指纹 —— 基线是在别的环境生成的 ⇒ 门禁必须立刻红并点名
+#
+# 「未覆盖」是**运行时**结论：装了 jq 走 jq 臂、没装走 python3 臂；Linux 与
+# macOS 走的也不是同一条臂 ⇒ 跨环境的基线与当前环境不可比（#143 的 http.sh
+# 臂、#145 的 retry 臂都栽在这上面）。指纹对不上时，红的原因必须一眼看出
+# 是「环境不同」而不是「代码坏了」—— 所以要能指出是哪个维度对不上。
+# -------------------------------------------------------------------------
+bad="$d/base.badenv"
+__orig=$(cat "$base")
+case "$__orig" in
+  *'jq=yes'*) __bad=${__orig/jq=yes/jq=never} ;;
+  *'jq=no'*) __bad=${__orig/jq=no/jq=never} ;;
+  *) _fail "the baseline must record the jq dimension" ;;
+esac
+printf '%s\n' "$__bad" >"$bad"
+assert_ne "$__orig" "$__bad" "the mismatched baseline must differ from the original"
+
+rc=0
+_cov_run rc --branch --root "$d" --suite 'bash tests/run.sh' --guards '' --baseline "$bad"
+assert_eq "5" "$rc" "a baseline generated in another environment must fail the gate"
+err=$(cat "$COV_STDERR")
+assert_contains "$err" "基线的生成环境与当前环境不一致" \
+  "the mismatch must be reported as an environment difference"
+assert_contains "$err" "jq" "the mismatch must name the differing dimension"
+
+# -------------------------------------------------------------------------
+# CASE 10：负对照 —— 把守卫改坏（永远放行）⇒ 这条判据就没有承重
+#
+# 守卫要是根本没被调用，CASE 9 也会「因为别的原因红」—— 所以这里把守卫改坏
+# 再跑一遍：改坏之后必须**不再**红。不变红 ⇒ CASE 9 没有判据能力。
+# -------------------------------------------------------------------------
+mut="$TEST_TMP_ROOT/coverage.mutant.sh"
+cp "$TOOL" "$mut" || _fail "cannot copy the tool for the mutation"
+sed 's/if \[ -n "\$__cov_diff" \]; then/if false; then/' "$mut" >"$mut.tmp" || true
+mv "$mut.tmp" "$mut"
+if cmp -s "$TOOL" "$mut"; then
+  _fail "the mutation did not change the tool (the guard anchor moved)"
+fi
+
+COV_TOOL="$mut"
+rc=0
+_cov_run rc --branch --root "$d" --suite 'bash tests/run.sh' --guards '' --baseline "$bad"
+COV_TOOL=""
+assert_ne "5" "$rc" "with the guard broken the mismatched baseline must not be rejected by it"
 
 exit 0
