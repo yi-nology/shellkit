@@ -1997,3 +1997,48 @@ man_count_functions —— 公开函数总数
 
 - 0 总是成功
 
+## vendor
+
+### `vendor_dir_rel`
+
+vendor_dir_rel PROJECT_DIR —— 库副本相对工程目录的路径（配置值原样）   默认是 vendor/shellkit；配了 SHELLKIT_VENDOR_DIR 或 .shellkit-vendor-dir   就是那个值。
+
+**稳定性**：experimental
+
+**退出码**
+
+- 0 成功（stdout 是相对路径）
+- 3 工程目录不存在，或落点越出工程目录
+
+### `vendor_dir`
+
+vendor_dir PROJECT_DIR —— 库副本在工程里的绝对路径
+
+**稳定性**：experimental
+
+**退出码**
+
+- 0 成功（stdout 是绝对路径）
+- 3 工程目录不存在，或落点越出工程目录
+
+### `vendor_dir_source`
+
+vendor_dir_source PROJECT_DIR —— 落点设置是从哪儿来的   用来把「为什么落在这个地方」讲清楚，而不是让人猜。
+
+**稳定性**：experimental
+
+**退出码**
+
+- 0 总是成功（stdout 是 env / file / default）
+
+### `vendor_dir_detect`
+
+vendor_dir_detect PROJECT_DIR —— 工程里「别处」的库副本   扫一层子目录，找形如 <子目录>/shellkit 的库副本（里面要有 lib/bootstrap.sh）。   解析出来的落点本身不算 —— 这里找的是「落点之外的那一份」。
+
+**稳定性**：experimental
+
+**退出码**
+
+- 0 找到了（stdout 是相对工程目录的路径）
+- 1 没找到
+

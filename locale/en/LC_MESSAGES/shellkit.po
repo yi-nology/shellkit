@@ -4,7 +4,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: shellkit\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-11-18 15:39+0800\n"
+"POT-Creation-Date: 2026-11-18 17:16+0800\n"
 "PO-Revision-Date: 2026-11-08 00:00+0800\n"
 "Last-Translator: shellkit contributors\n"
 "Language-Team: shellkit contributors\n"
@@ -424,6 +424,12 @@ msgstr ""
 msgid "value not in allowed set"
 msgstr ""
 
+msgid "target directory does not exist"
+msgstr ""
+
+msgid "the vendor directory must be inside the project directory"
+msgstr ""
+
 msgid "the library is only partially loaded"
 msgstr ""
 
@@ -518,6 +524,18 @@ msgid "the restored file does not match the kept copy"
 msgstr ""
 
 msgid "both copies are broken, nothing was removed, reinstall shellkit"
+msgstr ""
+
+msgid "the vendored library is at a different location"
+msgstr ""
+
+msgid "point shellkit at it instead of creating a second copy"
+msgstr ""
+
+msgid "refusing to write outside the project directory"
+msgstr ""
+
+msgid "refusing to write through a symlink"
 msgstr ""
 
 msgid "syncing"
@@ -642,9 +660,6 @@ msgstr ""
 msgid "--diff requires --check"
 msgstr ""
 
-msgid "target directory does not exist"
-msgstr ""
-
 msgid "it does not look like a shellkit-generated project"
 msgstr ""
 
@@ -666,9 +681,6 @@ msgstr ""
 msgid ""
 "the manifest predates the fingerprint baseline; files that cannot be "
 "verified are left alone"
-msgstr ""
-
-msgid "refusing to write outside the project directory"
 msgstr ""
 
 msgid "the target path is blocked by a file"
@@ -782,7 +794,13 @@ msgstr ""
 msgid "the vendored library path is not a directory"
 msgstr ""
 
+msgid "the vendored library path is invalid"
+msgstr ""
+
 msgid "vendor copy matches the bundled library"
+msgstr ""
+
+msgid "point shellkit at it"
 msgstr ""
 
 msgid "no vendored library found"
@@ -923,9 +941,6 @@ msgid "the target exists and is not a directory"
 msgstr ""
 
 msgid "recovering the skill copy after an interrupted install"
-msgstr ""
-
-msgid "refusing to write through a symlink"
 msgstr ""
 
 msgid "the skill is up to date"

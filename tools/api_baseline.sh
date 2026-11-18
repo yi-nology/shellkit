@@ -596,6 +596,10 @@ ask_yn	0,3	pv=""; ask_yn pv "probe" "y" || exit 81; [ "$pv" = "y" ] || exit 82; 
 ask_choice	0,3	pv=""; ask_choice pv "probe" "a|b" "a" || exit 81; [ "$pv" = "a" ] || exit 82; exit 0
 confirm	0,1	confirm "probe" "y" || exit 81; confirm "probe" "n"; prc=$?; [ "$prc" = 1 ] || exit 82; exit 0
 svc_platform	0	svc_platform >/dev/null || exit 81; exit 0
+vendor_dir_rel	0,3	mkdir -p vendor_dir_rel-d; [ "$(vendor_dir_rel vendor_dir_rel-d)" = "vendor/shellkit" ] || exit 81; SHELLKIT_VENDOR_DIR=../outside vendor_dir_rel vendor_dir_rel-d >/dev/null 2>&1; prc=$?; [ "$prc" = 3 ] || exit 82; exit 0
+vendor_dir	0,3	mkdir -p vendor_dir-d; out=$(vendor_dir vendor_dir-d) || exit 81; case "$out" in /*) ;; *) exit 82 ;; esac; SHELLKIT_VENDOR_DIR=/tmp/elsewhere vendor_dir vendor_dir-d >/dev/null 2>&1; prc=$?; [ "$prc" = 3 ] || exit 83; exit 0
+vendor_dir_source	0	mkdir -p vendor_dir_source-d; [ "$(vendor_dir_source vendor_dir_source-d)" = "default" ] || exit 81; exit 0
+vendor_dir_detect	0,1	mkdir -p vendor_dir_detect-d; vendor_dir_detect vendor_dir_detect-d >/dev/null 2>&1; prc=$?; [ "$prc" = 1 ] || exit 82; exit 0
 SK_AB_PROBES
 
   while IFS=$'\t' read -r name reason; do

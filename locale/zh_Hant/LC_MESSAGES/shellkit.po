@@ -4,7 +4,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: shellkit\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-11-18 15:39+0800\n"
+"POT-Creation-Date: 2026-11-18 17:16+0800\n"
 "PO-Revision-Date: 2026-11-08 00:00+0800\n"
 "Last-Translator: shellkit contributors\n"
 "Language-Team: shellkit contributors\n"
@@ -424,6 +424,12 @@ msgstr "路徑必須是絕對路徑"
 msgid "value not in allowed set"
 msgstr "值不在允許的集合中"
 
+msgid "target directory does not exist"
+msgstr "目標目錄不存在"
+
+msgid "the vendor directory must be inside the project directory"
+msgstr "庫副本目錄必須在工程目錄之內"
+
 msgid "the library is only partially loaded"
 msgstr "程式庫只載入了一部分"
 
@@ -519,6 +525,18 @@ msgstr "放回去的檔案與暫存副本內容不一致"
 
 msgid "both copies are broken, nothing was removed, reinstall shellkit"
 msgstr "兩份副本都不完整；什麼都沒刪，請重裝 shellkit"
+
+msgid "the vendored library is at a different location"
+msgstr "庫副本在別的位置"
+
+msgid "point shellkit at it instead of creating a second copy"
+msgstr "把 shellkit 指過去，而不是再建一份"
+
+msgid "refusing to write outside the project directory"
+msgstr "拒絕寫到工程目錄之外"
+
+msgid "refusing to write through a symlink"
+msgstr "拒絕順著符號連結寫入"
 
 msgid "syncing"
 msgstr "正在同步"
@@ -644,9 +662,6 @@ msgstr "升級日誌已損壞；部分條目被忽略"
 msgid "--diff requires --check"
 msgstr "--diff 必須與 --check 一起用"
 
-msgid "target directory does not exist"
-msgstr "目標目錄不存在"
-
 msgid "it does not look like a shellkit-generated project"
 msgstr "看起來不是 shellkit 產生的工程"
 
@@ -669,9 +684,6 @@ msgid ""
 "the manifest predates the fingerprint baseline; files that cannot be "
 "verified are left alone"
 msgstr "清單早於指紋基線；無法核對的檔案保持原樣"
-
-msgid "refusing to write outside the project directory"
-msgstr "拒絕寫到工程目錄之外"
 
 msgid "the target path is blocked by a file"
 msgstr "目標的父路徑是個檔案，建不出來"
@@ -784,8 +796,14 @@ msgstr "vendor 副本已漂移"
 msgid "the vendored library path is not a directory"
 msgstr "vendor 程式庫路徑不是目錄"
 
+msgid "the vendored library path is invalid"
+msgstr "庫副本路徑非法"
+
 msgid "vendor copy matches the bundled library"
 msgstr "vendor 副本與內建程式庫一致"
+
+msgid "point shellkit at it"
+msgstr "把 shellkit 指過去"
 
 msgid "no vendored library found"
 msgstr "未找到 vendor 程式庫"
@@ -926,9 +944,6 @@ msgstr "目標已存在且不是目錄"
 
 msgid "recovering the skill copy after an interrupted install"
 msgstr "恢復被打斷的 skill 安裝：正在從舊副本還原"
-
-msgid "refusing to write through a symlink"
-msgstr "拒絕順著符號連結寫入"
 
 msgid "the skill is up to date"
 msgstr "skill 已是最新"
