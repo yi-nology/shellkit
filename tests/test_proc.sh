@@ -28,27 +28,44 @@ sk_stat_is_real() {
 sk_stat_of() {
   ps -o stat= -p "$1" 2>/dev/null | tail -n 1 | tr -d '[:space:]'
 }
-# 假 ps：busybox 风格 —— 不认 `stat=` 的表头抑制，先打一行表头（STAT）再打真状态。
-# 没有它，这条路径在本地永远测不到（本地是 procps，ps 只打一行）。
-real_ps=$(command -v ps 2>/dev/null || true)
+# 假 ps：一个**桩**，不是转发。
+# 转发（把请求转给环境里真实的 ps）会把判据绑死在环境上：macOS 的 CI 上真实 ps
+# 的 stat= 行为与本地不同 ⇒ 同一条判据时绿时红 ⇒ 判据没有判据能力。
+# 桩的行为是确定的：busybox 风格 —— 不认 `stat=` 的表头抑制，先打一行表头（STAT）
+# 再打真状态；哪个 pid 是「假僵尸」由环境变量 SK_FAKE_ZOMBIE 决定。
 fakebin="$d/fakebin"
-if [ -n "$real_ps" ]; then
-  mkdir -p "$fakebin"
-  cat >"$fakebin/ps" <<EOF
+mkdir -p "$fakebin"
+cat >"$fakebin/ps" <<'EOF'
 #!/bin/sh
-for a in "\$@"; do
-  case "\$a" in
-    stat=) echo STAT; break ;;
+for a in "$@"; do
+  case "$a" in
+    stat=)
+      echo STAT
+      pid=""
+      prev=""
+      for b in "$@"; do
+        case "$prev" in
+          -p) pid="$b" ;;
+        esac
+        prev="$b"
+      done
+      if [ -n "$pid" ] && [ "$pid" = "$SK_FAKE_ZOMBIE" ]; then
+        echo Z+
+      else
+        echo Ss
+      fi
+      exit 0
+      ;;
   esac
 done
-exec "$real_ps" "\$@"
+exit 0
 EOF
-  chmod +x "$fakebin/ps"
-  # 「取最后一行」这条判据也要有承重：取全部输出 ⇒ 表头被拼在状态前面（STATSs）
-  # ⇒ 白名单认不出来 ⇒ 精简环境里用例以为能看状态、实际看不到。
-  if ! sk_stat_is_real "$(PATH="$fakebin:$PATH" sk_stat_of $$)"; then
-    _fail "the process state is taken from the last line of ps (the header comes first)"
-  fi
+chmod +x "$fakebin/ps"
+# 「取最后一行」这条判据也要有承重：取全部输出 ⇒ 表头被拼在状态前面（STATSs）
+# ⇒ 白名单认不出来 ⇒ 精简环境里用例以为能看状态、实际看不到。
+_fake_st=$(PATH="$fakebin:$PATH" sk_stat_of $$)
+if ! sk_stat_is_real "$_fake_st"; then
+  _fail "the process state is taken from the last line of ps (the header comes first): got '$_fake_st'"
 fi
 # 这条判据自己也要有承重：把白名单放宽成「首字母大写」就会把表头 STAT 当成状态
 # ⇒ 精简环境里用例以为能看状态、实际什么都看不到 ⇒ 假红。
@@ -91,8 +108,23 @@ if [ -f "$SHELLKIT_PROC_DIR/demo.pid" ]; then
 fi
 
 # ---- 整组停止：子进程不能残留（只 kill 主进程 ⇒ 端口还占着）----
-if [ "$have_pgid" != "1" ]; then
-  printf 'SKIP: this environment has no usable ps process-group field\n' >&2
+# 「还活着」不等于 kill -0 成功：僵尸也还在进程表里（kill -0 对僵尸也成功）。
+# 容器里 PID 1 常常不是 init（GitHub 的容器 job 用 `tail -f /dev/null` 占着 PID 1）
+# ⇒ 没人回收 ⇒ 被组杀掉的子进程永远停在 Z 态 ⇒ 只看 kill -0 会把「已经死了」
+# 误判成「还活着」（openEuler 的 compat job 就是这样红的：组杀其实生效了，
+# 子进程确实死了，只是没人收尸）。判据要和库里的「活着」是同一个意思。
+sk_alive() {
+  local __p="${1:-}" __st
+  [ -n "$__p" ] || return 1
+  kill -0 "$__p" 2>/dev/null || return 1
+  __st=$(sk_stat_of "$__p")
+  case "$__st" in
+    Z*) return 1 ;;
+  esac
+  return 0
+}
+if [ "$have_pgid" != "1" ] || [ "$have_stat" != "1" ]; then
+  printf 'SKIP: this environment cannot report the ps process group or the process state\n' >&2
 else
   assert_exit_code 0 proc_start grp sh -c 'sleep 30 & echo $! > "'"$d"'/child.pid"; wait'
   # 等子进程起来
@@ -109,11 +141,11 @@ else
   assert_exit_code 0 proc_stop grp
   i=0
   while [ "$i" -lt 50 ]; do
-    kill -0 "$child" 2>/dev/null || break
+    sk_alive "$child" || break
     sleep 0.1
     i=$((i + 1))
   done
-  if kill -0 "$child" 2>/dev/null; then
+  if sk_alive "$child"; then
     _fail "the whole process group is stopped (the child survived)"
   fi
 fi
@@ -140,6 +172,43 @@ assert_exit_code 1 proc_is_running stale
 if [ -f "$SHELLKIT_PROC_DIR/stale.pid" ]; then
   _fail "a stale pid file is cleaned up"
 fi
+
+# ---- 表头在前（busybox 风格的 ps）：僵尸仍然要判得出来、pid 文件仍然要清掉 ----
+# 判据承重的点：_sk_proc_alive 取 ps 输出的**最后一行**（真状态）。
+# 取全部输出 ⇒ 表头被拼在状态前面（STATZ+）⇒ 僵尸被当成活进程 ⇒ pid 文件清不掉
+# —— 而「僵尸 pid 文件清不掉」正是这一层要根治的坑。
+# 去掉库里那一行修复（取全部输出）后，这一条必须变红。
+#
+# 这里用桩 ps 而不是真僵尸：这条判据要验的是「表头在前时怎么读状态」，
+# 与环境能不能造出真僵尸无关 ⇒ 不该被环境能力牵着走。
+sleep 30 &
+fakez=$!
+printf '%s\n' "$fakez" >"$SHELLKIT_PROC_DIR/fakez.pid"
+SK_FAKE_ZOMBIE="$fakez" PATH="$fakebin:$PATH" assert_exit_code 1 proc_is_running fakez
+if [ -f "$SHELLKIT_PROC_DIR/fakez.pid" ]; then
+  _fail "a zombie pid file is cleaned up even when ps prints a header first"
+fi
+kill "$fakez" 2>/dev/null || true
+
+# 判据「僵尸不算活着」自己也要有承重：桩 ps 报告 Z+ ⇒ 这个进程必须判成「没活着」。
+# 去掉 Z 分支 ⇒ 判成活着 ⇒ 这一条变红。
+sleep 30 &
+fakez2=$!
+if SK_FAKE_ZOMBIE="$fakez2" PATH="$fakebin:$PATH" sk_alive "$fakez2"; then
+  kill "$fakez2" 2>/dev/null || true
+  _fail "a zombie process is not alive"
+fi
+kill "$fakez2" 2>/dev/null || true
+
+# 反方向也要有承重：桩 ps 报 Ss（普通进程）⇒ 必须判成「还活着」。
+# 把 Z 分支写成 * （一律判成没活着）⇒ 这一条变红。
+sleep 30 &
+alivez=$!
+if ! SK_FAKE_ZOMBIE= PATH="$fakebin:$PATH" sk_alive "$alivez"; then
+  kill "$alivez" 2>/dev/null || true
+  _fail "a running process is alive"
+fi
+kill "$alivez" 2>/dev/null || true
 
 # ---- 停一个没在跑的 ⇒ 成功（幂等）----
 assert_exit_code 0 proc_stop never-started
@@ -217,19 +286,6 @@ else
   assert_exit_code 1 proc_is_running zombie
   if [ -f "$SHELLKIT_PROC_DIR/zombie.pid" ]; then
     _fail "a zombie pid file is cleaned up"
-  fi
-  # 探活在「表头在前」的 ps 下也必须认出僵尸：这一条判据承重的点是
-  # _sk_proc_alive 取 ps 输出的**最后一行**（真状态）。
-  # 取全部输出会把表头拼在状态前面（STATZ+）⇒ 僵尸被当成活进程 ⇒ pid 文件清不掉
-  # —— 而「僵尸 pid 文件清不掉」正是这一层要根治的坑。
-  # 去掉库里那一行修复后，这一条必须变红。
-  if [ -n "$real_ps" ]; then
-    # 僵尸还在（父亲还活着）⇒ 重写一份 pid 文件再验一次
-    printf '%s\n' "$zpid" >"$SHELLKIT_PROC_DIR/zombie.pid"
-    PATH="$fakebin:$PATH" assert_exit_code 1 proc_is_running zombie
-    if [ -f "$SHELLKIT_PROC_DIR/zombie.pid" ]; then
-      _fail "a zombie pid file is cleaned up even when ps prints a header first"
-    fi
   fi
   kill "$zparent" 2>/dev/null || true
 fi
