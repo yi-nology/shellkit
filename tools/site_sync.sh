@@ -135,6 +135,7 @@ _emit_page "$DOCS/RELEASING.md" "$SITE/guide/releasing.md" || _die 'failed to wr
 _emit_page "$DOCS/MAN.md" "$SITE/guide/man.md" || _die 'failed to write guide/man.md'
 _emit_page "$DOCS/JSON.md" "$SITE/guide/json.md" || _die 'failed to write guide/json.md'
 _emit_page "$DOCS/SECURITY.md" "$SITE/guide/security.md" || _die 'failed to write guide/security.md'
+_emit_page "$DOCS/POSIX.md" "$SITE/guide/posix.md" || _die 'failed to write guide/posix.md'
 
 # ---------- 2. API 参考：总览 + 每模块一页 ----------
 
@@ -217,6 +218,8 @@ _en_notice "$SITE/en/guide/json.md" 'Machine-readable output' 'json' \
   'The field contract for shellkit doctor --json: version, platform, bash, modules, dependencies, vendor, checks and the verdict.'
 _en_notice "$SITE/en/guide/security.md" 'Security boundaries' 'security' \
   'The four boundaries shellkit holds: paths, permissions, sensitive arguments and execution isolation — each with the machine checks that enforce it.'
+_en_notice "$SITE/en/guide/posix.md" 'POSIX subset' 'posix' \
+  'The device-side subset: a POSIX-only library for busybox ash and dash, with a capability list that tells a device script which functions are available.'
 
 # ---------- 5. 截图 ----------
 
@@ -230,5 +233,5 @@ done
 # 清单是扫出来的：新增页面自动进清单，不会出现「加了页面但 llms.txt 里没有」。
 bash "$ROOT/tools/llms_txt.sh" || _die 'failed to generate llms.txt' 1
 
-_say "pages: 8 synced, 1 reference index, $__nfunc functions across $(printf '%s\n' $MODULES | wc -l | tr -d ' ') modules"
+_say "pages: 9 synced, 1 reference index, $__nfunc functions across $(printf '%s\n' $MODULES | wc -l | tr -d ' ') modules"
 exit 0
