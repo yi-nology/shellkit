@@ -61,17 +61,22 @@ _sk_proc_valid_name() {
 #   僵尸不算活着：kill -0 对僵尸也成功（它还在进程表里），
 #   而「僵尸 pid 文件没清」正是手写看门狗最常见的坑。
 #
-#   但 ps 报不出状态时（busybox / 没装 procps 的精简容器）分不出僵尸与活进程
+#   ps 报不出状态时（没装 procps 的精简容器）分不出僵尸与活进程
 #   ⇒ 退化成 kill -0（判据变粗：僵尸会被当成活着，pid 文件不会自动清）。
 #   这一层不进 POSIX 子集，但它服务的就是设备侧启动脚本 —— 那些机器上的
 #   ps 常常只有 busybox 那点能力，所以这里**必须能退化**：不能因为
 #   「查不到状态」就把所有进程判成死了（那等于这一层在设备侧完全不可用）。
+#
+#   取 ps 输出的**最后一行**：busybox 的 ps 不认 `stat=` 的表头抑制，
+#   会先打一行表头（STAT）再打真状态 ⇒ 表头在前、状态在后。
+#   取全部输出会把表头拼在状态前面（STATZ+）⇒ 僵尸就再也认不出来了
+#   —— 而「僵尸 pid 文件清不掉」正是这一层要根治的坑（坑 3）。
 # @exitcode 0 活着；1 没了
 _sk_proc_alive() {
   local __pid="${1:-}" __st
   [ -n "$__pid" ] || return 1
   kill -0 "$__pid" 2>/dev/null || return 1
-  __st=$(ps -o stat= -p "$__pid" 2>/dev/null | tr -d '[:space:]')
+  __st=$(ps -o stat= -p "$__pid" 2>/dev/null | tail -n 1 | tr -d '[:space:]')
   case "$__st" in
     Z*) return 1 ;;
   esac
