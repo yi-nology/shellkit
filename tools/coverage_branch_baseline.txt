@@ -400,6 +400,7 @@ lib/core/registry.sh:_registry_scan_one:3
 lib/core/registry.sh:registry_add:1
 lib/core/registry.sh:registry_add:3
 lib/core/registry.sh:registry_get:1
+lib/core/retry.sh:_sk_retry_timeout_code:1
 lib/core/retry.sh:retry:4
 lib/core/run.sh:_sk_run_display:1
 lib/core/run.sh:_sk_run_mask_values:2
