@@ -1,10 +1,10 @@
 # Module map
 
-`lib/bootstrap.sh` is the single entry point. It loads all 23 modules once, in **topological order**. You do not
+`lib/bootstrap.sh` is the single entry point. It loads all 24 modules once, in **topological order**. You do not
 pick and choose what to source, and you should not copy one module's implementation into your own script -- that is
 just another way of hitting the same trap twice.
 
-<ShotFigure src="/diagrams/modules-map.svg" caption="23 modules in five layers: foundations, files and system, process and version, integration, interaction and framework. Dependencies only point upward" />
+<ShotFigure src="/diagrams/modules-map.svg" caption="24 modules in five layers: foundations, files and system, process and version, integration, interaction and framework. Dependencies only point upward" />
 
 ## The table
 
@@ -57,7 +57,7 @@ Dependencies must come first. Getting the order wrong does not have to wait for 
 
 ## Load only what you need
 
-By default everything loads (23 modules). To slim it down:
+By default everything loads (24 modules). To slim it down:
 
 ```bash
 SHELLKIT_MODULES="log fs" . ./vendor/shellkit/lib/bootstrap.sh

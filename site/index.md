@@ -34,7 +34,7 @@ footerHtml: '<a href="https://github.com/yi-nology/shellkit/blob/main/LICENSE">M
 
 ## 三件套怎么拼在一起
 
-<ShotFigure src="/diagrams/assembly.svg" caption="库是唯一真相源：shellkit new 把它 vendor 进工程，CLI 负责日常；23 个模块各管一件事" />
+<ShotFigure src="/diagrams/assembly.svg" caption="库是唯一真相源：shellkit new 把它 vendor 进工程，CLI 负责日常；24 个模块各管一件事" />
 
 每个模块的完整签名与退出码见 [API 参考](/reference/index.md)。
 
