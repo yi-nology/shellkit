@@ -49,7 +49,7 @@ shellkit vendor .
 ```
 your-project/
 └─ vendor/shellkit/
-   ├─ lib/           23 个模块（bootstrap.sh + core/*.sh）
+   ├─ lib/           24 个模块（bootstrap.sh + core/*.sh）
    ├─ locale/        gettext 译文（en / zh_CN / zh_Hant）
    ├─ templates/     脚手架模板（副本自己就能 new / upgrade）
    ├─ tests/         测试基建（test_helper.sh + run.sh）
@@ -69,7 +69,7 @@ set -euo pipefail
 . "$(cd "$(dirname "$0")/.." && pwd)/vendor/shellkit/lib/bootstrap.sh"
 ```
 
-就这些。`bootstrap.sh` 会按拓扑序把 23 个模块加载好，设置 `SK_*` 常量与退出码，
+就这些。`bootstrap.sh` 会按拓扑序把 24 个模块加载好，设置 `SK_*` 常量与退出码，
 **不改你的 shell 选项、不改 cwd**——你的脚本还是你说了算。
 
 ### 为什么是 `vendor/` 而不是装到系统里
@@ -770,6 +770,27 @@ shellkit uninstall-self --purge
 | `ver_cmp` 接受预发布版本 | `1.0.0-rc.1` 被判非法（返回 `2`），`ver_gt` / `ver_lt` / `ver_eq` 跟着没法比较 | 接受 semver 预发布后缀：同核心时**正式版 > 预发布**，`rc.2 > rc.1`，标识符按 semver 比较（数字段按数值、数字段 < 字母段） | 之前靠「返回 2」来判断「不是版本号」的调用方：RC 现在是合法版本；`1.0.0-` / `1.0.0-rc..1` 这类空后缀仍然返回 2 |
 
 发布侧同步改了三处：`tools/release.sh` 接受 `x.y.z-pre` 且按新规则排序；`tools/check_versions.sh` 的版本引用与替换规则接受后缀；`release.yml` 对带 `-` 的 tag 走 `--prerelease`、**不**占用 `releases/latest`。
+
+### 1.1.0 → 1.2.0：会改变结果的行为变化
+
+库副本（工程自带的 shellkit 副本）的落点从硬编码的 `vendor/shellkit` 改成**可配置**：
+
+    环境变量 SHELLKIT_VENDOR_DIR  >  工程配置文件 .shellkit-vendor-dir  >  默认 vendor/shellkit
+
+起因是 Go 模块仓的仓根**不能**放 `vendor/` 目录 —— Go ≥1.14 看到模块根下的 `vendor/` 就切
+vendor 模式，缺 `vendor/modules.txt` 直接报 `inconsistent vendoring`。这类仓以前只能把副本
+放在 `third_party/shellkit`，而 doctor 说「没有副本」、upgrade 反而在仓根造出一个新的
+`vendor/`，把 Go 仓悄悄弄坏（退出码还是 0，日志里看不出来）。
+
+| 变化 | 以前 | 现在 | 你会在哪里撞到 |
+|---|---|---|---|
+| `shellkit vendor .` 遇到「副本在别处、且没配置落点」 | 静默在默认落点新建一份：仓根多出一个 `vendor/`，Go 仓直接坏掉，而退出码还是 **0** | 明确拒绝，退出码 **3**，并打印副本的实际位置与 `SHELLKIT_VENDOR_DIR=...` 的指法 | 用 `vendor/` 放副本、又在别处留了一份的工程；以及 Go 模块仓 |
+| `shellkit upgrade .` 遇到同样的情况 | 同上（静默新建 `vendor/`） | 同样拒绝，**不新建**（退出码非 0），并说明副本在哪儿 | 同上 |
+| `shellkit doctor` 的 vendor 那一行 | 固定查 `vendor/shellkit`；副本在 `third_party/shellkit` 时报「没有副本」 | 查**解析出来的**落点；副本在别处时给出可操作提示（实际位置 + `SHELLKIT_VENDOR_DIR=...`）；落点配置非法时该行判 `FAIL`（JSON 里 `vendor.state` 为 `invalid`） | 副本不在默认落点的工程 |
+| `shellkit new` 生成的工程 | 副本固定落在 `vendor/shellkit`，模板里写死这个路径 | 落点跟着配置走；非默认落点时工程里多一份 `.shellkit-vendor-dir`（工程自描述：doctor / upgrade / repair.sh 都读它），生成的 Makefile 与入口脚本指向实际落点 | 用 `SHELLKIT_VENDOR_DIR=... shellkit new ...` 生成的工程 |
+| `repair.sh --project DIR` | 只认 `vendor/shellkit` 这个形状，别的位置的残骸不收拾 | 按同一套规则解析落点；配置非法时**什么都不删**并明确报错（退出码 1） | 副本在 `third_party/shellkit` 的工程 |
+
+默认落点没变：不写 `.shellkit-vendor-dir`、不设环境变量时，一切与 1.1.0 完全一样。
 
 ### 1.0.0 → 1.1.0：会改变结果的行为变化
 
