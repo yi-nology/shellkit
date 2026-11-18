@@ -94,9 +94,13 @@ jobs:
     container: ${{ matrix.image }}
     # 有限超时（issue #136）：openeuler job 曾卡 30+ 分钟不结束。慢可以解释、
     # 卡死不行——超时把「等一个永远不会结束的 job」变成一条明确的失败信号。
-    # 取 40 分钟：实测 openeuler 完整一轮约 6 分钟（本地容器），但共享 runner
-    # 的包下载/CPU 波动可能到 20+ 分钟；超时只该杀「卡死」，不该杀「慢」。
-    timeout-minutes: 40
+    #
+    # 取 75 分钟（2026-11-18 从 40 调上来）：实测一次 openeuler job 光是容器里
+    # `dnf install` 就花了 **39 分钟**（共享 runner 拉 openeuler 镜像的元数据很慢），
+    # 测试套件本身 6 分钟就跑完了 —— 40 分钟的总超时砍掉的是「装包慢」，不是「卡死」。
+    # 卡死由下面 `install tooling` 步骤的**内层超时**兜底（慢在装包 ⇒ 那里早失败并
+    # 打印原因；慢在跑测试 ⇒ 总量化到 75 分钟仍然有界）。
+    timeout-minutes: 75
     strategy:
       fail-fast: false
       matrix:
@@ -151,6 +155,11 @@ jobs:
         shell: sh
         run: |
           set -eu
+          # 包安装的内层超时（2026-11-18）：openeuler 的 `dnf install` 在共享
+          # runner 上实测慢到 39 分钟 —— 那不是「卡死」，是镜像源慢。
+          # 慢在装包就该在这里早失败并说清原因，而不是把整个 job 的预算吃光、
+          # 最后由 job 总超时背锅（「看起来像测试挂了」）。
+          PKG_TIMEOUT=900
           if command -v apt-get >/dev/null 2>&1; then
             apt-get update -qq
             # python3：tests/test_doctor.sh 的 JSON 值断言靠它解析（jget/jlen）；
@@ -163,10 +172,13 @@ jobs:
             # 硬装 curl 会报 "curl-minimal ... conflicts with curl"。
             # curl-minimal 已经能下载文件（-fsSL 都支持），所以这里不装 curl，
             # 只补真正缺的包；下载器在下面统一兜底。
-            dnf install -y -qq --allowerasing \
+            timeout "$PKG_TIMEOUT" dnf install -y -qq --allowerasing \
               bash gettext ca-certificates tar xz make python3 git \
               grep sed gawk findutils diffutils coreutils \
-              gmp ncurses-libs
+              gmp ncurses-libs || {
+              echo "dnf install did not finish within ${PKG_TIMEOUT}s (the mirror is slow, or the package set is wrong)" >&2
+              exit 1
+            }
           fi
           # 下载器兜底：curl / wget / python3 任选其一，缺哪个都不该让 job 挂掉。
           # 三个都没有时按发行版补一个 —— 包名不能想当然：Rocky 9 只有 curl-minimal
