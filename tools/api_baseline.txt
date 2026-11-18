@@ -15,7 +15,7 @@
 #   分级            stable=承诺稳定 / experimental=暂不承诺（源码注释 @stability 的投影）
 #                   没写注解的按 experimental 落盘；是否已声明看 tools/stability_exempt.txt
 #
-baseline-version: 0.26.2
+baseline-version: 1.1.0
 ask	0,1,2,3	active	-	probe	0,3	-	stable
 ask_choice	0,1,2,3	active	-	probe	0,3	-	stable
 ask_yn	0,1,2,3	active	-	probe	0,3	-	stable
@@ -117,6 +117,9 @@ require_cmd	0,2,3	active	-	probe	0,3	-	stable
 require_file	0,2,3	active	-	probe	0,3	-	experimental
 require_root	0,3	active	-	probe	0,3	-	experimental
 retry	0,2,其他	active	-	probe	0,2	-	stable
+retry_classify	0,2	active	-	probe	0,2	-	experimental
+retry_last_class	0	active	-	probe	0	-	experimental
+retry_last_rc	0	active	-	probe	0	-	experimental
 run	0,2,其他	active	-	probe	0	-	stable
 run_concurrent	0,2,其他	active	-	probe	0	-	stable
 run_func_timeout	0,2,143,其他	active	-	probe	0	-	experimental

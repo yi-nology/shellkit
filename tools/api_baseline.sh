@@ -563,6 +563,9 @@ cli_opt_init	0	cli_opt_init || exit 81; exit 0
 cli_opt	0	cli_opt cli_opt_probe_var --cli-opt-probe -p || exit 81; exit 0
 cli_opts	0	cli_opt cli_opts_probe_var --cli-opt-probe -p 1; cli_opts --cli-opt-probe val || exit 81; [ "$cli_opts_probe_var" = "val" ] || exit 82; exit 0
 retry	0,2	retry 1 true || exit 81; retry 0 true; prc=$?; [ "$prc" = 2 ] || exit 82; exit 0
+retry_classify	0,2	retry_classify 0 >/dev/null || exit 81; [ "$(retry_classify 124)" = "timeout" ] || exit 82; retry_classify abc; prc=$?; [ "$prc" = "2" ] || exit 83; exit 0
+retry_last_class	0	retry 1 true; [ "$(retry_last_class)" = "success" ] || exit 81; exit 0
+retry_last_rc	0	retry 1 true; [ "$(retry_last_rc)" = "0" ] || exit 81; exit 0
 lock_acquire	0	mkdir -p "$PWD/lock_acquire-locks"; SHELLKIT_LOCK_DIR="$PWD/lock_acquire-locks"; lock_acquire lock_acquire-probe || exit 81; exit 0
 lock_release	0	mkdir -p "$PWD/lock_release-locks"; SHELLKIT_LOCK_DIR="$PWD/lock_release-locks"; lock_acquire lock_release-probe; lock_release lock_release-probe || exit 81; exit 0
 lock_held	0,1	mkdir -p "$PWD/lock_held-locks"; SHELLKIT_LOCK_DIR="$PWD/lock_held-locks"; lock_acquire lock_held-probe; lock_held lock_held-probe || exit 81; lock_held lock_held-none; prc=$?; [ "$prc" = 1 ] || exit 82; exit 0

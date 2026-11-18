@@ -4,7 +4,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: shellkit\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-11-18 12:02+0800\n"
+"POT-Creation-Date: 2026-11-18 15:39+0800\n"
 "PO-Revision-Date: 2026-11-08 00:00+0800\n"
 "Last-Translator: shellkit contributors\n"
 "Language-Team: shellkit contributors\n"
@@ -298,8 +298,14 @@ msgstr "用法: retry 次數 命令..."
 msgid "invalid retry count"
 msgstr "非法的重試次數"
 
+msgid "attempt timed out, retrying"
+msgstr "本次嘗試逾時，正在重試"
+
 msgid "attempt failed, retrying"
 msgstr "本次嘗試失敗，正在重試"
+
+msgid "giving up after retries (timed out)"
+msgstr "重試次數用盡（逾時）"
 
 msgid "giving up after retries"
 msgstr "重試次數用盡"

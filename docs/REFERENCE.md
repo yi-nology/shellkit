@@ -1403,6 +1403,37 @@ retry ATTEMPTS CMD... —— 失败退避重试；用法错与校验失败不重
 - 2 参数错（次数不是正整数）
 - 其他 被重试命令自身的退出码（放弃重试时返回它）
 
+### `retry_classify`
+
+retry_classify CODE —— 把退出码分类成 success / timeout / failure   超时码由 SHELLKIT_RETRY_TIMEOUT_CODE 决定（默认 124）。
+
+**稳定性**：experimental
+
+**退出码**
+
+- 0 分类成功（stdout 是 success / timeout / failure）
+- 2 CODE 不是数字
+
+### `retry_last_class`
+
+retry_last_class —— 上一次 retry 的结果分类（success / timeout / failure）   没跑过 retry 时是 none。
+
+**稳定性**：experimental
+
+**退出码**
+
+- 0 总是成功（stdout 是分类名）
+
+### `retry_last_rc`
+
+retry_last_rc —— 上一次 retry 里被重试命令最后的退出码   没跑过 retry 时是 none。
+
+**稳定性**：experimental
+
+**退出码**
+
+- 0 总是成功（stdout 是退出码）
+
 ## lock
 
 ### `lock_acquire`

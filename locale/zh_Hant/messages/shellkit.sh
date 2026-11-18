@@ -97,7 +97,9 @@ _sk_msg_lookup_shellkit() {
     'missing dependency') printf '%s' '缺失依賴' ;;
     'usage: retry ATTEMPTS COMMAND...') printf '%s' '用法: retry 次數 命令...' ;;
     'invalid retry count') printf '%s' '非法的重試次數' ;;
+    'attempt timed out, retrying') printf '%s' '本次嘗試逾時，正在重試' ;;
     'attempt failed, retrying') printf '%s' '本次嘗試失敗，正在重試' ;;
+    'giving up after retries (timed out)') printf '%s' '重試次數用盡（逾時）' ;;
     'giving up after retries') printf '%s' '重試次數用盡' ;;
     'run requires a command') printf '%s' 'run 需要一條命令' ;;
     'invalid secret argument index') printf '%s' '無效的敏感參數序號' ;;
