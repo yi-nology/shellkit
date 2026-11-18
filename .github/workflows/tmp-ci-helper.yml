@@ -82,9 +82,12 @@ jobs:
               {
                 echo "--- run $run_id job $job_id ($job_name) ---"
               } >> /tmp/helper.log
-              gh run view --repo "$GH_REPO" --job "$job_id" --log >"/tmp/job-$job_id.log" 2>/dev/null
+              # 取日志要走 curl -L：gh api 不跟 302（拿不到 blob）⇒ 取回来是空的。
+              curl -sSL -H "Authorization: Bearer $GH_TOKEN" -H "Accept: application/vnd.github+json" \
+                "https://api.github.com/repos/$GH_REPO/actions/jobs/$job_id/logs" \
+                -o "/tmp/job-$job_id.log" >/dev/null 2>&1
               if [ ! -s "/tmp/job-$job_id.log" ]; then
-                gh api "repos/$GH_REPO/actions/jobs/$job_id/logs" >"/tmp/job-$job_id.log" 2>/dev/null
+                gh run view --repo "$GH_REPO" --job "$job_id" --log >"/tmp/job-$job_id.log" 2>&1
               fi
               {
                 echo "--- FAIL lines ---"
