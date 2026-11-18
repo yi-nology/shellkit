@@ -19,6 +19,37 @@
 #     无关改动挤跑）。报告附带 guards 段：#39/#40/#41/#42 的 P0 守卫分支
 #     必须命中，白名单救不了（见 --guards；默认清单内嵌在本脚本里）。
 #
+# ⚠ 重生成基线必须在**与 CI runner 同环境**的地方做 —— 这是硬要求，不是建议。
+#
+# 为什么：「未覆盖」是**运行时**的结论，不是源码的结论。库里有两类分叉：
+#   ① 按外部工具分叉（http.sh 有 jq ⇒ python3 ⇒ 兜底三条路）—— 装了 jq 就走
+#      jq 臂、没装就走 python3 臂；
+#   ② 按平台分叉（lib/core/os.sh 按 uname -s/-m 分叉）—— Linux 与 macOS 走的
+#      是不同的臂，x86_64 与 arm64 也是。
+# ⇒ 同一份源码在两个环境下得到**两份不同的未覆盖集合**。基线在 A 环境生成、
+# 门禁在 B 环境跑 ⇒ 棘轮双向都红：「不在基线里」（B 有 A 没有的臂）+
+# 「基线列的分支已被覆盖」（A 有 B 已覆盖的臂）。看着像代码坏了，其实是环境不同。
+#
+# GitHub 的 ubuntu-latest runner：x86_64、**预装 jq**、预装 python3、
+# 门禁 job 另外装 gettext。容器里只装 gettext 是不够的 —— 那个环境生成出来的
+# 基线必然对不上（#143 的 http.sh 臂、#145 的 retry 臂都栽在这上面）。
+#
+# 最稳的做法是**在 CI 里重生成**（与门禁同一个 runner）：临时分支 + 临时
+# workflow 跑 `bash tools/coverage.sh --branch --write-baseline`，把产物取回来
+# 提交，然后把临时分支与 workflow 一并删掉。
+#
+# 本地要对齐 runner，必须是 **linux/x86_64** 且装齐 jq 与 python3：
+#
+#   docker run --rm --platform linux/amd64 -v "$PWD:/repo" -w /repo ubuntu:24.04 bash -c '
+#     apt-get update -qq
+#     DEBIAN_FRONTEND=noninteractive apt-get install -y -qq \
+#       gettext curl ca-certificates tar xz-utils make python3 git bash jq
+#     git config --global --add safe.directory "*"
+#     bash tools/coverage.sh --branch --write-baseline'
+#
+# 基线头会记下生成环境（os/arch/jq/python3）；门禁跑的时候先比这个头，
+# 不一致就直接红并说明「这是环境不同，不是代码坏了」（见下面「规则零」）。
+#
 # 做法：
 #   1) 把仓库复制到临时目录（不拷 site/ 与 .git）
 #   2) 给 lib/core 的公开函数插桩：函数体第一句调一次 __cov_hit
@@ -214,6 +245,44 @@ fi
 
 log() {
   printf 'coverage: %s\n' "$*" >&2
+}
+
+# _sk_cov_has CMD —— 这个工具有没有（写进基线头：未覆盖集合随工具有没有而变）
+_sk_cov_has() {
+  if command -v "${1:-}" >/dev/null 2>&1; then
+    printf 'yes'
+  else
+    printf 'no'
+  fi
+}
+
+# _sk_cov_os / _sk_cov_arch —— 平台指纹。lib/core/os.sh 的分支臂按 uname 分叉
+# （Linux 与 macOS 走的是不同的臂）⇒ 同一份源码在两个平台上得到两份不同的
+# 未覆盖集合。基线因此是「平台 + 工具」双重的运行时结论。
+_sk_cov_os() {
+  case "$(uname -s 2>/dev/null)" in
+    Linux*) printf 'linux' ;;
+    Darwin*) printf 'darwin' ;;
+    *) printf 'other' ;;
+  esac
+}
+
+_sk_cov_arch() {
+  case "$(uname -m 2>/dev/null)" in
+    arm64 | aarch64) printf 'aarch64' ;;
+    x86_64 | amd64) printf 'x86_64' ;;
+    *) printf 'other' ;;
+  esac
+}
+
+# _sk_cov_envval KEY " os=linux arch=x86_64" —— 取环境串里某个键的值；
+# 取不到返回 1（调用方据此判「这份基线没记这个维度」）。
+_sk_cov_envval() {
+  local __ev_rest="${2#* $1=}"
+  if [ "$__ev_rest" = "$2" ]; then
+    return 1
+  fi
+  printf '%s' "${__ev_rest%% *}"
 }
 
 # ---------------------------------------------------------------------------
@@ -925,6 +994,48 @@ else
   # ---- 分支棘轮（三条规则，与函数级同构）----
   BASELINE_IDS=" "
   if [ -f "$BASELINE" ]; then
+    # 规则零：基线头记着「生成环境」；与当前环境不一致 ⇒ 结论不可比 ⇒
+    # 报清楚再红（否则只剩一堆「不在基线里」，看不出是环境问题）。
+    #
+    # 不用 `sed ... | head -1` 取头：管道里 head 命中即退，sed 会被 SIGPIPE
+    # 打死（141），而本脚本开着 pipefail ⇒ 取值本身就成了假失败。
+    __cov_hdr=""
+    while IFS= read -r __line || [ -n "$__line" ]; do
+      case "$__line" in
+        '# 生成环境:'*)
+          __cov_hdr="$__line"
+          break
+          ;;
+      esac
+    done <"$BASELINE"
+    if [ -n "$__cov_hdr" ]; then
+      __cov_env=" ${__cov_hdr#*: }"
+      __cur_env=" os=$(_sk_cov_os) arch=$(_sk_cov_arch)"
+      __cur_env="$__cur_env jq=$(_sk_cov_has jq) python3=$(_sk_cov_has python3)"
+      __cov_diff=""
+      for __cov_key in os arch jq python3; do
+        __cov_want=$(_sk_cov_envval "$__cov_key" "$__cov_env") || __cov_want=""
+        __cov_have=$(_sk_cov_envval "$__cov_key" "$__cur_env") || __cov_have=""
+        if [ "$__cov_want" != "$__cov_have" ]; then
+          if [ -z "$__cov_want" ]; then
+            __cov_diff="$__cov_diff $__cov_key(基线没记这个维度)"
+          else
+            __cov_diff="$__cov_diff $__cov_key(基线=$__cov_want 当前=$__cov_have)"
+          fi
+        fi
+      done
+      if [ -n "$__cov_diff" ]; then
+        log "基线的生成环境与当前环境不一致：${__cov_diff# }"
+        log "「未覆盖」是运行时结论 ⇒ 这份基线与当前环境不可比，比对结果没有意义。"
+        log "在与 CI runner 同环境的容器/CI 里重生成：见本文件头部。"
+        exit 5
+      fi
+    else
+      # 基线没有环境指纹 ⇒ 无从比较。老基线（指纹机制之前生成的）走这条路，
+      # 行为与从前一致；重生成一次之后，这道守卫就一直在。
+      log "基线没有环境指纹（$BASELINE 里没有「# 生成环境:」那一行）⇒ 无法确认它是在哪种环境生成的。"
+      log "用 bash tools/coverage.sh --branch --write-baseline 重生成一次，这道守卫就会生效。"
+    fi
     while IFS= read -r __line || [ -n "$__line" ]; do
       __line="${__line%%#*}"
       __line="${__line#"${__line%%[![:space:]]*}"}"
@@ -1174,6 +1285,10 @@ if [ "$WRITE_BASELINE" = "1" ]; then
       printf '# 分支覆盖白名单：当前确实没被测试覆盖的分支臂。\n'
       printf '# 由 bash tools/coverage.sh --branch --write-baseline 生成，不要手工维护。\n'
       printf '# 棘轮规则：这里面的分支一旦被覆盖，CI 就要求把它移出（防覆盖回退）。\n'
+      # 生成环境: 平台与工具有没有都会改变「未覆盖」集合（见本文件头部）。
+      printf '# 生成环境: os=%s arch=%s jq=%s python3=%s\n' \
+        "$(_sk_cov_os)" "$(_sk_cov_arch)" \
+        "$(_sk_cov_has jq)" "$(_sk_cov_has python3)"
       cat "$WORK/uncovered.txt"
     } >"$BASELINE.tmp" || {
       log "cannot write the baseline"
