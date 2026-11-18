@@ -3586,6 +3586,42 @@ _sk_skill_version() {
   return 1
 }
 
+# _sk_skill_want_version SRC —— 装下去的 VERSION 应该是什么
+#
+# 包里带 VERSION 就用包里的：发行包携带的版本可能与本机 CLI 的 $SK_VERSION
+# 不同（从 tarball 里单独取出的子目录就是这种）。核对「装完的版本对不对」
+# 必须用这个基准，不能拿 $SK_VERSION 一把尺子量所有副本（issue #140）。
+_sk_skill_want_version() {
+  local __src=$1 __v=""
+  if [ -f "$__src/VERSION" ]; then
+    __v=$(tr -d '[:space:]' <"$__src/VERSION")
+  elif [ -r "$SELF_DIR/VERSION" ]; then
+    __v=$(tr -d '[:space:]' <"$SELF_DIR/VERSION")
+  fi
+  printf '%s' "$__v"
+}
+
+# _sk_skill_check_version DSTABS SRC N_NB DIR —— 核对装完的 skill 版本
+#
+# 版本没跟上 ⇒ 退出码 5（校验失败），并点名保留了多少个文件、给出逃逸口。
+# 旧副本（清单机制引入前装的）里每个文件都因「无所有权基线」被保留 ⇒
+# 版本永远升不上去。以前这里无条件打「installed」、退出 0，用户以为升了、
+# 实际一个文件没换（fail-open）—— 与 vendor 侧（#137）同一套判据。
+#   0 = 版本对上了；5 = 没跟上
+_sk_skill_check_version() {
+  local __dstabs=$1 __src=$2 __n_nb=${3:-0} __dir=${4:-} __want __got=""
+  __want=$(_sk_skill_want_version "$__src")
+  if [ -f "$__dstabs/VERSION" ]; then
+    __got=$(tr -d '[:space:]' <"$__dstabs/VERSION")
+  fi
+  if [ "$__got" = "$__want" ]; then
+    return 0
+  fi
+  log_error "$(_t 'the skill was not updated'): $__dstabs/VERSION is ${__got:-missing}, want ${__want:-unknown}"
+  log_info "$(_t 'files without an ownership baseline are kept; re-run with --force to overwrite them'): $__n_nb (shellkit skill install --force --dir $__dir)"
+  return "$SK_VERIFY"
+}
+
 # _sk_skill_install_into DIR FORCE —— 把 skill 包装进 DIR/shellkit
 #   FORCE=1 时连用户改过的文件也覆盖（默认跳过并告警 —— 不静默覆盖）。
 #   0 = 装好了；1 = 没装成
@@ -3603,28 +3639,28 @@ _sk_skill_version() {
 # 校验通过后两次 rename 整体换上；提交前任何失败都伤不到现有副本，
 # 提交途中被打断由下次安装先恢复（.shellkit-skill-old 是唯一完整副本）。
 _sk_skill_install_into() {
-  local __dir=$1 __force=${2:-0} __src __dst __dirabs __dstabs __f __rel __i=0 __sfile
-  local __new __base __cur __act __n_upd=0 __n_same=0 __n_keep=0
+  local __dir=$1 __force=${2:-0} __rc=1 __src __dst __dirabs __dstabs __f __rel __i=0 __sfile
+  local __new __base __cur __act __n_upd=0 __n_same=0 __n_keep=0 __n_nb=0
   local __txt __manifest __stage __old
-  __src=$(_sk_skill_src) || return 1
+  __src=$(_sk_skill_src) || return "$SK_PRECOND"
   if [ ! -f "$__src/SKILL.md" ]; then
     log_warn "$(_t 'the skill package is incomplete'): $__src"
-    return 1
+    return "$SK_PRECOND"
   fi
   __dst="$__dir/shellkit"
 
   # 目标已经是软链：既不跟着写穿，也不替换它（cp 会顺着软链写穿 —— 坑 8）
   if [ -L "$__dst" ]; then
     log_warn "$(_t 'the target is a symlink, left alone'): $__dst"
-    return 1
+    return "$SK_PRECOND"
   fi
   if [ -e "$__dst" ] && [ ! -d "$__dst" ]; then
     log_warn "$(_t 'the target exists and is not a directory'): $__dst"
-    return 1
+    return "$SK_PRECOND"
   fi
   # 根要真实存在才能解析：后面所有边界判据都锚在解析后的绝对路径上
-  fs_ensure_dir "$__dir" "" || return 1
-  __dirabs=$(cd "$__dir" 2>/dev/null && pwd -P) || return 1
+  fs_ensure_dir "$__dir" "" || return "$SK_PRECOND"
+  __dirabs=$(cd "$__dir" 2>/dev/null && pwd -P) || return "$SK_PRECOND"
   __dstabs="$__dirabs/shellkit"
   # 阶段目录带 pid：并发安装各铺各的（固定名会互相 rm -rf 对方的阶段目录 ——
   # fault 矩阵的 skill|concurrent 场景抓到过），残骸按 pid 归属清理。
@@ -3640,7 +3676,7 @@ _sk_skill_install_into() {
     [ -e "$__f" ] || [ -L "$__f" ] || continue
     if [ ! -e "$__dstabs" ]; then
       log_warn "$(_t 'recovering the skill copy after an interrupted install'): $__f"
-      mv "$__f" "$__dstabs" || return 1
+      mv "$__f" "$__dstabs" || return "$SK_PRECOND"
     else
       rm -rf "$__f" 2>/dev/null || true
     fi
@@ -3663,7 +3699,7 @@ _sk_skill_install_into() {
   # 这里挡住的就是「预置软链写到目标根之外」的洞 —— 无论链接指向根内还是根外。
   if ! _sk_fs_no_symlink_below "$__dirabs" "shellkit/references"; then
     log_error "$(_t 'refusing to write through a symlink'): $__dstabs/references"
-    return 1
+    return "$SK_PRECOND"
   fi
 
   # 已装清单：装过才有；没有的条目按「不是我们装的」处理
@@ -3708,9 +3744,22 @@ _sk_skill_install_into() {
         __act="W"
       elif [ "$__force" = "1" ]; then
         __act="W"
-      else
+      elif [ -n "$__base" ]; then
+        # 有基线、内容又对不上 ⇒ 用户改过
         log_warn "$(_t 'modified locally, left alone'): $__rel"
         __act="K"
+      else
+        # 目标存在、内容与上游不同，但没有基线（清单机制引入前装的旧副本 /
+        # 基线丢失 / 用户自己放的同名文件）：分不清「旧版本原文」与「用户改过」。
+        # 默认按保留处理 —— 没有证据时绝不静默覆盖用户内容；只有 --force 才覆盖。
+        # 基线不推进：没证据证明这是我们装的。
+        #
+        # 这一类与上面「用户改过」必须分开报（issue #140）：旧副本里的文件
+        # 用户一个字都没改过，报「modified locally」会把人指向错误的修复动作
+        # （去查自己改了什么），而真正的解法是 --force 或重新装一遍。
+        log_warn "$(_t 'no ownership baseline, left alone (use --force to overwrite)'): $__rel"
+        __act="K"
+        __n_nb=$((__n_nb + 1))
       fi
     fi
     _SK_SKILL_ACT[${#_SK_SKILL_ACT[@]}]=$__act
@@ -3758,10 +3807,14 @@ EOF
     # 没有要写的文件：只有清单基线在动（K 的保留项）—— 原地原子重写清单
     __txt=$(_sk_fs_own_render)
     if [ -n "$__txt" ]; then
-      fs_atomic_write "$__manifest" "$__txt" 644 || return 1
+      fs_atomic_write "$__manifest" "$__txt" 644 || return "$SK_PRECOND"
     else
       rm -f "$__manifest" 2>/dev/null || true
     fi
+    # 写不动文件不等于装好了：旧副本里每个文件都因「无所有权基线」被保留时
+    # 这里就会走到「没有要写的文件」，版本还是旧的 —— 报成功就是 fail-open
+    # （issue #140）。所以这里也要核对 VERSION。
+    _sk_skill_check_version "$__dstabs" "$__src" "$__n_nb" "$__dir" || return "$SK_VERIFY"
     if [ "$__n_keep" -eq 0 ]; then
       log_info "$(_t 'the skill is up to date'): $__dstabs ($__n_same unchanged)"
     fi
@@ -3771,11 +3824,11 @@ EOF
   # ---------- 阶段三：整组事务提交（issue #86）----------
   # 先铺阶段目录：旧副本原样搬进去（用户自己加的文件、保留项都在），
   # 要写的文件写到阶段目录里 —— 提交之前目标一个字节都没被碰过。
-  fs_ensure_dir "$__stage" 755 || return 1
+  fs_ensure_dir "$__stage" 755 || return "$SK_PRECOND"
   if [ -d "$__dstabs" ]; then
     if ! cp -R "$__dstabs/." "$__stage/"; then
       rm -rf "$__stage" 2>/dev/null || true
-      return 1
+      return "$SK_PRECOND"
     fi
   fi
   __i=0
@@ -3786,9 +3839,9 @@ EOF
     }
     __rel=${_SK_SKILL_REL[$__i]}
     if [ "$__rel" = "SKILL.md" ] || [ "$__rel" = "VERSION" ]; then
-      fs_ensure_dir "$__stage" 755 || return 1
+      fs_ensure_dir "$__stage" 755 || return "$SK_PRECOND"
     else
-      fs_ensure_dir "$__stage/references" 755 || return 1
+      fs_ensure_dir "$__stage/references" 755 || return "$SK_PRECOND"
     fi
     case "$__rel" in
       VERSION)
@@ -3804,7 +3857,7 @@ EOF
     # 不会顺着链接写到别处
     if ! fs_atomic_copy "$__sfile" "$__stage/$__rel" 644; then
       rm -rf "$__stage" 2>/dev/null || true
-      return 1
+      return "$SK_PRECOND"
     fi
     __i=$((__i + 1))
   done
@@ -3814,7 +3867,7 @@ EOF
   if [ -n "$__txt" ]; then
     fs_atomic_write "$__stage/.shellkit-skill-manifest" "$__txt" 644 || {
       rm -rf "$__stage" 2>/dev/null || true
-      return 1
+      return "$SK_PRECOND"
     }
   fi
 
@@ -3828,7 +3881,7 @@ EOF
       if [ "$__cur" != "${_SK_OWN_SUMS[$__i]}" ]; then
         log_error "$(_t 'the staged skill copy failed verification'): $__f"
         rm -rf "$__stage" 2>/dev/null || true
-        return 1
+        return "$SK_PRECOND"
       fi
     fi
     __i=$((__i + 1))
@@ -3840,7 +3893,7 @@ EOF
     if ! mv "$__dstabs" "$__old"; then
       log_error "$(_t 'the staged skill copy could not be committed'): $__stage"
       rm -rf "$__stage" 2>/dev/null || true
-      return 1
+      return "$SK_PRECOND"
     fi
   fi
   if ! mv "$__stage" "$__dstabs"; then
@@ -3849,9 +3902,15 @@ EOF
       log_warn "$(_t 'skill install failed mid-commit; the previous copy was restored')"
     fi
     rm -rf "$__stage" 2>/dev/null || true
-    return 1
+    return "$SK_PRECOND"
   fi
   rm -rf "$__old" 2>/dev/null || true
+
+  # 安装后核对：VERSION 必须真的等于当前版本（issue #140，与 #137 同构）。
+  # 旧副本（清单机制引入前装的）里每个文件都因「无所有权基线」被保留 ——
+  # 以前这里无条件打「installed」、退出 0，用户以为升了、实际一个文件没换
+  # （fail-open）。而且报的是「modified locally」，把人指向错误的修复动作。
+  _sk_skill_check_version "$__dstabs" "$__src" "$__n_nb" "$__dir" || return "$SK_VERIFY"
   return 0
 }
 
@@ -4073,11 +4132,15 @@ _sk_skill_list() {
 # _sk_skill_install CLIENT DIR FORCE —— 装到目标目录
 _sk_skill_install() {
   local __client=$1 __dir=$2 __force=${3:-0}
-  local __name __c __n=0 __ok=0
+  local __name __c __n=0 __ok=0 __rc=0 __worst=0
 
   if [ -n "$__dir" ]; then
-    if ! _sk_skill_install_into "$__dir" "$__force"; then
-      return "$SK_PRECOND"
+    # 安装函数区分「前置条件不满足」（软链、包残缺 ⇒ 3）与「校验失败」
+    # （装完了但版本没跟上 ⇒ 5，issue #140）：这里原样透传，别压成同一个码。
+    _sk_skill_install_into "$__dir" "$__force"
+    __rc=$?
+    if [ "$__rc" -ne 0 ]; then
+      return "$__rc"
     fi
     log_ok "$(_t 'installed the skill into'): $__dir/shellkit"
     # 带了 --client 就把这条记进用户配置：下次 skill list / install 就认识它了。
@@ -4107,6 +4170,13 @@ _sk_skill_install() {
     if _sk_skill_install_into "$__c" "$__force"; then
       __ok=$((__ok + 1))
       log_ok "$(_t 'installed the skill into'): $__c/shellkit"
+    else
+      __rc=$?
+      # 记住最严重的失败码：校验失败（5）比前置条件不满足（3）严重
+      # （issue #140：某个客户端没升上去，整轮就不能报成功）。
+      if [ "$__rc" -gt "${__worst:-0}" ]; then
+        __worst=$__rc
+      fi
     fi
   done < <(_sk_skill_clients_all)
 
@@ -4123,6 +4193,11 @@ _sk_skill_install() {
   fi
   if [ "$__ok" -eq 0 ]; then
     return "$SK_PRECOND"
+  fi
+  # 有客户端没升上去（版本没跟上）⇒ 整轮不能报成功：静默的假成功比报错更糟
+  # （issue #140，与 #137 同构）。最严重的码优先报。
+  if [ "$__worst" -gt 0 ]; then
+    return "$__worst"
   fi
   return "$SK_OK"
 }

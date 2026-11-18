@@ -4,7 +4,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: shellkit\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-11-17 17:38+0800\n"
+"POT-Creation-Date: 2026-11-18 12:02+0800\n"
 "PO-Revision-Date: 2026-11-08 00:00+0800\n"
 "Last-Translator: shellkit contributors\n"
 "Language-Team: shellkit contributors\n"
@@ -908,6 +908,9 @@ msgstr "再往下讀"
 
 msgid "remembered the client in"
 msgstr "用戶端已記入"
+
+msgid "the skill was not updated"
+msgstr "skill 沒有更新"
 
 msgid "the skill package is incomplete"
 msgstr "skill 包不完整"

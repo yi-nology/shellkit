@@ -8,7 +8,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: shellkit 1.0.0\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-11-18 00:08+0800\n"
+"POT-Creation-Date: 2026-11-18 12:02+0800\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language-Team: LANGUAGE <LL@li.org>\n"
@@ -908,6 +908,9 @@ msgid "where to read more"
 msgstr ""
 
 msgid "remembered the client in"
+msgstr ""
+
+msgid "the skill was not updated"
 msgstr ""
 
 msgid "the skill package is incomplete"
