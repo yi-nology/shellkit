@@ -10,6 +10,9 @@
 308e584 fix(i18n): 重生成消息表并补「the skill was not updated」译文 (#140)
 a2bf199 fix(coverage): 按 ubuntu 环境重生成分支覆盖基线并移除临时 job (#140)
 26e6a9b docs(migrating): 补 1.0.0 → 1.1.0 行为变化表（#140 的退出码变化）
+e790b21 fix(release): CHANGELOG 选「上一个已发布版本」改用 semver 口径 (#142)
+ca2eb26 fix(ci): compat job 的包安装加内层超时，总超时放宽到 75 分钟 (#143)
+5591c24 fix(fmt): 修正 tests/test_changelog_prev.sh 的 shfmt 格式 (#142)
 
 ## 1.0.0 — 2026-11-18
 
