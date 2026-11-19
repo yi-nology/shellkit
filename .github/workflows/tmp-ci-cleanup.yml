@@ -1,0 +1,134 @@
+name: tmp-ci-cleanup
+
+# 临时工装（收尾用，跑完就删）。
+#
+# 背景：另一条会话把 tmp/ci-helper 当普通功能分支提了 PR #154 并合进了 main
+# ⇒ 临时工装（.github/workflows/tmp-ci-helper.yml + 三个 md/sh）留在了 main 里。
+# 那个 workflow 本身会推分支、开 PR、关单 ⇒ 不该留在 main。
+#
+# 这个 workflow **放在 tmp/ci-cleanup 分支上**（不是 tmp/ci-helper）：
+# main 上那个泄漏的 workflow 只在 push 到 tmp/ci-helper 时触发 ⇒
+# 往 tmp/ci-helper 推这个清理会同时触发它 ⇒ 两边抢同一个 PR。
+#
+# 步骤：删掉 4 个临时文件 → 开 PR → 等必需检查 → squash 合并 → 删掉临时分支。
+
+on:
+  push:
+    branches:
+      - tmp/ci-cleanup
+
+permissions:
+  actions: write
+  checks: read
+  contents: write
+  issues: write
+  pull-requests: write
+
+concurrency:
+  group: tmp-ci-cleanup
+  cancel-in-progress: true
+
+jobs:
+  cleanup:
+    name: remove the temporary CI artifacts from main and delete the temp branches
+    runs-on: ubuntu-latest
+    timeout-minutes: 180
+    env:
+      GH_TOKEN: ${{ github.token }}
+      GH_REPO: ${{ github.repository }}
+      BRANCH: chore/remove-tmp-helper-artifacts
+    steps:
+      - name: checkout main
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          ref: main
+          path: repo
+          fetch-depth: 0
+
+      - name: remove the temporary artifacts and open the cleanup PR
+        run: |
+          set +e
+          set -uo pipefail
+          cd repo
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git checkout -B "$BRANCH" origin/main
+          git rm -q .github/workflows/tmp-ci-helper.yml issue-close.md pr-body.md probe-openeuler.sh
+          git commit -q -m "chore: 删掉临时 CI 工装（不该进 main）"
+          git push origin "$BRANCH" >> /tmp/cleanup.log 2>&1
+          gh pr create --base main --head "$BRANCH" \
+            --title "chore: 删掉临时 CI 工装（不该进 main）" \
+            --body "## 清理临时工装
+
+另一条会话把 `tmp/ci-helper` 当普通功能分支提了 PR #154 并合进了 main
+⇒ 临时工装留在了 main 里：
+
+- `.github/workflows/tmp-ci-helper.yml`（会推分支、开 PR、关单的临时 workflow）
+- `issue-close.md` / `pr-body.md` / `probe-openeuler.sh`（那套工装的附件）
+
+这个 PR 把这 4 个文件删掉，并删掉对应的临时分支，避免再被合一次。
+
+Closes #155" >> /tmp/cleanup.log 2>&1
+          exit 0
+
+      - name: wait for the required checks, merge
+        run: |
+          set +e
+          set -uo pipefail
+          cd repo
+          pr=$(gh pr view "$BRANCH" --json number -q .number 2>/dev/null)
+          {
+            echo "cleanup PR: $pr"
+          } >> /tmp/cleanup.log
+          if [ -z "$pr" ]; then
+            echo "NO PR — the PR creation step failed" >> /tmp/cleanup.log
+            exit 1
+          fi
+          head_sha=$(git ls-remote origin "refs/heads/$BRANCH" | cut -f1)
+          echo "gate SHA (head): $head_sha" >> /tmp/cleanup.log
+          bash tools/release_gate.sh "$head_sha" --timeout 5400 >> /tmp/cleanup.log 2>&1
+          gate_rc=$?
+          if [ "$gate_rc" -ne 0 ]; then
+            echo "GATE FAILED rc=$gate_rc" >> /tmp/cleanup.log
+            gh pr checks "$pr" >> /tmp/cleanup.log 2>&1
+            exit 1
+          fi
+          echo "gate passed" >> /tmp/cleanup.log
+          gh pr merge "$pr" --squash --delete-branch >> /tmp/cleanup.log 2>&1
+          merge_rc=$?
+          if [ "$merge_rc" -ne 0 ]; then
+            echo "MERGE FAILED rc=$merge_rc" >> /tmp/cleanup.log
+            exit 1
+          fi
+          echo "merged" >> /tmp/cleanup.log
+          exit 0
+
+      - name: delete the temporary branches
+        if: always()
+        run: |
+          set +e
+          set -uo pipefail
+          cd repo
+          for b in tmp/ci-helper tmp/ci-helper-log tmp/ci-helper-probe tmp/ci-cleanup feat/issue-146-skeleton; do
+            git push origin --delete "$b" >> /tmp/cleanup.log 2>&1
+            echo "deleted $b: rc=$?" >> /tmp/cleanup.log
+          done
+          exit 0
+
+      - name: publish the log (always)
+        if: always()
+        run: |
+          set +e
+          set -uo pipefail
+          cd repo
+          git worktree add -f /tmp/cleanwt -B tmp/ci-cleanup-log origin/main >> /tmp/cleanup.log 2>&1
+          if [ -d /tmp/cleanwt ]; then
+            cp /tmp/cleanup.log /tmp/cleanwt/cleanup-log.txt 2>/dev/null
+            cd /tmp/cleanwt
+            git config user.name "github-actions[bot]"
+            git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+            git add cleanup-log.txt 2>/dev/null
+            git commit -q -m "log: cleanup run" 2>/dev/null
+            git push -f origin "HEAD:tmp/ci-cleanup-log" >> /tmp/cleanup.log 2>&1
+          fi
+          exit 0
