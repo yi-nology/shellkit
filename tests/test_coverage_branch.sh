@@ -377,7 +377,7 @@ fi
 d=$(tmpdir) || _fail "cannot create tmpdir"
 _cov_tree "$d" || _fail "cannot build the mini tree"
 mkdir -p "$d/tools" || _fail "cannot create the tools dir"
-dd if=/dev/zero of="$d/tools/leftover.tmp" bs=1024 count=9216 2>/dev/null || \
+dd if=/dev/zero of="$d/tools/leftover.tmp" bs=1024 count=9216 2>/dev/null ||
   _fail "cannot create the leftover file"
 
 rc=0
