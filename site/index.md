@@ -34,7 +34,7 @@ footerHtml: '<a href="https://github.com/yi-nology/shellkit/blob/main/LICENSE">M
 
 ## 三件套怎么拼在一起
 
-<ShotFigure src="/diagrams/assembly.svg" caption="库是唯一真相源：shellkit new 把它 vendor 进工程，CLI 负责日常；26 个模块各管一件事" />
+<ShotFigure src="/diagrams/assembly.svg" caption="库是唯一真相源：shellkit new 把它 vendor 进工程，CLI 负责日常；27 个模块各管一件事" />
 
 每个模块的完整签名与退出码见 [API 参考](/reference/index.md)。
 
@@ -86,7 +86,7 @@ sha256 对不上就 `exit 5`，一个字节都不落地。
 | 想花五分钟判断值不值得用 | [三十秒](/guide/quickstart.md) |
 | 已经有脚本在跑，想接库但不想重写 | [五步迁移](/guide/migrating.md) |
 | 想判断「升级会不会弄坏我」 | [兼容与弃用](/guide/compatibility.md) |
-| 手上有具体活：改配置、下载校验、重试、单实例 | [Cookbook](/guide/cookbook.md) 25 个场景 |
+| 手上有具体活：改配置、下载校验、重试、单实例 | [Cookbook](/guide/cookbook.md) 27 个场景 |
 | 要查某个函数的确切签名和退出码 | [API 参考](/reference/index.md) |
 | 想让 AI 替你写 | [给 AI 用](/guide/ai.md) |
 | 想先看完整工程长什么样 | [示例工程](/guide/examples.md) |

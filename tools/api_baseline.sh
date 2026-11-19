@@ -611,6 +611,8 @@ proc_start	0,1,2,3	SHELLKIT_PROC_DIR="$PWD/proc_start-dir"; proc_start proc_star
 proc_stop	0,2,3	SHELLKIT_PROC_DIR="$PWD/proc_stop-dir"; proc_stop proc_stop_probe || exit 81; exit 0
 proc_is_running	0,1,2,3	SHELLKIT_PROC_DIR="$PWD/proc_is_running-dir"; proc_is_running proc_is_running_probe >/dev/null 2>&1; prc=$?; [ "$prc" = 1 ] || exit 81; exit 0
 proc_watchdog	0,1,2	SHELLKIT_PROC_DIR="$PWD/proc_watchdog-dir"; proc_watchdog --interval 1 --max-restarts 1 proc_watchdog_probe no-such-command-here >/dev/null 2>&1; prc=$?; [ "$prc" = 1 ] || exit 81; exit 0
+archive_list	0,2,3	mkdir -p archive_list-src; printf 'x' > archive_list-src/f; (cd archive_list-src && tar -cf ../archive_list.tar f) || exit 81; archive_list archive_list.tar >/dev/null || exit 82; archive_list no-such-archive.tar >/dev/null 2>&1; prc=$?; [ "$prc" = 3 ] || exit 83; exit 0
+archive_extract	0,2,3,5	mkdir -p archive_extract-src; printf 'x' > archive_extract-src/f; (cd archive_extract-src && tar -cf ../archive_extract.tar f) || exit 81; archive_extract archive_extract.tar archive_extract-d >/dev/null || exit 82; [ -f archive_extract-d/f ] || exit 83; archive_extract no-such-archive.tar archive_extract-d2 >/dev/null 2>&1; prc=$?; [ "$prc" = 3 ] || exit 84; exit 0
 SK_AB_PROBES
 
   while IFS=$'\t' read -r name reason; do

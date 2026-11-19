@@ -49,7 +49,7 @@ shellkit vendor .
 ```
 your-project/
 └─ vendor/shellkit/
-   ├─ lib/           26 个模块（bootstrap.sh + core/*.sh）
+   ├─ lib/           27 个模块（bootstrap.sh + core/*.sh）
    ├─ locale/        gettext 译文（en / zh_CN / zh_Hant）
    ├─ templates/     脚手架模板（副本自己就能 new / upgrade）
    ├─ tests/         测试基建（test_helper.sh + run.sh）
@@ -69,7 +69,7 @@ set -euo pipefail
 . "$(cd "$(dirname "$0")/.." && pwd)/vendor/shellkit/lib/bootstrap.sh"
 ```
 
-就这些。`bootstrap.sh` 会按拓扑序把 26 个模块加载好，设置 `SK_*` 常量与退出码，
+就这些。`bootstrap.sh` 会按拓扑序把 27 个模块加载好，设置 `SK_*` 常量与退出码，
 **不改你的 shell 选项、不改 cwd**——你的脚本还是你说了算。
 
 ### 为什么是 `vendor/` 而不是装到系统里
@@ -815,6 +815,60 @@ HEAD 的祖先，于是仍然失败。这一层用 `git fetch --deepen=N` 把边
 | `SHELLKIT_GIT_NO_FETCH` | `git_tag` 在浅克隆里不联网（跳过补 tag 与补深度） | `0`（联网） |
 | `SHELLKIT_GIT_DEEPEN` | `git_tag` 补深度时一次推多少个提交 | `50` |
 | `SHELLKIT_PROC_DIR` | `proc_*` 的 pid 文件与日志落点 | `${TMPDIR:-/tmp}/shellkit-proc-<uid>`（权限 700） |
+
+### 1.1.0 → 1.2.0：新增归档模块 + 演练不落盘（只加不改）
+
+这一版再加一块能力：
+
+| 模块 | 干什么 | 关键函数 |
+|---|---|---|
+| `archive` | 安全解包：路径穿越、软链逃逸、半截包三个坑一次挡住 | `archive_extract` `archive_list` |
+
+两族函数都标 `experimental`（不在 1.x 兼容承诺内）。
+
+`archive_extract` 解决的坑，在真实运维工程里是被手写了十几遍的那一段
+（「下载一个 release 包解开」）：
+
+| 坑 | 以前 | 现在 |
+|---|---|---|
+| 成员名带 `..` 或绝对路径 | 裸 `tar -xzf` 把它写到目标目录之外，而 **tar 退出码是 0** | **连解都不解**，退出码 5 |
+| 归档里的软链指向外面 | 同样写到外面 | **连解都不解**，退出码 5 |
+| 解到一半失败 | 目标目录留下**半份内容**，而调用方看到的是「目录存在了」 | 先解到临时目录，全通过才搬 ⇒ 目标目录一个字节都没变 |
+| 管道半截（`curl \| tar`） | tar 收到残缺输入，可能解压出一半 | 顺序改成「先落盘 → 校验 → 再解」 |
+| 校验和不匹配 | 已经解了一半才发现 | 一个字节都不解 |
+
+格式按**魔数**判（不靠扩展名 —— 扩展名是归档作者写的，不是事实），
+支持 tar / tar.gz / tar.bz2 / tar.xz / zip。
+
+**另一个新增：`SHELLKIT_DRY_RUN_FILES=1`**（演练不落盘）。
+
+`SHELLKIT_DRY_RUN=1` 只覆盖**跑命令**这一层（`run` / `svc`）—— 干跑就是不打这条命令。
+文件与配置这一层以前完全没覆盖，于是「演练」一遍，配置照样被改掉了：
+
+    $ SHELLKIT_DRY_RUN=1 bash -c '. lib/bootstrap.sh; conf_init /tmp/c; conf_set FOO bar'
+    $ cat /tmp/c
+    FOO=bar          # <= 演练完了，配置照样被改掉了
+
+新开关打开时，`fs_*` 与 `conf_*` 的写原语只打印一行计划（走 stderr，stdout 仍然只给数据）、
+**一个字节都不写**、返回 **0**（「跳过」不是错误，脚本的成功路径不该因此变红）。
+
+| 环境变量 | 作用 | 默认 |
+|---|---|---|
+| `SHELLKIT_DRY_RUN_FILES` | `fs_*` / `conf_*` 的写原语只演练不落盘 | `0`（照常写） |
+
+**为什么是独立开关而不是复用 `SHELLKIT_DRY_RUN`**：
+后者是 1.0 之前的兼容承诺面（`run` / `svc` 吃它）。让同一个开关突然开始拦文件写 ⇒
+既有脚本在 dry-run 下会**从「照做」变成「不做」** —— 那是改变既有结果，
+而且更危险：「演练」悄悄变成「跳过」，人以为它做过了。
+所以新能力 **opt-in**：默认行为一个字节都没变，既有脚本不用改任何代码。
+
+两个开关互不干扰，也可以叠加：
+
+    # 只定住文件
+    SHELLKIT_DRY_RUN_FILES=1 ./deploy.sh
+
+    # 命令也不跑 + 文件也不写
+    SHELLKIT_DRY_RUN=1 SHELLKIT_DRY_RUN_FILES=1 ./deploy.sh
 
 ### 1.0.0 → 1.1.0：会改变结果的行为变化
 

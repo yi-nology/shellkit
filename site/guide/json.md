@@ -65,7 +65,7 @@ jq '.result.exit_code' report.json
 | `broken` | array | 文件在但语法坏了 |
 
 `loadable` 与 `missing` / `empty` / `broken` 分开，是为了回答两个不同的问题：
-「清单上写了几个」和「现在真能加载几个」。只报前者，用户看到 26 个模块却起不来，
+「清单上写了几个」和「现在真能加载几个」。只报前者，用户看到 27 个模块却起不来，
 还得自己猜是哪一个坏了。
 
 ### `dependencies`

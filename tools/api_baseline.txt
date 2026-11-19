@@ -16,6 +16,8 @@
 #                   没写注解的按 experimental 落盘；是否已声明看 tools/stability_exempt.txt
 #
 baseline-version: 1.1.0
+archive_extract	0,2,3,5	active	-	probe	0,2,3,5	-	experimental
+archive_list	0,2,3	active	-	probe	0,2,3	-	experimental
 ask	0,1,2,3	active	-	probe	0,3	-	stable
 ask_choice	0,1,2,3	active	-	probe	0,3	-	stable
 ask_yn	0,1,2,3	active	-	probe	0,3	-	stable

@@ -68,7 +68,7 @@ https://yi-nology.github.io/shellkit/ —— 中文在 `/`，英文在 `/en/`。
 |---|---|
 | 想花五分钟判断值不值得用 | 往下读「三十秒」 |
 | 已经有脚本在跑，想接库但不想重写 | [docs/MIGRATING.md](docs/MIGRATING.md)：五步渐进，每一步都能单独上线 |
-| 手上有具体活：改配置、下载校验、重试、单实例、交互确认 | [docs/COOKBOOK.md](docs/COOKBOOK.md)：25 个场景，每节都是「场景 / 代码 / 为什么」 |
+| 手上有具体活：改配置、下载校验、重试、单实例、交互确认 | [docs/COOKBOOK.md](docs/COOKBOOK.md)：27 个场景，每节都是「场景 / 代码 / 为什么」 |
 | 想让 AI 替你写 | 根目录的 [AGENTS.md](AGENTS.md)；`shellkit new` 生成的工程也自带一份，写清了这行的坑 |
 | 想让 AI 直接读整个站点 | [llms.txt](https://yi-nology.github.io/shellkit/llms.txt)：一个文件读完整个站点 |
 | 要查某个函数的确切签名和退出码 | [docs/REFERENCE.md](docs/REFERENCE.md)：从源码注释生成，不会和代码漂移 |
@@ -600,7 +600,7 @@ shellkit                  生成器入口（也 source 自己的库）
 lib/bootstrap.sh          唯一入口，按 lib/modules.txt 的顺序加载
                           SHELLKIT_MODULES="log fs" 只加载这两个模块和它们的传递依赖
 lib/modules.txt           模块清单的唯一真相源：模块名 + 它依赖的模块
-lib/core/*.sh             26 个模块
+lib/core/*.sh             27 个模块
 templates/                shellkit new 的模板
 tests/                    断言库 + 逐文件执行器 + 每个模块一个测试
 tools/                    shdoc.awk 渲染 / comment_coverage.awk 查漏 / check_docs.sh 门禁 / term_shot.py 截图

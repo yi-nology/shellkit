@@ -3,6 +3,18 @@
 # 域：shellkit
 _sk_msg_lookup_shellkit() {
   case "$1" in
+    'archive not found') printf '%s' '封存檔案不存在' ;;
+    'cannot recognize the archive format') printf '%s' '認不出封存格式' ;;
+    'cannot create a temporary file') printf '%s' '無法建立暫存檔' ;;
+    'cannot list the archive') printf '%s' '無法列出封存內容' ;;
+    'the checksum does not match') printf '%s' '校驗和不符' ;;
+    'cannot create a temporary directory') printf '%s' '無法建立暫存目錄' ;;
+    'the archive contains unsafe paths and was not extracted') printf '%s' '封存含不安全的路徑，已拒絕解包' ;;
+    'the archive contains unsafe symlinks and was not extracted') printf '%s' '封存含不安全的軟連結，已拒絕解包' ;;
+    'unzip is required to extract zip archives') printf '%s' '解 zip 封存需要 unzip' ;;
+    'cannot extract the archive') printf '%s' '無法解包該封存' ;;
+    'cannot create the destination directory') printf '%s' '無法建立目標目錄' ;;
+    'cannot copy the extracted files into the destination') printf '%s' '無法把解包出來的檔案搬進目標目錄' ;;
     'invalid command name') printf '%s' '非法的指令名稱' ;;
     'duplicate command') printf '%s' '指令重複註冊' ;;
     'Usage') printf '%s' '用法' ;;
@@ -139,7 +151,6 @@ _sk_msg_lookup_shellkit() {
     'invalid concurrency') printf '%s' '非法的並行數' ;;
     'invalid timeout') printf '%s' '非法的逾時值' ;;
     'run_concurrent requires a command') printf '%s' 'run_concurrent 需要一條命令' ;;
-    'cannot create a temporary directory') printf '%s' '無法建立暫存目錄' ;;
     'timeout command not found, running without a timeout') printf '%s' '找不到 timeout 命令，將不設逾時執行' ;;
     'an instance produced no exit status') printf '%s' '實例沒有留下結束狀態' ;;
     'concurrent instances failed') printf '%s' '並行實例中有失敗' ;;
