@@ -145,10 +145,10 @@ _download_without_timeout() {
   while IFS= read -r __line || [ -n "$__line" ]; do
     __n=$((__n + 1))
     case "$__line" in
-      *'curl -fsSL'*|*'curl -sSL'*)
+      *'curl -fsSL'* | *'curl -sSL'*)
         # 已经有 --max-time / --connect-timeout 的算合规
         case "$__line" in
-          *'--max-time'*|*'--connect-timeout'*) continue ;;
+          *'--max-time'* | *'--connect-timeout'*) continue ;;
         esac
         printf '%s:%s: a download without a timeout will hang the job until the job-level timeout: %s\n' \
           "${__f##*/}" "$__n" "$__line"
