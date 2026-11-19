@@ -789,6 +789,7 @@ vendor 模式，缺 `vendor/modules.txt` 直接报 `inconsistent vendoring`。�
 | `shellkit doctor` 的 vendor 那一行 | 固定查 `vendor/shellkit`；副本在 `third_party/shellkit` 时报「没有副本」 | 查**解析出来的**落点；副本在别处时给出可操作提示（实际位置 + `SHELLKIT_VENDOR_DIR=...`）；落点配置非法时该行判 `FAIL`（JSON 里 `vendor.state` 为 `invalid`） | 副本不在默认落点的工程 |
 | `shellkit new` 生成的工程 | 副本固定落在 `vendor/shellkit`，模板里写死这个路径 | 落点跟着配置走；非默认落点时工程里多一份 `.shellkit-vendor-dir`（工程自描述：doctor / upgrade / repair.sh 都读它），生成的 Makefile 与入口脚本指向实际落点 | 用 `SHELLKIT_VENDOR_DIR=... shellkit new ...` 生成的工程 |
 | `repair.sh --project DIR` | 只认 `vendor/shellkit` 这个形状，别的位置的残骸不收拾 | 按同一套规则解析落点；配置非法时**什么都不删**并明确报错（退出码 1） | 副本在 `third_party/shellkit` 的工程 |
+| `archive_list` / `archive_extract` 遇到「列不出成员」的归档（包被截断、损坏） | 1.1.0 里没有这两个函数 | 返回 **5**（校验类：这个包坏了，重试同一个包不会成功）；缺 tar/unzip、文件不存在、格式认不出仍是 **3** | 按退出码分支的解包脚本：只认 3 的分支要同时认 5，否则「包坏了」会被当成「环境没配好」 |
 
 默认落点没变：不写 `.shellkit-vendor-dir`、不设环境变量时，一切与 1.1.0 完全一样。
 

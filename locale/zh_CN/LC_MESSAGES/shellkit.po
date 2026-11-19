@@ -4,7 +4,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: shellkit\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-11-19 13:01+0800\n"
+"POT-Creation-Date: 2026-11-19 13:51+0800\n"
 "PO-Revision-Date: 2026-11-08 00:00+0800\n"
 "Last-Translator: shellkit contributors\n"
 "Language-Team: shellkit contributors\n"
@@ -29,6 +29,12 @@ msgstr "无法列出归档内容"
 msgid "the checksum does not match"
 msgstr "校验和不匹配"
 
+msgid "the destination is a symlink"
+msgstr "目标目录是符号链接"
+
+msgid "the destination is not a directory"
+msgstr "目标目录不是目录"
+
 msgid "cannot create a temporary directory"
 msgstr "无法创建临时目录"
 
@@ -44,11 +50,14 @@ msgstr "解 zip 归档需要 unzip"
 msgid "cannot extract the archive"
 msgstr "无法解包该归档"
 
+msgid "cannot move the extracted files into the destination"
+msgstr ""
+
+msgid "some old files could not be moved back into the destination"
+msgstr "部分旧文件没能搬回目标目录"
+
 msgid "cannot create the destination directory"
 msgstr "无法创建目标目录"
-
-msgid "cannot copy the extracted files into the destination"
-msgstr "无法把解包出来的文件搬进目标目录"
 
 msgid "invalid command name"
 msgstr "非法的命令名"
@@ -1261,6 +1270,9 @@ msgstr "已开启强制模式"
 
 msgid "finished"
 msgstr "完成"
+
+#~ msgid "cannot copy the extracted files into the destination"
+#~ msgstr "无法把解包出来的文件搬进目标目录"
 
 #~ msgid ""
 #~ "legacy install without ownership fingerprints; every listed file will be "

@@ -5,6 +5,9 @@
 # 覆盖：
 #   1) 开关关着时，一切照常（默认行为一个字节都不变 —— 兼容承诺）
 #   2) 开关打开时，fs / conf 的写原语只打印计划、不落盘、返回 0
+#      （write / copy / backup / ensure_line / ensure_block / ensure_symlink /
+#        mkdir / conf_set / conf_unset / conf_disable 一个都不许落盘）
+#   2b) 干跑不吞「用法错」：参数非法仍然返回 2
 #   3) 干跑打印走 stderr（stdout 只给数据）
 #   4) 既有 SHELLKIT_DRY_RUN 的语义不变（它只管 run / svc）
 #
@@ -97,6 +100,44 @@ assert_eq "0" "$rc" "a dry-run symlink must not fail"
 if [ -e link.txt ] || [ -L link.txt ]; then
   _fail "the dry-run symlink must not create the link"
 fi
+
+# 块标记：同样不许落盘
+out=$(fs_ensure_block block.txt "BEGIN" "END" "body" 2>&1)
+assert_contains "$out" "[dry-run] ensure-block block.txt" "the dry-run plan must name the block"
+rc=0
+fs_ensure_block block.txt "BEGIN" "END" "body" >/dev/null 2>&1 || rc=$?
+assert_eq "0" "$rc" "a dry-run ensure_block must not fail"
+if [ -e block.txt ]; then
+  _fail "the dry-run ensure_block must not create the file"
+fi
+
+# 取消键 / 禁用键：同样不许落盘
+out=$(conf_unset DRYKEY 2>&1)
+assert_contains "$out" "[dry-run] conf-unset DRYKEY" "the dry-run plan must name the unset key"
+rc=0
+conf_unset DRYKEY >/dev/null 2>&1 || rc=$?
+assert_eq "0" "$rc" "a dry-run conf_unset must not fail"
+
+out=$(conf_disable DRYKEY 2>&1)
+assert_contains "$out" "[dry-run] conf-disable DRYKEY" "the dry-run plan must name the disabled key"
+rc=0
+conf_disable DRYKEY >/dev/null 2>&1 || rc=$?
+assert_eq "0" "$rc" "a dry-run conf_disable must not fail"
+
+# -------------------------------------------------------------------------
+# CASE 2b：干跑不吞「用法错」
+#
+# 守卫放在参数校验之前 ⇒ 干跑时把「参数错」也变成成功（rc=0）。
+# 那会让调用方以为「演练通过」，实际上一条命令都没跑对。
+# 干跑只该短路「写盘」，不该短路「判对错」。
+# -------------------------------------------------------------------------
+rc=0
+conf_set 'bad key!' v >/dev/null 2>&1 || rc=$?
+assert_eq "2" "$rc" "a dry-run conf_set must still reject an invalid key"
+
+rc=0
+fs_ensure_symlink >/dev/null 2>&1 || rc=$?
+assert_eq "2" "$rc" "a dry-run fs_ensure_symlink must still report a usage error"
 
 # -------------------------------------------------------------------------
 # CASE 3：干跑信息走 stderr，stdout 仍然只给数据

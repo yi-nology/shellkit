@@ -3,15 +3,26 @@
 # archive 模块的用例。
 #
 # 覆盖：
-#   1) 魔数识别：tar / tar.gz / zip 认得出；非归档认不出
+#   1) 魔数识别：tar / tar.gz / zip 认得出；老式 v7 tar（没有 ustar 魔数）
+#      也认得出；非归档认不出
 #   2) archive_list：列出成员，不写盘
 #   3) archive_extract：正常解包；sha256 对不上时一个字节都不解
 #   4) 路径穿越：成员名带 ../ 或绝对路径 ⇒ 拒绝解包，目标目录不变
-#   5) 软链逃逸：归档里的软链指向临时目录之外 ⇒ 拒绝解包
-#   6) 失败不留半份：损坏的归档解到一半失败时，目标目录一个字节都不变
+#   5) 软链：绝对目标 ⇒ 拒绝；相对目标解析后逃出归档 ⇒ 拒绝；
+#      良性相对软链（哪怕带 ../，只要仍在归档内）⇒ 必须成功
+#   6) 失败不留半份：解到一半失败时，目标目录一个字节都不变
+#   7) 覆盖安装：目标已有同名非空目录 ⇒ 必须成功，不能停在新旧混合
+#   8) 演练不落盘：SHELLKIT_DRY_RUN_FILES=1 时一个字节都不写
 #
 # 断言纪律：断完整文案不断单词；临时目录名只用编号；SHELLKIT_LANG=en 由
 # test_helper.sh 统一设置。
+#
+# 为什么自己写 tar 头（不用 tar，也不用 python3）：
+#   - tar 自己会把 ../ 开头的成员名「清洗」掉（GNU tar 报 Removing leading
+#     ../），造不出带穿越路径的包；
+#   - python3 不是每台机器都有 ⇒ 用它造包，判据会在没有 python3 的机器上
+#     **静默跳过**（假绿）。
+# 直接拼 512 字节的 tar 头，名字与软链目标都能任意指定，也不依赖外部工具。
 
 set -u
 
@@ -21,8 +32,6 @@ TEST_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." &>/dev/null && pwd)"
 
 . "$TEST_ROOT/lib/bootstrap.sh"
 
-LIB="$TEST_ROOT/lib/core/archive.sh"
-
 WORK=""
 _cleanup() {
   [ -n "$WORK" ] && rm -rf "$WORK"
@@ -31,6 +40,91 @@ trap '_cleanup' EXIT
 
 WORK=$(mktemp -d "${TMPDIR:-/tmp}/shellkit-arch-test.XXXXXX") || exit 1
 cd "$WORK" || exit 1
+
+# -------------------------------------------------------------------------
+# 造归档的底层工具：直接写 tar 头
+# -------------------------------------------------------------------------
+
+# _pad FILE N —— 在 FILE 末尾补 N 个 NUL 字节
+_pad() {
+  local __f=$1 __n=$2
+  [ "$__n" -gt 0 ] || return 0
+  dd if=/dev/zero bs="$__n" count=1 2>/dev/null >>"$__f"
+}
+
+# mk_tar_member OUT NAME [LINKNAME] [CONTENT] —— 造一个只含一个成员的 tar
+#
+# NAME 是成员名（可以带 ../ 或以 / 开头）；给了 LINKNAME 就是软链成员；
+# CONTENT 是普通文件成员的内容。
+#
+# tar 头布局（ustar，偏移从 0 起）：
+#   0-99 名字 / 100-107 模式 / 108-115 uid / 116-123 gid / 124-135 大小
+#   136-147 mtime / 148-155 校验和 / 156 类型 / 157-256 软链目标
+#   257-262 magic "ustar\0" / 263-264 版本 / 265-296 uname / 297-328 gname
+#   329-336 devmajor / 337-344 devminor / 345-499 prefix / 500-511 填充
+mk_tar_member() {
+  local __out=$1 __name=$2 __link=${3:-} __content=${4:-} __fmt=${5:-ustar}
+  local __hdr __size=0 __chk __n
+  [ -n "$__content" ] && __size=${#__content}
+  __hdr=$(mktemp "${TMPDIR:-/tmp}/shellkit-tarhdr.XXXXXX") || return 1
+  : >"$__hdr"
+
+  printf '%s' "$__name" >>"$__hdr"
+  _pad "$__hdr" $((100 - ${#__name}))
+  printf '0000644\000' >>"$__hdr"
+  printf '0000000\000' >>"$__hdr"
+  printf '0000000\000' >>"$__hdr"
+  printf '%011o\000' "$__size" >>"$__hdr"
+  printf '%011o\000' 0 >>"$__hdr"
+  # 校验和先占 8 个空格（算的时候按空格算），算完再填回去
+  printf '        ' >>"$__hdr"
+  if [ -n "$__link" ]; then
+    printf '2' >>"$__hdr"
+  else
+    printf '0' >>"$__hdr"
+  fi
+  if [ -n "$__link" ]; then
+    printf '%s' "$__link" >>"$__hdr"
+    _pad "$__hdr" $((100 - ${#__link}))
+  else
+    _pad "$__hdr" 100
+  fi
+  if [ "$__fmt" = "v7" ]; then
+    # v7 头没有 magic/version —— 257-264 全是零
+    _pad "$__hdr" 8
+  else
+    printf 'ustar\00000' >>"$__hdr"
+  fi
+  _pad "$__hdr" 32
+  _pad "$__hdr" 32
+  _pad "$__hdr" 8
+  _pad "$__hdr" 8
+  _pad "$__hdr" 155
+  _pad "$__hdr" 12
+
+  # od 会分多行输出 ⇒ 累加要跨行（每行各算各的会算出好几个和）
+  __n=$(od -An -tu1 -N512 "$__hdr" | awk '{for (i = 1; i <= NF; i++) s += $i} END {print s + 0}')
+  printf '%06o\000 ' "$__n" | dd of="$__hdr" bs=1 seek=148 count=8 conv=notrunc 2>/dev/null
+
+  cat "$__hdr" >>"$__out"
+  if [ "$__size" -gt 0 ]; then
+    printf '%s' "$__content" >>"$__out"
+  fi
+  __n=$((512 - __size % 512))
+  _pad "$__out" "$__n"
+  rm -f "$__hdr"
+  return 0
+}
+
+# tar_end OUT —— 补上 tar 的结束标记（两个 512 字节的零块）
+#
+# 单独拎出来，是因为多成员的包必须**先写完所有成员再补一次**结束标记：
+# 中间夹了结束标记的话，tar 读到第一个就停了，后面的成员根本看不见。
+tar_end() {
+  local __out=$1
+  _pad "$__out" 1024
+  return 0
+}
 
 # -------------------------------------------------------------------------
 # CASE 1：魔数识别
@@ -51,6 +145,18 @@ printf 'not an archive at all' >plain.txt
 if _sk_archive_kind plain.txt >/dev/null 2>&1; then
   _fail "a plain text file must not be recognized as an archive"
 fi
+
+# 老式 v7 tar 没有 ustar 魔数（偏移 257 处是零），但它仍是合法的 tar。
+# 只认魔数会把这类包判成「认不出格式」—— 明明能解开却说不能。
+mk_tar_member v7.tar "payload" "" "v7 content" v7
+tar_end v7.tar
+kind=$(_sk_archive_kind v7.tar)
+assert_eq "tar" "$kind" "an old-style tar without the ustar magic must still be recognized as tar"
+dest_v7="$WORK/destv7"
+rc=0
+archive_extract v7.tar "$dest_v7" >/dev/null 2>&1 || rc=$?
+assert_eq "0" "$rc" "an old-style tar must be extractable"
+assert_eq "v7 content" "$(cat "$dest_v7/payload" 2>/dev/null)" "the old-style tar must extract its content"
 
 # -------------------------------------------------------------------------
 # CASE 2：archive_list 列出成员，不写盘
@@ -98,105 +204,163 @@ assert_eq "hello" "$(cat "$dest3/a.txt" 2>/dev/null)" "the checksummed extractio
 # -------------------------------------------------------------------------
 # CASE 4：路径穿越必须被拒绝
 #
-# 造一个成员名带 ../ 的归档。GNU tar 造这种包时会警告「Removing leading
-# ../」，成员名本身被改了 ⇒ 换用 python3 直接写 tar 头，绕开 tar 的清洗。
-# 没有 python3 就用目录穿越的等价形式（成员名是绝对路径）。
+# 成员名带 ../ 时，归档里没有那个成员之前，tar 自己会把名字清洗掉；
+# 所以这里直接写 tar 头，成员名原样保留。
 # -------------------------------------------------------------------------
-mk_traversal() {
-  python3 - "$1" "$2" <<'PYEOF' 2>/dev/null
-import io, sys, tarfile
-out, mode = sys.argv[1], sys.argv[2]
-if mode == "abs":
-    name = "/tmp/shellkit-traversal-target.txt"
-else:
-    name = "../escaped.txt"
-buf = io.BytesIO()
-with tarfile.open(fileobj=buf, mode="w") as tf:
-    data = b"escaped"
-    ti = tarfile.TarInfo(name)
-    ti.size = len(data)
-    tf.addfile(ti, io.BytesIO(data))
-with open(out, "wb") as f:
-    f.write(buf.getvalue())
-PYEOF
-}
+mk_tar_member traversal.tar "../escaped.txt" "" "escaped"
+tar_end traversal.tar
+dest4="$WORK/dest4"
+mkdir -p "$dest4"
+rc=0
+archive_extract traversal.tar "$dest4" >"$WORK/out.txt" 2>"$WORK/err.txt" || rc=$?
+assert_eq "5" "$rc" "an archive with a traversing path must be refused"
+err=$(cat "$WORK/err.txt")
+assert_contains "$err" "unsafe paths" "the refusal must say the archive contains unsafe paths"
+assert_eq "" "$(ls -A "$dest4" 2>/dev/null)" "a refused archive must not extract anything"
+# 结构事实：穿越出去的落点必须没有被创建
+if [ -e "$WORK/escaped.txt" ]; then
+  _fail "the traversal target must not be created"
+fi
 
-if command -v python3 >/dev/null 2>&1; then
-  mk_traversal traversal.tar rel
-  if [ -f traversal.tar ]; then
-    dest4="$WORK/dest4"
-    mkdir -p "$dest4"
-    rc=0
-    archive_extract traversal.tar "$dest4" >"$WORK/out.txt" 2>"$WORK/err.txt" || rc=$?
-    assert_eq "5" "$rc" "an archive with a traversing path must be refused"
-    err=$(cat "$WORK/err.txt")
-    assert_contains "$err" "unsafe paths" "the refusal must say the archive contains unsafe paths"
-    assert_eq "" "$(ls -A "$dest4" 2>/dev/null)" "a refused archive must not extract anything"
-    # 穿越目标必须没被创建
-    if [ -e "$WORK/escaped.txt" ]; then
-      _fail "the traversal target must not be created"
-    fi
-    if [ -e /tmp/shellkit-traversal-target.txt ]; then
-      _fail "the absolute path target must not be created"
-      rm -f /tmp/shellkit-traversal-target.txt
-    fi
-  fi
+# 绝对路径成员 ⇒ 同样拒绝
+abs_target="$WORK/abs-escaped.txt"
+mk_tar_member absolute.tar "$abs_target" "" "escaped"
+tar_end absolute.tar
+dest4b="$WORK/dest4b"
+mkdir -p "$dest4b"
+rc=0
+archive_extract absolute.tar "$dest4b" >"$WORK/out.txt" 2>"$WORK/err.txt" || rc=$?
+assert_eq "5" "$rc" "an archive with an absolute member path must be refused"
+assert_eq "" "$(ls -A "$dest4b" 2>/dev/null)" "a refused archive must not extract anything"
+if [ -e "$abs_target" ]; then
+  _fail "the absolute path target must not be created"
 fi
 
 # -------------------------------------------------------------------------
-# CASE 5：软链逃逸必须被拒绝
+# CASE 5：软链的三种走向
 #
-# 归档里放一个指向临时目录之外的软链。解出来时软链本身没越界（它只是个
-# 链接），但经由它的成员文件会写到外面 —— 这是真实存在的逃逸路径。
+#   5a 绝对目标 ⇒ 拒绝（归档里的绝对软链不可能落在归档之内）
+#   5b 相对目标解析后逃出归档 ⇒ 拒绝
+#   5c 良性相对软链（带 ../ 但仍在归档内）⇒ 必须成功
 # -------------------------------------------------------------------------
-if command -v python3 >/dev/null 2>&1; then
-  python3 - symlink.tar <<'PYEOF' 2>/dev/null
-import io, tarfile
-buf = io.BytesIO()
-with tarfile.open(fileobj=buf, mode="w") as tf:
-    ti = tarfile.TarInfo("link")
-    ti.type = tarfile.SYMTYPE
-    ti.linkname = "/etc"
-    tf.addfile(ti)
-    data = b"through-the-link"
-    ti2 = tarfile.TarInfo("link/payload.txt")
-    ti2.size = len(data)
-    tf.addfile(ti2, io.BytesIO(data))
-with open("symlink.tar", "wb") as f:
-    f.write(buf.getvalue())
-PYEOF
-  if [ -f symlink.tar ]; then
-    dest5="$WORK/dest5"
-    mkdir -p "$dest5"
-    rc=0
-    archive_extract symlink.tar "$dest5" >"$WORK/out.txt" 2>"$WORK/err.txt" || rc=$?
-    assert_eq "5" "$rc" "an archive with an escaping symlink must be refused"
-    err=$(cat "$WORK/err.txt")
-    assert_contains "$err" "unsafe symlinks" "the refusal must say the archive contains unsafe symlinks"
-    # 关键结构事实：逃逸路径下不能有文件被写出去
-    if [ -e /etc/payload.txt ]; then
-      _fail "the escaping symlink must not write outside the destination"
-      rm -f /etc/payload.txt
-    fi
-  fi
+mk_tar_member symlink_abs.tar "link" "/etc"
+tar_end symlink_abs.tar
+dest5="$WORK/dest5"
+mkdir -p "$dest5"
+rc=0
+archive_extract symlink_abs.tar "$dest5" >"$WORK/out.txt" 2>"$WORK/err.txt" || rc=$?
+assert_eq "5" "$rc" "an archive with an absolute symlink target must be refused"
+err=$(cat "$WORK/err.txt")
+assert_contains "$err" "unsafe symlinks" "the refusal must say the archive contains unsafe symlinks"
+# 结构事实：目标目录里不能有那个软链
+if [ -e "$dest5/link" ] || [ -L "$dest5/link" ]; then
+  _fail "the refused symlink must not land in the destination"
 fi
 
+# 相对目标逃出归档：link -> ../../outside
+mk_tar_member symlink_rel.tar "link" "../../outside"
+tar_end symlink_rel.tar
+dest5b="$WORK/dest5b"
+mkdir -p "$dest5b"
+rc=0
+archive_extract symlink_rel.tar "$dest5b" >"$WORK/out.txt" 2>"$WORK/err.txt" || rc=$?
+assert_eq "5" "$rc" "an archive with an escaping relative symlink must be refused"
+err=$(cat "$WORK/err.txt")
+assert_contains "$err" "unsafe symlinks" "the refusal must say the archive contains unsafe symlinks"
+if [ -e "$dest5b/link" ] || [ -L "$dest5b/link" ]; then
+  _fail "the refused relative symlink must not land in the destination"
+fi
+
+# 多层软链：a -> b，b -> ../../outside（每一跳都要查，逃逸的那一跳必须被拒）
+mkdir -p multi
+printf 'payload' >multi/b
+tar -cf multi_base.tar -C multi b 2>/dev/null || _fail "cannot create the multi base archive"
+mk_tar_member symlink_chain.tar "a" "b"
+tar_end symlink_chain.tar
+dest5c="$WORK/dest5c"
+mkdir -p "$dest5c"
+rc=0
+archive_extract multi_base.tar "$dest5c" >/dev/null 2>&1 || rc=$?
+assert_eq "0" "$rc" "the multi-link base archive must be extracted"
+rc=0
+archive_extract symlink_chain.tar "$dest5c" >"$WORK/out.txt" 2>"$WORK/err.txt" || rc=$?
+assert_eq "0" "$rc" "a symlink chain that stays inside the archive must be accepted"
+assert_eq "b" "$(readlink "$dest5c/a" 2>/dev/null)" "the relative symlink must land in the destination"
+
+# 良性相对软链：link -> sibling（同目录），必须成功
+mkdir -p benign
+printf 'sibling payload' >benign/sibling
+tar -cf benign_base.tar -C benign sibling 2>/dev/null || _fail "cannot create the benign base archive"
+mk_tar_member symlink_benign.tar "link" "sibling"
+tar_end symlink_benign.tar
+dest5d="$WORK/dest5d"
+rc=0
+archive_extract benign_base.tar "$dest5d" >/dev/null 2>&1 || rc=$?
+assert_eq "0" "$rc" "the benign base archive must be extracted"
+rc=0
+archive_extract symlink_benign.tar "$dest5d" >"$WORK/out.txt" 2>"$WORK/err.txt" || rc=$?
+assert_eq "0" "$rc" "a benign relative symlink must be accepted"
+assert_eq "sibling" "$(readlink "$dest5d/link" 2>/dev/null)" "the benign symlink must be kept as a symlink"
+assert_eq "sibling payload" "$(cat "$dest5d/sibling" 2>/dev/null)" "the symlink target must be extracted too"
+
+# 良性但带 ../ 的相对软链：a/link -> ../b（仍在归档内）⇒ 必须成功
+mkdir -p inner
+printf 'inner payload' >inner/b
+tar -cf inner_base.tar -C inner b 2>/dev/null || _fail "cannot create the inner base archive"
+mk_tar_member symlink_inner.tar "a/link" "../b"
+tar_end symlink_inner.tar
+dest5e="$WORK/dest5e"
+rc=0
+archive_extract inner_base.tar "$dest5e" >/dev/null 2>&1 || rc=$?
+assert_eq "0" "$rc" "the inner base archive must be extracted"
+rc=0
+archive_extract symlink_inner.tar "$dest5e" >"$WORK/out.txt" 2>"$WORK/err.txt" || rc=$?
+assert_eq "0" "$rc" "a relative symlink that stays inside the archive must be accepted"
+assert_eq "../b" "$(readlink "$dest5e/a/link" 2>/dev/null)" "the inner relative symlink must be kept as a symlink"
+
 # -------------------------------------------------------------------------
-# CASE 6：损坏的归档解到一半失败 ⇒ 目标目录不变
+# CASE 6：解到一半失败 ⇒ 目标目录不变
+#
+# 头 700 字节：ustar 魔数还在（偏移 257），所以格式认得出；
+# 但内容块被截断了 ⇒ tar 读到一半失败。
 # -------------------------------------------------------------------------
-head -c 200 plain.tar >truncated.tar 2>/dev/null || _fail "cannot create the truncated archive"
+head -c 700 plain.tar >truncated.tar 2>/dev/null || _fail "cannot create the truncated archive"
 dest6="$WORK/dest6"
 mkdir -p "$dest6"
 rc=0
-archive_extract truncated.tar "$dest6" >/dev/null 2>&1 || rc=$?
-assert_ne "0" "$rc" "extracting a truncated archive must fail"
+archive_extract truncated.tar "$dest6" >"$WORK/out.txt" 2>"$WORK/err.txt" || rc=$?
+assert_eq "5" "$rc" "a truncated archive must be reported as a verification failure"
 assert_eq "" "$(ls -A "$dest6" 2>/dev/null)" "a failed extraction must leave the destination empty"
 
 # -------------------------------------------------------------------------
-# CASE 7：隐藏文件与嵌套目录必须一起搬过去
+# CASE 6b：列得出、解不开 ⇒ 5（解包失败那条路的判据）
 #
-# 隐藏文件是最容易漏的一类：复制时用通配符会漏掉以点开头的项 ——
-# 表现是「包里明明有 .env，解出来却不见了」，而退出码是 0。
+# 造一个「文件 a」与「a/b」同包的归档：成员列表列得出来（tar -tf 正常），
+# 但解的时候 a/b 建不出来（a 已经是文件）⇒ tar 报错退出。
+# 只断「列不出」的话，「解包失败 ⇒ 5」那条路会一直没有判据 ——
+# 造回缺陷（把解包失败也返回 0）用例也不会红。
+# -------------------------------------------------------------------------
+mk_tar_member conflict.tar "a" "" "file-a"
+mk_tar_member conflict.tar "a/b" "" "file-ab"
+tar_end conflict.tar
+dest6c="$WORK/dest6c"
+mkdir -p "$dest6c"
+rc=0
+archive_extract conflict.tar "$dest6c" >"$WORK/out.txt" 2>"$WORK/err.txt" || rc=$?
+assert_eq "5" "$rc" "an archive that cannot be extracted must be reported as a verification failure"
+assert_eq "" "$(ls -A "$dest6c" 2>/dev/null)" "a failed extraction must leave the destination empty"
+
+# 格式都认不出的 ⇒ 3（前置条件不满足）
+printf 'this is not an archive' >garbage.bin
+dest6b="$WORK/dest6b"
+mkdir -p "$dest6b"
+rc=0
+archive_extract garbage.bin "$dest6b" >/dev/null 2>&1 || rc=$?
+assert_eq "3" "$rc" "an unrecognized archive must report a precondition failure"
+assert_eq "" "$(ls -A "$dest6b" 2>/dev/null)" "an unrecognized archive must leave the destination empty"
+
+# -------------------------------------------------------------------------
+# CASE 7：隐藏文件与嵌套目录必须一起搬过去
 # -------------------------------------------------------------------------
 mkdir -p hidden/.config
 printf 'secret' >hidden/.env
@@ -211,8 +375,111 @@ assert_eq "secret" "$(cat "$dest7/.env" 2>/dev/null)" "the hidden file must be e
 assert_eq "cfg" "$(cat "$dest7/.config/app.conf" 2>/dev/null)" "the hidden nested file must be extracted"
 
 # -------------------------------------------------------------------------
-# CASE 8：缺参数 ⇒ 用法错（2）
+# CASE 8：覆盖安装 —— 目标已有同名非空目录
+#
+# 这是最常见的场景：把新包解到已有的安装目录。
+# 逐项 mv 在这里会撞上 "Directory not empty" 而失败，
+# 于是目标目录停在新旧混合的状态 —— 这条用例就是判它不再发生。
+# -------------------------------------------------------------------------
+mkdir -p oldpkg/sub
+printf 'v1' >oldpkg/a.txt
+printf 'old-only' >oldpkg/sub/keep.txt
+tar -cf oldpkg.tar -C oldpkg . 2>/dev/null || _fail "cannot create the old package archive"
 
+mkdir -p newpkg/sub
+printf 'v2' >newpkg/a.txt
+printf 'new-only' >newpkg/sub/new.txt
+tar -cf newpkg.tar -C newpkg . 2>/dev/null || _fail "cannot create the new package archive"
+
+dest8="$WORK/dest8"
+rc=0
+archive_extract oldpkg.tar "$dest8" >/dev/null 2>&1 || rc=$?
+assert_eq "0" "$rc" "the first extraction must succeed"
+assert_eq "v1" "$(cat "$dest8/a.txt" 2>/dev/null)" "the first package must be in place"
+
+rc=0
+archive_extract newpkg.tar "$dest8" >"$WORK/out.txt" 2>"$WORK/err.txt" || rc=$?
+assert_eq "0" "$rc" "extracting over an existing directory must succeed, not fail with a mixed state"
+assert_eq "v2" "$(cat "$dest8/a.txt" 2>/dev/null)" "the new package must win over the old file"
+assert_eq "new-only" "$(cat "$dest8/sub/new.txt" 2>/dev/null)" "the new nested file must be in place"
+assert_eq "old-only" "$(cat "$dest8/sub/keep.txt" 2>/dev/null)" "a file the new package does not provide must be kept"
+
+# -------------------------------------------------------------------------
+# CASE 9：演练不落盘
+# -------------------------------------------------------------------------
+dest9="$WORK/dest9"
+out=$(SHELLKIT_DRY_RUN_FILES=1 archive_extract plain.tar "$dest9" 2>&1)
+assert_contains "$out" "[dry-run] extract" "the dry-run plan must name the extraction"
+rc=0
+SHELLKIT_DRY_RUN_FILES=1 archive_extract plain.tar "$dest9" >/dev/null 2>&1 || rc=$?
+assert_eq "0" "$rc" "a dry-run extraction must not fail"
+if [ -e "$dest9" ]; then
+  _fail "the dry-run extraction must not create the destination"
+fi
+
+# -------------------------------------------------------------------------
+# CASE 10：目标目录是软链 ⇒ 拒绝（不顺着软链写）
+# -------------------------------------------------------------------------
+mkdir -p realdest
+ln -s realdest linkdest 2>/dev/null || _fail "cannot create the symlinked destination"
+rc=0
+archive_extract plain.tar "$WORK/linkdest" >"$WORK/out.txt" 2>"$WORK/err.txt" || rc=$?
+assert_eq "3" "$rc" "a symlinked destination must be refused"
+err=$(cat "$WORK/err.txt")
+assert_contains "$err" "the destination is a symlink" "the refusal must say the destination is a symlink"
+
+# -------------------------------------------------------------------------
+# CASE 12：压缩格式的解包分支
+#
+# tgz / tbz2 / txz / zip 四条分支曾经一条判据都没有 ——
+# 把分支写错（比如 tbz2 也走 tar -xzf）照样全绿。
+# 缺压缩器的机器上打印一行说明（不是静默跳过）。
+# -------------------------------------------------------------------------
+mkdir -p fmt
+printf 'fmt payload' >fmt/file.txt
+
+tar -czf fmt.tgz -C fmt file.txt 2>/dev/null || _fail "cannot create the tgz archive"
+# 魔数识别是**平台无关**的判据：解包走哪条分支由它决定，
+# 所以每种格式都要先钉住「认成什么」。
+assert_eq "tgz" "$(_sk_archive_kind fmt.tgz)" "a gzipped tar archive must be recognized as tgz"
+rc=0
+archive_extract fmt.tgz "$WORK/dest_tgz" >/dev/null 2>&1 || rc=$?
+assert_eq "0" "$rc" "extracting a tgz archive must succeed"
+assert_eq "fmt payload" "$(cat "$WORK/dest_tgz/file.txt" 2>/dev/null)" "the tgz archive must extract its content"
+
+if tar -cjf fmt.tbz2 -C fmt file.txt 2>/dev/null; then
+  assert_eq "tbz2" "$(_sk_archive_kind fmt.tbz2)" "a bzip2 tar archive must be recognized as tbz2"
+  rc=0
+  archive_extract fmt.tbz2 "$WORK/dest_tbz2" >/dev/null 2>&1 || rc=$?
+  assert_eq "0" "$rc" "extracting a tbz2 archive must succeed"
+  assert_eq "fmt payload" "$(cat "$WORK/dest_tbz2/file.txt" 2>/dev/null)" "the tbz2 archive must extract its content"
+else
+  printf 'note: bzip2 is unavailable here, the tbz2 branch is not exercised\n' >&2
+fi
+
+if tar -cJf fmt.txz -C fmt file.txt 2>/dev/null; then
+  assert_eq "txz" "$(_sk_archive_kind fmt.txz)" "an xz tar archive must be recognized as txz"
+  rc=0
+  archive_extract fmt.txz "$WORK/dest_txz" >/dev/null 2>&1 || rc=$?
+  assert_eq "0" "$rc" "extracting a txz archive must succeed"
+  assert_eq "fmt payload" "$(cat "$WORK/dest_txz/file.txt" 2>/dev/null)" "the txz archive must extract its content"
+else
+  printf 'note: xz is unavailable here, the txz branch is not exercised\n' >&2
+fi
+
+if command -v zip >/dev/null 2>&1 && command -v unzip >/dev/null 2>&1; then
+  (cd fmt && zip -q "$WORK/fmt.zip" file.txt) 2>/dev/null || _fail "cannot create the zip archive"
+  assert_eq "zip" "$(_sk_archive_kind "$WORK/fmt.zip")" "a zip archive must be recognized as zip"
+  rc=0
+  archive_extract "$WORK/fmt.zip" "$WORK/dest_zip" >/dev/null 2>&1 || rc=$?
+  assert_eq "0" "$rc" "extracting a zip archive must succeed"
+  assert_eq "fmt payload" "$(cat "$WORK/dest_zip/file.txt" 2>/dev/null)" "the zip archive must extract its content"
+else
+  printf 'note: zip or unzip is unavailable here, the zip branch is not exercised\n' >&2
+fi
+
+# -------------------------------------------------------------------------
+# CASE 13：缺参数 ⇒ 用法错（2）
 # -------------------------------------------------------------------------
 rc=0
 archive_extract >/dev/null 2>&1 || rc=$?

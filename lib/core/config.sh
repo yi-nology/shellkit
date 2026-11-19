@@ -543,9 +543,6 @@ conf_source() {
 conf_set() {
   local __key=${1:-} __value=${2:-} __file=${SK_CONF_FILE:-} __line __tmp __origin __replaced=0 __werr=0
   local __fmt=${SK_CONF_FORMAT:-auto}
-  if _sk_fs_dry_run "conf-set" "$__key"; then
-    return 0
-  fi
   if ! validate_key "$__key"; then
     log_error "$(_t 'invalid configuration key'): $__key"
     return "$SK_USAGE"
@@ -553,6 +550,10 @@ conf_set() {
   if ! validate_single_line "$__value"; then
     log_error "$(_t 'configuration value must be a single line'): $__key"
     return "$SK_USAGE"
+  fi
+  # 守卫放在校验之后：干跑也不该把「用法错」吞成成功
+  if _sk_fs_dry_run "conf-set" "$__key"; then
+    return 0
   fi
   if [ -z "$__file" ]; then
     log_error "$(_t 'configuration file is not initialized')"
@@ -609,11 +610,12 @@ conf_set() {
 conf_unset() {
   local __key=${1:-} __file=${SK_CONF_FILE:-} __line __tmp __werr=0
   local __fmt=${SK_CONF_FORMAT:-auto}
-  if _sk_fs_dry_run "conf-unset" "$__key"; then
-    return 0
-  fi
   if ! validate_key "$__key"; then
     return "$SK_USAGE"
+  fi
+  # 守卫放在校验之后：干跑也不该把「用法错」吞成成功
+  if _sk_fs_dry_run "conf-unset" "$__key"; then
+    return 0
   fi
   if ! conf_has "$__key"; then
     return 0
@@ -653,11 +655,12 @@ conf_unset() {
 conf_disable() {
   local __key=${1:-} __file=${SK_CONF_FILE:-} __line __tmp __werr=0
   local __fmt=${SK_CONF_FORMAT:-auto}
-  if _sk_fs_dry_run "conf-disable" "$__key"; then
-    return 0
-  fi
   if ! validate_key "$__key"; then
     return "$SK_USAGE"
+  fi
+  # 守卫放在校验之后：干跑也不该把「用法错」吞成成功
+  if _sk_fs_dry_run "conf-disable" "$__key"; then
+    return 0
   fi
   if ! conf_has "$__key"; then
     return 0

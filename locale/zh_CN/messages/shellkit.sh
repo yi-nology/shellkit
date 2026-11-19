@@ -8,13 +8,15 @@ _sk_msg_lookup_shellkit() {
     'cannot create a temporary file') printf '%s' '无法创建临时文件' ;;
     'cannot list the archive') printf '%s' '无法列出归档内容' ;;
     'the checksum does not match') printf '%s' '校验和不匹配' ;;
+    'the destination is a symlink') printf '%s' '目标目录是符号链接' ;;
+    'the destination is not a directory') printf '%s' '目标目录不是目录' ;;
     'cannot create a temporary directory') printf '%s' '无法创建临时目录' ;;
     'the archive contains unsafe paths and was not extracted') printf '%s' '归档含不安全的路径，已拒绝解包' ;;
     'the archive contains unsafe symlinks and was not extracted') printf '%s' '归档含不安全的软链，已拒绝解包' ;;
     'unzip is required to extract zip archives') printf '%s' '解 zip 归档需要 unzip' ;;
     'cannot extract the archive') printf '%s' '无法解包该归档' ;;
+    'some old files could not be moved back into the destination') printf '%s' '部分旧文件没能搬回目标目录' ;;
     'cannot create the destination directory') printf '%s' '无法创建目标目录' ;;
-    'cannot copy the extracted files into the destination') printf '%s' '无法把解包出来的文件搬进目标目录' ;;
     'invalid command name') printf '%s' '非法的命令名' ;;
     'duplicate command') printf '%s' '命令重复注册' ;;
     'Usage') printf '%s' '用法' ;;

@@ -553,13 +553,14 @@ fs_ensure_block() {
 # @stability stable
 fs_ensure_symlink() {
   local __target=${1:-} __link=${2:-} __cur
-  if _sk_fs_dry_run "symlink" "$__target -> $__link"; then
-    return 0
-  fi
   _sk_need_args "$#" 2 "fs_ensure_symlink TARGET LINK" || return $?
   if [ -z "$__target" ] || [ -z "$__link" ]; then
     log_error "$(_t 'fs_ensure_symlink requires TARGET and LINK')"
     return "$SK_USAGE"
+  fi
+  # 守卫放在参数校验之后：干跑也不该把「用法错」吞成成功
+  if _sk_fs_dry_run "symlink" "$__target -> $__link"; then
+    return 0
   fi
   fs_ensure_dir "$(dirname "$__link")" "" || return 1
   if [ -L "$__link" ]; then

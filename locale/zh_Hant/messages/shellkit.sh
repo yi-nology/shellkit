@@ -8,13 +8,15 @@ _sk_msg_lookup_shellkit() {
     'cannot create a temporary file') printf '%s' '無法建立暫存檔' ;;
     'cannot list the archive') printf '%s' '無法列出封存內容' ;;
     'the checksum does not match') printf '%s' '校驗和不符' ;;
+    'the destination is a symlink') printf '%s' '目標目錄是符號連結' ;;
+    'the destination is not a directory') printf '%s' '目標目錄不是目錄' ;;
     'cannot create a temporary directory') printf '%s' '無法建立暫存目錄' ;;
     'the archive contains unsafe paths and was not extracted') printf '%s' '封存含不安全的路徑，已拒絕解包' ;;
     'the archive contains unsafe symlinks and was not extracted') printf '%s' '封存含不安全的軟連結，已拒絕解包' ;;
     'unzip is required to extract zip archives') printf '%s' '解 zip 封存需要 unzip' ;;
     'cannot extract the archive') printf '%s' '無法解包該封存' ;;
+    'some old files could not be moved back into the destination') printf '%s' '部分舊檔案沒能搬回目標目錄' ;;
     'cannot create the destination directory') printf '%s' '無法建立目標目錄' ;;
-    'cannot copy the extracted files into the destination') printf '%s' '無法把解包出來的檔案搬進目標目錄' ;;
     'invalid command name') printf '%s' '非法的指令名稱' ;;
     'duplicate command') printf '%s' '指令重複註冊' ;;
     'Usage') printf '%s' '用法' ;;
