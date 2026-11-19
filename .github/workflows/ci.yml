@@ -236,12 +236,6 @@ jobs:
                 echo 'could not install a downloader (curl/wget) on this image' >&2
             fi
           fi
-          # 下载器兜底：curl / wget / python3 任选其一，缺哪个都不该让 job 挂掉。
-          # 三个都没有时按发行版补一个 —— 包名不能想当然：Rocky 9 只有 curl-minimal
-          # （装 curl 会与它冲突，靠 --allowerasing 换掉），openEuler 有 curl、没有
-          # curl-minimal ⇒ 两个都试，谁有装谁。
-          # 失败不吞：装不上就把原因打出来，别让报错点离病根太远。
-          #
           # ★ 每个下载都带**超时**（2026-11-19 实测踩到）：
           # 只给 `dnf install` 加内层超时是不够的 —— 装完包之后的 sk_fetch
           # （拉 shellcheck / shfmt）用的是裸 `curl -fsSL`，**没有 --max-time**。

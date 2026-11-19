@@ -128,12 +128,13 @@ _sk_fs_mode() {
 fs_atomic_copy() {
   local __src=${1:-} __dst=${2:-} __mode=${3:-} __dir __tmp __perm=""
   _sk_need_args "$#" 2 "fs_atomic_copy SRC DST [MODE]" || return $?
-  if _sk_fs_dry_run "copy" "$__src -> $__dst"; then
-    return 0
-  fi
   if [ ! -f "$__src" ]; then
     log_error "$(_t 'source file does not exist'): $__src"
     return 1
+  fi
+  # 守卫放在前置条件之后：干跑只该短路「写盘」，不该短路「判对错」
+  if _sk_fs_dry_run "copy" "$__src -> $__dst"; then
+    return 0
   fi
   __dir=$(dirname "$__dst")
   fs_ensure_dir "$__dir" "" || return 1

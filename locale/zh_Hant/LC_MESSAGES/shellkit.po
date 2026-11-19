@@ -4,7 +4,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: shellkit\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-11-19 16:20+0800\n"
+"POT-Creation-Date: 2026-11-19 17:16+0800\n"
 "PO-Revision-Date: 2026-11-08 00:00+0800\n"
 "Last-Translator: shellkit contributors\n"
 "Language-Team: shellkit contributors\n"
@@ -14,9 +14,8 @@ msgstr ""
 "Content-Transfer-Encoding: 8bit\n"
 "Plural-Forms: nplurals=1; plural=0;\n"
 
-msgid ""
-"a path with a different type existed at the destination and was replaced"
-msgstr "目標目錄上存在類型不同的路徑，已被替換"
+msgid "a path with a different type existed at the destination"
+msgstr "目標目錄上存在類型不同的路徑"
 
 msgid "archive not found"
 msgstr "封存檔案不存在"
@@ -59,6 +58,9 @@ msgstr "解 zip 封存需要 unzip"
 
 msgid "cannot extract the archive"
 msgstr "無法解包該封存"
+
+msgid "the extracted files contain a symlink that escapes the destination"
+msgstr "解出來的檔案裡有逃逸目標目錄的軟鏈"
 
 msgid "the old destination could not be restored, it is left at"
 msgstr "舊的目標目錄沒能放回去，留在"
@@ -1280,6 +1282,10 @@ msgstr "已開啟強制模式"
 
 msgid "finished"
 msgstr "完成"
+
+#~ msgid ""
+#~ "a path with a different type existed at the destination and was replaced"
+#~ msgstr "目標目錄上存在類型不同的路徑，已被替換"
 
 #~ msgid "some old files could not be moved back into the destination"
 #~ msgstr "部分舊檔案沒能搬回目標目錄"

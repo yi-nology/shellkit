@@ -8,7 +8,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: shellkit 1.1.0\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-11-19 16:20+0800\n"
+"POT-Creation-Date: 2026-11-19 17:16+0800\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language-Team: LANGUAGE <LL@li.org>\n"
@@ -17,8 +17,7 @@ msgstr ""
 "Content-Type: text/plain; charset=CHARSET\n"
 "Content-Transfer-Encoding: 8bit\n"
 
-msgid ""
-"a path with a different type existed at the destination and was replaced"
+msgid "a path with a different type existed at the destination"
 msgstr ""
 
 msgid "archive not found"
@@ -61,6 +60,9 @@ msgid "unzip is required to extract zip archives"
 msgstr ""
 
 msgid "cannot extract the archive"
+msgstr ""
+
+msgid "the extracted files contain a symlink that escapes the destination"
 msgstr ""
 
 msgid "the old destination could not be restored, it is left at"

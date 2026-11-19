@@ -3,7 +3,7 @@
 # 域：shellkit
 _sk_msg_lookup_shellkit() {
   case "$1" in
-    'a path with a different type existed at the destination and was replaced') printf '%s' '目標目錄上存在類型不同的路徑，已被替換' ;;
+    'a path with a different type existed at the destination') printf '%s' '目標目錄上存在類型不同的路徑' ;;
     'archive not found') printf '%s' '封存檔案不存在' ;;
     'cannot recognize the archive format') printf '%s' '認不出封存格式' ;;
     'cannot create a temporary file') printf '%s' '無法建立暫存檔' ;;
@@ -18,6 +18,7 @@ _sk_msg_lookup_shellkit() {
     'the archive contains unsafe symlinks and was not extracted') printf '%s' '封存含不安全的軟連結，已拒絕解包' ;;
     'unzip is required to extract zip archives') printf '%s' '解 zip 封存需要 unzip' ;;
     'cannot extract the archive') printf '%s' '無法解包該封存' ;;
+    'the extracted files contain a symlink that escapes the destination') printf '%s' '解出來的檔案裡有逃逸目標目錄的軟鏈' ;;
     'the old destination could not be restored, it is left at') printf '%s' '舊的目標目錄沒能放回去，留在' ;;
     'cannot move the extracted files into the destination') printf '%s' '無法把解包出來的檔案搬進目標目錄' ;;
     'cannot create the destination directory') printf '%s' '無法建立目標目錄' ;;

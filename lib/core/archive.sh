@@ -120,13 +120,24 @@ _sk_archive_symlink_targets() {
       awk '
         substr($0,1,1) != "l" { next }
         {
-          n = length($0)
+          n = length($0); idx = 0
           for (i = 1; i + 3 <= n; i++) {
-            if (substr($0,i,4) == " -> " && !(i > 1 && substr($0,i-1,1) == "\\")) {
-              print substr($0, i + 4)
-              break
-            }
+            if (substr($0,i,4) == " -> " && !(i > 1 && substr($0,i-1,1) == "\\")) { idx = i; break }
           }
+          if (idx == 0) next
+          # 目标 = " -> " 之后的全部
+          target = substr($0, idx + 4)
+          # 成员名 = 「 -> 」之前的**最后一个字段**。GNU tar 与 bsdtar 的
+          # 元数据字段数不同、日期写法也不同（bsdtar 对旧文件只打日期、不打
+          # 时间）⇒ 从尾部取，两边都对。
+          # 名字里带空格时会被截短 ⇒ 算出来的目录更浅 ⇒ 「..」更容易被判成
+          # 逃逸 ⇒ 判定偏保守（宁可误拒，不可放过）。
+          head = substr($0, 1, idx - 1)
+          sub(/[ \t]+$/, "", head)
+          nf = split(head, __f, /[ \t]+/)
+          name = ""
+          if (nf > 0) name = __f[nf]
+          printf "%s\t%s\n", name, target
         }
       ' "$__raw" >"$__out" 2>/dev/null
       rm -f "$__raw"
@@ -239,9 +250,9 @@ _sk_archive_merge() {
     # 同名且不是「目录对目录」⇒ 类型冲突（目录 ↔ 文件/软链）。
     # 覆盖语义下这会连带删掉一个目录里的内容 —— 说出来，不静默。
     if [ -d "$__e" ] && [ ! -d "$__dst/$__name" ]; then
-      log_warn "$(_t 'a path with a different type existed at the destination and was replaced'): $__dst/$__name"
+      log_warn "$(_t 'a path with a different type existed at the destination'): $__dst/$__name"
     elif [ ! -d "$__e" ] && [ -d "$__dst/$__name" ]; then
-      log_warn "$(_t 'a path with a different type existed at the destination and was replaced'): $__dst/$__name"
+      log_warn "$(_t 'a path with a different type existed at the destination'): $__dst/$__name"
     fi
     if [ "$__win" = "src" ]; then
       # 同名且类型不同 ⇒ 归档那份赢：先把旧的挪掉再搬新的
@@ -427,6 +438,8 @@ archive_list() {
 #   - `<目标目录的父目录>/.shellkit-old.XXXXXX`：换上去的瞬间被挪开的旧目录
 #     —— 这一处是**旧目标目录本身**，目标目录此刻可能整个不存在，
 #     把它改名搬回去即可恢复。
+#   - `<目标目录>/.shellkit-stage.XXXXXX`：父目录不可写时的降级暂存目录
+#     —— 它落在**目标目录里面**，强杀后残留会出现在用户的安装目录里。
 #
 # @exitcode 0 解包成功
 # @exitcode 2 参数错
@@ -434,9 +447,9 @@ archive_list() {
 # @exitcode 5 校验和不匹配，成员列不出来，归档里有不安全路径 / 软链，或解包失败
 # @stability experimental
 archive_extract() {
-  local __f=${1:-} __dest=${2:-} __expect=${3:-} __kind __work __meta __stage __old
-  local __list __targets __links __bad __rel __link __target __dir __parent __mode __missing
-  local __atomic=1 __rc=0
+  local __f=${1:-} __dest=${2:-} __expect=${3:-} __kind __work="" __meta __stage __old
+  local __list __targets __links __bad __rel __link __target __member __dir __parent __mode __missing
+  local __atomic=1 __rc=0 __dry=0 __restore_failed=0
   _sk_need_args "$#" 2 "archive_extract ARCHIVE DEST [SHA256]" || return $?
 
   if [ ! -f "$__f" ]; then
@@ -467,10 +480,12 @@ archive_extract() {
     return "$SK_PRECOND"
   fi
 
-  # 演练：一个字节都不写（放在目标校验之后 —— 干跑也不该把「目标不可用」
-  # 吞成成功；与 fs / conf 的守卫同一口径）
+  # 演练：一个字节都不写。守卫放在目标校验之后（干跑也不该把「目标不可用」
+  # 吞成成功），但**返回点**在安全检查之后 —— 干跑也要把「这个包安不安全」
+  # 判出来：演练说安全、真跑被拒，演练就失去了意义。
+  __dry=0
   if _sk_fs_dry_run "extract" "$__f -> $__dest"; then
-    return 0
+    __dry=1
   fi
 
   # 记下旧目录的权限：整体换上去之后要还原（暂存目录是 0700 的）
@@ -488,26 +503,9 @@ archive_extract() {
     __dest=${__dest%/}
   done
   __parent=$(dirname "$__dest")
-  fs_ensure_dir "$__parent" "" >/dev/null 2>&1 || true
 
-  # 暂存目录：优先放在 DEST 的同级（同文件系统 ⇒ 最后是 rename 而不是跨设备复制）
-  __work=$(mktemp -d "$__parent/.shellkit-extract.XXXXXX" 2>/dev/null) || __work=""
-  if [ -z "$__work" ]; then
-    # 父目录不可写 ⇒ 退化为就地合并（同样的语义，但不保证原子）
-    __atomic=0
-    if [ -d "$__dest" ]; then
-      __work=$(mktemp -d "$__dest/.shellkit-stage.XXXXXX" 2>/dev/null) || __work=""
-    fi
-    if [ -z "$__work" ]; then
-      __work=$(mktemp -d "${TMPDIR:-/tmp}/shellkit-extract.XXXXXX") || {
-        log_error "$(_t 'cannot create a temporary directory')"
-        return "$SK_PRECOND"
-      }
-    fi
-  fi
   # 清单文件放在暂存目录之外：搬内容时不能被一起搬走。
   __meta=$(mktemp -d "${TMPDIR:-/tmp}/shellkit-archive-meta.XXXXXX") || {
-    rm -rf "$__work"
     log_error "$(_t 'cannot create a temporary directory')"
     return "$SK_PRECOND"
   }
@@ -520,7 +518,7 @@ archive_extract() {
   _sk_archive_members "$__f" "$__kind" "$__list"
   __rc=$?
   if [ "$__rc" -ne 0 ]; then
-    rm -rf "$__work" "$__meta"
+    rm -rf "$__meta"
     __missing=$(_sk_archive_missing_decompressor "$__kind")
     if [ -n "$__missing" ]; then
       log_error "$(_t 'the decompressor for this archive format is not available'): $__missing"
@@ -532,7 +530,7 @@ archive_extract() {
   # 结尾标记必须齐全：GNU tar 读到 EOF 就当归档结束、照样退出 0 ⇒
   # 截断的包会被静默解成「只有前几个成员」⇒ 半份内容被装上而调用方拿到成功
   if _sk_archive_is_truncated "$__f" "$__kind"; then
-    rm -rf "$__work" "$__meta"
+    rm -rf "$__meta"
     log_error "$(_t 'the archive is truncated or has trailing data'): $__f"
     return "$SK_VERIFY"
   fi
@@ -552,7 +550,7 @@ archive_extract() {
     while IFS= read -r __rel; do
       log_error "  $__rel"
     done <"$__bad"
-    rm -rf "$__work" "$__meta"
+    rm -rf "$__meta"
     return "$SK_VERIFY"
   fi
 
@@ -561,11 +559,25 @@ archive_extract() {
   _sk_archive_symlink_targets "$__f" "$__kind" "$__targets" 2>/dev/null || true
   : >"$__bad"
   if [ -s "$__targets" ]; then
-    while IFS= read -r __target; do
+    while IFS=$'\t' read -r __member __target; do
       [ -n "$__target" ] || continue
       case "$__target" in
-        /*) printf '%s\n' "$__target" >>"$__bad" ;;
+        /*)
+          # 绝对目标：归档里的绝对软链不可能落在归档之内
+          printf '%s\n' "${__member:-$__target}" >>"$__bad"
+          continue
+          ;;
       esac
+      # 相对目标：按**它自己所在目录**做词法解析（与第三遍同一口径）。
+      # 解析后落在归档根之外 ⇒ 逃逸 ⇒ 解之前就拒。
+      # 成员名解析不出来（tar 的输出形状变了）⇒ 跳过，交给第三遍兜底：
+      # 这一遍是**加一层**，误拒比漏放更糟。
+      [ -n "$__member" ] || continue
+      __dir=${__member%/*}
+      [ "$__dir" = "$__member" ] && __dir=""
+      if ! _sk_archive_resolve_rel "$__dir" "$__target" >/dev/null 2>&1; then
+        printf '%s\n' "$__member" >>"$__bad"
+      fi
     done <"$__targets"
   fi
   if [ -s "$__bad" ]; then
@@ -574,8 +586,34 @@ archive_extract() {
     while IFS= read -r __rel; do
       log_error "  $__rel"
     done <"$__bad"
-    rm -rf "$__work" "$__meta"
+    rm -rf "$__meta"
     return "$SK_VERIFY"
+  fi
+
+  # 演练到这里收尾：安全检查都过了（不安全的包在干跑下同样被拒），
+  # 目标目录一个字节都没动 —— 连暂存目录都没建过。
+  if [ "$__dry" = "1" ]; then
+    rm -rf "$__meta"
+    return 0
+  fi
+
+  # 建父目录与暂存目录：优先放在 DEST 的同级（同文件系统 ⇒ 最后是 rename
+  # 而不是跨设备复制）
+  fs_ensure_dir "$__parent" "" >/dev/null 2>&1 || true
+  __work=$(mktemp -d "$__parent/.shellkit-extract.XXXXXX" 2>/dev/null) || __work=""
+  if [ -z "$__work" ]; then
+    # 父目录不可写 ⇒ 退化为就地合并（同样的语义，但不保证原子）
+    __atomic=0
+    if [ -d "$__dest" ]; then
+      __work=$(mktemp -d "$__dest/.shellkit-stage.XXXXXX" 2>/dev/null) || __work=""
+    fi
+    if [ -z "$__work" ]; then
+      __work=$(mktemp -d "${TMPDIR:-/tmp}/shellkit-extract.XXXXXX") || {
+        rm -rf "$__meta"
+        log_error "$(_t 'cannot create a temporary directory')"
+        return "$SK_PRECOND"
+      }
+    fi
   fi
 
   # 解到暂存目录
@@ -634,7 +672,7 @@ archive_extract() {
   done <"$__links"
   if [ -s "$__bad" ]; then
     # 明细先打出来，再清理（$__bad 在 $__meta 里）
-    log_error "$(_t 'the archive contains unsafe symlinks and was not extracted'): $__f"
+    log_error "$(_t 'the extracted files contain a symlink that escapes the destination'): $__f"
     while IFS= read -r __rel; do
       log_error "  $__rel"
     done <"$__bad"
@@ -676,12 +714,16 @@ archive_extract() {
       __work=""
       # 旧目录里目标没有的路径搬回去（包里有的以包为准）
       if [ -n "$__old" ]; then
-        if _sk_archive_merge "$__dest" "$__old" "dst" 2>/dev/null; then
+        # 不吞 stderr：类型冲突的告警要从这里冒出去（吞掉就成了静默覆盖）
+        if _sk_archive_merge "$__dest" "$__old" "dst"; then
           rm -rf "$__old"
         else
           # 合并失败 ⇒ **不能删** __old：里面是还没搬回去的旧文件，
           # 删了就永久没了。留在原地并把位置报出来，让人自己捡回去。
+          # 也不能报成功：调用方按退出码判断 ⇒ 报 0 就是「装好了」，
+          # 而目标目录里其实缺了旧文件（半份安装被当成完整安装）。
           log_error "$(_t 'the old destination could not be restored, it is left at'): $__old"
+          __restore_failed=1
         fi
       fi
     fi
@@ -703,5 +745,10 @@ archive_extract() {
   fi
 
   rm -rf "$__meta"
+  # 旧内容没搬回去 ⇒ 退 5（与降级路径的合并失败同一口径）：
+  # 「返回码就是接口的一部分」—— 失败却报成功，调用方无从分辨。
+  if [ "$__restore_failed" = "1" ]; then
+    return "$SK_VERIFY"
+  fi
   return 0
 }

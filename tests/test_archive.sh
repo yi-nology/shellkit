@@ -75,7 +75,9 @@ mk_tar_member() {
   printf '0000000\000' >>"$__hdr"
   printf '0000000\000' >>"$__hdr"
   printf '%011o\000' "$__size" >>"$__hdr"
-  printf '%011o\000' 0 >>"$__hdr"
+  # mtime 用真实时间戳：mtime=0 的包，bsdtar 按「Jan  1  1970」打印，
+  # 拿不到「HH:MM」⇒ 第二遍解析不出成员名（第三遍仍兜底，但少一层）
+  printf '%011o\000' 1767225600 >>"$__hdr"
   # 校验和先占 8 个空格（算的时候按空格算），算完再填回去
   printf '        ' >>"$__hdr"
   if [ -n "$__link" ]; then
@@ -164,6 +166,9 @@ assert_eq "v7 content" "$(cat "$dest_v7/payload" 2>/dev/null)" "the old-style ta
 # CASE 2：archive_list 列出成员，不写盘
 # -------------------------------------------------------------------------
 out=$(archive_list plain.tar)
+rc=0
+archive_list plain.tar >"$WORK/out.txt" 2>"$WORK/err.txt" || rc=$?
+assert_eq "0" "$rc" "listing a valid archive must succeed"
 assert_contains "$out" "a.txt" "the listing must contain the file name"
 assert_contains "$out" "sub/b.txt" "the listing must contain the nested file name"
 
@@ -325,16 +330,35 @@ printf 'inner payload' >inner/b
 tar -cf inner_base.tar -C inner b 2>/dev/null || _fail "cannot create the inner base archive"
 mk_tar_member symlink_inner.tar "a/link" "../b"
 tar_end symlink_inner.tar
-dest5e="$WORK/dest5e"
+dest5d="$WORK/dest5d"
 rc=0
-archive_extract inner_base.tar "$dest5e" >/dev/null 2>&1 || rc=$?
+archive_extract inner_base.tar "$dest5d" >/dev/null 2>&1 || rc=$?
 assert_eq "0" "$rc" "the inner base archive must be extracted"
 rc=0
-archive_extract symlink_inner.tar "$dest5e" >"$WORK/out.txt" 2>"$WORK/err.txt" || rc=$?
+archive_extract symlink_inner.tar "$dest5d" >"$WORK/out.txt" 2>"$WORK/err.txt" || rc=$?
 assert_eq "0" "$rc" "a relative symlink that stays inside the archive must be accepted"
-assert_eq "../b" "$(readlink "$dest5e/a/link" 2>/dev/null)" "the inner relative symlink must be kept as a symlink"
+assert_eq "../b" "$(readlink "$dest5d/a/link" 2>/dev/null)" "the inner relative symlink must be kept as a symlink"
 
 # -------------------------------------------------------------------------
+# --------------------------------------------------------------------------
+# CASE 5d：相对逃逸的软链 ⇒ 解之前就拒（第二遍，不是解完之后的第三遍）
+#
+# 相对目标要按「它自己所在目录」做词法解析：成员在归档根上时，「../../outside」
+# 一定逃出归档根 ⇒ 连解都不解。
+# 判据靠**文案**区分两层：第二遍说「归档里有不安全的软链」，第三遍说「解出来的
+# 文件里有逃逸软链」—— 两句不同 ⇒ 断言才能看出是哪一层拦的（把第二遍整段删掉，
+# 这条用例就会变红）。
+# -------------------------------------------------------------------------
+mk_tar_member rel_escape.tar "evil" "../../outside"
+tar_end rel_escape.tar
+dest5f="$WORK/dest5f"
+mkdir -p "$dest5f"
+rc=0
+archive_extract rel_escape.tar "$dest5f" >"$WORK/out.txt" 2>"$WORK/err.txt" || rc=$?
+assert_eq "5" "$rc" "a symlink that escapes the archive root must be refused"
+err=$(cat "$WORK/err.txt")
+assert_contains "$err" "the archive contains unsafe symlinks" "the refusal must come from the pre-extraction check"
+assert_eq "" "$(ls -A "$dest5f" 2>/dev/null)" "a refused archive must leave the destination empty"
 # CASE 6：解到一半失败 ⇒ 目标目录不变
 #
 # 头 700 字节：ustar 魔数还在（偏移 257），所以格式认得出；
@@ -479,6 +503,71 @@ assert_eq "$WORK/outside" "$(readlink "$WORK/hostile-dest/link" 2>/dev/null)" "t
 assert_eq "" "$(ls -A "$WORK/outside" 2>/dev/null)" "nothing may be written through the pre-existing symlink"
 
 # -------------------------------------------------------------------------
+# --------------------------------------------------------------------------
+# CASE 8e：旧目录回填失败 ⇒ 必须退 5（不能报成功）
+#
+# 目标目录只读（555）且里面已有文件 ⇒ 整体换上去之后新目录也是只读的 ⇒
+# 旧文件搬不回去 ⇒ 目标目录缺了旧文件。报 0 就是谎报成功：
+# 「返回码就是接口的一部分」，调用方只按退出码分支。
+# -------------------------------------------------------------------------
+mkdir -p "$WORK/dest8e"
+printf 'old' >"$WORK/dest8e/keep.txt"
+chmod 555 "$WORK/dest8e"
+rc=0
+archive_extract plain.tar "$WORK/dest8e" >"$WORK/out.txt" 2>"$WORK/err.txt" || rc=$?
+chmod 755 "$WORK/dest8e"
+assert_eq "5" "$rc" "a failed restore of the old content must be reported as a verification failure"
+err=$(cat "$WORK/err.txt")
+assert_contains "$err" "the old destination could not be restored" "the error must say the old content was not restored"
+# 被挪开的旧目录是只读的（555）⇒ 清理前要先改回可写，否则临时目录删不掉
+chmod -R u+w "$WORK"/.shellkit-old.* 2>/dev/null || true
+
+# --------------------------------------------------------------------------
+# CASE 8f：类型冲突（目录 ↔ 文件）⇒ 包里的赢，并且出声告警
+#
+# 覆盖语义下这会连带删掉目标上那个同名文件 —— 说出来，不静默。
+# -------------------------------------------------------------------------
+mkdir -p "$WORK/dest8f/sub"
+printf 'old-inner' >"$WORK/dest8f/sub/inner.txt"
+mkdir -p pkg8f
+printf 'new-file' >pkg8f/sub
+tar -cf pkg8f.tar -C pkg8f sub 2>/dev/null || _fail "cannot create the package"
+rc=0
+archive_extract pkg8f.tar "$WORK/dest8f" >"$WORK/out.txt" 2>"$WORK/err.txt" || rc=$?
+assert_eq "0" "$rc" "a type conflict must not fail the extraction"
+assert_eq "new-file" "$(cat "$WORK/dest8f/sub" 2>/dev/null)" "the package must win over the conflicting path"
+err=$(cat "$WORK/err.txt")
+assert_contains "$err" "a path with a different type existed at the destination" "the type conflict must be reported"
+
+# --------------------------------------------------------------------------
+# CASE 8g：父目录不可写 ⇒ 退化为就地合并（语义一样，不保证原子）
+# -------------------------------------------------------------------------
+mkdir -p "$WORK/ro-parent/dest"
+chmod 555 "$WORK/ro-parent"
+rc=0
+archive_extract plain.tar "$WORK/ro-parent/dest" >"$WORK/out.txt" 2>"$WORK/err.txt" || rc=$?
+chmod 755 "$WORK/ro-parent"
+assert_eq "0" "$rc" "extracting into a destination whose parent is read-only must still work"
+assert_eq "hello" "$(cat "$WORK/ro-parent/dest/a.txt" 2>/dev/null)" "the content must land in place"
+
+# --------------------------------------------------------------------------
+# CASE 8h：目标目录的权限要保住（整体换上去不能顺手改成 755）
+# -------------------------------------------------------------------------
+mkdir -p "$WORK/dest8h"
+chmod 750 "$WORK/dest8h"
+rc=0
+archive_extract plain.tar "$WORK/dest8h" >/dev/null 2>&1 || rc=$?
+mode=$(stat -f '%Lp' "$WORK/dest8h" 2>/dev/null) || mode=""
+if [ -z "$mode" ]; then mode=$(stat -c '%a' "$WORK/dest8h" 2>/dev/null) || mode=""; fi
+assert_eq "750" "$mode" "the destination permissions must be preserved"
+chmod 755 "$WORK/dest8h"
+# 干跑也要把「这个包安不安全」判出来：演练说安全、真跑被拒，演练就没有意义了
+rc=0
+SHELLKIT_DRY_RUN_FILES=1 archive_extract traversal.tar "$WORK/dest-dry" >"$WORK/out.txt" 2>"$WORK/err.txt" || rc=$?
+assert_eq "5" "$rc" "a dry-run extraction must still refuse an archive with unsafe paths"
+if [ -e "$WORK/dest-dry" ]; then
+  _fail "the dry-run extraction must not create the destination"
+fi
 # CASE 9：演练不落盘
 # -------------------------------------------------------------------------
 dest9="$WORK/dest9"

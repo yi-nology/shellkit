@@ -551,13 +551,13 @@ conf_set() {
     log_error "$(_t 'configuration value must be a single line'): $__key"
     return "$SK_USAGE"
   fi
-  # 守卫放在校验之后：干跑也不该把「用法错」吞成成功
-  if _sk_fs_dry_run "conf-set" "$__key"; then
-    return 0
-  fi
   if [ -z "$__file" ]; then
     log_error "$(_t 'configuration file is not initialized')"
     return "$SK_PRECOND"
+  fi
+  # 守卫放在校验与前置条件之后：干跑也不该把「用法错」或「没初始化」吞成成功
+  if _sk_fs_dry_run "conf-set" "$__key"; then
+    return 0
   fi
   __origin=$(conf_get "$__key")
   if conf_has "$__key" && [ "$__value" = "$__origin" ]; then

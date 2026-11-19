@@ -140,6 +140,24 @@ fs_ensure_symlink >/dev/null 2>&1 || rc=$?
 assert_eq "2" "$rc" "a dry-run fs_ensure_symlink must still report a usage error"
 
 # -------------------------------------------------------------------------
+# -------------------------------------------------------------------------
+# CASE 2c：干跑不吞「前置条件」（3）
+#
+# CASE 2b 锁住了「用法错」（2）；这一条补上另一类：前置条件不满足。
+# 守卫原本放在这些检查**之前** ⇒ 干跑把「源文件不存在」「配置没初始化」
+# 也吞成成功 ⇒ 演练说 OK、真跑失败，演练就失去了意义。
+# 干跑只该短路「写盘」，不该短路「判对错」。
+# -------------------------------------------------------------------------
+rc=0
+fs_atomic_copy no-such-source.txt copy.txt >/dev/null 2>&1 || rc=$?
+assert_eq "1" "$rc" "a dry-run copy must still fail when the source file does not exist"
+
+rc=0
+(
+  unset SK_CONF_FILE
+  conf_set DRYKEY v >/dev/null 2>&1
+) || rc=$?
+assert_eq "3" "$rc" "a dry-run conf_set must still fail when the configuration is not initialized"
 # CASE 3：干跑信息走 stderr，stdout 仍然只给数据
 # -------------------------------------------------------------------------
 stdout_only=$(fs_atomic_write quiet.txt "hello" 644 2>/dev/null)
