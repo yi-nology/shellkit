@@ -9,68 +9,34 @@
 #   3. 公开函数被删掉 ⇒ 门禁必须红（删公开函数是破坏性变更）
 #   4. 行为变更没写进 MIGRATING ⇒ 红；写进去并重生成基线 ⇒ 绿
 #
-# 副本从 `git archive HEAD` 取 —— 用**提交过的状态**当底，免得把工作树里
-# 别人还没做完的改动带进来（这份测试要能独立复现，不能被别人的半成品连累）。
-# 门禁自己的两个新文件从工作树拷进副本。
+# 副本**全部取工作树**，不依赖 git —— 理由见 _copy_repo 的注释。
 . "$(cd "$(dirname "$0")" && pwd)/test_helper.sh"
 
 REPO="$TEST_ROOT"
 
-# _copy_repo DST —— 造一份仓库副本
+# _copy_repo DST —— 造一份门禁需要的最小副本（**不依赖 git**）
 #
-# 首选 git archive：拿**提交过的状态**当底，不带工作树里别人的半成品。
-# 但 git 在三种环境下不可用，任何一种都不该让用例以
-# 「tar: This does not look like a tar archive」这种**二次错误**收场（CI #71）：
-#   1. coverage 的临时树没有 .git（coverage.sh 自己的注释就写过这件事）
-#   2. 容器里 checkout 属主与容器内用户不同 ⇒ dubious ownership 拒绝操作
-#   3. 镜像里压根没装 git
-# 所以：报错必须指出**第一因**，然后退到「门禁真正需要的子集」。
+# 为什么不用 `git archive HEAD`：那份 archive 是**已提交的状态**，而门禁的数据
+# （tools/api_baseline.txt）来自工作树 —— 两者可能不是同一份状态。
+# 新增模块尚未提交时就撞上：基线里已经有 proc_* / git_* 的条目，
+# archive 出来的 lib 里却没有这些函数 ⇒ 门禁报「探针表里有一个不是公开函数的
+# 条目」⇒ 规则一先拦下 ⇒ 探针压根没跑 ⇒ 用例红在
+# 「探针失败: validate_port」这个**与被测行为无关的第一因**上
+# （实测：把 validate_port 的范围判断改成恒真，探针没红，用例反而红了）。
+#
+# 同源才判得准：lib、门禁代码、门禁数据、MIGRATING 全部取工作树。
+# 也不依赖 git —— compat 容器里要么没有 git，要么 git 不认这个 checkout 的属主
+# （dubious ownership），依赖它就会红在「建不出副本」上（CI run 43374301252）。
 _copy_repo() {
-  local dst=$1 __err __rc=0 __f
-  mkdir -p "$dst" || return 1
-  if command -v git >/dev/null 2>&1 && git -C "$REPO" rev-parse --git-dir >/dev/null 2>&1; then
-    __err=$(mktemp "${TMPDIR:-/tmp}/api-baseline-git.XXXXXX") || return 1
-    if git -c safe.directory="$REPO" -C "$REPO" archive HEAD 2>"$__err" | tar -x -C "$dst"; then
-      rm -f "$__err"
-    else
-      __rc=$?
-      printf 'api_baseline: git archive failed (rc=%s): %s
-' \
-        "$__rc" "$(cat "$__err" 2>/dev/null)" >&2
-      rm -f "$__err"
-      rm -rf "$dst" && mkdir -p "$dst" || return 1
-      _copy_subset "$dst" || return 1
-    fi
-  else
-    printf 'api_baseline: git unavailable here (no git, or no .git under %s); using a worktree subset\n' \
-      "$REPO" >&2
-    _copy_subset "$dst" || return 1
-  fi
-  mkdir -p "$dst/tools" || return 1
-  # 门禁**代码**从工作树拷：未提交的门禁改动也要能被自证。
-  cp "$REPO/tools/api_baseline.sh" "$dst/tools/" || return 1
-  # 门禁的**数据**（基线 + 分级豁免名单）必须与 archive 取出的 lib 同一份状态：
-  # 无条件用工作树覆盖，会拼出「已提交的 lib + 未提交的数据」自相矛盾的副本 ——
-  # 注解批次（lib 注解 / 基线分级列 / 豁免名单三者一起改）里，规则一、规则三
-  # 会在探针之前先 bad=1，探针不跑，用例死在与被测行为无关的第一因上
-  # （实测：探针病例报不出「探针失败」，37 个函数先被规则一拦下）。
-  # 所以只补 archive 里没有的文件（尚未提交的新门禁数据）；退路 _copy_subset
-  # 全取工作树，lib 与数据同样自洽。
-  for __f in api_baseline.txt stability_exempt.txt; do
-    if [ ! -f "$dst/tools/$__f" ]; then
-      cp "$REPO/tools/$__f" "$dst/tools/" || return 1
-    fi
-  done
-  return 0
-}
-
-# _copy_subset DST —— 退路：只拷门禁真正读的那几处（实测 lib/ + MIGRATING + VERSION）
-_copy_subset() {
   local dst=$1
+  mkdir -p "$dst" || return 1
   cp -R "$REPO/lib" "$dst/" || return 1
   mkdir -p "$dst/docs" || return 1
   cp "$REPO/docs/MIGRATING.md" "$dst/docs/" || return 1
   cp "$REPO/VERSION" "$dst/" || return 1
+  mkdir -p "$dst/tools" || return 1
+  cp "$REPO/tools/api_baseline.sh" "$REPO/tools/api_baseline.txt" \
+    "$REPO/tools/stability_exempt.txt" "$dst/tools/" || return 1
   return 0
 }
 

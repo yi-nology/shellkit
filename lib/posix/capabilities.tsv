@@ -8,7 +8,7 @@
 # 「装上就挂」，而现场装不了 shellkit 补救。
 # 运行时也能问：posix_capable 函数名
 #
-# 主库的公开函数一共 169 个，POSIX 子集提供其中 28 个。
+# 主库的公开函数一共 180 个，POSIX 子集提供其中 28 个。
 # 另有 2 个是仅 POSIX 子集专有的（主库没有这个函数）。
 #
 # 函数名	POSIX 子集	原因
@@ -49,6 +49,13 @@ fs_ensure_line	no	POSIX 子集只给 fs_ensure_dir / fs_ensure_file
 fs_ensure_symlink	no	原子写 / 备份 / 符号链接在设备侧用不上
 fs_tmp_init	no	POSIX 子集只给 fs_ensure_dir / fs_ensure_file
 fs_tmpdir	no	POSIX 子集只给 fs_ensure_dir / fs_ensure_file
+git_default_branch	no	git 领域抽象在设备侧用不上
+git_fast_forward	no	git 领域抽象在设备侧用不上
+git_fetch	no	git 领域抽象在设备侧用不上
+git_is_dirty	no	git 领域抽象在设备侧用不上
+git_reset_hard	no	git 领域抽象在设备侧用不上
+git_tag	no	git 领域抽象在设备侧用不上
+git_worktree_add	no	git 领域抽象在设备侧用不上
 http_github_latest_tag	no	POSIX 子集不给 HTTP 客户端
 http_github_release_asset	no	POSIX 子集不给 HTTP 客户端
 lock_acquire	yes	-
@@ -96,6 +103,10 @@ os_sed_i	no	设备侧没有包管理器，也不该动系统包
 os_sha256	no	设备侧没有包管理器，也不该动系统包
 os_sudo_ready	no	设备侧没有包管理器，也不该动系统包
 parallel_map	no	命令执行层依赖 bash 的上下文栈与脱敏规则
+proc_is_running	no	进程组与看门狗依赖 bash 的作业控制（set -m）
+proc_start	no	进程组与看门狗依赖 bash 的作业控制（set -m）
+proc_stop	no	进程组与看门狗依赖 bash 的作业控制（set -m）
+proc_watchdog	no	进程组与看门狗依赖 bash 的作业控制（set -m）
 profile_append	no	profile 文件格式在设备侧用不上
 profile_env	no	profile 文件格式在设备侧用不上
 profile_parse	no	profile 文件格式在设备侧用不上

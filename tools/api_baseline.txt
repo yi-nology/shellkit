@@ -53,6 +53,13 @@ fs_ensure_line	0,1,2	active	-	probe	0	-	stable
 fs_ensure_symlink	0,1,2	active	-	probe	0	-	stable
 fs_tmp_init	0,1	active	-	probe	0	-	stable
 fs_tmpdir	0,1	active	-	probe	0	-	stable
+git_default_branch	0,3	active	-	probe	0,3	-	experimental
+git_fast_forward	0,1,2,3	active	-	probe	0,1,2,3	-	experimental
+git_fetch	0,1,2,3	active	-	probe	0,1,2,3	-	experimental
+git_is_dirty	0,1,3	active	-	probe	0,1,3	-	experimental
+git_reset_hard	0,1,2,3	active	-	probe	0,1,2,3	-	experimental
+git_tag	0,3	active	-	probe	0,3	-	experimental
+git_worktree_add	0,1,2,3	active	-	probe	0,1,2,3	-	experimental
 http_github_latest_tag	0,2	active	-	skip	-	需要网络	experimental
 http_github_release_asset	0,2	active	-	skip	-	需要网络	experimental
 lock_acquire	0,2,3	active	-	probe	0	-	stable
@@ -100,6 +107,10 @@ os_sed_i	0,其他	active	-	probe	0	-	experimental
 os_sha256	0,1,2	active	-	probe	0	-	experimental
 os_sudo_ready	0,3	active	-	skip	-	可能要交互输入 sudo 口令	experimental
 parallel_map	0,2,其他	active	-	probe	0	-	experimental
+proc_is_running	0,1,2,3	active	-	probe	0,1,2,3	-	experimental
+proc_start	0,1,2,3	active	-	probe	0,1,2,3	-	experimental
+proc_stop	0,2,3	active	-	probe	0,2,3	-	experimental
+proc_watchdog	0,1,2	active	-	probe	0,1,2	-	experimental
 profile_append	0,1,2	active	-	probe	0	-	experimental
 profile_env	0	active	-	probe	0	-	experimental
 profile_parse	0	active	-	probe	0	-	experimental

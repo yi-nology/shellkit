@@ -1,10 +1,10 @@
 # Module map
 
-`lib/bootstrap.sh` is the single entry point. It loads all 24 modules once, in **topological order**. You do not
+`lib/bootstrap.sh` is the single entry point. It loads all 26 modules once, in **topological order**. You do not
 pick and choose what to source, and you should not copy one module's implementation into your own script -- that is
 just another way of hitting the same trap twice.
 
-<ShotFigure src="/diagrams/modules-map.svg" caption="24 modules in five layers: foundations, files and system, process and version, integration, interaction and framework. Dependencies only point upward" />
+<ShotFigure src="/diagrams/modules-map.svg" caption="26 modules in five layers: foundations, files and system, process and version, integration, interaction and framework. Dependencies only point upward" />
 
 ## The table
 
@@ -33,6 +33,9 @@ just another way of hitting the same trap twice.
 | [prompt](/en/reference/prompt.md) | interaction | `ask` `ask_yn` `ask_choice` `confirm` |
 | [cli](/en/reference/cli.md) | registered-command framework | `cli_group` `cli_cmd` `cli_run` `cli_opt` `cli_opts` `cli_has` `cli_usage_global` |
 | [man](/en/reference/man.md) | man page generation | `man_page` `man_module_page` `man_write_all` `man_modules` `man_count_functions` |
+| [vendor](/en/reference/vendor.md) | where the library copy lives | `vendor_dir` `vendor_dir_rel` `vendor_dir_source` `vendor_dir_detect` |
+| [proc](/en/reference/proc.md) | process groups and watchdog | `proc_start` `proc_stop` `proc_is_running` `proc_watchdog` |
+| [git](/en/reference/git.md) | the right way to do git | `git_default_branch` `git_is_dirty` `git_tag` `git_fetch` `git_fast_forward` `git_reset_hard` `git_worktree_add` |
 
 ## Load order is not alphabetical
 
@@ -57,7 +60,7 @@ Dependencies must come first. Getting the order wrong does not have to wait for 
 
 ## Load only what you need
 
-By default everything loads (24 modules). To slim it down:
+By default everything loads (26 modules). To slim it down:
 
 ```bash
 SHELLKIT_MODULES="log fs" . ./vendor/shellkit/lib/bootstrap.sh

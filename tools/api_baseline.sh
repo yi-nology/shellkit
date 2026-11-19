@@ -600,6 +600,17 @@ vendor_dir_rel	0,3	mkdir -p vendor_dir_rel-d; [ "$(vendor_dir_rel vendor_dir_rel
 vendor_dir	0,3	mkdir -p vendor_dir-d; out=$(vendor_dir vendor_dir-d) || exit 81; case "$out" in /*) ;; *) exit 82 ;; esac; SHELLKIT_VENDOR_DIR=/tmp/elsewhere vendor_dir vendor_dir-d >/dev/null 2>&1; prc=$?; [ "$prc" = 3 ] || exit 83; exit 0
 vendor_dir_source	0	mkdir -p vendor_dir_source-d; [ "$(vendor_dir_source vendor_dir_source-d)" = "default" ] || exit 81; exit 0
 vendor_dir_detect	0,1	mkdir -p vendor_dir_detect-d; vendor_dir_detect vendor_dir_detect-d >/dev/null 2>&1; prc=$?; [ "$prc" = 1 ] || exit 82; exit 0
+git_default_branch	0,3	mkdir -p git_default_branch-d; (cd git_default_branch-d && git init -q . && git -c user.email=p@p -c user.name=p commit -q --allow-empty -m probe && git update-ref refs/remotes/origin/main HEAD && git symbolic-ref refs/remotes/origin/HEAD refs/remotes/origin/main) || exit 81; [ "$(git_default_branch git_default_branch-d)" = "main" ] || exit 82; exit 0
+git_is_dirty	0,1,3	mkdir -p git_is_dirty-d; (cd git_is_dirty-d && git init -q . && git -c user.email=p@p -c user.name=p commit -q --allow-empty -m probe) || exit 81; git_is_dirty git_is_dirty-d >/dev/null || exit 82; exit 0
+git_tag	0,3	mkdir -p git_tag-d; (cd git_tag-d && git init -q . && git -c user.email=p@p -c user.name=p commit -q --allow-empty -m probe && git tag probe-tag) || exit 81; [ "$(git_tag git_tag-d)" = "probe-tag" ] || exit 82; exit 0
+git_fetch	0,1,2,3	mkdir -p git_fetch-d; git_fetch git_fetch-d main >/dev/null 2>&1; prc=$?; [ "$prc" = 3 ] || exit 81; exit 0
+git_fast_forward	0,1,2,3	mkdir -p git_fast_forward-d; git_fast_forward git_fast_forward-d main >/dev/null 2>&1; prc=$?; [ "$prc" = 3 ] || exit 81; exit 0
+git_reset_hard	0,1,2,3	mkdir -p git_reset_hard-d; git_reset_hard git_reset_hard-d HEAD >/dev/null 2>&1; prc=$?; [ "$prc" = 3 ] || exit 81; exit 0
+git_worktree_add	0,1,2,3	mkdir -p git_worktree_add-d; git_worktree_add git_worktree_add-d git_worktree_add-wt probe-branch >/dev/null 2>&1; prc=$?; [ "$prc" = 3 ] || exit 81; exit 0
+proc_start	0,1,2,3	SHELLKIT_PROC_DIR="$PWD/proc_start-dir"; proc_start proc_start_probe sleep 30 || exit 81; proc_stop proc_start_probe || exit 82; exit 0
+proc_stop	0,2,3	SHELLKIT_PROC_DIR="$PWD/proc_stop-dir"; proc_stop proc_stop_probe || exit 81; exit 0
+proc_is_running	0,1,2,3	SHELLKIT_PROC_DIR="$PWD/proc_is_running-dir"; proc_is_running proc_is_running_probe >/dev/null 2>&1; prc=$?; [ "$prc" = 1 ] || exit 81; exit 0
+proc_watchdog	0,1,2	SHELLKIT_PROC_DIR="$PWD/proc_watchdog-dir"; proc_watchdog --interval 1 --max-restarts 1 proc_watchdog_probe no-such-command-here >/dev/null 2>&1; prc=$?; [ "$prc" = 1 ] || exit 81; exit 0
 SK_AB_PROBES
 
   while IFS=$'\t' read -r name reason; do
