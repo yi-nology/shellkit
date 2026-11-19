@@ -107,7 +107,7 @@ busybox ash 上，混进一个 `local` 或 `[[ ]]` 不是报错，是**整个脚
 只有真正成功应用了模板的文件才能推进基线；跳过的文件保持原基线。
 回归用例：`tests/test_upgrade.sh` 与 `tests/bats/scaffold.bats`（都要连升两次以上）。
 
-## 二十一个已经踩过的坑
+## 二十三个已经踩过的坑
 
 1. **bash 3.2 与 5 的 trap 语义不同**：子 shell 里 `trap -p EXIT`，3.2 读到空，5.x 仍打印
    父 shell 的 trap 但子 shell 退出时不执行。所以幂等不能只查 `trap -p`，看到是自己的
@@ -276,6 +276,21 @@ busybox ash 上，混进一个 `local` 或 `[[ ]]` 不是报错，是**整个脚
     ⇒ 顺便补上门禁的自测：`tools/check_docs.sh` 原来**没有自测**
     （它守着「文档里的示例还能不能跑」，自己静默失效没人会发现），
     本轮补了 `tests/test_check_docs.sh`。
+
+23. **容器里「装包慢」的病根常常是元数据，不是包**：dnf 为了解析依赖，会把
+    **每个**启用源的 repodata 都拉下来 —— openEuler 的镜像默认开 8 个源，
+    逐源实测：update 184 MB、everything 41 MB、EPOL 11 MB、debuginfo 10 MB
+    ⇒ 合计约 268 MB。共享 runner 在美国、镜像站在国内 ⇒ 实测装包 27~45 分钟，
+    撞 2700 秒内层超时 ⇒ 偶发被判失败（v1.3.0 发版现场连撞 3 次，最后一次
+    重跑才绿）。
+    ⇒ 先量「**每个源**的 metadata 有多大」，再决定是**少开源**还是**加超时**：
+       只留 OS/everything/EPOL/EPOL-update 四个源就够（bash/gettext/make/
+       python3/git/msgfmt/tar/xz 全到位），metadata 降到 60 MB（-78%）。
+       「加超时」只是把失败推后，「少开源」才是把问题解决。
+    ⇒ 少开源只对**匹配的发行版**生效：Rocky 的源 ID 完全不同，拿一个发行版的
+       经验去改另一个，等于把假设套到别人的发行版上。
+    ⇒ 判据：`tests/test_ci_openeuler_repos.sh`（四个重源必须被禁 + 禁用必须
+       被 openEuler 判定护住 + 弱依赖/文档必须关；注释里写对不算数）。
 
 ## 本场景的验证
 

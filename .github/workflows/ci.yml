@@ -209,7 +209,39 @@ jobs:
             # 硬装 curl 会报 "curl-minimal ... conflicts with curl"。
             # curl-minimal 已经能下载文件（-fsSL 都支持），所以这里不装 curl，
             # 只补真正缺的包；下载器在下面统一兜底。
-            timeout "$PKG_TIMEOUT" dnf install -y -qq --allowerasing \
+            #
+            # ── openEuler：只留必要源（2026-11-19 实测后加）────────────
+            # 装包慢的病根不是「包多」，是**元数据多**。openEuler 的镜像默认
+            # 开 8 个源（OS / everything / EPOL / EPOL-update / update /
+            # update-source / source / debuginfo），而 dnf 为了解析依赖会把
+            # **每个**启用源的 repodata 都拉下来。逐源实测的 metadata 体积：
+            #   update 184 MB、everything 41 MB、EPOL 11 MB、debuginfo 10 MB、
+            #   其余零碎 ⇒ 合计约 268 MB。
+            # 共享 runner 在美国、镜像站在国内，链路慢 ⇒ 实测装包 27~45 分钟，
+            # 撞 2700 秒内层超时 ⇒ 偶发被判失败（v1.3.0 发版现场连撞 3 次，
+            # 最后一次重跑才绿）。
+            #
+            # 实测结论（openeuler:24.03-lts 容器内逐源量过）：只需要
+            # OS / everything / EPOL / EPOL-update 四个源就够 —— 装完
+            # bash/gettext/make/python3/git/msgfmt/tar/xz/sha256sum 全部到位，
+            # metadata 降到 60 MB（-78%）。
+            #
+            # 只对 openEuler 生效：Rocky 的源 ID 完全不同（baseos/appstream/…），
+            # 拿 openEuler 的经验去改它等于把一个发行版的假设套到另一个身上。
+            # 判据见 tests/test_ci_openeuler_repos.sh。
+            set -- --setopt=install_weak_deps=False --setopt=tsflags=nodocs
+            if [ -r /etc/os-release ] && grep -q '^ID=.*openEuler' /etc/os-release; then
+              set -- "$@" \
+                --disablerepo=update \
+                --disablerepo=update-source \
+                --disablerepo=source \
+                --disablerepo=debuginfo
+            fi
+            # weak deps 是「推荐装」而不是「依赖」：openEuler 默认会顺带拉
+            # perl-Git / openssh-server / systemd / shadow-utils 一大票
+            # （实测 137 个包）。关掉只少 11 个包、5 MB，但少一轮依赖解析
+            # 与落盘抖动 —— 装包这一步本来就不该顺手装成一台完整开发机。
+            timeout "$PKG_TIMEOUT" dnf install -y -qq --allowerasing "$@" \
               bash gettext ca-certificates tar xz make python3 git \
               grep sed gawk findutils diffutils coreutils \
               gmp ncurses-libs || {
