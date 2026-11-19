@@ -433,6 +433,10 @@ archive_list() {
 # 就干净」—— 调用方自己放在目标目录里的软链是它自己的数据，覆盖安装
 # 后会原样保留（指向归档之外也照样保留）。要清就自己先清一遍。
 #
+# 目标目录是只读（555）时：新内容照常装上去，目录权限也照原样保留；
+# 但**旧文件搬不回去**（那个目录不可写）⇒ 退 5 并把旧目录的位置报出来。
+# root 不受权限限制 ⇒ 那种环境里旧文件能搬回去 ⇒ 退 0。
+#
 # 进程被强杀可能留下两处残留，都能安全处理：
 #   - `<目标目录的父目录>/.shellkit-extract.XXXXXX`：暂存目录（可能半份）；
 #   - `<目标目录的父目录>/.shellkit-old.XXXXXX`：换上去的瞬间被挪开的旧目录
@@ -444,12 +448,13 @@ archive_list() {
 # @exitcode 0 解包成功
 # @exitcode 2 参数错
 # @exitcode 3 归档不存在、格式认不出，缺 tar/unzip，或目标目录不可用
-# @exitcode 5 校验和不匹配，成员列不出来，归档里有不安全路径 / 软链，或解包失败
+# @exitcode 5 校验和不匹配，成员列不出来，归档里有不安全路径 / 软链，解包失败，
+#             旧内容没搬回去，或目标目录权限没能还原
 # @stability experimental
 archive_extract() {
   local __f=${1:-} __dest=${2:-} __expect=${3:-} __kind __work="" __meta __stage __old
   local __list __targets __links __bad __rel __link __target __member __dir __parent __mode __missing
-  local __atomic=1 __rc=0 __dry=0 __restore_failed=0
+  local __atomic=1 __rc=0 __dry=0 __restore_failed=0 __perm_failed=0
   _sk_need_args "$#" 2 "archive_extract ARCHIVE DEST [SHA256]" || return $?
 
   if [ ! -f "$__f" ]; then
@@ -644,9 +649,11 @@ archive_extract() {
     log_error "$(_t 'cannot extract the archive'): $__f"
     return "$SK_VERIFY"
   fi
-  # 权限在**解完之后**再套：先套的话，目标目录是只读（555）时暂存目录跟着
-  # 不可写 ⇒ tar 写不进去 ⇒ 好包被误判成坏包（退 5）。
-  chmod "$__mode" "$__work" 2>/dev/null || true
+  # 权限**不**在解完之后就套到暂存目录上。暂存目录必须保持可写直到
+  # rename 完成：**macOS 上重命名一个不可写的目录会失败**（内核要改写目录里
+  # 的 ".." 条目）⇒ 源目录是 555 时两次 rename 里有一次必然失败 ⇒ 退化成
+  # 就地合并 ⇒ 而就地合并写不进只读目录 ⇒ 好包被判成坏包（退 5）。
+  # 目标目录的权限在**换上去之后**再套（见下面的 swap 段）。
 
   # 第三遍：扫解出来的文件系统，软链兜底再查一遍
   # （清单里说不清的情况：zip 里的软链、或实现自己改了名字的）
@@ -688,7 +695,15 @@ archive_extract() {
       __old=$(mktemp -d "$__parent/.shellkit-old.XXXXXX" 2>/dev/null) || __old=""
       if [ -n "$__old" ]; then
         rmdir "$__old" 2>/dev/null
-        mv "$__dest" "$__old" 2>/dev/null || __old=""
+        # 搬走之前临时给旧目录加 u+w：**macOS 上重命名一个不可写的目录会失败**
+        # （内核要改写目录里的 ".." 条目）⇒ 目标目录是 555 时旧目录搬不走 ⇒
+        # 只能退化成就地合并 ⇒ 而就地合并写不进只读目录 ⇒ 好包被判成坏包。
+        # 权限在下面改回原样（无论旧目录是被删掉、被搬回去，还是被留在原地）。
+        chmod u+w "$__dest" 2>/dev/null || true
+        mv "$__dest" "$__old" 2>/dev/null || {
+          chmod "$__mode" "$__dest" 2>/dev/null || true
+          __old=""
+        }
       fi
       if [ -z "$__old" ]; then
         # 挪不开旧目录 ⇒ 退化为就地合并
@@ -700,11 +715,14 @@ archive_extract() {
         # 换不上去 ⇒ 旧目录放回去，目标目录保持原样
         if [ -n "$__old" ]; then
           if mv "$__old" "$__dest" 2>/dev/null; then
+            # 放回去了 ⇒ 把权限改回原样（我们刚才临时加了 u+w）
+            chmod "$__mode" "$__dest" 2>/dev/null || true
             rm -rf "$__old"
           else
             # 旧目录放不回去 ⇒ **绝对不能删**（那是用户的数据）：
             # 留在原地并把位置报出来，让人自己捡回去。
             log_error "$(_t 'the old destination could not be restored, it is left at'): $__old"
+            chmod "$__mode" "$__old" 2>/dev/null || true
           fi
         fi
         rm -rf "$__work" "$__meta"
@@ -712,6 +730,13 @@ archive_extract() {
         return "$SK_VERIFY"
       fi
       __work=""
+      # 换上去之后再套权限：rename 已经完成（暂存目录全程保持可写），
+      # 而目标路径此刻就是我们的 ⇒ 权限可以照原样还原。
+      # 还原不了就是「装出来的目录权限不对」⇒ 说出来，别当成装好了。
+      if ! chmod "$__mode" "$__dest" 2>/dev/null; then
+        log_error "$(_t 'the destination permissions could not be restored'): $__dest"
+        __perm_failed=1
+      fi
       # 旧目录里目标没有的路径搬回去（包里有的以包为准）
       if [ -n "$__old" ]; then
         # 不吞 stderr：类型冲突的告警要从这里冒出去（吞掉就成了静默覆盖）
@@ -723,6 +748,8 @@ archive_extract() {
           # 也不能报成功：调用方按退出码判断 ⇒ 报 0 就是「装好了」，
           # 而目标目录里其实缺了旧文件（半份安装被当成完整安装）。
           log_error "$(_t 'the old destination could not be restored, it is left at'): $__old"
+          # 旧目录被留在原地 ⇒ 把它的权限改回原样（我们搬它之前临时加了 u+w）
+          chmod "$__mode" "$__old" 2>/dev/null || true
           __restore_failed=1
         fi
       fi
@@ -748,6 +775,10 @@ archive_extract() {
   # 旧内容没搬回去 ⇒ 退 5（与降级路径的合并失败同一口径）：
   # 「返回码就是接口的一部分」—— 失败却报成功，调用方无从分辨。
   if [ "$__restore_failed" = "1" ]; then
+    return "$SK_VERIFY"
+  fi
+  # 权限没还原 ⇒ 装出来的目录权限不对 ⇒ 不能报成功
+  if [ "$__perm_failed" = "1" ]; then
     return "$SK_VERIFY"
   fi
   return 0

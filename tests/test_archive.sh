@@ -34,7 +34,11 @@ TEST_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." &>/dev/null && pwd)"
 
 WORK=""
 _cleanup() {
-  [ -n "$WORK" ] && rm -rf "$WORK"
+  [ -n "$WORK" ] || return 0
+  # 目录可能是只读的（555）⇒ 里面的东西删不掉（rm: Permission denied）⇒
+  # 先把权限改回可写再删，别给临时目录留垃圾
+  chmod -R u+w "$WORK" 2>/dev/null || true
+  rm -rf "$WORK"
 }
 trap '_cleanup' EXIT
 
@@ -481,8 +485,13 @@ mkdir -p "$WORK/ro-dest"
 chmod 555 "$WORK/ro-dest"
 rc=0
 archive_extract plain.tar "$WORK/ro-dest" >"$WORK/out.txt" 2>"$WORK/err.txt" || rc=$?
-assert_eq "0" "$rc" "extracting into a read-only destination must still work"
+err=$(cat "$WORK/err.txt" 2>/dev/null)
+assert_eq "0" "$rc" "extracting into a read-only destination must still work (stderr: $err)"
 assert_eq "hello" "$(cat "$WORK/ro-dest/a.txt" 2>/dev/null)" "the read-only destination must receive the content"
+# 目录权限要照原样保留：整体换上去不能顺手变成 700（暂存目录的权限）
+mode=$(stat -f '%Lp' "$WORK/ro-dest" 2>/dev/null) || mode=""
+if [ -z "$mode" ]; then mode=$(stat -c '%a' "$WORK/ro-dest" 2>/dev/null) || mode=""; fi
+assert_eq "555" "$mode" "the read-only destination permissions must be preserved"
 chmod 755 "$WORK/ro-dest"
 
 # -------------------------------------------------------------------------
@@ -516,9 +525,20 @@ chmod 555 "$WORK/dest8e"
 rc=0
 archive_extract plain.tar "$WORK/dest8e" >"$WORK/out.txt" 2>"$WORK/err.txt" || rc=$?
 chmod 755 "$WORK/dest8e"
-assert_eq "5" "$rc" "a failed restore of the old content must be reported as a verification failure"
-err=$(cat "$WORK/err.txt")
-assert_contains "$err" "the old destination could not be restored" "the error must say the old content was not restored"
+err=$(cat "$WORK/err.txt" 2>/dev/null)
+# root 能绕过权限检查 ⇒ 旧内容**能**搬回去 ⇒ 成功才是真话；
+# 非 root 时那个目录不可写 ⇒ 搬不回去 ⇒ 必须退 5（报成功就是谎报：
+# 目标目录里其实缺了旧文件，而调用方只按退出码分支）。
+#
+# 两种环境各断言各自**真实**的结果，不是「看情况放过」：
+# 把「这个环境里该发生什么」写死，改错任一边都会红。
+if [ "$(id -u)" = "0" ]; then
+  assert_eq "0" "$rc" "as root the old content can be restored into a read-only directory (stderr: $err)"
+  assert_eq "old" "$(cat "$WORK/dest8e/keep.txt" 2>/dev/null)" "as root the old file must be back in place"
+else
+  assert_eq "5" "$rc" "a failed restore of the old content must be reported as a verification failure (stderr: $err)"
+  assert_contains "$err" "the old destination could not be restored" "the error must say the old content was not restored"
+fi
 # 被挪开的旧目录是只读的（555）⇒ 清理前要先改回可写，否则临时目录删不掉
 chmod -R u+w "$WORK"/.shellkit-old.* 2>/dev/null || true
 

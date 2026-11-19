@@ -8,7 +8,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: shellkit 1.1.0\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-11-19 17:16+0800\n"
+"POT-Creation-Date: 2026-11-19 17:43+0800\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language-Team: LANGUAGE <LL@li.org>\n"
@@ -69,6 +69,9 @@ msgid "the old destination could not be restored, it is left at"
 msgstr ""
 
 msgid "cannot move the extracted files into the destination"
+msgstr ""
+
+msgid "the destination permissions could not be restored"
 msgstr ""
 
 msgid "cannot create the destination directory"

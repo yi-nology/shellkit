@@ -21,6 +21,7 @@ _sk_msg_lookup_shellkit() {
     'the extracted files contain a symlink that escapes the destination') printf '%s' '解出來的檔案裡有逃逸目標目錄的軟鏈' ;;
     'the old destination could not be restored, it is left at') printf '%s' '舊的目標目錄沒能放回去，留在' ;;
     'cannot move the extracted files into the destination') printf '%s' '無法把解包出來的檔案搬進目標目錄' ;;
+    'the destination permissions could not be restored') printf '%s' '目標目錄的權限沒能還原' ;;
     'cannot create the destination directory') printf '%s' '無法建立目標目錄' ;;
     'invalid command name') printf '%s' '非法的指令名稱' ;;
     'duplicate command') printf '%s' '指令重複註冊' ;;

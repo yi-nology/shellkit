@@ -4,7 +4,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: shellkit\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-11-19 17:16+0800\n"
+"POT-Creation-Date: 2026-11-19 17:43+0800\n"
 "PO-Revision-Date: 2026-11-08 00:00+0800\n"
 "Last-Translator: shellkit contributors\n"
 "Language-Team: shellkit contributors\n"
@@ -67,6 +67,9 @@ msgstr "旧的目标目录没能放回去，留在"
 
 msgid "cannot move the extracted files into the destination"
 msgstr "无法把解包出来的文件搬进目标目录"
+
+msgid "the destination permissions could not be restored"
+msgstr "目标目录的权限没能还原"
 
 msgid "cannot create the destination directory"
 msgstr "无法创建目标目录"
