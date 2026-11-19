@@ -12,6 +12,9 @@
 #   6) 守卫机制：命中臂守卫绿；未覆盖臂的守卫即使基线齐全也红；子串匹配不上也红。
 #   7) 真库快跑（test_str 套件）：报告格式、四条路径数字、--out 与 stdout
 #      一致；第二遍用 /bin/bash 起工具（macOS 上即 3.2 解析执行）+ 正对照基线。
+#   8) 被打断的运行不留半截基线（SIGTERM ⇒ 退出时清掉临时文件）。
+#   9) 未覆盖集合超过上限 ⇒ 拒绝重写基线（且不留临时文件）。
+#  10) 树里有巨型残留 ⇒ 开跑前就拒绝（不是拷贝到一半才 ENOSPC）。
 #
 # 断言纪律：断完整文案不断单词；临时目录名只用编号；SHELLKIT_LANG=en 由
 # test_helper.sh 统一设置。
@@ -310,5 +313,80 @@ rc=0
 _cov_run rc --branch --root "$d" --suite 'bash tests/run.sh' --guards '' --baseline "$bad"
 COV_TOOL=""
 assert_ne "5" "$rc" "with the guard broken the mismatched baseline must not be rejected by it"
+
+# -------------------------------------------------------------------------
+# CASE 11：被打断的运行不留半截基线
+#
+# 基线是「同目录临时文件 + rename」原子替换的：临时文件必须与目标同目录，
+# rename 才是原子操作。代价是：被打断的运行（Ctrl-C / kill / 磁盘写满）会把
+# 半截临时文件留在**工作树里** —— 它动辄很大，被全局 gitignore 的 *.tmp 藏起来
+# （git status 干净），却在「整仓拷贝」型步骤里被再拷一遍 ⇒ 磁盘写满 ⇒
+# 报错现场落在别的步骤上，看起来像「用例失败」，真因是磁盘不是代码。
+#
+# 造法：先在基线路径旁放一个半截临时文件（模拟「上一次运行被打断」），
+# 再起工具、故意 SIGTERM 它 ⇒ 工具退出时必须把它清掉。
+# 负对照：去掉清理那行 ⇒ "$base.tmp" 会留下来 ⇒ 这条用例变红。
+# -------------------------------------------------------------------------
+d=$(tmpdir) || _fail "cannot create tmpdir"
+_cov_tree "$d" || _fail "cannot build the mini tree"
+base="$d/base"
+: >"$base.tmp"
+
+bash "$TOOL" --branch --root "$d" --suite 'sleep 5' --guards '' --baseline "$base" \
+  >"$TEST_TMP_ROOT/term.out" 2>"$TEST_TMP_ROOT/term.err" &
+__pid=$!
+sleep 1
+kill -TERM "$__pid" 2>/dev/null || true
+wait "$__pid" 2>/dev/null || true
+
+if [ -e "$base.tmp" ]; then
+  _fail "an interrupted run must not leave its baseline temporary file in the tree: $base.tmp"
+fi
+
+# -------------------------------------------------------------------------
+# CASE 12：未覆盖集合超过上限 ⇒ 拒绝重写基线
+#
+# 正常是几百条；上千条说明这一趟跑歪了（插桩/解析异常、locale 差异）。
+# 不设上限的话，一次跑歪就能把基线写成几百 MB 的垃圾 —— 而这种垃圾会留在
+# 工作树里，把别处的门禁拖成假红。
+# -------------------------------------------------------------------------
+d=$(tmpdir) || _fail "cannot create tmpdir"
+_cov_tree "$d" || _fail "cannot build the mini tree"
+base="$d/base"
+
+rc=0
+SHELLKIT_COV_MAX_UNCOVERED=0 _cov_run rc --branch --root "$d" --suite 'bash tests/run.sh' \
+  --guards '' --baseline "$base" --write-baseline
+assert_eq "3" "$rc" "an oversized uncovered set must abort the baseline rewrite"
+err=$(cat "$COV_STDERR")
+assert_contains "$err" "refusing to rewrite the baseline" \
+  "the refusal must say that the baseline is not rewritten"
+if [ -e "$base" ]; then
+  _fail "the baseline must not be written when the uncovered set is over the limit"
+fi
+if [ -e "$base.tmp" ]; then
+  _fail "the aborted run must not leave a baseline temporary file behind"
+fi
+
+# -------------------------------------------------------------------------
+# CASE 13：树里有巨型残留 ⇒ 开跑前就拒绝
+#
+# 残留留在树里时，拷贝阶段会把它再拷一份 ⇒ 磁盘写满 ⇒ 报错现场落在拷贝中途，
+# 看起来像「工具坏了」。先说清楚，让调用方自己清。
+# -------------------------------------------------------------------------
+d=$(tmpdir) || _fail "cannot create tmpdir"
+_cov_tree "$d" || _fail "cannot build the mini tree"
+mkdir -p "$d/tools" || _fail "cannot create the tools dir"
+dd if=/dev/zero of="$d/tools/leftover.tmp" bs=1024 count=9216 2>/dev/null ||
+  _fail "cannot create the leftover file"
+
+rc=0
+_cov_run rc --branch --root "$d" --suite 'bash tests/run.sh' --guards '' --baseline "$d/base"
+assert_ne "0" "$rc" "the tool must refuse to run on a tree with a huge leftover"
+err=$(cat "$COV_STDERR")
+assert_contains "$err" "large leftover temporary file" \
+  "the refusal must name the leftover as such"
+assert_contains "$err" "tools/leftover.tmp" \
+  "the refusal must point at the leftover file"
 
 exit 0

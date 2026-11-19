@@ -13,6 +13,10 @@ env:
   SHELLCHECK_VERSION: v0.11.0
   SHFMT_VERSION: v3.14.1
   BATS_VERSION: v1.14.0
+  # 每个下载的超时（秒）。没有它，一次卡住的下载会把 job 挂到 job 级超时
+  # 才结束 —— 失败现场是「job 被取消」，离病根很远。
+  # 600 秒足够覆盖慢网络；超了就是真卡住，早失败并说清是哪一步。
+  DOWNLOAD_TIMEOUT: 600
 
 jobs:
   test:
@@ -51,7 +55,7 @@ jobs:
           else
             sc="shellcheck-${SHELLCHECK_VERSION}.linux.${arch}.tar.xz"
           fi
-          curl -fsSL "https://github.com/koalaman/shellcheck/releases/download/${SHELLCHECK_VERSION}/${sc}" -o /tmp/sc.tar.xz
+          curl -fsSL --max-time "${DOWNLOAD_TIMEOUT:-600}" "https://github.com/koalaman/shellcheck/releases/download/${SHELLCHECK_VERSION}/${sc}" -o /tmp/sc.tar.xz
           tar -xJf /tmp/sc.tar.xz -C /tmp
           install -m 0755 "/tmp/shellcheck-${SHELLCHECK_VERSION}/shellcheck" "$HOME/.local/bin/shellcheck"
           case "$(uname -s)-$(uname -m)" in
@@ -60,7 +64,7 @@ jobs:
             Linux-aarch64) sf="shfmt_${SHFMT_VERSION}_linux_arm64" ;;
             *) sf="shfmt_${SHFMT_VERSION}_linux_amd64" ;;
           esac
-          curl -fsSL "https://github.com/mvdan/sh/releases/download/${SHFMT_VERSION}/${sf}" -o "$HOME/.local/bin/shfmt"
+          curl -fsSL --max-time "${DOWNLOAD_TIMEOUT:-600}" "https://github.com/mvdan/sh/releases/download/${SHFMT_VERSION}/${sf}" -o "$HOME/.local/bin/shfmt"
           chmod 0755 "$HOME/.local/bin/shfmt"
           echo "$HOME/.local/bin" >> "$GITHUB_PATH"
 
@@ -160,12 +164,21 @@ jobs:
           # 慢在装包就该在这里早失败并说清原因，而不是把整个 job 的预算吃光、
           # 最后由 job 总超时背锅（「看起来像测试挂了」）。
           #
-          # 取 1800 秒（30 分钟），不是更小：同一批共享 runner 上实测过**合法**的
-          # 慢安装 1069 秒（17 分 49 秒，2026-11-18 openeuler amd64）。内层超时
-          # 比它还短，就会把「慢但没卡死」误杀成失败 —— 修超时修出新问题。
+          # 取 2700 秒（45 分钟）：同一批共享 runner 上实测过**合法**的慢安装
+          # 最长到 39 分钟（2340 秒，2026-11-18 openeuler amd64；job 总超时从
+          # 40 分钟调到 75 分钟就是为了容纳它）。内层超时比它还短，就会把
+          # 「慢但没卡死」误杀成失败 —— 修超时修出新问题。
+          #
+          # 2026-11-19 更正：原来这里是 1800 秒（30 分钟），**短于同一段注释
+          # 自己记的 39 分钟** —— 于是合法慢装被判成失败（实测 openeuler amd64
+          # 装到 29 分钟仍未结束）。判据里那个「实测最慢装包」的常数也一并
+          # 改成真实的 2340 秒：常数抄小了，判据就抓不到这种自相矛盾。
+          #
+          # 预算对账：2700（装包）+ 900（测试）= 3600 秒 = 60 分钟 < 75 分钟
+          # 的 job 总超时 ⇒ 内层超时不吃 job 预算。
           # 判据见 tests/test_ci_timeouts.sh：内层超时不得短于实测最慢装包，
           # 也不得把 job 的总预算吃光。
-          PKG_TIMEOUT=1800
+          PKG_TIMEOUT=2700
           if command -v apt-get >/dev/null 2>&1; then
             apt-get update -qq
             # python3：tests/test_doctor.sh 的 JSON 值断言靠它解析（jget/jlen）；
@@ -205,12 +218,30 @@ jobs:
                 echo 'could not install a downloader (curl/wget) on this image' >&2
             fi
           fi
+          # 下载器兜底：curl / wget / python3 任选其一，缺哪个都不该让 job 挂掉。
+          # 三个都没有时按发行版补一个 —— 包名不能想当然：Rocky 9 只有 curl-minimal
+          # （装 curl 会与它冲突，靠 --allowerasing 换掉），openEuler 有 curl、没有
+          # curl-minimal ⇒ 两个都试，谁有装谁。
+          # 失败不吞：装不上就把原因打出来，别让报错点离病根太远。
+          #
+          # ★ 每个下载都带**超时**（2026-11-19 实测踩到）：
+          # 只给 `dnf install` 加内层超时是不够的 —— 装完包之后的 sk_fetch
+          # （拉 shellcheck / shfmt）用的是裸 `curl -fsSL`，**没有 --max-time**。
+          # GitHub release 下载一旦卡住，这个 job 就无限期挂着：
+          # 外层 30 分钟超时只包住 dnf install，管不到它；job 级 75 分钟超时
+          # 兜底，但那时已经烧掉 75 分钟，而且失败现场是「job 被取消」——
+          # 离病根（一个卡住的下载）很远。
+          # 同一个坑的另一半：#147 修了「装包慢」，没修「下载慢」。
+          #
+          # DOWNLOAD_TIMEOUT 取 600 秒（10 分钟）：实测一次正常下载几秒，
+          # 600 秒足够覆盖慢网络；超了就是真卡住，早失败并说清是哪一步。
+          DOWNLOAD_TIMEOUT=600
           if command -v curl >/dev/null 2>&1; then
-            sk_fetch() { curl -fsSL "$1" -o "$2"; }
+            sk_fetch() { curl -fsSL --max-time "$DOWNLOAD_TIMEOUT" "$1" -o "$2"; }
           elif command -v wget >/dev/null 2>&1; then
-            sk_fetch() { wget -qO "$2" "$1"; }
+            sk_fetch() { wget -qO "$2" --timeout="$DOWNLOAD_TIMEOUT" "$1"; }
           elif command -v python3 >/dev/null 2>&1; then
-            sk_fetch() { python3 -c 'import sys,urllib.request; urllib.request.urlretrieve(sys.argv[1],sys.argv[2])' "$1" "$2"; }
+            sk_fetch() { timeout "$DOWNLOAD_TIMEOUT" python3 -c 'import sys,urllib.request; urllib.request.urlretrieve(sys.argv[1],sys.argv[2])' "$1" "$2"; }
           else
             echo "no downloader available (curl/wget/python3)" >&2
             exit 1
@@ -292,7 +323,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          curl -fsSL "https://github.com/bats-core/bats-core/archive/refs/tags/${BATS_VERSION}.tar.gz" -o /tmp/bats.tar.gz
+          curl -fsSL --max-time "${DOWNLOAD_TIMEOUT:-600}" "https://github.com/bats-core/bats-core/archive/refs/tags/${BATS_VERSION}.tar.gz" -o /tmp/bats.tar.gz
           tar -xzf /tmp/bats.tar.gz -C /tmp
           sudo "/tmp/bats-core-${BATS_VERSION#v}/install.sh" /usr/local
           bats --version

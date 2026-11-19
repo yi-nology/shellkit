@@ -20,9 +20,14 @@ set -u
 
 CI_YML="$TEST_ROOT/.github/workflows/ci.yml"
 
-# 实测最慢的一次装包（2026-11-18，openeuler amd64 共享 runner）：1069 秒。
+# 实测最慢的一次装包（2026-11-18，openeuler amd64 共享 runner）：**2340 秒（39 分钟）**。
 # 这个数是「合法慢」的**下界** —— 装包慢到它仍然该过，只是慢。
-OBSERVED_SLOW_INSTALL=1069
+#
+# 2026-11-19 更正：原来这里写的是 1069 秒（17 分 49 秒），那是**另一次**实测，
+# 不是最坏值 —— 而 ci.yml 的内层超时（当时 1800 秒）恰好短于这个真实最坏值，
+# 于是合法慢装被判成失败。常数抄小了，判据就抓不到这种自相矛盾：
+# 判据只能保证「超时 ≥ 常数」，常数本身偏小 ⇒ 一并错。
+OBSERVED_SLOW_INSTALL=2340
 # 装包之后还要跑测试套件（实测 6-10 分钟），留 15 分钟。
 TEST_BUDGET=900
 # job 总超时至少要给的分钟数：慢但没卡死的一轮不该被杀。
@@ -125,5 +130,46 @@ assert_contains "$(_ci_timeout_violations "$d/ci-small.yml")" "PKG_TIMEOUT=60" \
 sed 's/timeout-minutes: [0-9][0-9]*/timeout-minutes: 20/' "$CI_YML" >"$d/ci-budget.yml"
 assert_contains "$(_ci_timeout_violations "$d/ci-budget.yml")" "eats the job budget" \
   "a job timeout that the inner timeout eats must break the check"
+# --------------------------------------------------------------------------
+# 判据二：CI 里每个下载都必须有超时
+#
+# 为什么（2026-11-19 实测）：
+# 内层包安装超时（PKG_TIMEOUT）只包住 `dnf install`；装完包之后的
+# `sk_fetch`（拉 shellcheck / shfmt）用的是裸 `curl -fsSL`，**没有 --max-time**。
+# GitHub release 下载一旦卡住，这个 job 就无限期挂着 —— 外层 30 分钟超时
+# 管不到它，只能等 job 级 75 分钟超时兜底，失败现场是「job 被取消」，
+# 离病根（一个卡住的下载）很远。
+#
+# 同一个坑的另一半：#147 修了「装包慢」，没修「下载慢」。
+#
+# 判据形状：ci.yml 里每一处 `curl -fsSL` / `wget` 下载都必须带超时参数。
+# --------------------------------------------------------------------------
+
+_download_without_timeout() {
+  local __f=$1 __line __n=0
+  while IFS= read -r __line || [ -n "$__line" ]; do
+    __n=$((__n + 1))
+    case "$__line" in
+      *'curl -fsSL'* | *'curl -sSL'*)
+        # 已经有 --max-time / --connect-timeout 的算合规
+        case "$__line" in
+          *'--max-time'* | *'--connect-timeout'*) continue ;;
+        esac
+        printf '%s:%s: a download without a timeout will hang the job until the job-level timeout: %s\n' \
+          "${__f##*/}" "$__n" "$__line"
+        ;;
+    esac
+  done <"$__f"
+  return 0
+}
+
+dl=$(_download_without_timeout "$CI_YML")
+assert_eq "" "$dl" "every download in the CI workflow must carry a timeout"
+
+# 自证：去掉一个下载的超时 ⇒ 判据必须报出来
+sed 's|curl -fsSL --max-time "\${DOWNLOAD_TIMEOUT:-600}" "https://github.com/koalaman|curl -fsSL "https://github.com/koalaman|' \
+  "$CI_YML" >"$d/ci-dl.yml"
+assert_contains "$(_download_without_timeout "$d/ci-dl.yml")" "a download without a timeout" \
+  "removing the download timeout must break the check"
 
 exit 0

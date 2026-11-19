@@ -27,6 +27,7 @@
     tools/                    shdoc.awk / comment_coverage.awk / ai_doc.sh / check_docs.sh / term_shot.py
                               check_module_order.sh（模块依赖顺序门禁）
                               check_security.sh（安全边界门禁）/ api_baseline.sh（公开 API 行为基线）
+                              check_tree_clean.sh（工作树残留门禁：被打断的运行留下的临时文件）
                               check_ident_boundary.sh（$ident 紧跟非 ASCII 的边界检查，issue #73）
                               bench.sh（性能基准，基线在 tools/bench_baseline.txt）
                               package_tarball / package_syspkg / package_smoke（deb/rpm 打包与冒烟）
@@ -60,7 +61,8 @@
 
     make check     # syntax + test + lint + module-order-check + check-exitcode-docs +
                   # local-names-check + ident-boundary-check + module-count-check +
-                  # pipe-safety-check + dup-functions-check + security-check +
+                  # pipe-safety-check + check-tree-clean + dup-functions-check +
+                  # security-check +
                   # api-baseline-check + api-freeze-check + compatibility-check +
                   # docs-check + versions-check + check-docs + posix-check +
                   # cookbook-check +
