@@ -9,6 +9,7 @@ _sk_msg_lookup_shellkit() {
     'cannot create a temporary file') printf '%s' '无法创建临时文件' ;;
     'the decompressor for this archive format is not available') printf '%s' '该归档格式需要的解压器不可用' ;;
     'cannot list the archive') printf '%s' '无法列出归档内容' ;;
+    'the archive is truncated or has trailing data') printf '%s' '归档已被截断，或尾部有其他数据' ;;
     'the checksum does not match') printf '%s' '校验和不匹配' ;;
     'the destination is a symlink') printf '%s' '目标目录是符号链接' ;;
     'the destination is not a directory') printf '%s' '目标目录不是目录' ;;

@@ -349,6 +349,33 @@ assert_eq "5" "$rc" "a truncated archive must be reported as a verification fail
 assert_eq "" "$(ls -A "$dest6" 2>/dev/null)" "a failed extraction must leave the destination empty"
 
 # -------------------------------------------------------------------------
+# CASE 6c：缺 tar 结尾标记的包 ⇒ 5（判据必须与 tar 的实现无关）
+#
+# GNU tar 读到 EOF 就**当归档到此为止**，照样退出 0 ⇒ 被截断的包会被当成
+# 「只有前几个成员的包」静默解开 ⇒ 半份内容被装上，而调用方拿到的是成功。
+# bsdtar 恰好更严（同一个包在 macOS 上会红），但「同一份代码在不同 tar 实现
+# 上给出不同结论」本身就是缺陷 —— 判据必须与实现无关。
+#
+# 这个包的成员是**完整**的（header + data 都在），只缺末尾那两块 512 字节的零
+# ⇒ bsdtar 与 GNU tar 都会**接受**它 ⇒ 只有「结尾标记齐全吗」这条自检能拒它
+# ⇒ 这条用例在本机也有判据能力（把自检去掉，用例立刻变红）。
+# ---------------------------------------------------------------------------
+mk_tar_member noend.tar "a.txt" "" "hello"
+dest6d="$WORK/dest6d"
+mkdir -p "$dest6d"
+rc=0
+archive_extract noend.tar "$dest6d" >"$WORK/out.txt" 2>"$WORK/err.txt" || rc=$?
+assert_eq "5" "$rc" "an archive without the end-of-archive marker must be refused"
+err=$(cat "$WORK/err.txt")
+assert_contains "$err" "the archive is truncated" "the refusal must say the archive is truncated"
+assert_eq "" "$(ls -A "$dest6d" 2>/dev/null)" "a refused archive must leave the destination empty"
+
+# archive_list 同样要拒：列出来的清单必须是**完整**的清单
+rc=0
+archive_list noend.tar >"$WORK/out.txt" 2>"$WORK/err.txt" || rc=$?
+assert_eq "5" "$rc" "listing an archive without the end-of-archive marker must fail too"
+
+# ---------------------------------------------------------------------------
 # CASE 6b：列得出、解不开 ⇒ 5（解包失败那条路的判据）
 #
 # 造一个「文件 a」与「a/b」同包的归档：成员列表列得出来（tar -tf 正常），

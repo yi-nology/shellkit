@@ -9,6 +9,7 @@ _sk_msg_lookup_shellkit() {
     'cannot create a temporary file') printf '%s' '無法建立暫存檔' ;;
     'the decompressor for this archive format is not available') printf '%s' '該封存格式需要的解壓器不可用' ;;
     'cannot list the archive') printf '%s' '無法列出封存內容' ;;
+    'the archive is truncated or has trailing data') printf '%s' '封存檔案已被截斷，或尾部有其他資料' ;;
     'the checksum does not match') printf '%s' '校驗和不符' ;;
     'the destination is a symlink') printf '%s' '目標目錄是符號連結' ;;
     'the destination is not a directory') printf '%s' '目標目錄不是目錄' ;;

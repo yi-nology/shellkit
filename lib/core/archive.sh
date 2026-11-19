@@ -282,6 +282,66 @@ _sk_archive_missing_decompressor() {
   return 0
 }
 
+# _sk_archive_tail_nonzero FILE KIND —— 打印 tar 流末尾 1024 字节里的非零字节数
+#
+# 0 = tar 的结尾标记齐全（末尾两块 512 字节的零）；非 0 = 流在中途断了，
+# 或者尾部有别的数据。
+#
+# 压缩格式要先解压才看得到 tar 流的尾巴 —— 多一遍解压，换的是
+# 「结论与 tar 的实现无关」。
+_sk_archive_tail_nonzero() {
+  local __f=${1:-} __kind=${2:-}
+  case "$__kind" in
+    tar)
+      tail -c 1024 "$__f" 2>/dev/null | tr -d '\000' | wc -c | tr -d ' '
+      ;;
+    tgz)
+      gzip -dc "$__f" 2>/dev/null | tail -c 1024 | tr -d '\000' | wc -c | tr -d ' '
+      ;;
+    tbz2)
+      bzip2 -dc "$__f" 2>/dev/null | tail -c 1024 | tr -d '\000' | wc -c | tr -d ' '
+      ;;
+    txz)
+      xz -dc "$__f" 2>/dev/null | tail -c 1024 | tr -d '\000' | wc -c | tr -d ' '
+      ;;
+    *)
+      printf '0'
+      ;;
+  esac
+}
+
+# _sk_archive_is_truncated FILE KIND —— 包缺 tar 结尾标记时返回 0（是截断的）
+#
+# 为什么必须自己查，不能只看 tar 的退出码：**GNU tar 读到 EOF 就当
+# 「归档到此为止」，照样退出 0** —— 于是一个被截断的包会被当成
+# 「只有前几个成员的包」静默解开 ⇒ 半份内容被装上，而调用方拿到的是成功。
+# bsdtar 恰好更严（同一个包在 macOS 上会红），但「同一份代码在不同 tar
+# 实现上给出不同结论」本身就是缺陷 —— 判据必须与实现无关。
+#
+# zip 不走这条路：它的中央目录在尾部，unzip 自己就会报错。
+# 压缩格式且解压器不在 ⇒ 查不了 ⇒ 只能指望 tar 自己严格（见
+# _sk_archive_missing_decompressor）。
+_sk_archive_is_truncated() {
+  local __f=${1:-} __kind=${2:-} __n
+  [ -n "$__f" ] || return 1
+  case "$__kind" in
+    tar) ;;
+    tgz)
+      command -v gzip >/dev/null 2>&1 || return 1
+      ;;
+    tbz2)
+      command -v bzip2 >/dev/null 2>&1 || return 1
+      ;;
+    txz)
+      command -v xz >/dev/null 2>&1 || return 1
+      ;;
+    *) return 1 ;;
+  esac
+  __n=$(_sk_archive_tail_nonzero "$__f" "$__kind")
+  [ "$__n" = "0" ] && return 1
+  return 0
+}
+
 # archive_list ARCHIVE —— 打印归档里的成员清单（相对路径，每行一个）
 #
 # 只读不解：不写盘、不建目录。用来「先看看包里有什么」再决定解不解。
@@ -318,6 +378,11 @@ archive_list() {
     log_error "$(_t 'cannot list the archive'): $__f"
     return "$__rc"
   fi
+  if _sk_archive_is_truncated "$__f" "$__kind"; then
+    rm -f "$__tmp"
+    log_error "$(_t 'the archive is truncated or has trailing data'): $__f"
+    return "$SK_VERIFY"
+  fi
   cat "$__tmp"
   rm -f "$__tmp"
   return 0
@@ -334,6 +399,12 @@ archive_list() {
 #   5. 解到**暂存目录**（不是直接解到 DEST）；
 #   6. 扫解出来的文件系统，软链兜底再查一遍（这一遍是权威判据）；
 #   7. 全通过才**整体换**进 DEST。
+#
+# 解之前还要查一件事：**结尾标记**。tar 流末尾必须有两块 512 字节的零，
+# 缺了就是被截断了。GNU tar 读到 EOF 就当「归档到此为止」、照样退出 0 ⇒
+# 截断的包会被静默解成「只有前几个成员的包」⇒ 半份内容被装上，而调用方
+# 拿到的是成功。查结尾标记 ⇒ 结论与 tar 的实现无关（bsdtar 更严、GNU tar
+# 更松，同一份包在两边给出不同答案本身就是缺陷）。
 #
 # 为什么先解到暂存目录：tar 解到一半失败（磁盘满、成员损坏）时，
 # 直接解到目标目录会留下**半份内容** —— 而调用方看到的是「目录存在了」。
@@ -457,6 +528,13 @@ archive_extract() {
     fi
     log_error "$(_t 'cannot list the archive'): $__f"
     return "$__rc"
+  fi
+  # 结尾标记必须齐全：GNU tar 读到 EOF 就当归档结束、照样退出 0 ⇒
+  # 截断的包会被静默解成「只有前几个成员」⇒ 半份内容被装上而调用方拿到成功
+  if _sk_archive_is_truncated "$__f" "$__kind"; then
+    rm -rf "$__work" "$__meta"
+    log_error "$(_t 'the archive is truncated or has trailing data'): $__f"
+    return "$SK_VERIFY"
   fi
   : >"$__bad"
   while IFS= read -r __rel; do

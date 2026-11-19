@@ -8,7 +8,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: shellkit 1.1.0\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-11-19 14:21+0800\n"
+"POT-Creation-Date: 2026-11-19 16:20+0800\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language-Team: LANGUAGE <LL@li.org>\n"
@@ -34,6 +34,9 @@ msgid "the decompressor for this archive format is not available"
 msgstr ""
 
 msgid "cannot list the archive"
+msgstr ""
+
+msgid "the archive is truncated or has trailing data"
 msgstr ""
 
 msgid "the checksum does not match"
