@@ -208,6 +208,11 @@ dup-functions-check:
 pipe-safety-check:
 	@$(BASH) tools/check_pipe_safety.sh
 
+# 工作树里不能留「上一次运行被打断」的临时文件：它们被全局 gitignore 藏起来，
+# 却在「整仓拷贝」型步骤里把磁盘写满 ⇒ 门禁在别处报成假红
+check-tree-clean:
+	@$(BASH) tools/check_tree_clean.sh
+
 # 安全边界：路径守卫、软链、权限、密钥脱敏、单实例锁、原子写 —— 十条机器判据
 # （规范见 docs/SECURITY.md）
 security-check:
@@ -229,7 +234,7 @@ api-baseline-check:
 bench:
 	@$(BASH) tools/bench.sh
 
-check: syntax test lint module-order-check check-exitcode-docs local-names-check ident-boundary-check module-count-check pipe-safety-check dup-functions-check security-check api-baseline-check api-freeze-check compatibility-check docs-check versions-check check-docs posix-check cookbook-check messages-check examples fmt
+check: syntax test lint module-order-check check-exitcode-docs local-names-check ident-boundary-check module-count-check pipe-safety-check check-tree-clean dup-functions-check security-check api-baseline-check api-freeze-check compatibility-check docs-check versions-check check-docs posix-check cookbook-check messages-check examples fmt
 
 install:
 	./shellkit install-self --prefix $(PREFIX)/usr

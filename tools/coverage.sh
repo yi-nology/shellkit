@@ -219,6 +219,16 @@ WORK="$(mktemp -d "${TMPDIR:-/tmp}/shellkit-cov.XXXXXX")" || {
 WORK="$(cd "$WORK" && pwd -P)"
 
 _cleanup() {
+  # 基线是「同目录临时文件 + rename」原子替换的：临时文件必须与目标同目录，
+  # rename 才是原子操作（跨目录的 mv 是拷贝+删除，中间态是「两个文件都没了」）。
+  # 代价是：被打断的运行（Ctrl-C、kill、磁盘写满）会把半截基线留在**工作树里**。
+  # 这类残留动辄很大（一次跑歪就能到几十 G），而且被全局 gitignore 的 *.tmp
+  # 藏起来 ⇒ git status 干净、git 完全看不见 ⇒ 随后任何「整仓拷贝」型步骤
+  # 都会把它再拷一遍 → 磁盘写满 → 报错现场落在别的步骤上，看起来像用例失败。
+  # 退出时清掉：正常路径上它已被 rename 走（rm -f 对不存在的路径是空操作）。
+  if [ -n "${BASELINE:-}" ]; then
+    rm -f "$BASELINE.tmp" 2>/dev/null || true
+  fi
   if [ "${KEEP_WORK:-0}" = "1" ]; then
     log "KEEP_WORK=1 - keeping $WORK"
     return 0
@@ -296,6 +306,25 @@ mkdir -p "$TREE" || {
   exit 3
 }
 
+# 拷贝之前先看一眼：树里是不是已经有「上次运行被打断」留下的巨型临时文件。
+# 有的话，拷贝阶段会把它再拷一份 ⇒ 磁盘写满 ⇒ 报错现场落在拷贝中途，
+# 看起来像「工具坏了」，真因是工作树里有垃圾。先说清楚，让调用方自己清。
+LEFTOVER_MIN_BYTES=$((8 * 1024 * 1024))
+leftovers=$(find "$ROOT" \
+  -path "$ROOT/.git" -prune -o \
+  -path "$ROOT/site/node_modules" -prune -o \
+  -type f \( -name '*.tmp' -o -name '*.covtmp' \) \
+  -size +"$LEFTOVER_MIN_BYTES"c -print 2>/dev/null || true)
+if [ -n "$leftovers" ]; then
+  log "the working tree still holds a large leftover temporary file:"
+  printf '%s\n' "$leftovers" | while IFS= read -r __lf; do
+    [ -n "$__lf" ] || continue
+    printf 'coverage:   %s (%s bytes)\n' "${__lf#"$ROOT"/}" "$(wc -c <"$__lf" 2>/dev/null | tr -d ' ')" >&2
+  done
+  log "remove it first - it is left by an interrupted run, and copying it again is what fills the disk"
+  exit 3
+fi
+
 # .github 也要带：tests/test_release_gate_checks.sh 拿 ci.yml 与发布门禁对账，
 # 副本里没有它时那条用例必红（与 .gitignore 那次同一个原因）。
 for __d in lib tests tools templates locale po docs examples skills .github; do
@@ -317,6 +346,10 @@ for __f in shellkit install.sh repair.sh Makefile VERSION README.md AGENTS.md LI
     }
   fi
 done
+
+# 拷贝进来的临时文件（上次运行被打断留下的）不进插桩树：它们不是源码，
+# 而且会把插桩树撑大。只动副本，工作树里的原件不动。
+find "$TREE" -type f \( -name '*.tmp' -o -name '*.covtmp' \) -exec rm -f {} + 2>/dev/null || true
 
 # ---------------------------------------------------------------------------
 # 2) 排除「检查源码树」的用例
@@ -1280,6 +1313,16 @@ fi
 # 报告出完之后再写：这一趟既给出「哪块没测到」，又给出「白名单该长什么样」。
 # ---------------------------------------------------------------------------
 if [ "$WRITE_BASELINE" = "1" ]; then
+  # 未覆盖集合的规模上限：正常是几百条。上千条说明这一趟跑歪了
+  # （插桩/解析异常、locale 差异、源码树里混进了不该进来的东西）。
+  # 不设上限的话，一次跑歪就能把基线写成几百 MB 的垃圾 —— 而这种垃圾会留在
+  # 工作树里（见 _cleanup 的说明），把别处的门禁拖成假红。
+  MAX_UNCOVERED="${SHELLKIT_COV_MAX_UNCOVERED:-200000}"
+  if [ "$UNCOVERED" -gt "$MAX_UNCOVERED" ]; then
+    log "the uncovered set has $UNCOVERED entries (limit $MAX_UNCOVERED) - refusing to rewrite the baseline"
+    log "this run looks broken: fix the run first, then rewrite the baseline"
+    exit 3
+  fi
   if [ "$MODE" = "branch" ]; then
     {
       printf '# 分支覆盖白名单：当前确实没被测试覆盖的分支臂。\n'
