@@ -63,6 +63,31 @@ jobs:
           gh pr create --base main --head "$BRANCH" --title "chore: 删掉临时 CI 工装（不该进 main）" --body-file "$GITHUB_WORKSPACE/helper/cleanup-pr-body.md" >> /tmp/cleanup.log 2>&1
           exit 0
 
+      - name: approve the CI run for the cleanup PR
+        run: |
+          set +e
+          set -uo pipefail
+          cd repo
+          head_sha=$(git ls-remote origin "refs/heads/$BRANCH" | cut -f1)
+          echo "head sha: $head_sha" >> /tmp/cleanup.log
+          # PR 的作者是 github-actions[bot] ⇒ 仓库「外部协作者先审批」的规则
+          # 会把 CI 卡在 Action required ⇒ 必须按 head_sha 精确批准那一次运行。
+          i=0
+          while [ "$i" -lt 60 ]; do
+            run_id=$(gh api "repos/$GH_REPO/actions/runs?branch=$BRANCH&per_page=20" --jq "[.workflow_runs[] | select(.head_sha == \"$head_sha\") | .id] | .[0] // empty" 2>/dev/null)
+            case "$run_id" in
+              "" | null) ;;
+              *)
+                echo "approving ci run $run_id" >> /tmp/cleanup.log
+                gh api -X POST "repos/$GH_REPO/actions/runs/$run_id/approve" -H "Accept: application/vnd.github+json" >> /tmp/cleanup.log 2>&1
+                break
+                ;;
+            esac
+            sleep 10
+            i=$((i + 1))
+          done
+          exit 0
+
       - name: wait for the required checks, merge
         run: |
           set +e
