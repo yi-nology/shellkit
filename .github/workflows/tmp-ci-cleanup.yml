@@ -43,12 +43,6 @@ jobs:
           path: repo
           fetch-depth: 0
 
-      - name: checkout the cleanup branch (the PR body)
-        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
-        with:
-          ref: tmp/ci-cleanup
-          path: helper
-
       - name: remove the temporary artifacts and open the cleanup PR
         run: |
           set +e
@@ -60,7 +54,7 @@ jobs:
           git rm -q .github/workflows/tmp-ci-helper.yml issue-close.md pr-body.md probe-openeuler.sh
           git commit -q -m "chore: 删掉临时 CI 工装（不该进 main）"
           git push origin "$BRANCH" >> /tmp/cleanup.log 2>&1
-          gh pr create --base main --head "$BRANCH" --title "chore: 删掉临时 CI 工装（不该进 main）" --body-file "$GITHUB_WORKSPACE/helper/cleanup-pr-body.md" >> /tmp/cleanup.log 2>&1
+          gh pr create --base main --head "$BRANCH" --title "chore: 删掉临时 CI 工装（不该进 main）" --body "删掉 main 里的 4 个临时 CI 工装文件（.github/workflows/tmp-ci-helper.yml 与 issue-close.md / pr-body.md / probe-openeuler.sh）—— 它们是另一条会话把 tmp/ci-helper 当普通功能分支提 PR #154 时误合进来的；配套的清理 job 会同时删掉对应的临时分支。" >> /tmp/cleanup.log 2>&1
           exit 0
 
       - name: approve the CI run for the cleanup PR
@@ -119,12 +113,15 @@ jobs:
           exit 0
 
       - name: delete the temporary branches
-        if: always()
+        # 只在成功时删：`if: always()` 在**被取消时也会跑** ⇒ 下一轮还没 checkout
+        # 到 tmp/ci-helper 就被自己删了 ⇒ 那一轮直接 checkout 失败。
+        # tmp/ci-cleanup 也不在这里删（这一轮自己还要用它）⇒ 收尾时手工删。
+        if: success()
         run: |
           set +e
           set -uo pipefail
           cd repo
-          for b in tmp/ci-helper tmp/ci-helper-log tmp/ci-helper-probe tmp/ci-cleanup feat/issue-146-skeleton; do
+          for b in tmp/ci-helper tmp/ci-helper-log tmp/ci-helper-probe feat/issue-146-skeleton; do
             git push origin --delete "$b" >> /tmp/cleanup.log 2>&1
             echo "deleted $b rc=$?" >> /tmp/cleanup.log
           done
