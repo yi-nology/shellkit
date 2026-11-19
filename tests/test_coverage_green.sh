@@ -164,7 +164,10 @@ assert_eq "6" "$(_count "$counter")" \
 # -------------------------------------------------------------------------
 # CASE 5：凭据过期 ⇒ 必须重跑（免得「套件早就坏了」被一份陈凭据永久掩盖）
 # -------------------------------------------------------------------------
-stamp=$(find "$cov_tmp" -name '*.stamp' -type f 2>/dev/null | head -1)
+# 取第一个 stamp：不用 `find | head`（head 命中即退，会把 find 打死成 141），
+# 改成纯 bash 取第一行。
+__stamps=$(find "$cov_tmp" -name '*.stamp' -type f 2>/dev/null)
+stamp="${__stamps%%$'\n'*}"
 [ -n "$stamp" ] || _fail "the green stamp was not written"
 printf '%s\t%s\t%s\n' "$(cut -f1 "$stamp")" "$(cut -f2 "$stamp")" "$(($(date +%s) - 7200))" >"$stamp"
 _cov_run rc --branch --root "$root" --suite 'bash tests/run.sh' --guards '' --baseline "$base"

@@ -16,6 +16,12 @@
 # 其余写法一律改成：让消费者读完整个输入（去掉 -q / head），或者用纯 bash 判断
 # （case 匹配、参数展开）。
 #
+# 实现：一次 awk 扫描做完「拆管道 → 认命令 → 判消费者」的活。
+#   为什么不用纯 bash 逐行扫：原实现每行都要跑一次拆管道，而拆出来的每一段
+#   又要 fork 一次子 shell 去问「这段跑的是什么命令」（O(行数 × 段数) 次 fork）
+#   —— 本机单跑 88s，CI 上是每个 job 的固定开销。改成一次 awk 扫描后只剩一次
+#   fork。判定口径与失败文案保持逐字不变（既有测试断的就是文案）。
+#
 #   bash tools/check_pipe_safety.sh   # 0 合格；5 不合格
 set -u
 
@@ -29,158 +35,159 @@ _fail() {
   _bad=1
 }
 
-# --------------------------------------------------------------------------
-# 拆行：按管道符切开一段命令。引号里的 | 不算管道，|| 也不算，# 之后是注释。
-# 结果放在 _stages 数组里（bash 3.2 没有 nameref，用全局数组传出去）。
-# --------------------------------------------------------------------------
-_stages=()
-_split_pipe() {
-  local __s=$1 __cur="" __q="" __i=0 __c
-  local __n=${#__s}
-  _stages=()
-  while [ "$__i" -lt "$__n" ]; do
-    __c=${__s:$__i:1}
-    __i=$((__i + 1))
-    if [ -z "$__q" ]; then
-      case "$__c" in
-        "'" | '"')
-          __q=$__c
-          __cur=$__cur$__c
+# 扫描器内嵌在本文件里，不拆成独立的 .awk 文件：
+#   门禁自测（tests/test_pipe_safety.sh）会把本脚本单独复制到一棵假树上跑，
+#   内嵌 ⇒ 假树不需要第二个文件，判据不会因为「少拷了一个文件」而假红。
+__scan_prog=$(mktemp "${TMPDIR:-/tmp}/sk-pipe-safety.XXXXXX") || {
+  printf 'check_pipe_safety: 临时文件创建失败（TMPDIR 不可写？）\n' >&2
+  exit 1
+}
+__scan_list=$(mktemp "${TMPDIR:-/tmp}/sk-pipe-safety-list.XXXXXX") || {
+  rm -f "$__scan_prog"
+  printf 'check_pipe_safety: 临时文件创建失败（TMPDIR 不可写？）\n' >&2
+  exit 1
+}
+trap 'rm -f "$__scan_prog" "$__scan_list"' EXIT
+
+cat >"$__scan_prog" <<'SK_PIPE_SAFETY_AWK'
+# 一次扫描：逐行拆管道 → 认出每段跑什么命令 → 判有没有「命中就退」的消费者。
+
+function fail(msg) {
+  printf "check_pipe_safety: %s\n", msg > "/dev/stderr"
+  bad = 1
+}
+
+# split_pipe —— 按管道符切开一段命令。
+#   引号里的 | 不算管道，|| 也不算，# 之后是注释（形如 x#y 的参数展开不是注释）。
+function split_pipe(s,   i, n, c, q, cur, nst) {
+  nst = 0
+  n = length(s)
+  i = 1
+  q = ""
+  cur = ""
+  while (i <= n) {
+    c = substr(s, i, 1)
+    i++
+    if (q == "") {
+      if (c == "'" || c == "\"") {
+        q = c
+        cur = cur c
+        continue
+      }
+      if (c == "\\") {
+        cur = cur c
+        i++
+        if (i <= n) cur = cur substr(s, i, 1)
+        i++
+        continue
+      }
+      if (c == "#") {
+        # 注释只在行首或空白之后开始
+        if (cur == "" || substr(cur, length(cur), 1) ~ /[[:space:]]/) break
+        cur = cur c
+        continue
+      }
+      if (c == "|") {
+        if (i <= n && substr(s, i, 1) == "|") {
+          cur = cur "||"
+          i++
           continue
-          ;;
-        "\\")
-          __cur=$__cur$__c
-          __i=$((__i + 1))
-          if [ "$__i" -le "$__n" ]; then
-            __cur=$__cur${__s:$__i:1}
-          fi
-          __i=$((__i + 1))
-          continue
-          ;;
-        "#")
-          # 注释只在行首或空白之后开始；${x#y} 这种不是注释
-          case "$__cur" in
-            '' | *[[:space:]]) break ;;
-          esac
-          __cur=$__cur$__c
-          continue
-          ;;
-        "|")
-          if [ "$__i" -le "$__n" ] && [ "${__s:$__i:1}" = "|" ]; then
-            __cur=$__cur"||"
-            __i=$((__i + 1))
-            continue
-          fi
-          _stages[${#_stages[@]}]="$__cur"
-          __cur=""
-          continue
-          ;;
-      esac
-    else
-      case "$__c" in
-        "$__q") __q="" ;;
-        "\\")
-          __cur=$__cur$__c
-          __i=$((__i + 1))
-          if [ "$__i" -le "$__n" ]; then
-            __cur=$__cur${__s:$__i:1}
-          fi
-          __i=$((__i + 1))
-          continue
-          ;;
-      esac
-    fi
-    __cur=$__cur$__c
-  done
-  _stages[${#_stages[@]}]="$__cur"
+        }
+        stages[++nst] = cur
+        cur = ""
+        continue
+      }
+    } else {
+      if (c == q) {
+        q = ""
+      } else if (c == "\\") {
+        cur = cur c
+        i++
+        if (i <= n) cur = cur substr(s, i, 1)
+        i++
+        continue
+      }
+    }
+    cur = cur c
+  }
+  stages[++nst] = cur
+  return nst
+}
+
+# stage_cmd —— 这一段跑的是什么命令（第一个实词；带 = 的赋值不算）
+function stage_cmd(st,   m, i, parts, w) {
+  m = split(st, parts, /[[:space:]]+/)
+  for (i = 1; i <= m; i++) {
+    w = parts[i]
+    if (w == "") continue
+    if (index(w, "=") > 0) continue
+    return w
+  }
+  return ""
+}
+
+# stage_early —— 这一段是不是「命中就退出」的消费者
+function stage_early(st,   cmd, m, i, parts, w, rest) {
+  cmd = stage_cmd(st)
+  if (cmd == "head") return 1
+  if (cmd == "read") return 1
+  if (cmd == "grep") {
+    m = split(st, parts, /[[:space:]]+/)
+    for (i = 1; i <= m; i++) {
+      w = parts[i]
+      if (w == "") continue
+      if (substr(w, 1, 2) == "--") continue
+      if (substr(w, 1, 1) == "-") {
+        rest = substr(w, 2)
+        if (index(rest, "q") > 0) return 1
+        if (rest ~ /^m[0-9]/) return 1
+      }
+    }
+    return 0
+  }
+  if (cmd == "sed") {
+    if (index(st, ";q") > 0) return 1
+    if (index(st, "q;") > 0) return 1
+    if (index(st, "'q'") > 0) return 1
+    if (index(st, "\"q\"") > 0) return 1
+    return 0
+  }
+  if (cmd == "awk") {
+    if (index(st, "exit") > 0) return 1
+    return 0
+  }
   return 0
 }
 
-# _stage_cmd STAGE —— 这一段跑的是什么命令（第一个实词）
-_stage_cmd() {
-  local __st=$1 __w=""
-  for __w in $__st; do
-    case "$__w" in
-      *=*) continue ;;
-      *) break ;;
-    esac
-  done
-  printf '%s' "$__w"
-}
+BEGIN {
+  bad = 0
+  n = 0
+  while ((getline p < listfile) > 0) {
+    if (p != "") paths[++n] = p
+  }
+  close(listfile)
 
-# _stage_early STAGE —— 这一段是不是「命中就退出」的消费者
-_stage_early() {
-  local __st=$1 __cmd __tok
-  __cmd=$(_stage_cmd "$__st")
-  case "$__cmd" in
-    head)
-      return 0
-      ;;
-    read)
-      return 0
-      ;;
-    grep)
-      for __tok in $__st; do
-        case "$__tok" in
-          --*) continue ;;
-          -*)
-            case "${__tok#-}" in
-              *q*) return 0 ;;
-              m[0-9]*) return 0 ;;
-            esac
-            ;;
-        esac
-      done
-      return 1
-      ;;
-    sed)
-      case "$__st" in
-        *";q"*) return 0 ;;
-        *"q;"*) return 0 ;;
-        *"'q'"*) return 0 ;;
-        *'"q"'*) return 0 ;;
-      esac
-      return 1
-      ;;
-    awk)
-      case "$__st" in
-        *exit*) return 0 ;;
-      esac
-      return 1
-      ;;
-  esac
-  return 1
-}
+  for (fi = 1; fi <= n; fi++) {
+    lineno = 0
+    while ((getline line < paths[fi]) > 0) {
+      lineno++
+      nst = split_pipe(line)
+      if (nst < 2) continue
+      for (i = 2; i <= nst; i++) {
+        if (!stage_early(stages[i])) continue
+        cmd = stage_cmd(stages[i - 1])
+        if (cmd == "printf" || cmd == "echo" || cmd == "true" || cmd == "false") continue
+        consumer = stage_cmd(stages[i])
+        fail(paths[fi] ":" lineno ": " cmd " 的输出接进会提前退出的 " consumer " ⇒ " cmd " 会被 SIGPIPE 打死（141）；调用方开了 pipefail 时整条管道判失败。改法：让 " consumer " 读完整个输入（去掉 -q / head），或改成纯 bash 判断")
+      }
+    }
+    close(paths[fi])
+  }
 
-# _check_line FILE LINENO LINE
-_check_line() {
-  local __file=$1 __lineno=$2 __line=$3
-  local __i __cmd __consumer
-  _split_pipe "$__line"
-  [ "${#_stages[@]}" -ge 2 ] || return 0
-  for ((__i = 1; __i < ${#_stages[@]}; __i += 1)); do
-    _stage_early "${_stages[$__i]}" || continue
-    __cmd=$(_stage_cmd "${_stages[$((__i - 1))]}")
-    case "$__cmd" in
-      printf) continue ;;
-      echo) continue ;;
-      true) continue ;;
-      false) continue ;;
-    esac
-    __consumer=$(_stage_cmd "${_stages[$__i]}")
-    _fail "$__file:$__lineno: ${__cmd} 的输出接进会提前退出的 ${__consumer} ⇒ ${__cmd} 会被 SIGPIPE 打死（141）；调用方开了 pipefail 时整条管道判失败。改法：让 ${__consumer} 读完整个输入（去掉 -q / head），或改成纯 bash 判断"
-  done
-  return 0
+  if (bad) exit 5
+  exit 0
 }
-
-_scan_file() {
-  local __file=$1 __lineno=0 __line
-  while IFS= read -r __line || [ -n "$__line" ]; do
-    __lineno=$((__lineno + 1))
-    _check_line "$__file" "$__lineno" "$__line"
-  done <"$__file"
-  _scanned=$((_scanned + 1))
-}
+SK_PIPE_SAFETY_AWK
 
 # --------------------------------------------------------------------------
 # 扫描范围：库、CLI、安装脚本、门禁、测试、模板 —— 会被人 vendor 走的都在内。
@@ -190,6 +197,7 @@ if [ ! -d "$ROOT/lib/core" ]; then
   exit 1
 fi
 
+: >"$__scan_list"
 for __f in \
   "$ROOT"/lib/core/*.sh \
   "$ROOT"/lib/bootstrap.sh \
@@ -204,12 +212,19 @@ for __f in \
   case "$__f" in
     *.md | *.json | *.txt) continue ;;
   esac
-  _scan_file "$__f"
+  printf '%s\n' "$__f" >>"$__scan_list"
+  _scanned=$((_scanned + 1))
 done
 
 if [ "$_scanned" -eq 0 ]; then
   printf 'check_pipe_safety: nothing was scanned under %s\n' "$ROOT" >&2
   exit 1
+fi
+
+awk -v listfile="$__scan_list" -f "$__scan_prog"
+__rc=$?
+if [ "$__rc" -ne 0 ]; then
+  _bad=1
 fi
 
 if [ "$_bad" -ne 0 ]; then
