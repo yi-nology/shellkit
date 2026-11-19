@@ -167,9 +167,66 @@ dl=$(_download_without_timeout "$CI_YML")
 assert_eq "" "$dl" "every download in the CI workflow must carry a timeout"
 
 # 自证：去掉一个下载的超时 ⇒ 判据必须报出来
-sed 's|curl -fsSL --max-time "\${DOWNLOAD_TIMEOUT:-600}" "https://github.com/koalaman|curl -fsSL "https://github.com/koalaman|' \
-  "$CI_YML" >"$d/ci-dl.yml"
+sed 's|curl -fsSL --max-time|curl -fsSL|' "$CI_YML" >"$d/ci-dl.yml"
 assert_contains "$(_download_without_timeout "$d/ci-dl.yml")" "a download without a timeout" \
   "removing the download timeout must break the check"
+
+# --------------------------------------------------------------------------
+# 判据三：CI 里每个下载都必须有**重试**
+#
+# 为什么（2026-11-19 实测踩到）：GitHub release 的 CDN 偶尔返回 504
+# （网关超时）—— 实测 ubuntu-latest 的 job 就死在
+# `curl: (22) The requested URL returned error: 504` 上。
+# 超时能防「卡住」，防不住「服务端明确报错」：一次 504 就让整个 job 挂掉，
+# 而那不是代码的问题 —— 重试一次就好了。
+#
+# 判据形状：每一处下载都必须落在**一个带重试循环的函数**里
+# （函数体里有 while 循环 + 「attempt」标记）；落在函数外的下载连重试的
+# 机会都没有，直接判不合格。
+# --------------------------------------------------------------------------
+_download_without_retry() {
+  local __f=$1
+  awk '
+    function check_block(s, e,   i, l, has_while, has_attempt) {
+      has_while = 0
+      has_attempt = 0
+      for (i = s; i <= e; i++) {
+        l = lines[i]
+        if (l ~ /while/) has_while = 1
+        if (l ~ /attempt/) has_attempt = 1
+      }
+      for (i = s; i <= e; i++) {
+        l = lines[i]
+        if (l ~ /curl -fsSL|curl -sSL|wget .*-O/) {
+          if (!has_while || !has_attempt) {
+            printf "%s:%d: a download without a retry loop dies on a single 5xx: %s\n", FILENAME, i, l
+          }
+        }
+      }
+    }
+    {
+      lines[NR] = $0
+      t = $0
+      sub(/^[ \t]+/, "", t)
+      if (t ~ /^#/) next
+      if ($0 ~ /^[ \t]*[a-zA-Z_][a-zA-Z0-9_]*\(\)[ \t]*\{/) { fstart = NR; infn = 1; next }
+      if (infn && $0 ~ /^[ \t]*\}[ \t]*$/) { check_block(fstart, NR); infn = 0; next }
+      if (!infn && $0 ~ /curl -fsSL|curl -sSL|wget .*-O/) {
+        printf "%s:%d: a download outside any function cannot be retried: %s\n", FILENAME, NR, $0
+      }
+    }
+    END {
+      if (infn) check_block(fstart, NR)
+    }
+  ' "$__f"
+}
+
+retry_gaps=$(_download_without_retry "$CI_YML")
+assert_eq "" "$retry_gaps" "every download in the CI workflow must sit behind a retry loop"
+
+# 自证：把重试标记去掉 ⇒ 判据必须报出来
+sed 's/attempt/try/g' "$CI_YML" >"$d/ci-noretry.yml"
+assert_contains "$(_download_without_retry "$d/ci-noretry.yml")" "without a retry loop" \
+  "removing the retry loop must break the check"
 
 exit 0

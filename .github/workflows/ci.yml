@@ -55,7 +55,25 @@ jobs:
           else
             sc="shellcheck-${SHELLCHECK_VERSION}.linux.${arch}.tar.xz"
           fi
-          curl -fsSL --max-time "${DOWNLOAD_TIMEOUT:-600}" "https://github.com/koalaman/shellcheck/releases/download/${SHELLCHECK_VERSION}/${sc}" -o /tmp/sc.tar.xz
+          # 下载要**重试**（2026-11-19 实测踩到）：GitHub release 的 CDN 偶尔
+          # 返回 504（网关超时）—— 实测 ubuntu-latest 的 job 就死在
+          # `curl: (22) The requested URL returned error: 504` 上。
+          # 超时只能防「卡住」，防不住「服务端明确报错」：一次 504 就让 job 挂掉。
+          # 重试 3 次，每次之间等 5 秒；三次都失败才算失败。
+          sk_download() {
+            local __n=0
+            while [ "$__n" -lt 3 ]; do
+              if curl -fsSL --max-time "${DOWNLOAD_TIMEOUT:-600}" "$1" -o "$2"; then
+                return 0
+              fi
+              __n=$((__n + 1))
+              echo "download failed (attempt ${__n}/3): $1" >&2
+              sleep 5
+            done
+            echo "download failed after 3 attempts: $1" >&2
+            return 1
+          }
+          sk_download "https://github.com/koalaman/shellcheck/releases/download/${SHELLCHECK_VERSION}/${sc}" /tmp/sc.tar.xz
           tar -xJf /tmp/sc.tar.xz -C /tmp
           install -m 0755 "/tmp/shellcheck-${SHELLCHECK_VERSION}/shellcheck" "$HOME/.local/bin/shellcheck"
           case "$(uname -s)-$(uname -m)" in
@@ -64,7 +82,7 @@ jobs:
             Linux-aarch64) sf="shfmt_${SHFMT_VERSION}_linux_arm64" ;;
             *) sf="shfmt_${SHFMT_VERSION}_linux_amd64" ;;
           esac
-          curl -fsSL --max-time "${DOWNLOAD_TIMEOUT:-600}" "https://github.com/mvdan/sh/releases/download/${SHFMT_VERSION}/${sf}" -o "$HOME/.local/bin/shfmt"
+          sk_download "https://github.com/mvdan/sh/releases/download/${SHFMT_VERSION}/${sf}" "$HOME/.local/bin/shfmt"
           chmod 0755 "$HOME/.local/bin/shfmt"
           echo "$HOME/.local/bin" >> "$GITHUB_PATH"
 
@@ -236,16 +254,34 @@ jobs:
           # DOWNLOAD_TIMEOUT 取 600 秒（10 分钟）：实测一次正常下载几秒，
           # 600 秒足够覆盖慢网络；超了就是真卡住，早失败并说清是哪一步。
           DOWNLOAD_TIMEOUT=600
-          if command -v curl >/dev/null 2>&1; then
-            sk_fetch() { curl -fsSL --max-time "$DOWNLOAD_TIMEOUT" "$1" -o "$2"; }
-          elif command -v wget >/dev/null 2>&1; then
-            sk_fetch() { wget -qO "$2" --timeout="$DOWNLOAD_TIMEOUT" "$1"; }
-          elif command -v python3 >/dev/null 2>&1; then
-            sk_fetch() { timeout "$DOWNLOAD_TIMEOUT" python3 -c 'import sys,urllib.request; urllib.request.urlretrieve(sys.argv[1],sys.argv[2])' "$1" "$2"; }
-          else
+          if ! command -v curl >/dev/null 2>&1 &&
+            ! command -v wget >/dev/null 2>&1 &&
+            ! command -v python3 >/dev/null 2>&1; then
             echo "no downloader available (curl/wget/python3)" >&2
             exit 1
           fi
+          # 下载要**重试**（2026-11-19 实测踩到）：GitHub release 的 CDN 偶尔
+          # 返回 504（网关超时）—— 实测 ubuntu-latest 的 job 就死在
+          # `curl: (22) The requested URL returned error: 504` 上。
+          # 超时只能防「卡住」，防不住「服务端明确报错」：一次 504 就让 job 挂掉。
+          # 重试 3 次，每次之间等 5 秒；三次都失败才算失败。
+          sk_fetch() {
+            local __n=0
+            while [ "$__n" -lt 3 ]; do
+              if command -v curl >/dev/null 2>&1; then
+                curl -fsSL --max-time "$DOWNLOAD_TIMEOUT" "$1" -o "$2" && return 0
+              elif command -v wget >/dev/null 2>&1; then
+                wget -qO "$2" --timeout="$DOWNLOAD_TIMEOUT" "$1" && return 0
+              else
+                timeout "$DOWNLOAD_TIMEOUT" python3 -c 'import sys,urllib.request; urllib.request.urlretrieve(sys.argv[1],sys.argv[2])' "$1" "$2" && return 0
+              fi
+              __n=$((__n + 1))
+              echo "fetch failed (attempt ${__n}/3): $1" >&2
+              sleep 5
+            done
+            echo "fetch failed after 3 attempts: $1" >&2
+            return 1
+          }
           # 工具装到镜像默认 PATH 里的 /usr/local/bin，**不写 GITHUB_PATH**：
           # 实测 runner 在容器 job 里应用 GITHUB_PATH 后，下一步的 PATH 只剩
           # 追加的那一项——连 sh 都 exec 不到（issue #136 的 gate 步骤现场：
@@ -323,7 +359,22 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          curl -fsSL --max-time "${DOWNLOAD_TIMEOUT:-600}" "https://github.com/bats-core/bats-core/archive/refs/tags/${BATS_VERSION}.tar.gz" -o /tmp/bats.tar.gz
+          # 下载要**重试**（2026-11-19 实测踩到）：CDN 偶尔返回 504 ——
+          # 超时只能防「卡住」，防不住「服务端明确报错」。
+          sk_download() {
+            local __n=0
+            while [ "$__n" -lt 3 ]; do
+              if curl -fsSL --max-time "${DOWNLOAD_TIMEOUT:-600}" "$1" -o "$2"; then
+                return 0
+              fi
+              __n=$((__n + 1))
+              echo "download failed (attempt ${__n}/3): $1" >&2
+              sleep 5
+            done
+            echo "download failed after 3 attempts: $1" >&2
+            return 1
+          }
+          sk_download "https://github.com/bats-core/bats-core/archive/refs/tags/${BATS_VERSION}.tar.gz" /tmp/bats.tar.gz
           tar -xzf /tmp/bats.tar.gz -C /tmp
           sudo "/tmp/bats-core-${BATS_VERSION#v}/install.sh" /usr/local
           bats --version
