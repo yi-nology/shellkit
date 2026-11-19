@@ -8,7 +8,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: shellkit 1.1.0\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-11-19 14:06+0800\n"
+"POT-Creation-Date: 2026-11-19 14:21+0800\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language-Team: LANGUAGE <LL@li.org>\n"
@@ -17,6 +17,10 @@ msgstr ""
 "Content-Type: text/plain; charset=CHARSET\n"
 "Content-Transfer-Encoding: 8bit\n"
 
+msgid ""
+"a path with a different type existed at the destination and was replaced"
+msgstr ""
+
 msgid "archive not found"
 msgstr ""
 
@@ -24,6 +28,9 @@ msgid "cannot recognize the archive format"
 msgstr ""
 
 msgid "cannot create a temporary file"
+msgstr ""
+
+msgid "the decompressor for this archive format is not available"
 msgstr ""
 
 msgid "cannot list the archive"
@@ -57,9 +64,6 @@ msgid "the old destination could not be restored, it is left at"
 msgstr ""
 
 msgid "cannot move the extracted files into the destination"
-msgstr ""
-
-msgid "some old files could not be moved back into the destination"
 msgstr ""
 
 msgid "cannot create the destination directory"

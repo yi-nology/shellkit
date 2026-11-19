@@ -236,6 +236,13 @@ _sk_archive_merge() {
       }
       continue
     fi
+    # 同名且不是「目录对目录」⇒ 类型冲突（目录 ↔ 文件/软链）。
+    # 覆盖语义下这会连带删掉一个目录里的内容 —— 说出来，不静默。
+    if [ -d "$__e" ] && [ ! -d "$__dst/$__name" ]; then
+      log_warn "$(_t 'a path with a different type existed at the destination and was replaced'): $__dst/$__name"
+    elif [ ! -d "$__e" ] && [ -d "$__dst/$__name" ]; then
+      log_warn "$(_t 'a path with a different type existed at the destination and was replaced'): $__dst/$__name"
+    fi
     if [ "$__win" = "src" ]; then
       # 同名且类型不同 ⇒ 归档那份赢：先把旧的挪掉再搬新的
       case "$__name" in
@@ -249,6 +256,29 @@ _sk_archive_merge() {
     fi
   done <"$__list"
   rm -f "$__list"
+  return 0
+}
+
+# _sk_archive_missing_decompressor KIND —— 打印这个格式缺的解压器（空 = 没缺）
+#
+# 只有 GNU tar 才查：GNU tar 靠**外部程序**解压（gzip / bzip2 / xz），
+# bsdtar 自带 liblzma / libbz2 ⇒ 系统里没有 xz 也不影响它解开。
+# 判据是「缺了解压器」（3，前置条件）还是「包坏了」（5，校验失败）：
+# 重试同一个包永远解不开，但换个环境能解开 —— 调用方该知道是哪种。
+_sk_archive_missing_decompressor() {
+  local __kind=${1:-} __need="" __tarver
+  case "$__kind" in
+    tgz) __need=gzip ;;
+    tbz2) __need=bzip2 ;;
+    txz) __need=xz ;;
+    *) return 0 ;;
+  esac
+  __tarver=$(tar --version 2>/dev/null)
+  case "$__tarver" in
+    *"GNU tar"*) ;;
+    *) return 0 ;;
+  esac
+  command -v "$__need" >/dev/null 2>&1 || printf '%s' "$__need"
   return 0
 }
 
@@ -280,6 +310,11 @@ archive_list() {
   __rc=$?
   if [ "$__rc" -ne 0 ]; then
     rm -f "$__tmp"
+    __missing=$(_sk_archive_missing_decompressor "$__kind")
+    if [ -n "$__missing" ]; then
+      log_error "$(_t 'the decompressor for this archive format is not available'): $__missing"
+      return "$SK_PRECOND"
+    fi
     log_error "$(_t 'cannot list the archive'): $__f"
     return "$__rc"
   fi
@@ -325,7 +360,7 @@ archive_list() {
 # @stability experimental
 archive_extract() {
   local __f=${1:-} __dest=${2:-} __expect=${3:-} __kind __work __meta __stage __old
-  local __list __targets __links __bad __rel __link __target __dir __parent __mode
+  local __list __targets __links __bad __rel __link __target __dir __parent __mode __missing
   local __atomic=1 __rc=0
   _sk_need_args "$#" 2 "archive_extract ARCHIVE DEST [SHA256]" || return $?
 
@@ -342,11 +377,6 @@ archive_extract() {
     fi
   fi
 
-  # 演练：一个字节都不写
-  if _sk_fs_dry_run "extract" "$__f -> $__dest"; then
-    return 0
-  fi
-
   __kind=$(_sk_archive_kind "$__f") || {
     log_error "$(_t 'cannot recognize the archive format'): $__f"
     return "$SK_PRECOND"
@@ -360,6 +390,12 @@ archive_extract() {
   if [ -e "$__dest" ] && [ ! -d "$__dest" ]; then
     log_error "$(_t 'the destination is not a directory'): $__dest"
     return "$SK_PRECOND"
+  fi
+
+  # 演练：一个字节都不写（放在目标校验之后 —— 干跑也不该把「目标不可用」
+  # 吞成成功；与 fs / conf 的守卫同一口径）
+  if _sk_fs_dry_run "extract" "$__f -> $__dest"; then
+    return 0
   fi
 
   # 记下旧目录的权限：整体换上去之后要还原（暂存目录是 0700 的）
@@ -394,8 +430,6 @@ archive_extract() {
       }
     fi
   fi
-  chmod "$__mode" "$__work" 2>/dev/null || true
-
   # 清单文件放在暂存目录之外：搬内容时不能被一起搬走。
   __meta=$(mktemp -d "${TMPDIR:-/tmp}/shellkit-archive-meta.XXXXXX") || {
     rm -rf "$__work"
@@ -412,6 +446,11 @@ archive_extract() {
   __rc=$?
   if [ "$__rc" -ne 0 ]; then
     rm -rf "$__work" "$__meta"
+    __missing=$(_sk_archive_missing_decompressor "$__kind")
+    if [ -n "$__missing" ]; then
+      log_error "$(_t 'the decompressor for this archive format is not available'): $__missing"
+      return "$SK_PRECOND"
+    fi
     log_error "$(_t 'cannot list the archive'): $__f"
     return "$__rc"
   fi
@@ -426,11 +465,12 @@ archive_extract() {
     fi
   done <"$__list"
   if [ -s "$__bad" ]; then
-    rm -rf "$__work" "$__meta"
+    # 明细先打出来，再清理：$__bad 就在 $__meta 里，先删就永远打不出来
     log_error "$(_t 'the archive contains unsafe paths and was not extracted'): $__f"
     while IFS= read -r __rel; do
       log_error "  $__rel"
     done <"$__bad"
+    rm -rf "$__work" "$__meta"
     return "$SK_VERIFY"
   fi
 
@@ -447,11 +487,12 @@ archive_extract() {
     done <"$__targets"
   fi
   if [ -s "$__bad" ]; then
-    rm -rf "$__work" "$__meta"
+    # 明细先打出来，再清理（$__bad 在 $__meta 里）
     log_error "$(_t 'the archive contains unsafe symlinks and was not extracted'): $__f"
     while IFS= read -r __rel; do
       log_error "  $__rel"
     done <"$__bad"
+    rm -rf "$__work" "$__meta"
     return "$SK_VERIFY"
   fi
 
@@ -483,6 +524,9 @@ archive_extract() {
     log_error "$(_t 'cannot extract the archive'): $__f"
     return "$SK_VERIFY"
   fi
+  # 权限在**解完之后**再套：先套的话，目标目录是只读（555）时暂存目录跟着
+  # 不可写 ⇒ tar 写不进去 ⇒ 好包被误判成坏包（退 5）。
+  chmod "$__mode" "$__work" 2>/dev/null || true
 
   # 第三遍：扫解出来的文件系统，软链兜底再查一遍
   # （清单里说不清的情况：zip 里的软链、或实现自己改了名字的）
@@ -507,11 +551,12 @@ archive_extract() {
     fi
   done <"$__links"
   if [ -s "$__bad" ]; then
-    rm -rf "$__work" "$__meta"
+    # 明细先打出来，再清理（$__bad 在 $__meta 里）
     log_error "$(_t 'the archive contains unsafe symlinks and was not extracted'): $__f"
     while IFS= read -r __rel; do
       log_error "  $__rel"
     done <"$__bad"
+    rm -rf "$__work" "$__meta"
     return "$SK_VERIFY"
   fi
 
@@ -549,9 +594,13 @@ archive_extract() {
       __work=""
       # 旧目录里目标没有的路径搬回去（包里有的以包为准）
       if [ -n "$__old" ]; then
-        _sk_archive_merge "$__dest" "$__old" "dst" 2>/dev/null ||
-          log_warn "$(_t 'some old files could not be moved back into the destination'): $__dest"
-        rm -rf "$__old"
+        if _sk_archive_merge "$__dest" "$__old" "dst" 2>/dev/null; then
+          rm -rf "$__old"
+        else
+          # 合并失败 ⇒ **不能删** __old：里面是还没搬回去的旧文件，
+          # 删了就永久没了。留在原地并把位置报出来，让人自己捡回去。
+          log_error "$(_t 'the old destination could not be restored, it is left at'): $__old"
+        fi
       fi
     fi
   fi

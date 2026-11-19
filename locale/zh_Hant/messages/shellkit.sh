@@ -3,9 +3,11 @@
 # 域：shellkit
 _sk_msg_lookup_shellkit() {
   case "$1" in
+    'a path with a different type existed at the destination and was replaced') printf '%s' '目標目錄上存在類型不同的路徑，已被替換' ;;
     'archive not found') printf '%s' '封存檔案不存在' ;;
     'cannot recognize the archive format') printf '%s' '認不出封存格式' ;;
     'cannot create a temporary file') printf '%s' '無法建立暫存檔' ;;
+    'the decompressor for this archive format is not available') printf '%s' '該封存格式需要的解壓器不可用' ;;
     'cannot list the archive') printf '%s' '無法列出封存內容' ;;
     'the checksum does not match') printf '%s' '校驗和不符' ;;
     'the destination is a symlink') printf '%s' '目標目錄是符號連結' ;;
@@ -17,7 +19,6 @@ _sk_msg_lookup_shellkit() {
     'cannot extract the archive') printf '%s' '無法解包該封存' ;;
     'the old destination could not be restored, it is left at') printf '%s' '舊的目標目錄沒能放回去，留在' ;;
     'cannot move the extracted files into the destination') printf '%s' '無法把解包出來的檔案搬進目標目錄' ;;
-    'some old files could not be moved back into the destination') printf '%s' '部分舊檔案沒能搬回目標目錄' ;;
     'cannot create the destination directory') printf '%s' '無法建立目標目錄' ;;
     'invalid command name') printf '%s' '非法的指令名稱' ;;
     'duplicate command') printf '%s' '指令重複註冊' ;;

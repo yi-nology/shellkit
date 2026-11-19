@@ -197,7 +197,7 @@ _download_without_retry() {
       }
       for (i = s; i <= e; i++) {
         l = lines[i]
-        if (l ~ /curl -fsSL|curl -sSL|wget .*-O/) {
+        if (l ~ /curl -fsSL|curl -sSL|wget .*-O|urlretrieve/) {
           if (!has_while || !has_attempt) {
             printf "%s:%d: a download without a retry loop dies on a single 5xx: %s\n", FILENAME, i, l
           }
@@ -211,7 +211,7 @@ _download_without_retry() {
       if (t ~ /^#/) next
       if ($0 ~ /^[ \t]*[a-zA-Z_][a-zA-Z0-9_]*\(\)[ \t]*\{/) { fstart = NR; infn = 1; next }
       if (infn && $0 ~ /^[ \t]*\}[ \t]*$/) { check_block(fstart, NR); infn = 0; next }
-      if (!infn && $0 ~ /curl -fsSL|curl -sSL|wget .*-O/) {
+      if (!infn && $0 ~ /curl -fsSL|curl -sSL|wget .*-O|urlretrieve/) {
         printf "%s:%d: a download outside any function cannot be retried: %s\n", FILENAME, NR, $0
       }
     }

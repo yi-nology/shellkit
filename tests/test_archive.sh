@@ -110,7 +110,9 @@ mk_tar_member() {
   if [ "$__size" -gt 0 ]; then
     printf '%s' "$__content" >>"$__out"
   fi
-  __n=$((512 - __size % 512))
+  # 零长度成员后面**不能**补 512 字节：那正好是 tar 的结束标记，
+  # tar 会当成「归档到此为止」⇒ 后面的成员全部看不见（假绿，不是覆盖）。
+  __n=$(((512 - __size % 512) % 512))
   _pad "$__out" "$__n"
   rm -f "$__hdr"
   return 0
@@ -216,6 +218,8 @@ archive_extract traversal.tar "$dest4" >"$WORK/out.txt" 2>"$WORK/err.txt" || rc=
 assert_eq "5" "$rc" "an archive with a traversing path must be refused"
 err=$(cat "$WORK/err.txt")
 assert_contains "$err" "unsafe paths" "the refusal must say the archive contains unsafe paths"
+# 明细必须打出来：清单在临时目录里，先删了就永远打不出来（还会漏一条裸 bash 错误）
+assert_contains "$err" "../escaped.txt" "the refusal must name the offending member"
 assert_eq "" "$(ls -A "$dest4" 2>/dev/null)" "a refused archive must not extract anything"
 # 结构事实：穿越出去的落点必须没有被创建
 if [ -e "$WORK/escaped.txt" ]; then
@@ -272,20 +276,32 @@ if [ -e "$dest5b/link" ] || [ -L "$dest5b/link" ]; then
 fi
 
 # 多层软链：a -> b，b -> ../../outside（每一跳都要查，逃逸的那一跳必须被拒）
-mkdir -p multi
-printf 'payload' >multi/b
-tar -cf multi_base.tar -C multi b 2>/dev/null || _fail "cannot create the multi base archive"
+#
+# 两个成员**必须在同一个包里**：拆成两个包时，第二包里的逃逸那一跳单独就能
+# 被拒，测不出「链上每一跳都要查」。
 mk_tar_member symlink_chain.tar "a" "b"
+mk_tar_member symlink_chain.tar "b" "../../outside"
 tar_end symlink_chain.tar
 dest5c="$WORK/dest5c"
 mkdir -p "$dest5c"
 rc=0
-archive_extract multi_base.tar "$dest5c" >/dev/null 2>&1 || rc=$?
-assert_eq "0" "$rc" "the multi-link base archive must be extracted"
-rc=0
 archive_extract symlink_chain.tar "$dest5c" >"$WORK/out.txt" 2>"$WORK/err.txt" || rc=$?
+assert_eq "5" "$rc" "a symlink chain whose second hop escapes must be refused"
+err=$(cat "$WORK/err.txt")
+assert_contains "$err" "unsafe symlinks" "the refusal must say the archive contains unsafe symlinks"
+if [ -e "$dest5c/a" ] || [ -L "$dest5c/a" ]; then
+  _fail "the refused symlink chain must not land in the destination"
+fi
+
+# 良性的一跳软链：a -> b（b 是同包里的普通文件）⇒ 必须成功
+mk_tar_member symlink_ok.tar "a" "b"
+mk_tar_member symlink_ok.tar "b" ""
+tar_end symlink_ok.tar
+dest5c2="$WORK/dest5c2"
+rc=0
+archive_extract symlink_ok.tar "$dest5c2" >"$WORK/out.txt" 2>"$WORK/err.txt" || rc=$?
 assert_eq "0" "$rc" "a symlink chain that stays inside the archive must be accepted"
-assert_eq "b" "$(readlink "$dest5c/a" 2>/dev/null)" "the relative symlink must land in the destination"
+assert_eq "b" "$(readlink "$dest5c2/a" 2>/dev/null)" "the relative symlink must land in the destination"
 
 # 良性相对软链：link -> sibling（同目录），必须成功
 mkdir -p benign
@@ -403,6 +419,20 @@ assert_eq "0" "$rc" "extracting over an existing directory must succeed, not fai
 assert_eq "v2" "$(cat "$dest8/a.txt" 2>/dev/null)" "the new package must win over the old file"
 assert_eq "new-only" "$(cat "$dest8/sub/new.txt" 2>/dev/null)" "the new nested file must be in place"
 assert_eq "old-only" "$(cat "$dest8/sub/keep.txt" 2>/dev/null)" "a file the new package does not provide must be kept"
+
+# -------------------------------------------------------------------------
+# CASE 8b：目标目录是只读（555）⇒ 也要能解
+#
+# 暂存目录若**先**继承目标目录的权限，它也是只读的 ⇒ tar 写不进去 ⇒
+# 好包被误判成坏包（退 5）。所以权限必须在解完之后才套。
+# -------------------------------------------------------------------------
+mkdir -p "$WORK/ro-dest"
+chmod 555 "$WORK/ro-dest"
+rc=0
+archive_extract plain.tar "$WORK/ro-dest" >"$WORK/out.txt" 2>"$WORK/err.txt" || rc=$?
+assert_eq "0" "$rc" "extracting into a read-only destination must still work"
+assert_eq "hello" "$(cat "$WORK/ro-dest/a.txt" 2>/dev/null)" "the read-only destination must receive the content"
+chmod 755 "$WORK/ro-dest"
 
 # -------------------------------------------------------------------------
 # CASE 9：演练不落盘
