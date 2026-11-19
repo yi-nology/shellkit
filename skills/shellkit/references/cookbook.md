@@ -625,3 +625,7 @@ archive_extract /tmp/pkg.tar.gz /opt/app           # 再解包
 archive_extract /tmp/pkg.tar.gz /opt/app "$sha256"   # 校验不过就不解
 archive_list /tmp/pkg.tar.gz                           # 先看看包里有什么
 ```
+
+**已知边界**：解包只保证「**包里的东西**逃不出去」，不保证「目标目录本来
+就干净」。调用方自己放在目标目录里的软链是它自己的数据，覆盖安装后会
+**原样保留**（指向归档之外也照样保留）—— 要清就自己先清一遍。

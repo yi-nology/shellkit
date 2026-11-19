@@ -435,6 +435,23 @@ assert_eq "hello" "$(cat "$WORK/ro-dest/a.txt" 2>/dev/null)" "the read-only dest
 chmod 755 "$WORK/ro-dest"
 
 # -------------------------------------------------------------------------
+# CASE 8c：目标目录里**既有**的软链 ⇒ 原样保留（已知边界）
+#
+# archive_extract 保证的是「**包里的东西**逃不出去」，不保证「目标目录
+# 本来就干净」：调用方自己放的软链是它自己的数据，覆盖安装后会原样搬回来。
+# 锁住这条行为 —— 将来若有人顺手改成「清理掉」，用户的数据就没了。
+# -------------------------------------------------------------------------
+mkdir -p "$WORK/hostile-dest" "$WORK/outside"
+ln -s "$WORK/outside" "$WORK/hostile-dest/link"
+rc=0
+archive_extract plain.tar "$WORK/hostile-dest" >"$WORK/out.txt" 2>"$WORK/err.txt" || rc=$?
+assert_eq "0" "$rc" "extracting over a destination with a pre-existing symlink must succeed"
+assert_eq "hello" "$(cat "$WORK/hostile-dest/a.txt" 2>/dev/null)" "the new content must be in place"
+assert_eq "$WORK/outside" "$(readlink "$WORK/hostile-dest/link" 2>/dev/null)" "the pre-existing symlink must be preserved as-is"
+# 结构事实：不能有任何文件经它写到外面去
+assert_eq "" "$(ls -A "$WORK/outside" 2>/dev/null)" "nothing may be written through the pre-existing symlink"
+
+# -------------------------------------------------------------------------
 # CASE 9：演练不落盘
 # -------------------------------------------------------------------------
 dest9="$WORK/dest9"
