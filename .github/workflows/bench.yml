@@ -1,0 +1,52 @@
+name: bench trend
+
+# 性能基准的**定时**运行：完整四条路径（含整套测试），产出趋势报告。
+#
+# 为什么从 PR 挪到定时：
+#   * 套件路径一次要跑 3 遍完整测试（十几分钟）—— 每个 PR 都跑，是纯浪费：
+#     共享 runner 的计时噪音比代码的性能差异大得多，PR 上的数只能当参考。
+#   * 计时基线是**机器相关**的（tools/bench_baseline.txt 的注释里写明了：
+#     「换一台机器重测，这个数会变」）⇒ PR 上的计时判定本来就不成立。
+#   * PR 上保留的是**跨机器可比**的那一半判据：ci.yml 里的
+#     `bash tools/bench.sh --profile --check`（xtrace 计数，由代码路径决定）。
+#
+# 所以分工是：PR = 可比的判据；定时 = 不可比但看趋势的计时。
+#
+# 触发：每天一次（UTC 03:17，避开整点 —— 整点的定时任务在 GitHub 上排队最久），
+# 也可以手动触发。
+on:
+  schedule:
+    - cron: '17 3 * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  bench:
+    name: scheduled bench (all paths)
+    runs-on: ubuntu-latest
+    # 完整路径 = 3 遍整套测试 + 3 遍 new/upgrade + 3 遍 bootstrap
+    # （Linux 上整套测试约 10 分钟 ⇒ 3 遍 30 分钟；留够余量给慢的 runner）
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+
+      # stdout 是纯 JSON（日志一律 stderr），重定向落盘当产物
+      - name: measure all paths
+        run: bash tools/bench.sh --summary bench-summary.md --json > bench.json
+
+      - name: report
+        if: always()
+        run: cat bench-summary.md >> "$GITHUB_STEP_SUMMARY"
+
+      - name: upload report
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: bench-summary
+          path: |
+            bench-summary.md
+            bench.json
+          if-no-files-found: ignore
+          retention-days: 30
