@@ -438,8 +438,15 @@ jobs:
     steps:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
 
-      - name: measure
-        run: bash tools/bench.sh --summary bench-summary.md
+      # PR 上只量**不含套件**的三条快路径。
+      #
+      # 为什么：套件路径一次要跑 3 遍完整测试（十几分钟），而这个 job 跑在
+      # 共享 runner 上 —— 计时噪音比代码的性能差异大得多，量出来的数只能当
+      # 参考。计时趋势改由定时 workflow 跑（.github/workflows/bench.yml，
+      # 每天一次，产出趋势报告）；PR 上保留**跨机器可比**的那部分判据：
+      # 下面的 profile 计数基线检查（由代码路径决定，不受机器快慢影响）。
+      - name: measure (fast paths only)
+        run: bash tools/bench.sh --summary bench-summary.md --only cli_bootstrap,cli_new,cli_upgrade
 
       # 计数基线检查（路线图 v0.23.0「升级热点有可比较的指标」）：xtrace 计数
       # 由代码路径决定、跨机器可比 —— 比计时稳定得多。基线 tools/bench_profile_baseline.txt

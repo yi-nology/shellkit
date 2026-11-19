@@ -45,6 +45,8 @@
     docs/shots/*.shot         截图源：每行 `$ ` 是真要跑的命令，svg 由 make shots 渲染
     examples/                 两个能直接跑的工程，测试全程走真实二进制
     site/                     VuePress 2 文档站（手写页 + docs/ 同步页；Actions 构建，产物不进 git 历史）
+    .github/workflows/        quality（15 项必需检查）/ packages / pages / release
+                              bench.yml = 性能基准的**定时**运行（PR 上只量不含套件的快路径）
     locale/{en,zh_CN,zh_Hant} gettext 目录，msgid 一律英文
 
 ## 加一个模块要改三处，少一处就红
@@ -69,6 +71,8 @@
                   # messages-check + examples + fmt，CI 也是这组
                   # 步骤清单的唯一真相源是 Makefile 的 check 目标（上面这份是投影）
     make bats-check  # tests/bats 下的 bats 用例（bats 是外部依赖，不进 check）
+    make check-fast  # 快通道：只跑静态门禁（= check 去掉 test 与 examples），几十秒出结果
+                      # 刻意**不改** check 的语义：check 仍是唯一的完整门禁，CI 也只跑 check
 
 `docs-check` 会拦两种事：公开函数缺注释、`docs/` 里的生成物与源码不一致。
 `lint` 是 `shellcheck -S warning -x`，模板会先渲染再检查（占位符不是合法语法）。
@@ -253,9 +257,30 @@ busybox ash 上，混进一个 `local` 或 `[[ ]]` 不是报错，是**整个脚
     权限造现场。
     回归用例：`tests/test_archive.sh`（CASE 8e：旧内容回填失败必须退 5）。
 
+22. **门禁里的 O(N²) 次 fork，在机器忙时会放大成几十倍**：
+    三道静态门禁原本是「纯 bash 逐行扫 + 每问一句就 fork 一次」
+    （`check_local_names.sh` 对每个函数重扫一遍文件、`check_docs.sh` 对每个
+    代码块跑十几次管道再对每个候选名两次 grep）。
+    本机**空闲**时它们分别要 5.4s / 9.8s / 3.0s；同一台机器**负载高**的时候
+    分别变成 76s / 88s / 88s —— 放大 15~30 倍。放大的是 **fork 的等待**：
+    机器忙时每次 fork 都要排队，几千次 fork 就变成几十秒。
+    ⇒ 扫描一律改成**一次 awk 扫完**（把「文件 × 函数」两层循环压成一次遍历），
+    名字对账改成纯 bash 的模式匹配（不 fork grep）：改完之后同一台机器
+    0.08s / 0.46s / 1.4s，**输出文案与退出码逐字不变**。
+    ⇒ 但「跑一遍是绿的」**不能**证明重写没写坏判据：重写最容易把判据能力
+    一起写没（本轮就真出现过一次：拼名单的字符串少了开头的换行 ⇒ 第一个
+    名字永远匹配不上 ⇒ 门禁把「块内自己定义过的函数」误报成未知函数）。
+    ⇒ 改写后必须做**差分验证**：拿旧实现与新实现在一批变异树上逐字比
+    输出与退出码（本轮：25 棵变异树 + 39 行管道探针 + 22 棵 markdown 树），
+    再做**变异自证**（把实现改坏 ⇒ 用例必须变红）。
+    ⇒ 顺便补上门禁的自测：`tools/check_docs.sh` 原来**没有自测**
+    （它守着「文档里的示例还能不能跑」，自己静默失效没人会发现），
+    本轮补了 `tests/test_check_docs.sh`。
+
 ## 本场景的验证
 
     make check
+    make check-fast                  # 只看静态门禁（几十秒；改代码时的快速反馈）
     bash tests/run.sh                # 只看测试
     ./shellkit docs --check          # 只看文档产物是否最新
     bash tools/check_versions.sh     # 只看版本引用是否一致

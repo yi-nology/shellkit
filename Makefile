@@ -9,7 +9,7 @@ SOURCES := shellkit install.sh repair.sh demo.sh lib/bootstrap.sh $(wildcard lib
 TEMPLATES := $(shell find templates -type f)
 SHOTS := $(wildcard docs/shots/*.shot)
 
-.PHONY: help test syntax lint lint-templates fmt messages messages-check docs docs-check versions-check check-docs cookbook-check posix-check shots examples artifact-smoke check install release release-dry site-deps site-sync site site-serve local-names-check module-count-check pipe-safety-check dup-functions-check mutation security-check api-baseline-check api-freeze-check compatibility-check bench coverage coverage-branch upgrade-matrix ident-boundary-check
+.PHONY: help test syntax lint lint-templates fmt messages messages-check docs docs-check versions-check check-docs cookbook-check posix-check shots examples artifact-smoke check check-fast install release release-dry site-deps site-sync site site-serve local-names-check module-count-check pipe-safety-check dup-functions-check mutation security-check api-baseline-check api-freeze-check compatibility-check bench coverage coverage-branch upgrade-matrix ident-boundary-check
 
 help:
 	@printf '%s\n' \
@@ -31,7 +31,8 @@ help:
   'make cookbook-check  文档里说的场景数要与 Cookbook 实际场景数一致' \
 	  'make shots       按 docs/shots/*.shot 真跑命令并渲染 SVG 截图' \
 	  'make examples    跑 examples/ 下每个工程的测试' \
-	  'make check       依次跑 syntax / test / lint / module-order-check / check-exitcode-docs / local-names-check / module-count-check / pipe-safety-check / docs-check / versions-check / check-docs / cookbook-check / messages-check / examples / fmt' \
+	  'make check       完整门禁：syntax / test / lint / module-order-check / check-exitcode-docs / local-names-check / ident-boundary-check / module-count-check / pipe-safety-check / check-tree-clean / dup-functions-check / security-check / api-baseline-check / api-freeze-check / compatibility-check / docs-check / versions-check / check-docs / posix-check / cookbook-check / messages-check / examples / fmt' \ \
+	  'make check-fast  快通道：只跑静态门禁（= check 去掉 test 与 examples），几十秒出结果' \
 	  'make bats-check  跑 bats 用例（tests/bats，每个 @test 一个独立进程）' \
 	  'make coverage    公开函数级覆盖率（带白名单棘轮，不进 check）' \
 	  'make coverage-branch  分支级覆盖率（if/case/|| 各臂棘轮 + P0 守卫分支，不进 check）' \
@@ -235,6 +236,14 @@ bench:
 	@$(BASH) tools/bench.sh
 
 check: syntax test lint module-order-check check-exitcode-docs local-names-check ident-boundary-check module-count-check pipe-safety-check check-tree-clean dup-functions-check security-check api-baseline-check api-freeze-check compatibility-check docs-check versions-check check-docs posix-check cookbook-check messages-check examples fmt
+
+# 快通道：只跑静态门禁，不跑整套测试（tests/run.sh）与 examples。
+# 用途：改代码时的本地快速反馈 —— 完整门禁要十几分钟（套件本身占绝大部分），
+# 而「我这次改动有没有踩坏门禁」这件事，几十秒就能知道。
+# 刻意**不**改 check 的语义：check 仍是唯一的完整门禁，CI 也只跑 check。
+# 子目标与 check 保持一致（少了 test 与 examples）—— 少一个都会变成「快通道
+# 漏检」，多一个都会变成「快通道白等」。
+check-fast: syntax lint module-order-check check-exitcode-docs local-names-check ident-boundary-check module-count-check pipe-safety-check check-tree-clean dup-functions-check security-check api-baseline-check api-freeze-check compatibility-check docs-check versions-check check-docs posix-check cookbook-check messages-check fmt
 
 install:
 	./shellkit install-self --prefix $(PREFIX)/usr

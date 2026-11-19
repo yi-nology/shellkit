@@ -296,6 +296,117 @@ _sk_cov_envval() {
 }
 
 # ---------------------------------------------------------------------------
+# 绿灯凭据：这次「未插桩副本是绿的」这个事实，内容寻址地记在 TMPDIR 下
+# ---------------------------------------------------------------------------
+#
+# 为什么要有：CI 的覆盖率 job 把函数级与分支级**各跑一遍**，而两遍里的
+# 第一遍（未插桩副本必须全绿）查的是**同一棵树、同一套测试** ⇒ 第二遍是
+# 纯重复（实测每遍约 7 分钟，而这个 job 是整条流水线的关键路径）。
+#
+# 为什么用内容指纹，而不是「上一步成功了就跳过」：
+# 凭据**内容寻址** ⇒ 树变了凭据自动失效 ⇒ 不会拿旧的绿灯糊弄新的树；
+# 凭据带**有效期**（默认一小时）⇒ 树没变但很久之后重跑，仍然会重新验一遍
+# （免得「套件早就坏了」这件事被一份陈凭据永久掩盖）。
+#
+# 没有 sha256 工具 ⇒ 不做凭据（每次都老老实实跑一遍）。这是**保守**方向：
+# 少省一点时间，但不会拿一份算不出来的指纹糊弄。
+COV_GREEN_TTL=${SHELLKIT_COV_GREEN_TTL:-3600}
+COV_GREEN_DIR="${TMPDIR:-/tmp}/shellkit-cov-green"
+
+# _sk_cov_sha256 FILE —— 打印文件摘要；没有工具就返回 1
+_sk_cov_sha256() {
+  local __f=${1:-}
+  if command -v sha256sum >/dev/null 2>&1; then
+    sha256sum "$__f" 2>/dev/null | cut -d' ' -f1
+  elif command -v shasum >/dev/null 2>&1; then
+    shasum -a 256 "$__f" 2>/dev/null | cut -d' ' -f1
+  else
+    return 1
+  fi
+}
+
+# _cov_tree_fingerprint DIR —— 打印这棵树的**内容指纹**（内容寻址）
+#
+# 口径 = 这棵树里每个文件的摘要，按行排序后再摘要一次 ⇒
+# 目录改名、文件挪位置都不影响指纹（内容一样就是同一棵树）。
+# 用**相对路径**：副本落在哪都不影响指纹（本地与 CI 的路径不同）。
+_cov_tree_fingerprint() {
+  local __dir=${1:-} __out __fp
+  [ -d "$__dir" ] || return 1
+  command -v sha256sum >/dev/null 2>&1 || command -v shasum >/dev/null 2>&1 || return 1
+  __out=$(mktemp "${TMPDIR:-/tmp}/shellkit-cov-fp.XXXXXX") || return 1
+  # 路径必须是**相对**的：副本落在哪个临时目录里每次都不一样 ⇒ 用绝对路径
+  # 算出来的指纹每次都不同 ⇒ 凭据永远匹配不上 ⇒ 复用形同虚设。
+  (
+    cd "$__dir" || exit 1
+    if command -v sha256sum >/dev/null 2>&1; then
+      find . -type f -exec sha256sum {} + 2>/dev/null
+    else
+      find . -type f -exec shasum -a 256 {} + 2>/dev/null
+    fi
+  ) >"$__out" || true
+  [ -s "$__out" ] || {
+    rm -f "$__out"
+    return 1
+  }
+  LC_ALL=C sort "$__out" -o "$__out" 2>/dev/null || {
+    rm -f "$__out"
+    return 1
+  }
+  __fp=$(_sk_cov_sha256 "$__out") || {
+    rm -f "$__out"
+    return 1
+  }
+  rm -f "$__out"
+  [ -n "$__fp" ] || return 1
+  printf '%s' "$__fp"
+}
+
+# _cov_green_stamp_path FP —— 凭据文件路径（按指纹分文件）
+_cov_green_stamp_path() {
+  printf '%s/%s.stamp' "$COV_GREEN_DIR" "${1:-none}"
+}
+
+# _cov_green_valid FP EXCLUDED_SET —— 这棵树有没有一份**还有效**的绿灯凭据
+#
+# EXCLUDED_SET = 这一轮被挪走的用例（空格分隔）。复用要求：
+# **当前这一轮跑的套件是当初验过的那套的子集**（排除得更多 ⇒ 跑得更少 ⇒
+# 「当初全绿」蕴含「现在也全绿」）。反过来的方向不成立 ⇒ 拒绝复用。
+#
+# 为什么必须记这一项：两种模式的排除清单不同（分支级多排除一个用例）⇒
+# 跑得多的那套绿了，才轮得到跑得少的那套复用。
+_cov_green_valid() {
+  local __fp=${1:-} __excluded=${2:-} __stamp __f2 __ex2 __ts __now __w
+  [ -n "$__fp" ] || return 1
+  __stamp=$(_cov_green_stamp_path "$__fp")
+  [ -f "$__stamp" ] || return 1
+  IFS="$(printf '\t')" read -r __f2 __ex2 __ts <"$__stamp" 2>/dev/null || return 1
+  [ "$__f2" = "$__fp" ] || return 1
+  case "$__ts" in '' | *[!0-9]*) return 1 ;; esac
+  __now=$(date +%s)
+  [ $((__now - __ts)) -ge 0 ] || return 1
+  [ $((__now - __ts)) -le "$COV_GREEN_TTL" ] || return 1
+  # 当初排除的每一个用例，这一轮也必须排除（否则这一轮跑得更多 ⇒ 不能复用）
+  for __w in $__ex2; do
+    case " $__excluded " in
+      *" $__w "*) : ;;
+      *) return 1 ;;
+    esac
+  done
+  return 0
+}
+
+# _cov_green_write FP EXCLUDED_SET —— 记下「这棵树的未插桩副本是绿的」
+_cov_green_write() {
+  local __fp=${1:-} __excluded=${2:-} __stamp
+  [ -n "$__fp" ] || return 1
+  mkdir -p "$COV_GREEN_DIR" 2>/dev/null || return 1
+  __stamp=$(_cov_green_stamp_path "$__fp")
+  printf '%s\t%s\t%s\n' "$__fp" "$__excluded" "$(date +%s)" >"$__stamp" 2>/dev/null || return 1
+  return 0
+}
+
+# ---------------------------------------------------------------------------
 # 1) 复制仓库到副本
 #
 # 不拷 site/（有 node_modules，太大）与 .git（历史与覆盖率无关）。
@@ -350,6 +461,15 @@ done
 # 拷贝进来的临时文件（上次运行被打断留下的）不进插桩树：它们不是源码，
 # 而且会把插桩树撑大。只动副本，工作树里的原件不动。
 find "$TREE" -type f \( -name '*.tmp' -o -name '*.covtmp' \) -exec rm -f {} + 2>/dev/null || true
+
+# 这棵副本的**内容指纹**（内容寻址 ⇒ 树变了凭据自动失效）。
+#
+# 必须取在**排除用例之前**：两种模式的排除清单不同（分支级多排除一个用例）
+# ⇒ 排除之后的副本内容不同 ⇒ 指纹不同 ⇒ 两个模式永远匹配不上 ⇒ 复用形同虚设。
+# 排除规则本身写在 tools/coverage.sh 里，而 coverage.sh 就在副本里 ⇒
+# 改了排除规则 ⇒ 副本内容变了 ⇒ 指纹变了 ⇒ 旧凭据自动作废 ✓。
+COV_FP=""
+COV_FP=$(_cov_tree_fingerprint "$TREE") || COV_FP=""
 
 # ---------------------------------------------------------------------------
 # 2) 排除「检查源码树」的用例
@@ -448,12 +568,20 @@ _report_red() {
   log "----- end of suite log -----"
 }
 
-log "running the suite on the untouched copy (this must be green)..."
-if ! _run_suite "$WORK/suite-plain.log"; then
-  _report_red "$WORK/suite-plain.log" "before instrumentation"
-  exit 3
+if [ -n "$COV_FP" ] && _cov_green_valid "$COV_FP" "$COV_EXCLUDES"; then
+  # 这棵树的未插桩副本刚验过是绿的（凭据内容寻址 + 未过期 + 这一轮跑的是
+  # 当初那套的子集）⇒ 不重复跑一遍
+  log "reusing the green result of the untouched copy (same tree content, the stamp is still valid)"
+else
+  log "running the suite on the untouched copy (this must be green)..."
+  if ! _run_suite "$WORK/suite-plain.log"; then
+    _report_red "$WORK/suite-plain.log" "before instrumentation"
+    exit 3
+  fi
+  log "the untouched copy is green"
+  # 记下这份绿灯（下一遍跑同一棵树时可以复用 ⇒ 省一次整套件）
+  [ -n "$COV_FP" ] && _cov_green_write "$COV_FP" "$COV_EXCLUDES"
 fi
-log "the untouched copy is green"
 
 # ---------------------------------------------------------------------------
 # 4) 插桩

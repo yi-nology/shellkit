@@ -15,6 +15,13 @@
 #      就会多出一个「静默失效」的名字
 #   3. 每个公开的出参入口都必须调用 _sk_check_out_name
 #
+# 实现：一次 awk 扫描把每个文件读成「函数 → 正文 + 具名局部变量」的表，
+# 三条规则全在表上判定。
+#   为什么不用纯 bash 逐行扫：原实现是「文件 × 函数」两层循环，每个函数都要
+#   重扫一遍文件（O(N²) 次 fork）—— 本机单跑 37~76s，CI 上是每个 job 的固定
+#   开销。改成一次 awk 扫描后只剩一次 fork。
+#   判定口径与失败文案保持逐字不变（既有测试断的就是文案）。
+#
 #   bash tools/check_local_names.sh   # 0 合格；5 不合格
 set -u
 
@@ -37,251 +44,334 @@ cli_opt cli_opts _sk_opt_set"
 # 公开的出参入口：必须自己挡住保留名。
 OUT_PARAM_FUNCS="str_trim str_lower str_upper str_repeat ask ask_yn ask_choice cli_opt"
 
-# _sk_split_words TEXT —— 按 shell 词法把一行拆成若干词（每词一行）
-#   处理单双引号；反斜杠转义下一个字符。不做变量展开，也不执行任何内容。
-_sk_split_words() {
-  local __s=${1:-} __tok="" __q="" __i=0 __c
-  local __len=${#__s}
-  while [ "$__i" -lt "$__len" ]; do
-    __c=${__s:$__i:1}
-    __i=$((__i + 1))
-    if [ -z "$__q" ]; then
-      case "$__c" in
-        " " | "\t")
-          if [ -n "$__tok" ]; then
-            printf '%s\n' "$__tok"
-            __tok=""
-          fi
-          continue
-          ;;
-        "'" | '"')
-          __q=$__c
-          continue
-          ;;
-        "\\")
-          __i=$((__i + 1))
-          __c=${__s:$__i:1}
-          ;;
-      esac
-    elif [ "$__c" = "$__q" ]; then
-      __q=""
+# 扫描器内嵌在本文件里，不拆成独立的 .awk 文件：
+#   门禁自测（tests/test_local_names.sh）会把本脚本单独复制到一棵假树上跑，
+#   内嵌 ⇒ 假树不需要第二个文件，判据不会因为「少拷了一个文件」而假红。
+__scan_prog=$(mktemp "${TMPDIR:-/tmp}/sk-local-names.XXXXXX") || {
+  printf 'check_local_names: 临时文件创建失败（TMPDIR 不可写？）\n' >&2
+  exit 5
+}
+__scan_list=$(mktemp "${TMPDIR:-/tmp}/sk-local-names-list.XXXXXX") || {
+  rm -f "$__scan_prog"
+  printf 'check_local_names: 临时文件创建失败（TMPDIR 不可写？）\n' >&2
+  exit 5
+}
+trap 'rm -f "$__scan_prog" "$__scan_list"' EXIT
+
+cat >"$__scan_prog" <<'SK_LOCAL_NAMES_AWK'
+# 一次扫描：读文件 → 建「函数 → 正文 + 具名局部变量」的表 → 三条规则。
+# 口径与原 bash 实现逐字对齐（失败文案、退出码、判定顺序都不变）。
+
+function fail(msg) {
+  printf "check_local_names: %s\n", msg > "/dev/stderr"
+  bad = 1
+}
+
+# lex —— 按 shell 词法把一段文本拆成词（处理单双引号与反斜杠转义）
+function lex(s,   i, n, c, q, tok) {
+  lnw = 0
+  n = length(s)
+  i = 1
+  q = ""
+  tok = ""
+  while (i <= n) {
+    c = substr(s, i, 1)
+    i++
+    if (q == "") {
+      if (c == " " || c == "\t") {
+        if (tok != "") { lw[++lnw] = tok; tok = "" }
+        continue
+      }
+      if (c == "'" || c == "\"") { q = c; continue }
+      if (c == "\\") {
+        if (i <= n) { c = substr(s, i, 1); i++ } else { c = "" }
+      }
+    } else {
+      if (c == q) { q = ""; continue }
+      if (c == "\\" && q == "\"") {
+        if (i <= n) { c = substr(s, i, 1); i++ } else { c = "" }
+      }
+    }
+    tok = tok c
+  }
+  if (tok != "") lw[++lnw] = tok
+}
+
+# names_from —— 从「local 后面那段」里取出变量名（跳过选项、去掉 =默认值）
+#   注意：原实现把拆出来的词用未加引号的 $__tokens 展开，展开时会按 IFS
+#   再切一次（引号里带空格的名字会被切成两个）。这里照样再切一次，口径一致。
+function names_from(rest, out,   i, j, m, t, name) {
+  lex(rest)
+  no = 0
+  for (i = 1; i <= lnw; i++) {
+    m = split(lw[i], wpart, /[ \t]+/)
+    for (j = 1; j <= m; j++) {
+      t = wpart[j]
+      if (t == "") continue
+      if (t ~ /^-/) continue
+      if (index(t, "=") > 0) name = substr(t, 1, index(t, "=") - 1)
+      else name = t
+      if (name == "") continue
+      out[++no] = name
+    }
+  }
+  return no
+}
+
+# rule1_names —— 规则 1 的取名：去掉行首空白后，只认正好是 local 或 local+空格
+function rule1_names(line, out,   rest) {
+  rest = line
+  sub(/^[[:space:]]+/, "", rest)
+  if (rest != "local" && rest !~ /^local /) return 0
+  sub(/^local/, "", rest)
+  return names_from(rest, out)
+}
+
+# chain_names —— 出参链路的取名：原实现用 [[:space:]]*local 前缀匹配
+function chain_names(line, out,   rest) {
+  if (line !~ /^[[:space:]]*local/) return 0
+  rest = line
+  sub(/^[[:space:]]+/, "", rest)
+  sub(/^local/, "", rest)
+  return names_from(rest, out)
+}
+
+# close_def —— 收尾一个函数：正文落表
+function close_def() {
+  dbody[cur] = body
+  inbody = 0
+  cur = 0
+  body = ""
+}
+
+# merge_func —— 把「文件里某个名字」的所有定义合并起来看
+#   （原实现取函数正文时会把同名定义全都收进来，判据按合并后的正文走）
+function merge_func(fi, nm,   key, cnt, j, d, k) {
+  key = fi SUBSEP nm
+  mpv = 0
+  mg = 0
+  mnl = 0
+  if (!(key in nfnd)) return
+  cnt = nfnd[key]
+  for (j = 1; j <= cnt; j++) {
+    d = fnd[key SUBSEP j]
+    if (haspv[d]) mpv = 1
+    if (hasguard[d]) mg = 1
+    for (k = 1; k <= nfloc[d]; k++) mergedloc[++mnl] = floc[d SUBSEP k]
+  }
+}
+
+# extract_guard —— 从保留名单正文里抽出所有 __xxx（等价 grep -o '__[A-Za-z0-9_]*'）
+function extract_guard(text,   i, n, j, tok) {
+  ng = 0
+  n = length(text)
+  i = 1
+  while (i <= n) {
+    if (substr(text, i, 2) == "__") {
+      tok = "__"
+      j = i + 2
+      while (j <= n && substr(text, j, 1) ~ /[A-Za-z0-9_]/) {
+        tok = tok substr(text, j, 1)
+        j++
+      }
+      if (!(tok in gset)) { gset[tok] = 1; gnames[++ng] = tok }
+      i = j
+    } else {
+      i++
+    }
+  }
+}
+
+BEGIN {
+  bad = 0
+
+  # ---- 读文件清单（core 在前，bootstrap/shellkit 在后）----
+  n = 0
+  while ((getline p < listfile) > 0) {
+    if (p != "") paths[++n] = p
+  }
+  close(listfile)
+
+  # ---- 第一遍：扫文件，建表；同时判规则 1 ----
+  for (fi = 1; fi <= n; fi++) {
+    base = paths[fi]
+    sub(/^.*\//, "", base)
+    inbody = 0
+    cur = 0
+    body = ""
+    lineno = 0
+    while ((getline line < paths[fi]) > 0) {
+      lineno++
+
+      # 规则 1：局部变量名一律 __ 前缀
+      m = rule1_names(line, r1n)
+      for (i = 1; i <= m; i++) {
+        if (r1n[i] !~ /^__/) {
+          fail(base ":" lineno ": 局部变量 " r1n[i] " 必须用 __ 前缀（库内部命名空间）")
+        }
+      }
+
+      if (inbody) {
+        if (line ~ /^}/) { close_def(); continue }
+        body = body line "\n"
+        m = chain_names(line, c1n)
+        for (i = 1; i <= m; i++) floc[cur SUBSEP (++nfloc[cur])] = c1n[i]
+        if (index(line, "printf -v \"$")) haspv[cur] = 1
+        if (index(line, "_sk_check_out_name")) hasguard[cur] = 1
+        continue
+      }
+
+      # 函数定义行：第一个 { 之前的内容，去掉尾部空白后形如 name()
+      p = index(line, "{")
+      if (p > 0) head = substr(line, 1, p - 1)
+      else head = line
+      sub(/[[:space:]]+$/, "", head)
+      if (head !~ /\(\)$/) continue
+      nm = substr(head, 1, length(head) - 2)
+      if (nm == "") continue
+
+      cur = ++ndefs
+      dname[cur] = nm
+      dfile[cur] = fi
+      fdef[fi SUBSEP (++nfdef[fi])] = cur
+      ckey = fi SUBSEP nm
+      fnd[ckey SUBSEP (++nfnd[ckey])] = cur
+      if (!(nm in firstfile)) firstfile[nm] = fi
+      if (fi <= ncore && !(nm in firstcore)) firstcore[nm] = fi
+      body = ""
+      inbody = 1
+    }
+    close(paths[fi])
+    if (inbody) close_def()
+  }
+
+  # ---- 保留名单：str.sh 里 _sk_check_out_name 的正文 ----
+  guardfound = 0
+  guardtext = ""
+  gfi = 0
+  for (i = 1; i <= n; i++) if (paths[i] == strfile) gfi = i
+  if (gfi > 0) {
+    gkey = gfi SUBSEP "_sk_check_out_name"
+    if (gkey in nfnd) {
+      cnt = nfnd[gkey]
+      for (j = 1; j <= cnt; j++) {
+        d = fnd[gkey SUBSEP j]
+        guardtext = guardtext dbody[d]
+      }
+      guardfound = 1
+    }
+  }
+  if (guardfound) {
+    extract_guard(guardtext)
+  } else {
+    fail("读不到 _sk_check_out_name 的保留名单（str.sh 被改坏了？）")
+  }
+
+  # ---- 规则 2：出参链路上的每个具名局部变量都必须在保留名单里 ----
+  if (guardfound && ng > 0) {
+    # 2a 自动 —— 公开的动态出参函数，它声明的每个具名局部变量都必须在名单里
+    for (fi = 1; fi <= ncore; fi++) {
+      for (j = 1; j <= nfdef[fi]; j++) {
+        d = fdef[fi SUBSEP j]
+        nm = dname[d]
+        if (nm ~ /^_/) continue
+        if (nm !~ /^[A-Za-z0-9_]+$/) continue
+        merge_func(fi, nm)
+        if (!mpv) continue
+        for (k = 1; k <= mnl; k++) {
+          ln = mergedloc[k]
+          if (ln !~ /^__/) continue
+          if (!(ln in gset)) {
+            fail(nm "() 的局部变量 " ln " 没进 _sk_check_out_name 的保留名单（用这个名字的调用方会静默拿到旧值）")
+          }
+        }
+      }
+    }
+    # 2b 硬名单 —— 转手交给私有函数的公开入口
+    cnt = split(chain, cfn)
+    for (j = 1; j <= cnt; j++) {
+      nm = cfn[j]
+      if (nm == "") continue
+      if (!(nm in firstcore)) {
+        fail("链路上找不到函数 " nm "（它被删了还是改了名？）")
+        continue
+      }
+      merge_func(firstcore[nm], nm)
+      for (k = 1; k <= mnl; k++) {
+        ln = mergedloc[k]
+        if (ln !~ /^__/) continue
+        if (!(ln in gset)) {
+          fail(nm "() 的局部变量 " ln " 没进 _sk_check_out_name 的保留名单（用这个名字的调用方会静默拿到旧值）")
+        }
+      }
+    }
+  }
+
+  # ---- 规则 3：公开的出参入口必须挡住保留名 ----
+  #   3a 自动 —— 公开的动态出参函数
+  for (fi = 1; fi <= ncore; fi++) {
+    for (j = 1; j <= nfdef[fi]; j++) {
+      d = fdef[fi SUBSEP j]
+      nm = dname[d]
+      if (nm ~ /^_/) continue
+      if (nm !~ /^[A-Za-z0-9_]+$/) continue
+      merge_func(fi, nm)
+      if (!mpv) continue
+      if (!mg) {
+        fail(nm "() 是公开出参入口，必须调用 _sk_check_out_name 挡住保留名")
+      }
+    }
+  }
+  #   3b 硬名单
+  cnt = split(outp, ofn)
+  for (j = 1; j <= cnt; j++) {
+    nm = ofn[j]
+    if (nm == "") continue
+    if (!(nm in firstcore)) {
+      fail("找不到公开出参函数 " nm)
       continue
-    elif [ "$__c" = "\\" ] && [ "$__q" = '"' ]; then
-      __i=$((__i + 1))
-      __c=${__s:$__i:1}
-    fi
-    __tok="${__tok}${__c}"
-  done
-  if [ -n "$__tok" ]; then
-    printf '%s\n' "$__tok"
-  fi
-}
+    }
+    merge_func(firstcore[nm], nm)
+    if (!mg) {
+      fail(nm "() 是公开出参入口，必须调用 _sk_check_out_name 挡住保留名")
+    }
+  }
 
-# _fn_body FILE FUNC —— 打印函数正文；函数不存在返回 1
-_fn_body() {
-  local __file=$1 __want=$2 __line __head __in=0 __found=0
-  while IFS= read -r __line || [ -n "$__line" ]; do
-    if [ "$__in" = "1" ]; then
-      case "$__line" in
-        '}'*)
-          __in=0
-          continue
-          ;;
-      esac
-      printf '%s\n' "$__line"
-      continue
-    fi
-    # 函数定义行：取第一个 { 之前的内容，去掉尾部空白后与「名字()」比较
-    __head=${__line%%\{*}
-    __head=${__head%"${__head##*[![:space:]]}"}
-    if [ "$__head" = "$__want()" ]; then
-      __in=1
-      __found=1
-    fi
-  done <"$__file"
-  [ "$__found" = "1" ] || return 1
-  return 0
+  if (bad) exit 5
+  exit 0
 }
+SK_LOCAL_NAMES_AWK
 
-# _fn_names FILE —— 打印文件里所有函数名（每行一个）
-_fn_names() {
-  local __file=$1 __line __head
-  while IFS= read -r __line || [ -n "$__line" ]; do
-    __head=${__line%%\{*}
-    __head=${__head%"${__head##*[![:space:]]}"}
-    case "$__head" in
-      *\(\))
-        __head=${__head%\(\)}
-        case "$__head" in
-          "" | *[!A-Za-z0-9_]*) continue ;;
-        esac
-        printf '%s\n' "$__head"
-        ;;
-    esac
-  done <"$__file"
-}
-
-# _fn_locals FILE FUNC —— 打印该函数声明的具名局部变量（每行一个）
-_fn_locals() {
-  local __body
-  __body=$(_fn_body "$1" "$2") || return 1
-  printf '%s\n' "$__body" | while IFS= read -r __line; do
-    case "$__line" in
-      [[:space:]]*local[[:space:]]* | [[:space:]]*local) ;;
-      *) continue ;;
-    esac
-    __rest="${__line#"${__line%%[![:space:]]*}"}"
-    __rest="${__rest#local}"
-    for __tok in $(_sk_split_words "$__rest"); do
-      case "$__tok" in
-        -*) continue ;;
-        *=*) __name=${__tok%%=*} ;;
-        *) __name=$__tok ;;
-      esac
-      [ -n "$__name" ] || continue
-      printf '%s\n' "$__name"
-    done
-  done
-}
-
-# _check_locals FILE —— 规则 1：局部变量名一律 __ 前缀
-_check_locals() {
-  local __file=$1 __line __lineno=0 __rest __tok __name __tokens
-  while IFS= read -r __line || [ -n "$__line" ]; do
-    __lineno=$((__lineno + 1))
-    __rest="${__line#"${__line%%[![:space:]]*}"}"
-    case "$__rest" in
-      local | local\ *) ;;
-      *) continue ;;
-    esac
-    __rest="${__rest#local}"
-    __tokens=$(_sk_split_words "$__rest")
-    for __tok in $__tokens; do
-      case "$__tok" in
-        -*) continue ;;
-        *=*) __name=${__tok%%=*} ;;
-        *) __name=$__tok ;;
-      esac
-      [ -n "$__name" ] || continue
-      case "$__name" in
-        __*) ;;
-        *) _fail "${__file##*/}:${__lineno}: 局部变量 $__name 必须用 __ 前缀（库内部命名空间）" ;;
-      esac
-    done
-  done <"$__file"
-}
-
-# 保留名单：_sk_check_out_name 的 case 分支里列出来的那些名字
-_guard_list() {
-  local __body
-  __body=$(_fn_body "$ROOT/lib/core/str.sh" "_sk_check_out_name") || return 1
-  printf '%s\n' "$__body" | grep -o '__[A-Za-z0-9_]*' | sort -u
-}
-
-for __f in "$ROOT"/lib/core/*.sh "$ROOT"/lib/bootstrap.sh "$ROOT"/shellkit; do
+# 文件清单：core 在前（规则 2/3 只看这一组），再 bootstrap.sh 与 shellkit（规则 1 看）
+: >"$__scan_list"
+__core_n=0
+for __f in "$ROOT"/lib/core/*.sh; do
   [ -f "$__f" ] || continue
-  _check_locals "$__f"
+  printf '%s\n' "$__f" >>"$__scan_list"
+  __core_n=$((__core_n + 1))
 done
-
-# 规则 2：出参链路上的每个具名局部变量都必须在保留名单里
-#   两部分：
-#     2a 自动 —— 凡是出现动态出参（printf -v "$..."）的函数，它声明的每个具名局部变量
-#         都必须在名单里。新写一个出参函数而不进名单，门禁立刻红。
-#     2b 硬名单 —— 把「出参」转手交给私有函数的公开入口（ask / cli_opts 之类），
-#         它们自己的局部变量同样在链路上，一并列进 CHAIN_FUNCS 盯着。
-__guard=$(_guard_list) || {
-  _fail "读不到 _sk_check_out_name 的保留名单（str.sh 被改坏了？）"
-  __guard=""
-}
-if [ -n "$__guard" ]; then
-  for __cand in "$ROOT"/lib/core/*.sh; do
-    [ -f "$__cand" ] || continue
-    for __fn in $(_fn_names "$__cand"); do
-      # 私有函数（名字带 _ 前缀）的出参只来自库内部，名字由我们自己保证；
-      # 它们靠下面 CHAIN_FUNCS 那份硬名单盯着（被公开入口用到的那些）。
-      case "$__fn" in
-        _*) continue ;;
-      esac
-      __body=$(_fn_body "$__cand" "$__fn") || continue
-      case "$__body" in
-        *'printf -v "$'*) ;;
-        *) continue ;;
-      esac
-      for __name in $(_fn_locals "$__cand" "$__fn"); do
-        case "$__name" in
-          __*) ;;
-          *) continue ;;
-        esac
-        if ! printf '%s\n' "$__guard" | grep -qx "$__name"; then
-          _fail "$__fn() 的局部变量 $__name 没进 _sk_check_out_name 的保留名单（用这个名字的调用方会静默拿到旧值）"
-        fi
-      done
-    done
-  done
-  for __fn in $CHAIN_FUNCS; do
-    __file=""
-    for __cand in "$ROOT"/lib/core/*.sh; do
-      if _fn_body "$__cand" "$__fn" >/dev/null 2>&1; then
-        __file=$__cand
-        break
-      fi
-    done
-    if [ -z "$__file" ]; then
-      _fail "链路上找不到函数 ${__fn}（它被删了还是改了名？）"
-      continue
-    fi
-    for __name in $(_fn_locals "$__file" "$__fn"); do
-      case "$__name" in
-        __*) ;;
-        *) continue ;;
-      esac
-      if ! printf '%s\n' "$__guard" | grep -qx "$__name"; then
-        _fail "$__fn() 的局部变量 $__name 没进 _sk_check_out_name 的保留名单（用这个名字的调用方会静默拿到旧值）"
-      fi
-    done
-  done
+if [ -f "$ROOT/lib/bootstrap.sh" ]; then
+  printf '%s\n' "$ROOT/lib/bootstrap.sh" >>"$__scan_list"
+fi
+if [ -f "$ROOT/shellkit" ]; then
+  printf '%s\n' "$ROOT/shellkit" >>"$__scan_list"
 fi
 
-# 规则 3：公开的出参入口必须挡住保留名
-#   3a 自动 —— 凡是公开的（名字不以 _ 开头）动态出参函数，都必须调 _sk_check_out_name
-#   3b 硬名单 —— 转手交给私有函数的公开入口同样要挡
-for __cand in "$ROOT"/lib/core/*.sh; do
-  [ -f "$__cand" ] || continue
-  for __fn in $(_fn_names "$__cand"); do
-    case "$__fn" in
-      _*) continue ;;
-    esac
-    __body=$(_fn_body "$__cand" "$__fn") || continue
-    case "$__body" in
-      *'printf -v "$'*) ;;
-      *) continue ;;
-    esac
-    case "$__body" in
-      *_sk_check_out_name*) ;;
-      *) _fail "$__fn() 是公开出参入口，必须调用 _sk_check_out_name 挡住保留名" ;;
-    esac
-  done
-done
-for __fn in $OUT_PARAM_FUNCS; do
-  __file=""
-  for __cand in "$ROOT"/lib/core/*.sh; do
-    if _fn_body "$__cand" "$__fn" >/dev/null 2>&1; then
-      __file=$__cand
-      break
-    fi
-  done
-  if [ -z "$__file" ]; then
-    _fail "找不到公开出参函数 $__fn"
-    continue
-  fi
-  # 不用 `_fn_body ... | grep -q`：grep -q 命中即退，上游会被 SIGPIPE 打死（141），
-  # 调用方开了 pipefail 时整条管道判失败。这里先把正文收进变量，再用 case 匹配。
-  __body=$(_fn_body "$__file" "$__fn" 2>/dev/null) || __body=""
-  case "$__body" in
-    *_sk_check_out_name*) ;;
-    *) _fail "$__fn() 是公开出参入口，必须调用 _sk_check_out_name 挡住保留名" ;;
-  esac
-done
+# CHAIN_FUNCS 在上面是分成三行写的；awk 的 -v 不接受值里带换行，
+# 先把换行换成空格（一份名单而已，词与词之间的分隔符无所谓）。
+__chain=${CHAIN_FUNCS//$'\n'/ }
+__outp=${OUT_PARAM_FUNCS//$'\n'/ }
+
+awk -v listfile="$__scan_list" \
+  -v strfile="$ROOT/lib/core/str.sh" \
+  -v ncore="$__core_n" \
+  -v chain="$__chain" \
+  -v outp="$__outp" \
+  -f "$__scan_prog"
+__rc=$?
+if [ "$__rc" -ne 0 ]; then
+  _bad=1
+fi
 
 if [ "$_bad" -ne 0 ]; then
   printf 'check_local_names: 库内部命名空间与出参保留名单不合格\n' >&2

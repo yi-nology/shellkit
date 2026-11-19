@@ -542,6 +542,7 @@ make check     # syntax + test + lint + module-order-check + check-exitcode-docs
                # + api-baseline-check + api-freeze-check + compatibility-check
                # + docs-check + versions-check + check-docs + cookbook-check
                # + messages-check + examples + fmt
+make check-fast  # 快通道：只跑静态门禁（去掉 test 与 examples），几十秒出结果
 ```
 
 - `docs-check`：公开函数缺注释、生成物与源码不一致 ⇒ 红。
