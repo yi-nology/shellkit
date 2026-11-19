@@ -2,6 +2,22 @@
 本文件由 `tools/release.sh` 在发版时自动追加，已发布的小节不要手改。
 最新的在最前面。每一条对应一个提交 —— 要看「为什么」而不是「改了什么」，读 `docs/MIGRATING.md`。
 
+## 1.2.0 — 2026-11-19
+
+7980f33 feat(retry): 区分「超时」与「失败」（#145） (#148)
+edaf1db fix(test): 并行模式恢复默认信号处置，信号用例不再假红 (#149)
+fec3497 docs(releasing): 记 2026-11-18 / v1.1.0 发版窗口的连环事故与处置
+7ac8652 fix(coverage): 分支覆盖基线补上 #145 引入的新分支臂（ubuntu 同环境重生成）
+fca05a6 docs(releasing): 记 main 的分支保护规则（必需检查与 release_gate 同一份清单）
+7f9f020 docs(agents): 把 main 的分支保护规则写进 AGENTS.md
+6e35b04 feat(vendor): 库副本落点可配置 —— doctor / upgrade / repair.sh 读同一个答案 (#143) (#150)
+c0bb7ed feat(posix): POSIX sh / busybox ash 子集模式 —— 设备侧启动脚本终于能用上 shellkit (#144) (#151)
+9c99f2a Tmp/ci helper (#154)
+2ecb479 feat(git,proc): git 领域抽象 + 进程组/看门狗原语 (#146) (#153)
+edaaefa chore: 删掉临时 CI 工装（不该进 main） (#155)
+8f10d81 fix(工具): 覆盖率基线被打断时不再留下巨型临时文件（+ 新增工作树残留门禁） (#157) (#158)
+75d37e1 feat(archive): 安全解包原语 + 演练不落盘开关（v1.2.0） (#163)
+
 ## 1.1.0 — 2026-11-18
 
 3c7b350 docs(roadmap): 记录 v1.0.0 GA 已发布与验收结果

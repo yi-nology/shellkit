@@ -26,7 +26,7 @@ sha256 只证明「下载没被改」，证明不了「这个包是 shellkit 发
 
 # 2) 离线验签：先下载、先验，最后才执行任何脚本
 #    需要 minisign：brew install minisign / apt-get install -y minisign
-VERSION=1.1.0
+VERSION=1.2.0
 base="https://github.com/yi-nology/shellkit/releases/download/v$VERSION"
 work=$(mktemp -d) && cd "$work" || exit 1
 for f in "shellkit-$VERSION.tar.gz" install.sh SHA256SUMS shellkit.minisign.pub; do
@@ -138,7 +138,7 @@ curl -fsSL https://github.com/yi-nology/shellkit/releases/latest/download/instal
 
 ```bash
 curl -fsSL .../install.sh | PREFIX="$HOME/.local" bash   # 换目录
-curl -fsSL .../install.sh | VERSION=1.1.0 bash           # 钉版本
+curl -fsSL .../install.sh | VERSION=1.2.0 bash           # 钉版本
 ./install.sh --prefix /opt/shellkit                     # 在检出目录里直接跑，装当前工作树
 ```
 
