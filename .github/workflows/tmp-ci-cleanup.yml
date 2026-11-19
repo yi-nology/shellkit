@@ -1,14 +1,20 @@
 name: tmp-ci-cleanup
 
-# 临时工装（收尾用，跑完就删）。
+# 最后一版清理工装。
 #
-# 背景：另一条会话把 tmp/ci-helper 当普通功能分支提了 PR #154 并合进了 main
-# ⇒ 临时工装（.github/workflows/tmp-ci-helper.yml + 三个 md/sh）留在了 main 里。
-# 那个 workflow 本身会推分支、开 PR、关单 ⇒ 不该留在 main。
+# main 已由 PR #155（merge commit edaaefaa）清干净：4 个临时工装文件已删、
+# .github/workflows 只剩 ci/packages/pages/release 四个正式文件。
 #
-# 这个 workflow **放在 tmp/ci-cleanup 分支上**（不是 tmp/ci-helper）：
-# main 上那个泄漏的 workflow 只在 push 到 tmp/ci-helper 时触发 ⇒
-# 往 tmp/ci-helper 推这个清理会同时触发它 ⇒ 两边抢同一个 PR。
+# 这一版只做三件事：
+#   ① 关掉 PR #156 —— 它的 diff 是把 6 个临时工装文件**加回** main
+#      （.github/workflows/tmp-ci-cleanup.yml、tmp-ci-helper.yml、
+#       cleanup-pr-body.md、issue-close.md、pr-body.md、probe-openeuler.sh），
+#      与 PR #155 正好相反 ⇒ 合并它等于把污染放回去；
+#   ② 核对 main 的终态（临时文件确实不在、workflow 目录只剩正式文件）；
+#   ③ 把日志发到 tmp/ci-cleanup-log。
+#
+# 这一版**不再创建任何 PR**：清理已经由 PR #155 完成。
+# tmp/ci-cleanup 与 tmp/ci-cleanup-log 跑完后手工删（workflow 不能删自己）。
 
 on:
   push:
@@ -28,14 +34,26 @@ concurrency:
 
 jobs:
   cleanup:
-    name: remove the temporary CI artifacts from main and delete the temp branches
+    name: close the pollution PR and verify the main tree
     runs-on: ubuntu-latest
-    timeout-minutes: 180
+    timeout-minutes: 20
     env:
       GH_TOKEN: ${{ github.token }}
       GH_REPO: ${{ github.repository }}
-      BRANCH: chore/remove-tmp-helper-artifacts
     steps:
+      - name: close the PR that would put the temporary artifacts back into main
+        run: |
+          set +e
+          set -uo pipefail
+          echo "== close pollution PRs ==" > /tmp/cleanup.log
+          for pr in $(gh pr list --state open --json number,headRefName --jq ".[] | select(.headRefName == \"tmp/ci-cleanup\") | .number" 2>/dev/null); do
+            gh pr close "$pr" --comment "这个 PR 会把临时 CI 工装（tmp-ci-helper.yml / tmp-ci-cleanup.yml / issue-close.md / pr-body.md / cleanup-pr-body.md / probe-openeuler.sh）**加回** main —— 与 PR #155 正好相反。main 已经在 PR #155（merge commit edaaefaa）里清干净了，所以这里关掉而不是合并。临时工装只放 tmp/* 分支，合并进 main 就成了常驻的自动推分支/开 PR 的 workflow。" >> /tmp/cleanup.log 2>&1
+            echo "closed PR $pr rc=$?" >> /tmp/cleanup.log
+          done
+          echo "open PRs after close:" >> /tmp/cleanup.log
+          gh pr list --state open --json number,title >> /tmp/cleanup.log 2>&1
+          exit 0
+
       - name: checkout main
         uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
         with:
@@ -43,88 +61,23 @@ jobs:
           path: repo
           fetch-depth: 0
 
-      - name: remove the temporary artifacts and open the cleanup PR
+      - name: verify the main tree no longer carries the temporary artifacts
         run: |
           set +e
           set -uo pipefail
           cd repo
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git checkout -B "$BRANCH" origin/main
-          git rm -q .github/workflows/tmp-ci-helper.yml issue-close.md pr-body.md probe-openeuler.sh
-          git commit -q -m "chore: 删掉临时 CI 工装（不该进 main）"
-          git push origin "$BRANCH" >> /tmp/cleanup.log 2>&1
-          gh pr create --base main --head "$BRANCH" --title "chore: 删掉临时 CI 工装（不该进 main）" --body "删掉 main 里的 4 个临时 CI 工装文件（.github/workflows/tmp-ci-helper.yml 与 issue-close.md / pr-body.md / probe-openeuler.sh）—— 它们是另一条会话把 tmp/ci-helper 当普通功能分支提 PR #154 时误合进来的；配套的清理 job 会同时删掉对应的临时分支。" >> /tmp/cleanup.log 2>&1
-          exit 0
-
-      - name: approve the CI run for the cleanup PR
-        run: |
-          set +e
-          set -uo pipefail
-          cd repo
-          head_sha=$(git ls-remote origin "refs/heads/$BRANCH" | cut -f1)
-          echo "head sha: $head_sha" >> /tmp/cleanup.log
-          # PR 的作者是 github-actions[bot] ⇒ 仓库「外部协作者先审批」的规则
-          # 会把 CI 卡在 Action required ⇒ 必须按 head_sha 精确批准那一次运行。
-          i=0
-          while [ "$i" -lt 60 ]; do
-            run_id=$(gh api "repos/$GH_REPO/actions/runs?branch=$BRANCH&per_page=20" --jq "[.workflow_runs[] | select(.head_sha == \"$head_sha\") | .id] | .[0] // empty" 2>/dev/null)
-            case "$run_id" in
-              "" | null) ;;
-              *)
-                echo "approving ci run $run_id" >> /tmp/cleanup.log
-                gh api -X POST "repos/$GH_REPO/actions/runs/$run_id/approve" -H "Accept: application/vnd.github+json" >> /tmp/cleanup.log 2>&1
-                break
-                ;;
-            esac
-            sleep 10
-            i=$((i + 1))
+          git fetch -q origin main
+          for f in .github/workflows/tmp-ci-helper.yml .github/workflows/tmp-ci-cleanup.yml issue-close.md pr-body.md cleanup-pr-body.md probe-openeuler.sh; do
+            if git cat-file -e "origin/main:$f" 2>/dev/null; then
+              echo "FAIL: $f still in main" >> /tmp/cleanup.log
+            else
+              echo "ok: $f not in main" >> /tmp/cleanup.log
+            fi
           done
-          exit 0
-
-      - name: wait for the required checks, merge
-        run: |
-          set +e
-          set -uo pipefail
-          cd repo
-          pr=$(gh pr view "$BRANCH" --json number -q .number 2>/dev/null)
-          echo "cleanup PR: $pr" >> /tmp/cleanup.log
-          if [ -z "$pr" ]; then
-            echo "NO PR - the PR creation step failed" >> /tmp/cleanup.log
-            exit 1
-          fi
-          head_sha=$(git ls-remote origin "refs/heads/$BRANCH" | cut -f1)
-          echo "gate SHA (head): $head_sha" >> /tmp/cleanup.log
-          bash tools/release_gate.sh "$head_sha" --timeout 5400 >> /tmp/cleanup.log 2>&1
-          gate_rc=$?
-          if [ "$gate_rc" -ne 0 ]; then
-            echo "GATE FAILED rc=$gate_rc" >> /tmp/cleanup.log
-            gh pr checks "$pr" >> /tmp/cleanup.log 2>&1
-            exit 1
-          fi
-          echo "gate passed" >> /tmp/cleanup.log
-          gh pr merge "$pr" --squash --delete-branch >> /tmp/cleanup.log 2>&1
-          merge_rc=$?
-          if [ "$merge_rc" -ne 0 ]; then
-            echo "MERGE FAILED rc=$merge_rc" >> /tmp/cleanup.log
-            exit 1
-          fi
-          echo "merged" >> /tmp/cleanup.log
-          exit 0
-
-      - name: delete the temporary branches
-        # 只在成功时删：`if: always()` 在**被取消时也会跑** ⇒ 下一轮还没 checkout
-        # 到 tmp/ci-helper 就被自己删了 ⇒ 那一轮直接 checkout 失败。
-        # tmp/ci-cleanup 也不在这里删（这一轮自己还要用它）⇒ 收尾时手工删。
-        if: success()
-        run: |
-          set +e
-          set -uo pipefail
-          cd repo
-          for b in tmp/ci-helper tmp/ci-helper-log tmp/ci-helper-probe feat/issue-146-skeleton; do
-            git push origin --delete "$b" >> /tmp/cleanup.log 2>&1
-            echo "deleted $b rc=$?" >> /tmp/cleanup.log
-          done
+          echo "workflows in main:" >> /tmp/cleanup.log
+          git ls-tree --name-only origin/main .github/workflows/ >> /tmp/cleanup.log 2>&1
+          echo "main head:" >> /tmp/cleanup.log
+          git log --oneline -3 origin/main >> /tmp/cleanup.log 2>&1
           exit 0
 
       - name: publish the log (always)
@@ -140,7 +93,7 @@ jobs:
             git config user.name "github-actions[bot]"
             git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
             git add cleanup-log.txt 2>/dev/null
-            git commit -q -m "log: cleanup run" 2>/dev/null
+            git commit -q -m "log: final cleanup run" 2>/dev/null
             git push -f origin "HEAD:tmp/ci-cleanup-log" >> /tmp/cleanup.log 2>&1
           fi
           exit 0
