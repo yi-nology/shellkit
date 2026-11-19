@@ -16,7 +16,7 @@
                               SHELLKIT_MODULES="log fs" 只加载这两个模块和它们的传递依赖
     lib/modules.txt           模块清单的唯一真相源：两列 —— 模块名 + 它依赖的模块
                               （bootstrap、shdoc、站点都读它）
-    lib/core/<module>.sh      26 个模块，一个模块一个主题
+    lib/core/<module>.sh      27 个模块，一个模块一个主题
     lib/posix/                POSIX 子集（设备侧）：busybox ash / dash 上能跑的那一小撮
                               shellkit-posix.sh（只写 POSIX 语法的库）
                               capabilities.tsv（能力清单：哪些函数设备侧有、哪些没有；机器生成）
@@ -313,6 +313,8 @@ shellkit 是一个 Bash 库加脚手架：日志、配置、下载校验、重�
 | 改配置且要幂等 | `conf_set`；改任意文件用 `fs_ensure_line` / `fs_ensure_block` |
 | 写文件不想写坏 | `fs_atomic_write`（写内容）；搬文件用 `fs_atomic_copy`（逐字节一致）；备份用 `fs_backup` |
 | 下载并校验 | `net_download URL DEST [SHA256]`，镜像回退已内置 |
+| 解开 tar / zip 包 | `archive_extract ARCHIVE DEST [SHA256]`（挡路径穿越与软链逃逸，失败不留半份）；先看内容用 `archive_list` |
+| 只想演练不想落盘 | `SHELLKIT_DRY_RUN_FILES=1`：`fs_*` / `conf_*` 的写原语只打印计划不写盘（`SHELLKIT_DRY_RUN` 只管 `run` / `svc`） |
 | 等端口 / 等 HTTP | `net_wait_port` / `net_wait_http` |
 | 跑命令，失败即停 | `run systemctl restart nginx`；`SHELLKIT_DRY_RUN=1` 只打印 |
 | 命令行里有口令/令牌 | `run` 的日志自动脱敏；启发式认不出来的用 `run --secret-arg N` / `run --redact-value V` 显式声明 |

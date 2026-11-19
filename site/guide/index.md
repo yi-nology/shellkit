@@ -19,11 +19,11 @@
 
 - [五条硬约定](./conventions.md) —— 为什么 stdout 只给数据、为什么出参要用 `printf -v`。
 - [Bash 3.2 兼容](./bash32.md) —— 哪些语法在 macOS 自带的 bash 上直接崩，以及为什么。
-- [模块地图](./modules.md) —— 26 个模块各管什么，什么时候该用哪个。
+- [模块地图](./modules.md) —— 27 个模块各管什么，什么时候该用哪个。
 
 ## 常见任务
 
-- [Cookbook](./cookbook.md) —— 25 个场景，每节都是「场景 / 代码 / 为什么」。
+- [Cookbook](./cookbook.md) —— 27 个场景，每节都是「场景 / 代码 / 为什么」。
 - [CLI 框架](./cli.md) —— 注册式命令、帮助自动生成、选项解析。
 - [国际化](./i18n.md) —— msgid 英文、pot/po/mo、缺 gettext 时的降级。
 - [测试与门禁](./testing.md) —— 断言库、逐文件执行器、`make check` 每一步拦什么。

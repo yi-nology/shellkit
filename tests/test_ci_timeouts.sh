@@ -142,18 +142,51 @@ assert_contains "$(_ci_timeout_violations "$d/ci-budget.yml")" "eats the job bud
 #
 # 同一个坑的另一半：#147 修了「装包慢」，没修「下载慢」。
 #
-# 判据形状：ci.yml 里每一处 `curl -fsSL` / `wget` 下载都必须带超时参数。
-# --------------------------------------------------------------------------
+# 判据形状：ci.yml 里每一处下载（curl / wget / urlretrieve）都必须带超时参数。
+#
+# 为什么不能只认「curl -fsSL」：换个拼写（curl -fL、wget -qO）就绕过去了 ——
+# 判据认的是**命令**，不是某一种写法。
+# -------------------------------------------------------------------------
 
 _download_without_timeout() {
   local __f=$1 __line __n=0
   while IFS= read -r __line || [ -n "$__line" ]; do
     __n=$((__n + 1))
     case "$__line" in
-      *'curl -fsSL'* | *'curl -sSL'*)
-        # 已经有 --max-time / --connect-timeout 的算合规
+      *'#'*) continue ;;
+      # 「command -v curl」是在问「有没有这个命令」，不是下载
+      *'command -v'*) continue ;;
+    esac
+    # 只认**下载调用**：curl 要有输出参数（-o / --output / -O），
+    # wget 要有输出参数（-O / -qO / --output-document / -P）。
+    # 「dnf install curl」「apt-get install wget」不是下载 —— 判据认的是
+    # 命令，不能把「提到 curl 的那一行」都算成下载。
+    case "$__line" in
+      *curl\ *)
+        case "$__line" in
+          *' -o '* | *' --output '* | *' -O '*) ;;
+          *) continue ;;
+        esac
         case "$__line" in
           *'--max-time'* | *'--connect-timeout'*) continue ;;
+        esac
+        printf '%s:%s: a download without a timeout will hang the job until the job-level timeout: %s\n' \
+          "${__f##*/}" "$__n" "$__line"
+        ;;
+      *wget\ *)
+        case "$__line" in
+          *' -O '* | *' -qO '* | *' --output-document '* | *' -P '*) ;;
+          *) continue ;;
+        esac
+        case "$__line" in
+          *'--timeout='* | *' -T '*) continue ;;
+        esac
+        printf '%s:%s: a download without a timeout will hang the job until the job-level timeout: %s\n' \
+          "${__f##*/}" "$__n" "$__line"
+        ;;
+      *urlretrieve*)
+        case "$__line" in
+          *timeout\ *) continue ;;
         esac
         printf '%s:%s: a download without a timeout will hang the job until the job-level timeout: %s\n' \
           "${__f##*/}" "$__n" "$__line"
@@ -162,14 +195,109 @@ _download_without_timeout() {
   done <"$__f"
   return 0
 }
-
 dl=$(_download_without_timeout "$CI_YML")
 assert_eq "" "$dl" "every download in the CI workflow must carry a timeout"
 
 # 自证：去掉一个下载的超时 ⇒ 判据必须报出来
-sed 's|curl -fsSL --max-time "\${DOWNLOAD_TIMEOUT:-600}" "https://github.com/koalaman|curl -fsSL "https://github.com/koalaman|' \
-  "$CI_YML" >"$d/ci-dl.yml"
+sed 's|curl -fsSL --max-time|curl -fsSL|' "$CI_YML" >"$d/ci-dl.yml"
 assert_contains "$(_download_without_timeout "$d/ci-dl.yml")" "a download without a timeout" \
   "removing the download timeout must break the check"
+
+# 自证：换个拼写绕不过去（判据认的是命令，不是某一种写法）
+sed 's|curl -fsSL --max-time|curl -fL|' "$CI_YML" >"$d/ci-dl2.yml"
+assert_contains "$(_download_without_timeout "$d/ci-dl2.yml")" "a download without a timeout" \
+  "a differently spelled download must still be checked for a timeout"
+
+sed 's|--timeout="$DOWNLOAD_TIMEOUT"||g' "$CI_YML" >"$d/ci-dl3.yml"
+assert_contains "$(_download_without_timeout "$d/ci-dl3.yml")" "a download without a timeout" \
+  "a wget download without a timeout must break the check"
+
+# --------------------------------------------------------------------------
+# 判据三：CI 里每个下载都必须有**重试**
+#
+# 为什么（2026-11-19 实测踩到）：GitHub release 的 CDN 偶尔返回 504
+# （网关超时）—— 实测 ubuntu-latest 的 job 就死在
+# `curl: (22) The requested URL returned error: 504` 上。
+# 超时能防「卡住」，防不住「服务端明确报错」：一次 504 就让整个 job 挂掉，
+# 而那不是代码的问题 —— 重试一次就好了。
+#
+# 判据形状：每一处下载都必须落在**一个带重试循环的函数**里，而且要落在
+# **循环体内部** —— 函数里有 while 不算数：把下载挪到循环外，它就只剩一次
+# 机会了（这正是变异自证要抓的形状）。
+# -------------------------------------------------------------------------
+_download_without_retry() {
+  local __f=$1
+  awk '
+    function close_level(   i) {
+      for (i = 1; i <= dwc[nl]; i++) {
+        if (!watt[nl]) {
+          printf "%s:%d: a download without a retry loop dies on a single 5xx: %s\n", FILENAME, dwl[nl, i], dwt[nl, i]
+        }
+      }
+      delete dwc[nl]
+      delete watt[nl]
+      nl--
+    }
+    {
+      t = $0
+      sub(/^[ \t]+/, "", t)
+      if (t ~ /^#/) next
+      match($0, /^[ \t]*/)
+      ind = RLENGTH
+      # 缩进 <= 栈顶 while 的缩进 ⇒ 出了那一层循环
+      while (nl > 0 && ind <= wind[nl]) close_level()
+      if (t ~ /^while[ \t]/) {
+        nl++
+        wind[nl] = ind
+        dwc[nl] = 0
+        watt[nl] = 0
+      }
+      if (t ~ /attempt/ && nl > 0) watt[nl] = 1
+      # 同样只认**下载调用**（有输出参数的那种）：
+      # 「dnf install curl」「command -v wget」不是下载。
+      isdl = 0
+      if (t ~ /curl[ \t]/ && t ~ / -o | --output | -O /) isdl = 1
+      if (t ~ /wget[ \t]/ && t ~ / -O | -qO | --output-document | -P /) isdl = 1
+      if (t ~ /urlretrieve/) isdl = 1
+      if (t ~ /command -v/) isdl = 0
+      if (isdl) {
+        if (nl > 0) {
+          dwc[nl]++
+          dwl[nl, dwc[nl]] = NR
+          dwt[nl, dwc[nl]] = $0
+        } else {
+          printf "%s:%d: a download outside any retry loop cannot be retried: %s\n", FILENAME, NR, $0
+        }
+      }
+    }
+    END {
+      while (nl > 0) close_level()
+    }
+  ' "$__f"
+}
+
+retry_gaps=$(_download_without_retry "$CI_YML")
+assert_eq "" "$retry_gaps" "every download in the CI workflow must sit inside a retry loop"
+
+# 自证：把重试标记去掉 ⇒ 判据必须报出来
+sed 's/attempt/try/g' "$CI_YML" >"$d/ci-noretry.yml"
+assert_contains "$(_download_without_retry "$d/ci-noretry.yml")" "without a retry loop" \
+  "removing the retry marker must break the check"
+
+# 自证：把下载挪出循环（循环还在、下载不在里面）⇒ 判据必须报出来
+sed 's|while \[ "$__n" -lt 3 \]; do|if true; then|' "$CI_YML" >"$d/ci-outside.yml"
+assert_contains "$(_download_without_retry "$d/ci-outside.yml")" "retry loop" \
+  "a download moved out of the retry loop must break the check"
+
+# （函数体里有 while 循环 + 「attempt」标记）；落在函数外的下载连重试的
+# 机会都没有，直接判不合格。
+# --------------------------------------------------------------------------
+retry_gaps=$(_download_without_retry "$CI_YML")
+assert_eq "" "$retry_gaps" "every download in the CI workflow must sit behind a retry loop"
+
+# 自证：把重试标记去掉 ⇒ 判据必须报出来
+sed 's/attempt/try/g' "$CI_YML" >"$d/ci-noretry.yml"
+assert_contains "$(_download_without_retry "$d/ci-noretry.yml")" "without a retry loop" \
+  "removing the retry loop must break the check"
 
 exit 0
