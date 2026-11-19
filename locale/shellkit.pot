@@ -8,7 +8,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: shellkit 1.1.0\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-11-19 13:51+0800\n"
+"POT-Creation-Date: 2026-11-19 14:06+0800\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language-Team: LANGUAGE <LL@li.org>\n"
@@ -51,6 +51,9 @@ msgid "unzip is required to extract zip archives"
 msgstr ""
 
 msgid "cannot extract the archive"
+msgstr ""
+
+msgid "the old destination could not be restored, it is left at"
 msgstr ""
 
 msgid "cannot move the extracted files into the destination"

@@ -15,6 +15,8 @@ _sk_msg_lookup_shellkit() {
     'the archive contains unsafe symlinks and was not extracted') printf '%s' '归档含不安全的软链，已拒绝解包' ;;
     'unzip is required to extract zip archives') printf '%s' '解 zip 归档需要 unzip' ;;
     'cannot extract the archive') printf '%s' '无法解包该归档' ;;
+    'the old destination could not be restored, it is left at') printf '%s' '旧的目标目录没能放回去，留在' ;;
+    'cannot move the extracted files into the destination') printf '%s' '无法把解包出来的文件搬进目标目录' ;;
     'some old files could not be moved back into the destination') printf '%s' '部分旧文件没能搬回目标目录' ;;
     'cannot create the destination directory') printf '%s' '无法创建目标目录' ;;
     'invalid command name') printf '%s' '非法的命令名' ;;

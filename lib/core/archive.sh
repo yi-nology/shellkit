@@ -528,8 +528,13 @@ archive_extract() {
       if ! mv "$__work" "$__dest" 2>/dev/null; then
         # 换不上去 ⇒ 旧目录放回去，目标目录保持原样
         if [ -n "$__old" ]; then
-          mv "$__old" "$__dest" 2>/dev/null
-          rm -rf "$__old"
+          if mv "$__old" "$__dest" 2>/dev/null; then
+            rm -rf "$__old"
+          else
+            # 旧目录放不回去 ⇒ **绝对不能删**（那是用户的数据）：
+            # 留在原地并把位置报出来，让人自己捡回去。
+            log_error "$(_t 'the old destination could not be restored, it is left at'): $__old"
+          fi
         fi
         rm -rf "$__work" "$__meta"
         log_error "$(_t 'cannot move the extracted files into the destination'): $__dest"
