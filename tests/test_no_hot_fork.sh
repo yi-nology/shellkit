@@ -220,6 +220,19 @@ for loc in C __ambient__; do
 done
 unset LC_ALL
 
+# _assert_mutated FILE ORIG —— 变异必须真的改到了文件，且还是合法 bash
+#
+# 为什么要有这道：变异没生效 ⇒ 判据当然抓不住它 ⇒ 「变异自证」变成一句空话
+# （本轮真踩过：mawk 不认正则里的 \{ ⇒ awk 报错 ⇒ 文件原封不动 ⇒ 断言报
+# 「没抓到」，看起来像判据有问题，其实是变异根本没发生）。
+_assert_mutated() {
+  local f=$1 orig=$2
+  if cmp -s "$f" "$orig"; then
+    _fail "the mutation must actually change the source: $f"
+  fi
+  bash -n "$f" || _fail "the mutated source must still be valid bash: $f"
+}
+
 # ── 变异自证一：去掉恒等快路（永远走 tr）⇒ 判据二必须报出来 ──────────
 # 改的是一份**库副本**：真库不动，判据自己先证明「它抓得住回退」。
 COPY="$BIN/copy1"
@@ -231,6 +244,7 @@ awk '
   skip { next }
   { print }
 ' "$COPY/lib/core/i18n.sh" >"$COPY/lib/core/i18n.new" && mv "$COPY/lib/core/i18n.new" "$COPY/lib/core/i18n.sh"
+_assert_mutated "$COPY/lib/core/i18n.sh" "$TEST_ROOT/lib/core/i18n.sh"
 
 run_probe "$BIN/probe_t.sh" "$LOG" "$COPY"
 mut=$(cat "$LOG")
@@ -240,11 +254,14 @@ assert_ne "" "$mut" "a suffix implementation that forks again must break the che
 COPY2="$BIN/copy2"
 mkdir -p "$COPY2"
 cp -Rp "$TEST_ROOT/lib" "$TEST_ROOT/locale" "$COPY2/" || _fail "copy failed"
+# ⚠️ 正则里不要用 \{ / \}：mawk（Debian/CI 的 awk）不认它 ⇒ awk 直接报错
+# ⇒ 文件原封不动 ⇒ 变异没发生。改成不含花括号的等价写法。
 awk '
-  /^  case "\$\{OSTYPE/ { print "  case \"\$(uname -s 2>/dev/null)\" in"; next }
-  /^  case "\$\{MACHTYPE/ { print "  case \"\$(uname -m 2>/dev/null)\" in"; next }
+  /^  case .*OSTYPE/ { print "  case \"\$(uname -s 2>/dev/null)\" in"; next }
+  /^  case .*MACHTYPE/ { print "  case \"\$(uname -m 2>/dev/null)\" in"; next }
   { print }
 ' "$COPY2/lib/core/os.sh" >"$COPY2/lib/core/os.new" && mv "$COPY2/lib/core/os.new" "$COPY2/lib/core/os.sh"
+_assert_mutated "$COPY2/lib/core/os.sh" "$TEST_ROOT/lib/core/os.sh"
 
 run_probe "$BIN/probe_load.sh" "$LOG" "$COPY2"
 mut=$(cat "$LOG")
@@ -259,6 +276,7 @@ awk '
   /^    \*\) printf '\''%s'\'' \"\$__d\"; return 0 ;;$/ { print "    *) ;;"; next }
   { print }
 ' "$COPY3/lib/core/i18n.sh" >"$COPY3/lib/core/i18n.new" && mv "$COPY3/lib/core/i18n.new" "$COPY3/lib/core/i18n.sh"
+_assert_mutated "$COPY3/lib/core/i18n.sh" "$TEST_ROOT/lib/core/i18n.sh"
 
 compute_expected
 if check_suffix_equivalence "$COPY3"; then

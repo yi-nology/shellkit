@@ -314,14 +314,19 @@ if command -v timeout >/dev/null 2>&1 || command -v gtimeout >/dev/null 2>&1; th
   mkdir -p "$mut/tests" || _fail "mkdir failed"
   cp "$slow/tests/run.sh" "$mut/tests/run.sh" || _fail "copy failed"
   cp "$slow/tests/test_slow_budget.sh" "$mut/tests/test_slow_budget.sh" || _fail "copy failed"
+  # ⚠️ 正则里不要用 \{ / \}:mawk(Debian/CI 的 awk)不认它 ⇒ awk 直接报错
+  # ⇒ 文件原封不动 ⇒ 变异没发生 ⇒「变异自证」变成一句空话。
   awk '
-    /^      msg="timed out after \$\{budget\}s \(the default budget\)"$/ {
+    /msg="timed out after .*the default budget/ {
       print "      msg=\"timed out after \${TEST_TIMEOUT}s\""
       next
     }
-    /^      msg="timed out after \$\{budget\}s \(this file.s own budget\)"$/ { next }
+    /msg="timed out after .*own budget/ { next }
     { print }
   ' "$mut/tests/run.sh" >"$mut/tests/run.new" && mv "$mut/tests/run.new" "$mut/tests/run.sh"
+  if cmp -s "$mut/tests/run.sh" "$slow/tests/run.sh"; then
+    _fail "the mutation must actually change the runner"
+  fi
   mutout=$(bash "$mut/tests/run.sh" --format tap --filter '*slow_budget*' </dev/null 2>&1) || true
   case "$mutout" in
     *"timed out after 1s"*)
@@ -338,10 +343,16 @@ fi
 # 300 是「慢但没坏」的底线。再往下压，正常机器上也会随机红灯 ——
 # 随机红灯会被忽略，连真的红灯都看不见了。
 # ---------------------------------------------------------------------------
-default_budget=$(awk '/^TEST_TIMEOUT="\$\{TEST_TIMEOUT:-[0-9]+\}"$/ {
-    sub(/^TEST_TIMEOUT="\$\{TEST_TIMEOUT:-/, "")
-    sub(/\}"$/, "")
-    print
+# ⚠️ 正则里不要用 \{ / \}:mawk(Debian/CI 的 awk)不认它 ⇒ awk 报错 ⇒
+# 读不到默认预算（Linux 上的假红就是这么来的）。改成不含花括号的等价写法。
+default_budget=$(awk '/^TEST_TIMEOUT="\$/ {
+    line = $0
+    sub(/^TEST_TIMEOUT="/, "", line)
+    sub(/"$/, "", line)
+    n = line
+    sub(/^.*:-/, "", n)
+    sub(/[^0-9].*$/, "", n)
+    print n
     exit
   }' "$TEST_ROOT/tests/run.sh")
 case "$default_budget" in
