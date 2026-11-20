@@ -1,7 +1,7 @@
 # ShellKit 路线图：三层架构与版本验收状态
 
-状态：2026-11-21 更新（当前已发布 **v1.3.1**；本轮在推进 **v1.4.0** ——
-POSIX/ash 侧的进程与看门狗原语，见下）。
+状态：2026-11-21 更新（当前已发布 **v1.4.0**：POSIX/ash 侧的进程与看门狗原语 ——
+设备侧那一层终于不用手写了；标签、17 项资产与系统包全部验签通过）。
 本文是**方向**，不是承诺 ——
 每个版本的退出条件写清楚，条件不满足就不进下一个版本（见「迭代节奏」）。
 
@@ -40,6 +40,7 @@ POSIX/ash 侧的进程与看门狗原语，见下）。
 | v0.26.1 | 系统包 job 的两处附产品：签名工具与补签前提 | `packages` job 自装 minisign；`sign_release.sh --file` 点名模式不再要求 `SHA256SUMS` 整份齐全（`tests/test_release_signing_tool.sh` 盯着签名 job） |
 | v0.27.0 | 1.0 契约批：兼容承诺 + 全量分级 + 取消重跑 + 发布自检 + 矩阵 lifecycle | `docs/COMPATIBILITY.md` + `compatibility-check`；162 个公开函数 50 stable / 112 experimental、豁免名单为空；`tests/test_release_gate_cancelled.sh`；`tools/release_selfcheck.sh` + 不可选 self-check job；`upgrade_matrix` lifecycle 一格 |
 | v1.0.0-rc.1 | 预发布版本语义（semver 后缀）+ RC 真实验证 | `lib/core/ver.sh` 接受并排序 `x.y.z-pre`；`tools/rc_check.sh`（对输入工程只读、先复制再跑）+ `--test-cmd`；tag 含 `-` ⇒ `--prerelease` 不占 `latest`；RPM 预发布拆 `Version`/`Release` |
+| v1.4.0 | POSIX/ash 侧的进程与看门狗原语（#162）：设备侧那一层终于进子集 | `lib/posix/shellkit-posix.sh` 的 `proc_start`/`proc_stop`/`proc_is_running`/`proc_watchdog`（同名同语义、返回码一致）；能力清单这四条 yes + 写清限制；判据 `tests/posix_smoke.sh`（**同一份 POSIX sh 脚本**在 dash 与 busybox ash 上原样跑，CI 必需检查「posix subset on busybox ash」）+ 三处变异自证 |
 | v1.1.0 | skill 旧副本的升级通道（#140）：无所有权基线时不再静默不更新 | 措辞区分「用户改过」与「无所有权基线」；装完核对 `VERSION`，没跟上退 5 并点名 N 个文件 + `--force` 逃逸口；「装不成」仍是 3 |
 
 ### v0.24.2 —— 数据安全收口（已发布 2026-11-16）
@@ -250,7 +251,7 @@ GA 之后的第一版，只修一个真缺陷：**旧版（清单机制引入前
 「不在基线里」的 90 条全部进了新基线，「已被覆盖」的 23 条全部不在了。
 
 
-### v1.4.0 —— POSIX/ash 侧的进程与看门狗原语（#162，设备侧那一层）
+### v1.4.0 —— POSIX/ash 侧的进程与看门狗原语（#162，设备侧那一层，已发布 2026-11-21）
 
 设备侧（NAS 的 start/stop、OpenWrt 的 init）是「装机即执行」的：改坏的现场装不了
 shellkit 补救 ⇒ 那边的脚本必须是**最保守**的那一份。#144 交付了 POSIX/ash 子集，
