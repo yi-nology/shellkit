@@ -53,11 +53,14 @@ mkdir -p "$fake"
 cp -R "$TEST_ROOT/lib" "$fake/" || _fail "cannot copy lib"
 cp "$TEST_ROOT/shellkit" "$fake/" || _fail "cannot copy the CLI"
 
-got=$(bash "$fake/shellkit" --version 2>/dev/null | head -1)
+# ⚠️ 不许写 `... | head -1`：head 命中即退 ⇒ 上游被 SIGPIPE 打死
+#    ⇒ 调用方开了 pipefail 时整条管道判失败（坑 5）。--version 只输出一行，
+#    命令替换本身就会去掉行尾换行 ⇒ 直接取整段即可。
+got=$(bash "$fake/shellkit" --version 2>/dev/null)
 assert_eq "dev" "$got" "without VERSION the CLI must report dev (that is the bug)"
 
 printf '9.9.9\n' >"$fake/VERSION"
-got=$(bash "$fake/shellkit" --version 2>/dev/null | head -1)
+got=$(bash "$fake/shellkit" --version 2>/dev/null)
 assert_eq "9.9.9" "$got" "with VERSION the CLI must report the real version"
 
 # install-self 那条路本来就装 VERSION（#164 说 brew 这条路单独坏了）
