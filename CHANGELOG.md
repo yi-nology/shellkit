@@ -2,6 +2,14 @@
 本文件由 `tools/release.sh` 在发版时自动追加，已发布的小节不要手改。
 最新的在最前面。每一条对应一个提交 —— 要看「为什么」而不是「改了什么」，读 `docs/MIGRATING.md`。
 
+## 1.4.0 — 2026-11-21
+
+2211e62 feat(docs): 能力索引 —— 「还有哪些能力」一眼能扫完（#161 的解法一） (#169)
+eac9da9 fix(brew): formula 必须装 VERSION —— 漏了它，skill 装不上（#164） (#168)
+7f92811 perf(lib)+fix(tests): 热路径零 fork + 门禁的超时预算按文件自己的算 (#167)
+b09e434 feat(test): 新门禁 —— 断言不许把提示文案当成 test 的参数 (#170)
+fcc8ef8 feat(posix): 设备侧那一层 —— POSIX/ash 上也有进程与看门狗原语 (#175)
+
 ## 1.3.1 — 2026-11-20
 
 68daa3e perf(ci): openEuler 装包只留必要源 —— metadata 268MB→60MB (#166)
