@@ -480,6 +480,567 @@ status_extra() {
   return 0
 }
 
+# ---- 进程与看门狗（设备侧那一层）----
+#
+# 这一层与主库的 proc_* **同名同语义**（返回码一致）：
+# 主库那一份靠 bash 的作业控制（set -m）让后台任务自带进程组，
+# 设备侧的 busybox ash 上没有作业控制 ⇒ 进程组得靠 setsid 拿。
+#
+# 三条**实测**出来的约束（busybox 1.36 容器里逐条验过，不是推测）：
+#
+#   1. 整组杀不能带 --：
+#      busybox 与 dash 都把 -- 当成 pid（busybox 报 "invalid number '--'"，
+#      dash 报 "Illegal number: -"）⇒ 必须用 kill -TERM -PGID（负号紧跟数字）。
+#      而 bash 只认带 -- 的写法（把 -PGID 当成信号名）⇒ 两种都试。
+#   2. busybox 的 ps 不认 -p（"ps: invalid option -- 'p'"），也不认 stat=
+#      的表头抑制 ⇒ 状态与进程组都从 /proc/<pid>/stat 取，ps 只当兜底。
+#   3. busybox 的 setsid 在非交互 shell 里**不 fork**（父进程拿到的 $! 就是
+#      最终那条命令的 pid）；但「已经是组长」时它会 fork ⇒
+#      pid 让**子进程自己写**（exec 不改 pid ⇒ 写的必然是真正那条命令）。
+#
+# 与主库同名 ⇒ 两份**不要同时加载**：bash 后定义覆盖先定义，
+# 同时加载时后加载的那份会顶掉先加载的那份（语义一致，差别只在能不能拿到
+# 进程组）。按需只加载一份。
+
+# _sk_posix_proc_dir —— 运行时目录（pid 文件与日志都在这儿）
+_sk_posix_proc_dir() {
+  _sp_pd_dir="${SHELLKIT_PROC_DIR:-}"
+  if [ -z "$_sp_pd_dir" ]; then
+    _sp_pd_dir="${TMPDIR:-/tmp}/shellkit-proc-$(id -u 2>/dev/null || printf '0')"
+  fi
+  if [ -L "$_sp_pd_dir" ]; then
+    log_error "refusing to use a symlinked runtime directory: $_sp_pd_dir"
+    return 3
+  fi
+  if [ ! -d "$_sp_pd_dir" ]; then
+    mkdir -p "$_sp_pd_dir" 2>/dev/null || {
+      log_error "cannot create the runtime directory: $_sp_pd_dir"
+      return 3
+    }
+    chmod 700 "$_sp_pd_dir" 2>/dev/null || true
+  fi
+  printf '%s' "$_sp_pd_dir"
+}
+
+# _sk_posix_proc_valid_name NAME —— 名字能不能当文件名的组成部分
+#   名字会变成路径（<name>.pid）⇒ 带 / 或 .. 的名字能写到目录之外。
+_sk_posix_proc_valid_name() {
+  case "${1:-}" in
+    '' | . | ..) return 1 ;;
+    *[!A-Za-z0-9._-]*) return 1 ;;
+  esac
+  return 0
+}
+
+# _sk_posix_sleep_frac SECONDS —— 小数秒的 sleep
+#   精简系统的 sleep 可能只认整数秒 ⇒ 先探一次，不行就退化成 1 秒。
+_SK_POSIX_FRACT_SLEEP=unknown
+_sk_posix_sleep_frac() {
+  if [ "$_SK_POSIX_FRACT_SLEEP" = "unknown" ]; then
+    if sleep 0.05 2>/dev/null; then
+      _SK_POSIX_FRACT_SLEEP=yes
+    else
+      _SK_POSIX_FRACT_SLEEP=no
+    fi
+  fi
+  if [ "$_SK_POSIX_FRACT_SLEEP" = "yes" ]; then
+    sleep "${1:-1}"
+  else
+    sleep 1
+  fi
+}
+
+# _sk_posix_proc_stat_fields PID —— /proc/<pid>/stat 里我们要的那几段
+#
+# 格式：pid (comm) state ppid pgrp session …
+# comm 里可能有空格与括号 ⇒ 只能从**最后一个右括号**之后开始切。
+# shellcheck disable=SC2086
+_sk_posix_proc_stat_fields() {
+  _sp_sf_pid="${1:-}"
+  [ -n "$_sp_sf_pid" ] || return 1
+  [ -r "/proc/$_sp_sf_pid/stat" ] || return 1
+  _sp_sf_rest=$(sed 's/^.*) //' "/proc/$_sp_sf_pid/stat" 2>/dev/null || true)
+  # shellcheck disable=SC2086
+  set -- $_sp_sf_rest
+  # $1=state $2=ppid $3=pgrp $4=session
+  [ "$#" -ge 3 ] || return 1
+  printf '%s %s %s' "${1:-}" "${2:-}" "${3:-}"
+  return 0
+}
+
+# _sk_posix_proc_state PID —— 这个进程的状态字符（S / R / Z …）
+#
+# 查不到就返回 1（调用方按「查不到状态」处理：判据变粗，但绝不误杀）。
+_sk_posix_proc_state() {
+  _sp_st_pid="${1:-}"
+  [ -n "$_sp_st_pid" ] || return 1
+  _sp_st_fields=$(_sk_posix_proc_stat_fields "$_sp_st_pid") || _sp_st_fields=""
+  if [ -n "$_sp_st_fields" ]; then
+    # shellcheck disable=SC2086
+    set -- $_sp_st_fields
+    printf '%s' "${1:-}"
+    return 0
+  fi
+  # 兜底：ps 的最后一行（busybox 会先打一行表头，表头不是状态）
+  _sp_st_stat=$(ps -o stat= -p "$_sp_st_pid" 2>/dev/null | tail -n 1 | tr -d '[:space:]' || true)
+  [ -n "$_sp_st_stat" ] || return 1
+  printf '%s' "$_sp_st_stat"
+  return 0
+}
+
+# _sk_posix_proc_state_is_dead STATE —— 这个状态算不算「已经没了」
+#
+# 僵尸（Z）与正在消亡（X）都算没了：它们还在进程表里，但 kill -0 对它们
+# **仍然成功** ⇒ 只用 kill -0 判活会把僵尸当成活进程 ⇒ pid 文件永远清不掉、
+# 看门狗永远以为进程还在（手写看门狗最常见的坑）。
+_sk_posix_proc_state_is_dead() {
+  case "${1:-}" in
+    Z | X) return 0 ;;
+  esac
+  return 1
+}
+
+# _sk_posix_proc_alive PID —— 这个 pid 上还有活进程吗
+#   查不到状态时退化成 kill -0（判据变粗：僵尸会被当成活着，pid 文件不会自动清）。
+_sk_posix_proc_alive() {
+  _sp_pa_pid="${1:-}"
+  [ -n "$_sp_pa_pid" ] || return 1
+  kill -0 "$_sp_pa_pid" 2>/dev/null || return 1
+  _sp_pa_state=$(_sk_posix_proc_state "$_sp_pa_pid") || _sp_pa_state=""
+  if [ -n "$_sp_pa_state" ] && _sk_posix_proc_state_is_dead "$_sp_pa_state"; then
+    return 1
+  fi
+  return 0
+}
+
+# _sk_posix_proc_pgid PID —— 这个进程的进程组 id
+_sk_posix_proc_pgid() {
+  _sp_pg_pid="${1:-}"
+  [ -n "$_sp_pg_pid" ] || return 1
+  _sp_pg_fields=$(_sk_posix_proc_stat_fields "$_sp_pg_pid") || _sp_pg_fields=""
+  if [ -n "$_sp_pg_fields" ]; then
+    # shellcheck disable=SC2086
+    set -- $_sp_pg_fields
+    printf '%s' "${3:-}"
+    return 0
+  fi
+  _sp_pg_out=$(ps -o pgid= -p "$_sp_pg_pid" 2>/dev/null | tr -d '[:space:]' || true)
+  [ -n "$_sp_pg_out" ] || return 1
+  printf '%s' "$_sp_pg_out"
+  return 0
+}
+
+# _sk_posix_proc_self_pgid —— 调用方自己所在的进程组
+_sk_posix_proc_self_pgid() {
+  _sk_posix_proc_pgid "$$"
+}
+
+# _sk_posix_proc_group_of PID —— 这个进程能不能「整组停」
+#
+# 判据只有这一处（别在别处再写一遍）：
+#   目标自己就是组长（pgid == pid）**且**那个组不是调用方自己的组。
+# 少一条的后果：
+#   - 不查 pgid == pid ⇒ 可能打到别人的组；
+#   - 不查 pgid != 自己的组 ⇒ **自杀**：脚本被自己组的信号打死，
+#     退出码 143，看着像「被信号停掉」，其实是我们自己动的手。
+_sk_posix_proc_group_of() {
+  _sp_go_pid="${1:-}"
+  [ -n "$_sp_go_pid" ] || return 1
+  _sp_go_pgid=$(_sk_posix_proc_pgid "$_sp_go_pid") || return 1
+  [ "$_sp_go_pgid" = "$_sp_go_pid" ] || return 1
+  _sp_go_self=$(_sk_posix_proc_self_pgid) || return 1
+  [ -n "$_sp_go_self" ] || return 1
+  [ "$_sp_go_pgid" != "$_sp_go_self" ] || return 1
+  printf '%s' "$_sp_go_pgid"
+  return 0
+}
+
+# _sk_posix_proc_group_pids PGID —— 这个组里还有哪些 pid
+#
+# 扫 /proc 而不是问 ps：busybox 的 ps 不认 -p，输出格式也不可控。
+_sk_posix_proc_group_pids() {
+  _sp_gp_pgid="${1:-}"
+  [ -n "$_sp_gp_pgid" ] || return 0
+  awk -v g="$_sp_gp_pgid" '
+    {
+      line = $0
+      last = 0
+      while (match(line, /\)[ \t]/)) {
+        last = RSTART
+        line = substr(line, RSTART + 1)
+      }
+      if (last == 0) next
+      rest = substr($0, last + 2)
+      n = split(rest, f, /[ \t]+/)
+      if (n < 3) next
+      if (f[3] != g) next
+      pid = $1
+      sub(/^[ \t]+/, "", pid)
+      print pid
+    }
+  ' /proc/[0-9]*/stat 2>/dev/null || true
+  return 0
+}
+
+# _sk_posix_proc_group_busy PGID —— 这个组里还有活着的进程吗（僵尸不算）
+_sk_posix_proc_group_busy() {
+  _sp_gb_pgid="${1:-}"
+  [ -n "$_sp_gb_pgid" ] || return 1
+  _sp_gb_pids=$(_sk_posix_proc_group_pids "$_sp_gb_pgid")
+  for _sp_gb_pid in $_sp_gb_pids; do
+    if _sk_posix_proc_alive "$_sp_gb_pid"; then
+      return 0
+    fi
+  done
+  return 1
+}
+
+# _sk_posix_kill_group SIGNAL PGID —— 整组停
+#
+# 两种写法都试（实测）：带 -- 的 bash 认、busybox/dash 报 "invalid number"；
+# 不带 -- 的 busybox/dash 认、bash 把 -PGID 当信号名 ⇒ 两种都试，
+# 都不成就返回 1（调用方退化成只杀主进程）。
+_sk_posix_kill_group() {
+  _sp_kg_sig="${1:-TERM}"
+  _sp_kg_pgid="${2:-}"
+  [ -n "$_sp_kg_pgid" ] || return 1
+  kill "$_sp_kg_sig" -- "-$_sp_kg_pgid" 2>/dev/null && return 0
+  kill "$_sp_kg_sig" "-$_sp_kg_pgid" 2>/dev/null && return 0
+  return 1
+}
+
+# _sk_posix_proc_spawn PIDFILE LOGFILE COMMAND... —— 引导一个后台进程
+#
+# pid 由**子进程自己写**（而不是父进程拿 $!）：setsid 在「已经是组长」时会
+# fork ⇒ 那时 $! 是 setsid 的 pid，不是真正那条命令的 pid ⇒ 父进程记下来的
+# pid 指向一个马上就退出的进程 ⇒ 探活永远失败、pid 文件永远清不掉。
+# 子进程写的是 exec 之后那条命令的 pid（exec 不改 pid）⇒ 一定是它。
+#
+# 脱离终端三级退化（按可用性）：
+#   setsid —— 有就优先：顺便给一个新会话与新进程组 ⇒ 整组停止才做得到；
+#   nohup  —— 只解决 SIGHUP，没有新进程组 ⇒ 整组停止退化成只停主进程；
+#   子 shell 里 trap '' HUP 再 exec —— 都没有时的兜底
+#            （被忽略的信号跨 exec 继承 ⇒ 子进程不会因终端关闭而收到 SIGHUP）。
+_sk_posix_proc_spawn() {
+  _sp_sp_pidfile="${1:-}"
+  _sp_sp_logfile="${2:-}"
+  shift 2
+  # shellcheck disable=SC2016
+  _sp_sp_boot='printf "%s\n" "$$" > "$1.tmp" && mv -f "$1.tmp" "$1"; shift; exec "$@"'
+  if command -v setsid >/dev/null 2>&1; then
+    setsid sh -c "$_sp_sp_boot" sk "$_sp_sp_pidfile" "$@" >>"$_sp_sp_logfile" 2>&1 </dev/null &
+  elif command -v nohup >/dev/null 2>&1; then
+    nohup sh -c "$_sp_sp_boot" sk "$_sp_sp_pidfile" "$@" >>"$_sp_sp_logfile" 2>&1 </dev/null &
+  else
+    (trap '' HUP; exec sh -c "$_sp_sp_boot" sk "$_sp_sp_pidfile" "$@") >>"$_sp_sp_logfile" 2>&1 </dev/null &
+  fi
+  return 0
+}
+
+# proc_start NAME COMMAND... —— 后台拉起一个进程
+#
+# 脱离终端、记 pid 文件（子进程自己写）、日志**追加**（不截断 ——
+# 截断会把上次的现场抹掉，出事时没得查）。
+#
+# 退出码：0 成功 / 1 拉起失败 / 2 用法错 / 3 前置条件不满足
+proc_start() {
+  if [ "$#" -lt 2 ]; then
+    log_error "usage: proc_start NAME COMMAND..."
+    return 2
+  fi
+  _sp_s_name="$1"
+  shift
+  if ! _sk_posix_proc_valid_name "$_sp_s_name"; then
+    log_error "invalid process name: $_sp_s_name"
+    return 2
+  fi
+  if ! command -v "${1:-}" >/dev/null 2>&1; then
+    log_error "the command does not exist: ${1:-}"
+    return 3
+  fi
+  _sp_s_dir=$(_sk_posix_proc_dir) || return 3
+  _sp_s_pidfile="$_sp_s_dir/$_sp_s_name.pid"
+  _sp_s_logfile="$_sp_s_dir/$_sp_s_name.log"
+  if [ -L "$_sp_s_pidfile" ]; then
+    log_error "refusing to write through a symlink: $_sp_s_pidfile"
+    return 3
+  fi
+  # 已经在跑 ⇒ 不再拉第二份（两份进程抢同一个端口）
+  if [ -f "$_sp_s_pidfile" ]; then
+    _sp_s_old=$(cat "$_sp_s_pidfile" 2>/dev/null || true)
+    if _sk_posix_proc_alive "$_sp_s_old"; then
+      log_error "the process is already running: $_sp_s_name ($_sp_s_old)"
+      return 3
+    fi
+    # 僵尸 pid 文件：清掉，否则下次 start 会误判「已经在跑」
+    rm -f "$_sp_s_pidfile" 2>/dev/null || true
+  fi
+  _sk_posix_proc_spawn "$_sp_s_pidfile" "$_sp_s_logfile" "$@" || return 1
+  # 等 pid 文件落地（子进程写的）：最多 5 秒
+  _sp_s_wait=0
+  while [ "$_sp_s_wait" -lt 50 ]; do
+    if [ -s "$_sp_s_pidfile" ]; then
+      break
+    fi
+    _sk_posix_sleep_frac 0.1
+    _sp_s_wait=$((_sp_s_wait + 1))
+  done
+  _sp_s_pid=$(cat "$_sp_s_pidfile" 2>/dev/null || true)
+  case "$_sp_s_pid" in
+    '' | *[!0-9]*)
+      rm -f "$_sp_s_pidfile" 2>/dev/null || true
+      log_error "the process did not report its pid: $_sp_s_name"
+      return 1
+      ;;
+  esac
+  # 拉起来就退出（命令本身有问题：不存在、参数错、立刻崩）⇒ 明确报错
+  _sk_posix_sleep_frac 0.3
+  if ! _sk_posix_proc_alive "$_sp_s_pid"; then
+    # 整组清掉：命令自己起来就崩，但它可能已经派生了子进程 ——
+    # 只杀主进程会留下孤儿（端口还占着，正是这一层要根治的坑）
+    _sp_s_pgid=$(_sk_posix_proc_group_of "$_sp_s_pid") || _sp_s_pgid=""
+    if [ -n "$_sp_s_pgid" ]; then
+      _sk_posix_kill_group TERM "$_sp_s_pgid" || kill -TERM "$_sp_s_pid" 2>/dev/null || true
+    else
+      kill -TERM "$_sp_s_pid" 2>/dev/null || true
+    fi
+    rm -f "$_sp_s_pidfile" 2>/dev/null || true
+    log_error "the process exited immediately: $_sp_s_name (see $_sp_s_logfile)"
+    return 1
+  fi
+  return 0
+}
+
+# proc_stop NAME —— 停掉那个进程（能整组停就整组停）
+#
+# 只 kill 主进程 ⇒ 子进程残留、端口还占着 —— 这是手写最常见的坑。
+# 这里先给整组 TERM，留收尾的时间；还在就 KILL 整组。
+#
+# 拿不到进程组时**明确退化成只杀主进程**（宁可留子进程，也不能自杀 ——
+# kill 打到自己的组上会静默自杀，退出码 143）。
+#
+# 退出码：0 已停 / 2 用法错 / 3 停不掉
+proc_stop() {
+  if [ "$#" -lt 1 ]; then
+    log_error "usage: proc_stop NAME"
+    return 2
+  fi
+  _sp_st_name="$1"
+  if ! _sk_posix_proc_valid_name "$_sp_st_name"; then
+    log_error "invalid process name: $_sp_st_name"
+    return 2
+  fi
+  _sp_st_dir=$(_sk_posix_proc_dir) || return 3
+  _sp_st_pidfile="$_sp_st_dir/$_sp_st_name.pid"
+  # 没有 pid 文件 ⇒ 没在跑（停一个没跑的东西是成功，不是错误）
+  [ -f "$_sp_st_pidfile" ] || return 0
+  _sp_st_pid=$(cat "$_sp_st_pidfile" 2>/dev/null || true)
+  if ! _sk_posix_proc_alive "$_sp_st_pid"; then
+    rm -f "$_sp_st_pidfile" 2>/dev/null || true
+    return 0
+  fi
+  _sp_st_pgid=$(_sk_posix_proc_group_of "$_sp_st_pid") || _sp_st_pgid=""
+  if [ -n "$_sp_st_pgid" ]; then
+    _sk_posix_kill_group TERM "$_sp_st_pgid" || kill -TERM "$_sp_st_pid" 2>/dev/null || true
+  else
+    kill -TERM "$_sp_st_pid" 2>/dev/null || true
+  fi
+  # 等它收尾（最多 10 秒）：主进程没了还不够 —— 组里可能还有子进程在跑
+  _sp_st_i=0
+  while [ "$_sp_st_i" -lt 100 ]; do
+    _sp_st_alive=0
+    _sk_posix_proc_alive "$_sp_st_pid" && _sp_st_alive=1
+    if [ "$_sp_st_alive" = "0" ] && [ -n "$_sp_st_pgid" ] && _sk_posix_proc_group_busy "$_sp_st_pgid"; then
+      _sp_st_alive=1
+    fi
+    [ "$_sp_st_alive" = "0" ] && break
+    _sk_posix_sleep_frac 0.1
+    _sp_st_i=$((_sp_st_i + 1))
+  done
+  _sp_st_alive=0
+  _sk_posix_proc_alive "$_sp_st_pid" && _sp_st_alive=1
+  if [ "$_sp_st_alive" = "0" ] && [ -n "$_sp_st_pgid" ] && _sk_posix_proc_group_busy "$_sp_st_pgid"; then
+    _sp_st_alive=1
+  fi
+  if [ "$_sp_st_alive" = "1" ]; then
+    if [ -n "$_sp_st_pgid" ]; then
+      _sk_posix_kill_group KILL "$_sp_st_pgid" || kill -KILL "$_sp_st_pid" 2>/dev/null || true
+    else
+      kill -KILL "$_sp_st_pid" 2>/dev/null || true
+    fi
+    # KILL 之后再看一眼：还在就如实报停不掉（退出码 3），别假装成功
+    _sp_st_i=0
+    while [ "$_sp_st_i" -lt 20 ]; do
+      _sp_st_alive=0
+      _sk_posix_proc_alive "$_sp_st_pid" && _sp_st_alive=1
+      if [ "$_sp_st_alive" = "0" ] && [ -n "$_sp_st_pgid" ] && _sk_posix_proc_group_busy "$_sp_st_pgid"; then
+        _sp_st_alive=1
+      fi
+      [ "$_sp_st_alive" = "0" ] && break
+      _sk_posix_sleep_frac 0.1
+      _sp_st_i=$((_sp_st_i + 1))
+    done
+    if [ "$_sp_st_alive" = "1" ]; then
+      log_error "cannot stop the process: $_sp_st_name ($_sp_st_pid)"
+      return 3
+    fi
+  fi
+  rm -f "$_sp_st_pidfile" 2>/dev/null || true
+  return 0
+}
+
+# proc_is_running NAME —— 探活
+#
+# 僵尸 pid 文件会被清掉：文件还在、进程早没了 —— 手写看门狗最常见的另一种坑
+#（探活永远失败，但没人清理，重启就一直起不来）。
+#
+# 退出码：0 在跑 / 1 没在跑（僵尸 pid 文件会被清掉）/ 2 用法错 / 3 目录不可用
+proc_is_running() {
+  if [ "$#" -lt 1 ]; then
+    log_error "usage: proc_is_running NAME"
+    return 2
+  fi
+  _sp_ir_name="$1"
+  if ! _sk_posix_proc_valid_name "$_sp_ir_name"; then
+    log_error "invalid process name: $_sp_ir_name"
+    return 2
+  fi
+  _sp_ir_dir=$(_sk_posix_proc_dir) || return 3
+  _sp_ir_pidfile="$_sp_ir_dir/$_sp_ir_name.pid"
+  [ -f "$_sp_ir_pidfile" ] || return 1
+  _sp_ir_pid=$(cat "$_sp_ir_pidfile" 2>/dev/null || true)
+  if _sk_posix_proc_alive "$_sp_ir_pid"; then
+    return 0
+  fi
+  rm -f "$_sp_ir_pidfile" 2>/dev/null || true
+  return 1
+}
+
+# proc_watchdog [--interval SEC] [--max-backoff SEC] [--max-restarts N] NAME COMMAND...
+#
+# 看门狗：进程挂了拉起来，带退避。
+# 退避：连续失败时按 1→2→4… 翻倍（上限 --max-backoff）——
+# 没有退避的重启是**风暴**：进程起来就崩 ⇒ 无限循环重启，把机器打满。
+# 进程连续活过几个周期 ⇒ 退避归零。
+# --max-restarts N：连续 N 次拉起失败就放弃并返回非 0（0 = 不限）。
+#
+# 退出码：0 被信号停掉 / 1 放弃 / 2 用法错
+proc_watchdog() {
+  _sp_w_interval=5
+  _sp_w_backoff_max=60
+  _sp_w_restarts=0
+  while [ "$#" -gt 0 ]; do
+    case "$1" in
+      --interval)
+        shift
+        _sp_w_interval="${1:-}"
+        ;;
+      --max-backoff)
+        shift
+        _sp_w_backoff_max="${1:-}"
+        ;;
+      --max-restarts)
+        shift
+        _sp_w_restarts="${1:-}"
+        ;;
+      -h | --help)
+        printf '%s\n' "Usage: proc_watchdog [--interval SEC] [--max-backoff SEC] [--max-restarts N] NAME COMMAND..."
+        return 0
+        ;;
+      --)
+        shift
+        break
+        ;;
+      *)
+        break
+        ;;
+    esac
+    shift
+  done
+  if [ "$#" -lt 2 ]; then
+    log_error "usage: proc_watchdog [options] NAME COMMAND..."
+    return 2
+  fi
+  _sp_w_name="$1"
+  shift
+  if ! _sk_posix_proc_valid_name "$_sp_w_name"; then
+    log_error "invalid process name: $_sp_w_name"
+    return 2
+  fi
+  case "$_sp_w_interval" in
+    '' | *[!0-9]*)
+      log_error "invalid interval: $_sp_w_interval"
+      return 2
+      ;;
+  esac
+  case "$_sp_w_backoff_max" in
+    '' | *[!0-9]*)
+      log_error "invalid backoff: $_sp_w_backoff_max"
+      return 2
+      ;;
+  esac
+  case "$_sp_w_restarts" in
+    '' | *[!0-9]*)
+      log_error "invalid restart limit: $_sp_w_restarts"
+      return 2
+      ;;
+  esac
+  # 0 秒间隔是热循环（100% CPU），0 秒退避是重启风暴 —— 两个都不接受
+  if [ "$_sp_w_interval" -lt 1 ]; then
+    log_error "invalid interval: $_sp_w_interval"
+    return 2
+  fi
+  if [ "$_sp_w_backoff_max" -lt 1 ]; then
+    log_error "invalid backoff: $_sp_w_backoff_max"
+    return 2
+  fi
+  _sp_w_backoff=1
+  _sp_w_consec=0
+  _sp_w_up=0
+  _sp_w_rc=0
+  # 被停时把子进程也带走 —— 留下一个孤儿占着端口，比不停更糟
+  trap_push "proc_stop '$_sp_w_name'" || true
+  trap_install || true
+  while :; do
+    if ! proc_is_running "$_sp_w_name"; then
+      if [ "$_sp_w_consec" -gt 0 ]; then
+        # 退避要看得见：没有退避的重启是风暴，运维要能看出「在等」
+        log_info "waiting before the next restart: $_sp_w_backoff s"
+        sleep "$_sp_w_backoff"
+      fi
+      if proc_start "$_sp_w_name" "$@"; then
+        _sp_w_up=0
+      else
+        # 失败计数只加一次（下面那个「没在跑」的分支统一加）——
+        # 两处都加会把一次失败算成两次，--max-restarts 的上限就少了一半
+        log_error "the watchdog could not start the process: $_sp_w_name"
+      fi
+    fi
+    sleep "$_sp_w_interval"
+    if proc_is_running "$_sp_w_name"; then
+      _sp_w_up=$((_sp_w_up + 1))
+      if [ "$_sp_w_up" -ge 3 ]; then
+        # 连续活过三个周期 ⇒ 之前那次挂掉是偶发，退避归零
+        _sp_w_backoff=1
+        _sp_w_consec=0
+      fi
+    else
+      _sp_w_backoff=$((_sp_w_backoff * 2))
+      if [ "$_sp_w_backoff" -gt "$_sp_w_backoff_max" ]; then
+        _sp_w_backoff=$_sp_w_backoff_max
+      fi
+      _sp_w_consec=$((_sp_w_consec + 1))
+    fi
+    if [ "$_sp_w_restarts" -gt 0 ] && [ "$_sp_w_consec" -ge "$_sp_w_restarts" ]; then
+      log_error "the watchdog gave up after too many failed restarts: $_sp_w_name"
+      _sp_w_rc=1
+      break
+    fi
+  done
+  proc_stop "$_sp_w_name" || true
+  return "$_sp_w_rc"
+}
+
 # ---- 能力查询 ----
 
 # posix_capable NAME —— 这个函数在 POSIX 子集里能用吗

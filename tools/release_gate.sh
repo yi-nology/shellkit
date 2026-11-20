@@ -35,7 +35,7 @@
 set -u
 
 PROG=tools/release_gate.sh
-DEFAULT_CHECKS="test on macos-latest|test on macos-15|test on ubuntu-latest|test on ubuntu-22.04|test on ubuntu-24.04-arm|compat on debian:12 (ubuntu-latest)|compat on rockylinux:9 (ubuntu-latest)|compat on openeuler/openeuler:24.03-lts (ubuntu-latest)|compat on openeuler/openeuler:24.03-lts (ubuntu-24.04-arm)|bats suite|docs site|coverage ratchet|mutation campaign|release artifact smoke|cross-version upgrade matrix"
+DEFAULT_CHECKS="test on macos-latest|test on macos-15|test on ubuntu-latest|test on ubuntu-22.04|test on ubuntu-24.04-arm|compat on debian:12 (ubuntu-latest)|compat on rockylinux:9 (ubuntu-latest)|compat on openeuler/openeuler:24.03-lts (ubuntu-latest)|compat on openeuler/openeuler:24.03-lts (ubuntu-24.04-arm)|bats suite|docs site|coverage ratchet|mutation campaign|release artifact smoke|cross-version upgrade matrix|posix subset on busybox ash"
 
 TIMEOUT=2400
 INTERVAL=30

@@ -133,7 +133,7 @@ git push origin v1.1.0                # 重新推 ⇒ release.yml 由 tag 触发
 
 `main` 现在带分支保护（branch protection）。规则刻意与仓库自己的发布门禁**同一份清单**：
 
-- **必需检查**：15 个 = `tools/release_gate.sh` 的 `DEFAULT_CHECKS`（ci.yml 的 job 名逐字一致）；
+- **必需检查**：16 个 = `tools/release_gate.sh` 的 `DEFAULT_CHECKS`（ci.yml 的 job 名逐字一致）；
 - **`strict: false`**：检查不要求在 base 分支最新提交上重跑 —— `main` 在发版窗口里经常前进，
   开了 strict 会把每个 PR 都卡成 BLOCKED（与上面「发版窗口」一节是同一个坑）；
 - **不要求 review**：这是 agent 驱动的工作流，链路上没有人类 reviewer ——

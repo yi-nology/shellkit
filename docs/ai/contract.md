@@ -72,7 +72,7 @@ shellkit 是一个 Bash 库加脚手架：日志、配置、下载校验、重�
 | 校验用户输入 | `validate_not_empty` / `validate_single_line` / `validate_key` / `validate_port` / `validate_ip` / `validate_url` / `validate_version` / `validate_abs_path` / `validate_enum` |
 | 一批命令并发跑 | `parallel_map 4 -- cmd args...`（逐条标注，汇总成功数） |
 | 命令/函数要超时 | `run_timeout 30 cmd` / `run_func_timeout 30 my_func args` |
-| 进程组与看门狗 | `proc_start` / `proc_stop` / `proc_is_running` / `proc_watchdog`（靠 bash 作业控制；POSIX 子集没有这层） |
+| 进程组与看门狗 | `proc_start` / `proc_stop` / `proc_is_running` / `proc_watchdog`（bash 侧靠作业控制；**POSIX/ash 侧有同名版本**：无作业控制 ⇒ 靠 setsid 拿进程组，拿不到时只停主进程） |
 | 查发行版与包管理器 | `os_distro_id` / `os_distro_name` / `os_pkg_manager` / `os_pkg_install` / `os_pkg_update` / `os_has_cmd` / `os_is_root` |
 | 原地改文件里的字符串 | `os_sed_i FILE PATTERN REPL`（带备份） |
 | 算文件哈希 | `os_sha256 FILE` / `os_md5 FILE` |

@@ -229,7 +229,7 @@ _reason_for() {
       return 0
       ;;
     proc_*)
-      printf '%s' "进程组与看门狗依赖 bash 的作业控制（set -m）"
+      printf '%s' "进程组与看门狗的 bash 版本不进 POSIX 子集（POSIX 子集只给同名 ash 版）"
       return 0
       ;;
     git_*)
@@ -315,7 +315,7 @@ _reason_for() {
       printf '%s' "库副本落点是工程期的事，设备侧不 vendor 库"
       ;;
     proc.sh)
-      printf '%s' "进程组与看门狗依赖 bash 的作业控制"
+      printf '%s' "进程组与看门狗的 bash 版本不进 POSIX 子集（POSIX 子集只给同名 ash 版）"
       ;;
     git.sh)
       printf '%s' "git 领域抽象在设备侧用不上"
@@ -324,6 +324,21 @@ _reason_for() {
       printf '%s' "POSIX 子集未实现（模块 ${__mod:-未知}）"
       ;;
   esac
+}
+
+# ---- 有的话有什么限制（yes 行也要写清楚）----
+#
+# 清单里 yes 的行过去一律写 "-" ⇒ 设备侧脚本只知道「有这条」，
+# 不知道**这条在设备侧是什么样**（能不能整组停？查不查得到状态？）。
+# 「同一套语义在 ash 上有降级」这件事必须写进清单，否则用的人
+# 会按主库的行为去假设它。
+_yes_note_for() {
+  case "${1:-}" in
+    proc_start | proc_stop | proc_is_running | proc_watchdog)
+      printf '%s' "POSIX 子集提供同名版本（语义与返回码一致）：没有作业控制 ⇒ 靠 setsid 拿进程组，拿不到时只停主进程；状态从 /proc/<pid>/stat 读，查不到时退化成 kill -0；与主库同名，两份不要同时加载"
+      ;;
+  esac
+  return 0
 }
 
 # ---------------------------------------------------------------------------
@@ -345,7 +360,7 @@ _write_capabilities() {
     printf '#\n'
     printf '# 由 bash tools/check_posix.sh --write 生成，不要手工维护。\n'
     printf '#\n'
-    printf '# 格式：函数名<TAB>POSIX 子集里有没有<TAB>没有的话为什么\n'
+    printf '# 格式：函数名<TAB>POSIX 子集里有没有<TAB>没有的话为什么 / 有的话有什么限制\n'
     printf '#\n'
     printf '# 设备侧脚本据此判断「这条能不能用」，而不是靠试 —— 试出来的失败往往是\n'
     printf '# 「装上就挂」，而现场装不了 shellkit 补救。\n'
@@ -359,7 +374,9 @@ _write_capabilities() {
     while IFS='	' read -r __fn __mod; do
       [ -n "$__fn" ] || continue
       if _in_posix "$__fn"; then
-        printf '%s\tyes\t-\n' "$__fn"
+        __note=$(_yes_note_for "$__fn")
+        [ -n "$__note" ] || __note="-"
+        printf '%s\tyes\t%s\n' "$__fn" "$__note"
       else
         [ -n "$__mod" ] || __mod=unknown.sh
         printf '%s\tno\t%s\n' "$__fn" "$(_reason_for "$__fn" "$__mod")"

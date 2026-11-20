@@ -53,10 +53,70 @@ POSIX 子集只给「设备侧真的用得上」的那一小撮。完整清单�
 | 版本 | `ver_cmp`、`ver_gt`、`ver_lt`、`ver_eq` |
 | 锁 | `lock_acquire`、`lock_release` |
 | 状态输出 | `status_emit`、`status_is_machine`、`status_state_valid`、`status_version`、`status_extra` |
+| 进程与看门狗 | `proc_start`、`proc_stop`、`proc_is_running`、`proc_watchdog` |
 | 能力查询 | `posix_capable` |
 
 清单里没列的能力，主库里有、POSIX 子集里没有 —— 每一行都写明了原因
 （设备侧用不上、需要数组、依赖 bash 的作业控制……）。
+**有**的那几行，第三列同样有话：写清这一条在设备侧**长什么样**
+（例如 `proc_*` 那一行写明「没有作业控制 ⇒ 靠 `setsid` 拿进程组，
+拿不到时只停主进程」）。一根 `-` 等于没写。
+
+## 设备侧的进程层（proc_*）
+
+设备侧启动脚本的另一半：**后台引导 + 整组停止 + 探活自愈**。
+手写这三件事要自己对付三个坑，而这三个坑主库早就对付过了：
+
+1. **僵尸假阳性**：`kill -0 <pid>` 对**僵尸进程仍然返回 0**
+   ⇒ 只用 `kill -0` 判存活，永远等不到「进程已退出」⇒ 停不干净、
+   pid 文件永远清不掉、看门狗永远以为进程还在。
+2. **只杀主进程**：子进程残留、端口还占着（手写最常见的坑）。
+3. **重启风暴**：探活失败与超时不分、没有退避 ⇒ 设备上疯狂重启。
+
+POSIX 子集里的这四个函数与主库**同名**、返回码一致：
+
+`@sh
+#!/bin/sh
+. /opt/pigeonbox/lib/shellkit-posix.sh
+
+proc_start pigeonbox /opt/pigeonbox/bin/pigeonbox   # 后台拉起 + pid 文件
+proc_is_running pigeonbox                            # 探活（僵尸判死）
+proc_stop pigeonbox                                  # 整组停
+`@
+
+看门狗（探活失败就拉起，带退避；连续失败到上限就**放弃并返回非 0**）：
+
+`@sh
+proc_watchdog --interval 5 --max-backoff 60 --max-restarts 5 pigeonbox /opt/pigeonbox/bin/pigeonbox
+`@
+
+### 它在设备侧是怎么降级的（说清楚，别让人按主库的行为去假设）
+
+| 场合 | 设备侧的做法 | 拿不到时 |
+| --- | --- | --- |
+| 脱离终端 | `setsid` > `nohup` > 子 shell 忽略 SIGHUP（三级退化） | —— |
+| 进程组 | `setsid` 给一个新会话 ⇒ 整组停做得到 | 拿不到就**只停主进程**（宁可留子进程，也不能自杀） |
+| 进程状态 | 读 `/proc/<pid>/stat` 的状态位（`Z`/`X` 判死） | 查不到就退化成 `kill -0`（判据变粗，但不误杀） |
+
+### 三条实测出来的约束（busybox 1.36 容器里逐条验的）
+
+1. **整组停不能带 `--`**：
+   `kill -TERM -- -1234` 在 busybox 报 `invalid number '--'`、
+   dash 报 `Illegal number: -` ⇒ 两边都没杀成；
+   而 `kill -TERM -1234`（不带 `--`）busybox 与 dash 都认，bash 反而不认。
+   ⇒ 两种都试，先带 `--`，失败再不带。
+2. **busybox 的 `ps` 不认 `-p`**（`invalid option -- 'p'`），
+   也不认 `stat=` 的表头抑制 ⇒ 状态与进程组改读 `/proc/<pid>/stat`，
+   `ps` 只当兜底。
+3. **`setsid` 在「已经是组长」时会 fork** ⇒ 父进程拿到的 `$!`
+   可能是 setsid 的 pid 而不是真正那条命令的 pid ⇒
+   pid 文件由**子进程自己写**（`exec` 不改 pid ⇒ 写的必然是它）。
+
+### 不要两份同时加载
+
+这四个函数与主库**同名** ⇒ bash 与 ash 都是「后定义覆盖先定义」⇒
+主库与 POSIX 子集**同时加载**时，后加载的那份会顶掉先加载的那份。
+按需只加载一份：bash 侧用主库，设备侧用 POSIX 子集。
 
 ## 怎么判断「这条能不能用」
 
@@ -93,6 +153,12 @@ POSIX sh 是**解析器级别**的约束：混进一个 bash 专有语法，busy
   （所以子集里到处是 `_sp_xxx` 这种带前缀的变量）；
 - 取环境变量用 `printenv`，不用 `eval` 间接引用（`eval` 那一套既能注入，
   又过不了 shellcheck 的 sh 方言）。
+- **起名字别撞上子集自己的公开函数**：子集里有 `fail()` 与 `die()`
+  ⇒ 判据脚本（或其他调用方）再定义一个 `fail()` 会被子集那份覆盖
+  （后定义覆盖先定义）⇒ 自己的失败计数永远不增 ⇒ **判据假绿**。
+  辅助函数用独占前缀。
+- 判据要能在**真解释器**上跑：同一份 POSIX sh 脚本在 dash 与 busybox ash 上
+  原样跑（见下面的门禁），而不是在 bash 上「假装是 ash」。
 
 ## 门禁
 
@@ -111,6 +177,21 @@ make posix-check
 
 门禁本体在 `tools/check_posix.sh`，判据在 `tests/test_posix.sh`。
 `make check` 里已经包含这一步。
+
+### 判据在真解释器上跑
+
+`tests/posix_smoke.sh` 是一份**只用 POSIX sh 语法**的判据脚本
+（设备侧那一层：进程与看门狗）⇒ 同一份在 dash 与 **busybox ash** 上原样跑：
+
+`@sh
+dash tests/posix_smoke.sh          # 本机
+busybox ash tests/posix_smoke.sh    # 设备侧的解释器（CI 的必需检查之一）
+`@
+
+判据有承重：脚本内做**变异自证**（把库的缺陷改坏 ⇒ 场景必须变红），
+每处都带**形状守卫**（变异必须真的落到源码上，否则「断言没变」与
+「缺陷没造回去」分不开）；bash 侧（`tests/test_posix_proc.sh`）再验一层
+「把库的僵尸判定改坏 ⇒ 判据必须变红」。
 
 ## 与主库的关系
 
