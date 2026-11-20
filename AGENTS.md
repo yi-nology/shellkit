@@ -360,7 +360,11 @@ shellkit 是一个 Bash 库加脚手架：日志、配置、下载校验、重�
    重试、锁、清理、交互、CLI、i18n。不要先写一版再想着替换。
 2. **不确定签名就查 `docs/REFERENCE.md`，不要发明函数名。** 幻觉出来的 API
    （比如 `conf_require`、`log_success`）会让脚本在运行时才炸，而且错误信息看不懂。
-3. **写完就跑验证命令**（见下）。不要声称"应该能跑"。
+3. **想知道「有没有现成的」⇒ 扫一眼 `references/capabilities.md`**（全部公开函数，
+   一行一个）。下面的落点表覆盖的是**常用路径**，索引覆盖的是**全部** ——
+   「表里没写」不等于「库里没有」：`str_suggest` 早就在库里，多个工程还是
+   自己写了一遍编辑距离（issue #161 的实证）。
+4. **写完就跑验证命令**（见下）。不要声称"应该能跑"。
 
 ### 常见任务的落点
 
@@ -391,6 +395,23 @@ shellkit 是一个 Bash 库加脚手架：日志、配置、下载校验、重�
 | 比较版本号 | `ver_cmp` / `ver_gt` / `ver_lt` / `ver_eq`（纯 bash 分段比较，别用 `sort -V`；非法输入返回 2，不伪装成「相等」） |
 | 输出机器可读状态 | `SHELLKIT_STATUS_MODE=machine` + `status_emit STATE 人类文案`（再按需 `status_version` / `status_extra`） |
 | 日志要能进采集系统 | `SHELLKIT_LOG_FORMAT=json`；按级别过滤用 `SHELLKIT_LOG_LEVEL=warn`；落文件用 `SHELLKIT_LOG_FILE=/var/log/x.log` |
+| 输错的命令名给个建议 | `str_suggest "cmd" "cmd1 cmd2"`（编辑距离；**库里早就有**，别再自己写一遍） |
+| 字符串的小判断 | `str_contains` / `str_starts_with` / `str_ends_with` / `str_trim` / `str_lower` / `str_upper` / `str_repeat` |
+| 校验用户输入 | `validate_not_empty` / `validate_single_line` / `validate_key` / `validate_port` / `validate_ip` / `validate_url` / `validate_version` / `validate_abs_path` / `validate_enum` |
+| 一批命令并发跑 | `parallel_map 4 -- cmd args...`（逐条标注，汇总成功数） |
+| 命令/函数要超时 | `run_timeout 30 cmd` / `run_func_timeout 30 my_func args` |
+| 进程组与看门狗 | `proc_start` / `proc_stop` / `proc_is_running` / `proc_watchdog`（靠 bash 作业控制；POSIX 子集没有这层） |
+| 查发行版与包管理器 | `os_distro_id` / `os_distro_name` / `os_pkg_manager` / `os_pkg_install` / `os_pkg_update` / `os_has_cmd` / `os_is_root` |
+| 原地改文件里的字符串 | `os_sed_i FILE PATTERN REPL`（带备份） |
+| 算文件哈希 | `os_sha256 FILE` / `os_md5 FILE` |
+| 退出时按顺序收尾 | `trap_push 'rm -rf "$workdir"'` + `trap_install`；另有 `trap_list` / `trap_pop` / `trap_cleanup` |
+| 读写键值文件 | `profile_write` / `profile_append` / `profile_parse` / `profile_env` |
+| 操作 Git 仓库 | `git_is_dirty` / `git_default_branch` / `git_fetch` / `git_fast_forward` / `git_tag` / `git_worktree_add` |
+| 解包前先看看内容 | `archive_list ARCHIVE`（`archive_extract` 会挡路径穿越与软链逃逸） |
+| 找库副本在哪 | `vendor_dir` / `vendor_dir_detect` / `vendor_dir_source`（doctor / upgrade / repair 读同一个答案） |
+| 查上游最新版本 | `http_github_latest_tag REPO` / `http_github_release_asset REPO TAG PATTERN` |
+| 改配置里的某一项 | `conf_set KEY VALUE` / `conf_unset KEY` / `conf_disable KEY` / `conf_keys` |
+| 管理 systemd 单元 | `svc_enable` / `svc_disable` / `svc_reload` / `svc_is_enabled` / `svc_daemon_reload` / `svc_install_unit` |
 | 新工程要带自定义变量 | `shellkit new ./x --set KEY=VALUE`；变量声明在模板的 `template.config` |
 | 已有工程跟上模板更新 | `shellkit upgrade ./x`（本地改过的文件会跳过并告警） |
 

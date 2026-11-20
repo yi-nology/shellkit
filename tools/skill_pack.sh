@@ -38,6 +38,7 @@ die() {
 [ -f "$ROOT/docs/REFERENCE.md" ] || die "missing $ROOT/docs/REFERENCE.md (run shellkit docs first)" 3
 [ -f "$ROOT/docs/COOKBOOK.md" ] || die "missing $ROOT/docs/COOKBOOK.md" 3
 [ -f "$ROOT/docs/BASH32.md" ] || die "missing $ROOT/docs/BASH32.md" 3
+[ -f "$ROOT/docs/CAPABILITIES.md" ] || die "missing $ROOT/docs/CAPABILITIES.md" 3
 
 mkdir -p "$OUT/references" || die "cannot create $OUT/references" 1
 
@@ -65,6 +66,7 @@ mv -f "$OUT/SKILL.md.tmp.$$" "$OUT/SKILL.md" || die 'failed to write SKILL.md' 1
 
 # references/ —— 投影自 docs/ 与 CLI 注册表
 _copy "$ROOT/docs/REFERENCE.md" "$OUT/references/reference.md"
+_copy "$ROOT/docs/CAPABILITIES.md" "$OUT/references/capabilities.md"
 _copy "$ROOT/docs/COOKBOOK.md" "$OUT/references/cookbook.md"
 _copy "$ROOT/docs/BASH32.md" "$OUT/references/bash32.md"
 
