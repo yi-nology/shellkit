@@ -333,7 +333,7 @@ cp -Rp "$TEST_ROOT/lib" "$TEST_ROOT/locale" "$COPY3/" || _fail "copy failed"
 #    ② 分支覆盖那套会**插桩**（在候选后面插 __cov_hit 调用）。
 #    ⇒ 写死 "0|1|2|…" 或写死 ");;" 的模式，在这两种树上都匹配不上
 #    ⇒ 变异**根本没发生** ⇒ 判据报「没抓到」，看着像判据坏了，
-#    其实��变异死了（2026-11-20 在 fmt 与 coverage job 上各踩一次）。
+#    其实是变异死了（2026-11-20 在 fmt 与 coverage job 上各踩一次）。
 awk '
   /9[[:space:]]*\|[[:space:]]*_\)/ {
     print "      a | b | c | d | e | f | g | h | i | j | k | l | m | n | o | p | q | r | s | t | u | v | w | x | y | z | A | B | C | D | E | F | G | H | I | J | K | L | M | N | O | P | Q | R | S | T | U | V | W | X | Y | Z | 0 | 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | _) ;;"
