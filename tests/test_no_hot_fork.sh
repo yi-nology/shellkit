@@ -273,9 +273,14 @@ _assert_mutated() {
 COPY="$BIN/copy1"
 mkdir -p "$COPY"
 cp -Rp "$TEST_ROOT/lib" "$TEST_ROOT/locale" "$COPY/" || _fail "copy failed"
+# ⚠️ 模式不能带行尾锚：分支覆盖那套会把源码**插桩**（在 then 后面插
+#    __cov_hit 调用）⇒ 插桩后的 if 行是
+#    "  if [ -z "\$__rest" ]; then __cov_hit '...';"
+#    ⇒ 写死行尾的匹配在插桩树上匹配不上 ⇒ 变异**根本没发生**
+#    ⇒ 判据报「没抓到」，看着像判据坏了（2026-11-20 coverage job 实测）。
 awk '
-  /^  if \[ -z "\$__rest" \]; then$/ { skip = 1; next }
-  skip && /^  fi$/ { skip = 0; next }
+  /^  if \[ -z "\$__rest" \]; then/ { skip = 1; next }
+  skip && /^  fi[ \t]*$/ { skip = 0; next }
   skip { next }
   { print }
 ' "$COPY/lib/core/i18n.sh" >"$COPY/lib/core/i18n.new" && mv "$COPY/lib/core/i18n.new" "$COPY/lib/core/i18n.sh"
@@ -323,12 +328,14 @@ assert_ne "" "$mut" "a platform probe that forks uname again must break the chec
 COPY3="$BIN/copy3"
 mkdir -p "$COPY3"
 cp -Rp "$TEST_ROOT/lib" "$TEST_ROOT/locale" "$COPY3/" || _fail "copy failed"
-# ⚠️ 变异的位置用**宽松**的模式找（数字与竖线之间允许空格）：
-#    shfmt 会把 case 的候选写成 "a | b | c"（带空格）⇒ 写死 "0|1|2|…"
-#    的模式在格式化之后就匹配不上了 ⇒ 变异**根本没发生** ⇒ 判据报
-#    「没抓到」，看着像判据坏了，其实是变异死了（2026-11-20 真踩过）。
+# ⚠️ 变异的位置用**宽松**的模式找：
+#    ① shfmt 会把 case 的候选写成 "a | b | c"（竖线两侧带空格）；
+#    ② 分支覆盖那套会**插桩**（在候选后面插 __cov_hit 调用）。
+#    ⇒ 写死 "0|1|2|…" 或写死 ");;" 的模式，在这两种树上都匹配不上
+#    ⇒ 变异**根本没发生** ⇒ 判据报「没抓到」，看着像判据坏了，
+#    其实��变异死了（2026-11-20 在 fmt 与 coverage job 上各踩一次）。
 awk '
-  /9[[:space:]]*\|[[:space:]]*_\)[[:space:]]*;;/ {
+  /9[[:space:]]*\|[[:space:]]*_\)/ {
     print "      a | b | c | d | e | f | g | h | i | j | k | l | m | n | o | p | q | r | s | t | u | v | w | x | y | z | A | B | C | D | E | F | G | H | I | J | K | L | M | N | O | P | Q | R | S | T | U | V | W | X | Y | Z | 0 | 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | _) ;;"
     next
   }
