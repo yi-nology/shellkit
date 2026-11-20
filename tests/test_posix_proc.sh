@@ -80,6 +80,41 @@ for fn in proc_start proc_stop proc_is_running proc_watchdog; do
   fi
 done
 
+# ---- CASE: 语义分叉判据（#171 / #172 / #173 / #174）也过 ----
+#   那是另一份 POSIX sh 判据：POSIX 子集与 bash core 的**语义分叉**
+#   （锁的归属、看门狗、版本比较、重试白名单）。
+SEM="$TEST_ROOT/tests/posix_semantics.sh"
+assert_true test -f "$SEM"
+out=$("$POSIX_SH" "$SEM" 2>&1)
+rc=$?
+if [ "$rc" != "0" ]; then
+  _fail "the POSIX semantics judgment must pass under $POSIX_SH (exit $rc): $out"
+fi
+assert_contains "$out" "ok" "the POSIX semantics judgment must report ok"
+
+if command -v busybox >/dev/null 2>&1; then
+  out=$(busybox ash "$SEM" 2>&1)
+  rc=$?
+  if [ "$rc" != "0" ]; then
+    _fail "the POSIX semantics judgment must pass under busybox ash (exit $rc): $out"
+  fi
+fi
+
+# ---- CASE: 语义分叉判据有承重 —— 把锁的归属守卫改坏，判据必须变红 ----
+#   这一条是「四条修复」的牙齿所在：守卫一旦没了，判据必须红。
+mut2="$TEST_TMP_ROOT/mutant-semantics.sh"
+cp "$POSIX_LIB" "$mut2" || _fail "cannot copy the POSIX subset"
+sed 's/if \[ -n "$_sp_lr_pid" \] && \[ "$_sp_lr_pid" != "$$" \]; then/if false; then/' "$mut2" >"$mut2.new" 2>/dev/null ||
+  _fail "cannot build the mutant"
+mv "$mut2.new" "$mut2" || _fail "cannot replace the mutant"
+if ! grep -q 'if false; then' "$mut2"; then
+  _fail "the ownership-guard mutation did not apply (the shape guard caught it)"
+fi
+out=$(SK_POSIX_LIB="$mut2" "$POSIX_SH" "$SEM" 2>&1)
+rc=$?
+assert_ne "0" "$rc" "the POSIX semantics judgment must go red when the lock ownership guard is broken"
+assert_contains "$out" "FAIL:" "the broken semantics judgment must name the failure"
+
 # ---- CASE: 判据有承重 —— 把库的僵尸判定改坏，判据必须变红 ----
 d=$(tmpdir)
 mutant="$d/mutant.sh"

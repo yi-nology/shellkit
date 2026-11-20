@@ -337,6 +337,15 @@ _yes_note_for() {
     proc_start | proc_stop | proc_is_running | proc_watchdog)
       printf '%s' "POSIX 子集提供同名版本（语义与返回码一致）：没有作业控制 ⇒ 靠 setsid 拿进程组，拿不到时只停主进程；状态从 /proc/<pid>/stat 读，查不到时退化成 kill -0；与主库同名，两份不要同时加载"
       ;;
+    lock_acquire | lock_release)
+      printf '%s' "POSIX 子集提供同名版本：只删**自己持有**的锁（持有者 pid 不是自己就拒绝）；lock_acquire 建不出锁目录时立刻报错返回 3（不重试）；释放后从退出清理栈里摘掉自己那条 —— 否则退出清理会删掉别人后来拿到的锁"
+      ;;
+    retry)
+      printf '%s' "POSIX 子集提供同名版本：带退避（SHELLKIT_RETRY_DELAY / _BACKOFF / _MAX_DELAY），退出码 2 与 3 不重试；SHELLKIT_RETRY_ON 非空时只重试名单里的退出码"
+      ;;
+    ver_cmp | ver_eq | ver_gt | ver_lt)
+      printf '%s' "POSIX 子集提供同名版本：与主库同一口径（认 v 前缀、认预发布后缀、正式版 > 同核心的预发布）；非法版本号返回 2"
+      ;;
   esac
   return 0
 }

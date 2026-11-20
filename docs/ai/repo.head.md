@@ -429,6 +429,25 @@ busybox ash 上，混进一个 `local` 或 `[[ ]]` 不是报错，是**整个脚
       （直接喂 `_sk_posix_proc_state_is_dead "Z+"`），
       否则判据会跟着平台的 ps 写法一起漂 —— 本机绿、CI 红。
 
+32. **bash 扩展在 POSIX 子集里不是「报错」，是**静默失效** ⇒ 设备侧拿到空结果**：
+    POSIX 子集（设备侧那套 busybox ash / dash）只能写 POSIX sh 语法。
+    本轮在语义分叉的修复里用了 `$((10#08))`（去前导零）—— **bash 扩展**，
+    POSIX 没有。
+    ⇒ 在 **macOS 的 bash 上**：一切正常（本机全绿）。
+    ⇒ 在 **dash 上**：`arithmetic expression: expecting EOF: "10#1"`
+      ⇒ 那一行的输出变成**空字符串**，而函数**仍然返回 0**
+      ⇒ 版本比较静默返回空（不是报错！）。
+    ⇒ 这类缺陷**在 macOS 上根本测不出来**（本机默认 `/bin/bash`）——
+      只有把同一份判据真的丢给 dash / busybox ash 跑才会暴露。
+    ⇒ POSIX 子集里禁止用：`10#`、数组、`[[ ]]`、`local`、`printf -v`、
+      `${var^^}`、`mapfile`、`source`（用 `.`）。
+    ⇒ **判据必须点名跑真解释器**：`tests/posix_semantics.sh` 是一份 POSIX sh
+      脚本 ⇒ 同一份在 dash 与 busybox ash 上原样跑（CI 的
+      「posix subset on busybox ash」job）。本机没装 dash/busybox 时，
+      **明说没跑**，不许静默跳过。
+    ⇒ 附带一条：`[ a \< b ]`（字符串比较）在 POSIX 里是**未定义行为**
+      （shellcheck SC3012）⇒ 改用 `sort` 的字典序判定。
+
 ## 本场景的验证
 
     make check
