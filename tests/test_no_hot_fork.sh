@@ -245,6 +245,12 @@ awk '
   { print }
 ' "$COPY/lib/core/i18n.sh" >"$COPY/lib/core/i18n.new" && mv "$COPY/lib/core/i18n.new" "$COPY/lib/core/i18n.sh"
 _assert_mutated "$COPY/lib/core/i18n.sh" "$TEST_ROOT/lib/core/i18n.sh"
+# 变异必须产生**预期的形状**：否则「变异自证」测的是别的东西。
+# 本轮真踩过：mawk 把字符串里的 \$ 原样留着 ⇒ 变异出的是字面量 \$(...)
+# ⇒ bash 根本不执行它 ⇒ 热路径没 fork ⇒ 断言报「没抓到」，看着像判据坏了。
+case "$(cat "$COPY/lib/core/i18n.sh")" in
+  *'return 0 ;;'*) _fail "the mutation must remove the identity fast path" ;;
+esac
 
 run_probe "$BIN/probe_t.sh" "$LOG" "$COPY"
 mut=$(cat "$LOG")
@@ -257,11 +263,15 @@ cp -Rp "$TEST_ROOT/lib" "$TEST_ROOT/locale" "$COPY2/" || _fail "copy failed"
 # ⚠️ 正则里不要用 \{ / \}：mawk（Debian/CI 的 awk）不认它 ⇒ awk 直接报错
 # ⇒ 文件原封不动 ⇒ 变异没发生。改成不含花括号的等价写法。
 awk '
-  /^  case .*OSTYPE/ { print "  case \"\$(uname -s 2>/dev/null)\" in"; next }
-  /^  case .*MACHTYPE/ { print "  case \"\$(uname -m 2>/dev/null)\" in"; next }
+  /^  case .*OSTYPE/ { print "  case \"$(uname -s 2>/dev/null)\" in"; next }
+  /^  case .*MACHTYPE/ { print "  case \"$(uname -m 2>/dev/null)\" in"; next }
   { print }
 ' "$COPY2/lib/core/os.sh" >"$COPY2/lib/core/os.new" && mv "$COPY2/lib/core/os.new" "$COPY2/lib/core/os.sh"
 _assert_mutated "$COPY2/lib/core/os.sh" "$TEST_ROOT/lib/core/os.sh"
+case "$(cat "$COPY2/lib/core/os.sh")" in
+  *'case "$(uname -s 2>/dev/null)" in'*) ;;
+  *) _fail "the os.sh mutation must produce a real command substitution" ;;
+esac
 
 run_probe "$BIN/probe_load.sh" "$LOG" "$COPY2"
 mut=$(cat "$LOG")
@@ -272,11 +282,15 @@ COPY3="$BIN/copy3"
 mkdir -p "$COPY3"
 cp -Rp "$TEST_ROOT/lib" "$TEST_ROOT/locale" "$COPY3/" || _fail "copy failed"
 awk '
-  /^    \*\[!a-z0-9_\]\*\) ;;$/ { print "    *[!a-z0-9_]*) printf '\''%s'\'' \"\$__d\"; return 0 ;;"; next }
-  /^    \*\) printf '\''%s'\'' \"\$__d\"; return 0 ;;$/ { print "    *) ;;"; next }
+  /^    \*\[!a-z0-9_\]\*\) ;;$/ { print "    *[!a-z0-9_]*) printf '\''%s'\'' \"$__d\"; return 0 ;;"; next }
+  /^    \*\) printf '\''%s'\'' \"$__d\"; return 0 ;;$/ { print "    *) ;;"; next }
   { print }
 ' "$COPY3/lib/core/i18n.sh" >"$COPY3/lib/core/i18n.new" && mv "$COPY3/lib/core/i18n.new" "$COPY3/lib/core/i18n.sh"
 _assert_mutated "$COPY3/lib/core/i18n.sh" "$TEST_ROOT/lib/core/i18n.sh"
+case "$(cat "$COPY3/lib/core/i18n.sh")" in
+  *'*[!a-z0-9_]*) printf'*) ;;
+  *) _fail "the mutation must swap the fast path and the fallback" ;;
+esac
 
 compute_expected
 if check_suffix_equivalence "$COPY3"; then

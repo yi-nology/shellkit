@@ -318,7 +318,7 @@ if command -v timeout >/dev/null 2>&1 || command -v gtimeout >/dev/null 2>&1; th
   # ⇒ 文件原封不动 ⇒ 变异没发生 ⇒「变异自证」变成一句空话。
   awk '
     /msg="timed out after .*the default budget/ {
-      print "      msg=\"timed out after \${TEST_TIMEOUT}s\""
+      print "      msg=\"timed out after ${TEST_TIMEOUT}s\""
       next
     }
     /msg="timed out after .*own budget/ { next }
@@ -327,6 +327,12 @@ if command -v timeout >/dev/null 2>&1 || command -v gtimeout >/dev/null 2>&1; th
   if cmp -s "$mut/tests/run.sh" "$slow/tests/run.sh"; then
     _fail "the mutation must actually change the runner"
   fi
+  # 变异必须产生**预期的形状**：mawk 会把字符串里的 \$ 原样留着 ⇒ 变异出的是
+  # 字面量 \${TEST_TIMEOUT} ⇒ bash 不展开 ⇒ 测的就不是「报全局预算」这件事了。
+  case "$(cat "$mut/tests/run.sh")" in
+    *'msg="timed out after ${TEST_TIMEOUT}s"'*) ;;
+    *) _fail "the mutation must report the global budget" ;;
+  esac
   mutout=$(bash "$mut/tests/run.sh" --format tap --filter '*slow_budget*' </dev/null 2>&1) || true
   case "$mutout" in
     *"timed out after 1s"*)
