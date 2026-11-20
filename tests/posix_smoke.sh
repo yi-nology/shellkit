@@ -183,6 +183,26 @@ if [ -f "$PROCDIR/stale.pid" ]; then
   smoke_fail "a stale pid file must be cleaned up"
 fi
 
+# ---- CASE 7b：状态判定按**前缀**认（不依赖各家 ps 怎么写僵尸）----
+# macOS 的 ps 报 "Z"，Linux 与 busybox 报 "Z+" 或 "Z<" ⇒ 精确匹配
+# 只能认中一种 ⇒ 另一种机器上僵尸就被当成活进程（pid 文件永远清不掉）。
+# 这一组断言不依赖平台：直接喂各种写法的状态，看判据认不认。
+for _st in "Z" "Z+" "Z<" "X" "X+"; do
+  if _sk_posix_proc_state_is_dead "$_st"; then
+    :
+  else
+    smoke_fail "the state $_st must be judged as dead"
+  fi
+done
+for _st in "Ss" "S" "R" "I" "Sl" "T"; do
+  if _sk_posix_proc_state_is_dead "$_st"; then
+    smoke_fail "the state $_st must not be judged as dead"
+  fi
+done
+if _sk_posix_proc_state_is_dead ""; then
+  smoke_fail "an empty state must not be judged as dead"
+fi
+
 # ---- CASE 8：真僵尸（进程已退出但还占着进程表）⇒ 判成「没在跑」----
 # 这是 issue 点名的负对照：kill -0 对僵尸仍然成功 ⇒ 只用 kill -0 判活
 # ⇒ 僵尸 pid 文件永远清不掉、看门狗永远以为进程还在。
@@ -375,8 +395,8 @@ _group_verdict() {
 
 # M1：去掉「僵尸算死」这一支 ⇒ 僵尸会被判成活着
 M1="$TMP/mutant1.sh"
-if _mutate "$LIB" "$M1" 's/Z | X) return 0 ;;/Z | X) return 1 ;;/'; then
-  if ! grep -q 'Z | X) return 1 ;;' "$M1"; then
+if _mutate "$LIB" "$M1" 's/Z\* | X\*) return 0 ;;/Z* | X*) return 1 ;;/'; then
+  if ! grep -q 'Z\* | X\*) return 1 ;;' "$M1"; then
     smoke_fail "M1: the mutation did not apply (the shape guard caught it)"
   elif [ "$(_running_verdict "$M1")" != "running" ]; then
     smoke_fail "M1: a zombie must be judged as running once the dead-state branch is broken"

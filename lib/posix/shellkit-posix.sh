@@ -595,7 +595,7 @@ _sk_posix_proc_state() {
 # 看门狗永远以为进程还在（手写看门狗最常见的坑）。
 _sk_posix_proc_state_is_dead() {
   case "${1:-}" in
-    Z | X) return 0 ;;
+    Z* | X*) return 0 ;;
   esac
   return 1
 }
@@ -697,15 +697,23 @@ _sk_posix_proc_group_busy() {
 
 # _sk_posix_kill_group SIGNAL PGID —— 整组停
 #
-# 两种写法都试（实测）：带 -- 的 bash 认、busybox/dash 报 "invalid number"；
-# 不带 -- 的 busybox/dash 认、bash 把 -PGID 当信号名 ⇒ 两种都试，
-# 都不成就返回 1（调用方退化成只杀主进程）。
+# ⚠ 信号名**必须带前导 -**（kill -TERM，不是 kill TERM）：
+#   busybox 的 kill 认不带横杠的信号名（把 "TERM" 当信号），
+#   而 dash 与 bash 会把它当成**一个 pid** ⇒ "TERM: Illegal number"
+#   ⇒ 整组杀根本没发生 ⇒ 进程停不掉（退出码 3）。
+#   同一份代码在三种 shell 上三种结果，而且**只在有 setsid 的机器上**
+#   才走到这条路（macOS 没有 setsid ⇒ 走「只停主进程」的降级 ⇒ 看不出来）。
+#
+# 两种 pid 写法都试（实测）：
+#   kill -TERM -- -1234  —— bash 认；busybox 报 "invalid number '--'"，
+#                           dash 报 "Illegal number: -"
+#   kill -TERM -1234     —— busybox / dash / bash 都认（负 pid = 进程组）
 _sk_posix_kill_group() {
   _sp_kg_sig="${1:-TERM}"
   _sp_kg_pgid="${2:-}"
   [ -n "$_sp_kg_pgid" ] || return 1
-  kill "$_sp_kg_sig" -- "-$_sp_kg_pgid" 2>/dev/null && return 0
-  kill "$_sp_kg_sig" "-$_sp_kg_pgid" 2>/dev/null && return 0
+  kill "-$_sp_kg_sig" -- "-$_sp_kg_pgid" 2>/dev/null && return 0
+  kill "-$_sp_kg_sig" "-$_sp_kg_pgid" 2>/dev/null && return 0
   return 1
 }
 

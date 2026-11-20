@@ -111,6 +111,13 @@ proc_watchdog --interval 5 --max-backoff 60 --max-restarts 5 pigeonbox /opt/pige
 2. **busybox 的 `ps` 不认 `-p`**（`invalid option -- 'p'`），
    也不认 `stat=` 的表头抑制 ⇒ 状态与进程组改读 `/proc/<pid>/stat`，
    `ps` 只当兜底。
+4. **信号名必须带前导 `-`**（`kill -TERM`，不是 `kill TERM`）：
+   busybox 的 kill 认不带横杠的信号名，而 dash 与 bash 会把 `TERM` 当成
+   **一个 pid** ⇒ 整组杀根本没发生 ⇒ 进程停不掉（退出码 3）。
+   ⚠ 这条错**只在有 setsid 的机器上才走到**（macOS 没有 setsid ⇒
+   走「只停主进程」的降级 ⇒ 本机永远是绿的）⇒ 判据要在目标环境里跑。
+5. **僵尸状态按前缀认**（`Z*`）：Linux 常报 `Z`、macOS/BSD 常报 `Z+` ⇒
+   精确匹配只能认中一种 ⇒ 另一种机器上僵尸被当成活进程。
 3. **`setsid` 在「已经是组长」时会 fork** ⇒ 父进程拿到的 `$!`
    可能是 setsid 的 pid 而不是真正那条命令的 pid ⇒
    pid 文件由**子进程自己写**（`exec` 不改 pid ⇒ 写的必然是它）。
