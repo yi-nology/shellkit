@@ -63,7 +63,8 @@
 
     make check     # syntax + test + lint + module-order-check + check-exitcode-docs +
                   # local-names-check + ident-boundary-check + module-count-check +
-                  # pipe-safety-check + check-tree-clean + dup-functions-check +
+                  # pipe-safety-check + assert-usage-check +
+                  # check-tree-clean + dup-functions-check +
                   # security-check +
                   # api-baseline-check + api-freeze-check + compatibility-check +
                   # docs-check + versions-check + check-docs + posix-check +
@@ -80,6 +81,10 @@
 内容会静默写丢（见下面第 4 条）。
 `pipe-safety-check` 拦的是「管道早退」：`grep -q` / `head` 命中即退，上游被 SIGPIPE 打死，
 调用方开了 `pipefail` 时整条管道误判失败（见下面第 5 条）。
+`assert-usage-check` 拦的是「断言把提示文案当成被测命令的参数」：
+`assert_true` / `assert_false` 把**全部**参数交给命令，多一个字符串就多一个参数
+⇒ `test` 报「binary operator expected」并退出 2 ⇒ `assert_false` 看到「失败」
+就通过 ⇒ 这条断言从无判据能力（见下面第 28 条）。
 `dup-functions-check` 拦的是「同名函数定义了两遍」：bash 后定义覆盖先定义，
 先写的那份悄悄失效 —— 不报错、不崩，只是你以为在跑 A、其实在跑 B。
 `compatibility-check` 拦的是「承诺文档说了却没兑现」：`docs/COMPATIBILITY.md` 声称
@@ -370,6 +375,12 @@ busybox ash 上，混进一个 `local` 或 `[[ ]]` 不是报错，是**整个脚
     ⇒ 回归：`tests/test_scaffold.sh`（那条「被拒的工程不许被创建」）。
     ⚠️ 更隐蔽的一层：这类假绿**不会让 CI 红**，只在日志里留一行 test 的报错
       ⇒ 要**扫**全仓的用法，而不是只修被抓到的那一处。
+    ⇒ 现在有门禁兜住：`tools/check_assert_usage.sh`（`make assert-usage-check`）
+      扫全仓 `tests/` 与 `examples/`，按 test/[ 的**参数个数与位置**判定
+      （引号感知切分 —— 说明文案里通常带空格，按空白切会把一条参数
+      切成好几段，参数个数就数错了，判据会失灵还不报错）。
+      门禁自己的自测：`tests/test_assert_usage.sh`（真树合格 / 假树坏用法
+      必被点名 / 合法人用不误伤 / 变异自证）。
 
 ## 本场景的验证
 
