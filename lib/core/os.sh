@@ -1,15 +1,23 @@
 #!/usr/bin/env bash
 # 平台与系统探测。所有 Darwin / Linux 差异只在这里出现。
 
+# 优先用 bash 自带的 $OSTYPE / $MACHTYPE（零 fork），拿不到再退回 uname。
+# 为什么（2026-11-20 实测）：这段在**每次装载库**时都跑一遍，而 macOS 上进程
+# 创建比 Linux 贵 3~4 倍（bash -c true：macOS ≈10ms/次 vs Linux ≈2~3ms/次）
+# ⇒ 每个脚本开头白白多花 20ms。
+# 口径不变：$OSTYPE 是 "linux-gnu" / "darwin23.0.0"，$MACHTYPE 是
+# "x86_64-pc-linux-gnu" / "arm64-apple-darwin23.0.0" ⇒ 与 uname 的答案一致。
+# 分支数与改前**逐条相同**（case 的臂数与顺序都没变）—— 分支覆盖基线按
+# 「文件:函数:臂序号」记账，改臂的写法会让基线错位。
 _sk_os_detect() {
-  case "$(uname -s 2>/dev/null)" in
-    Linux*) SK_OS=linux ;;
-    Darwin*) SK_OS=darwin ;;
+  case "${OSTYPE:-$(uname -s 2>/dev/null)}" in
+    linux* | Linux*) SK_OS=linux ;;
+    darwin* | Darwin*) SK_OS=darwin ;;
     *) SK_OS=other ;;
   esac
-  case "$(uname -m 2>/dev/null)" in
-    arm64 | aarch64) SK_ARCH=aarch64 ;;
-    x86_64 | amd64) SK_ARCH=x86_64 ;;
+  case "${MACHTYPE:-$(uname -m 2>/dev/null)}" in
+    arm64* | aarch64*) SK_ARCH=aarch64 ;;
+    x86_64* | amd64*) SK_ARCH=x86_64 ;;
     *) SK_ARCH=other ;;
   esac
 }
