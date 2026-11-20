@@ -221,11 +221,20 @@ check_suffix_equivalence() {
 # 这条没跑，不许静默跳过。
 utf8_locale=""
 for cand in en_US.UTF-8 en_US.utf8 C.UTF-8 C.utf8; do
-  if LC_ALL="$cand" locale charmap 2>/dev/null | grep -qiE 'utf-?8'; then
-    utf8_locale=$cand
-    break
-  fi
+  # ⚠️ 不许写 "locale charmap | grep -q ..."：grep -q 命中即退 ⇒ 上游 locale
+  #    被 SIGPIPE 打死（141）⇒ 调用方开了 pipefail 时整条管道判失败 ⇒
+  #    探针**永远找不到** UTF-8 locale ⇒ 这条排序规则判据被静默跳过（假绿）。
+  #    这个坑真的踩了：2026-11-20 的 CI 上 Linux 侧探针失灵，靠 pipe-safety
+  #    门禁点名才发现。改成纯 bash：取输出再判断，不起管道。
+  __charmap=$(LC_ALL="$cand" locale charmap 2>/dev/null) || continue
+  case "$__charmap" in
+    *UTF-8* | *utf8* | *UTF8*)
+      utf8_locale=$cand
+      break
+      ;;
+  esac
 done
+unset __charmap
 if [ -z "$utf8_locale" ]; then
   printf 'SKIP: no UTF-8 collation locale found - the collation-sensitive check did NOT run\n' >&2
 else
