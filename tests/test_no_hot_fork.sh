@@ -323,16 +323,20 @@ assert_ne "" "$mut" "a platform probe that forks uname again must break the chec
 COPY3="$BIN/copy3"
 mkdir -p "$COPY3"
 cp -Rp "$TEST_ROOT/lib" "$TEST_ROOT/locale" "$COPY3/" || _fail "copy failed"
+# ⚠️ 变异的位置用**宽松**的模式找（数字与竖线之间允许空格）：
+#    shfmt 会把 case 的候选写成 "a | b | c"（带空格）⇒ 写死 "0|1|2|…"
+#    的模式在格式化之后就匹配不上了 ⇒ 变异**根本没发生** ⇒ 判据报
+#    「没抓到」，看着像判据坏了，其实是变异死了（2026-11-20 真踩过）。
 awk '
-  /0\|1\|2\|3\|4\|5\|6\|7\|8\|9\|_\) ;;/ {
-    print "      a|b|c|d|e|f|g|h|i|j|k|l|m|n|o|p|q|r|s|t|u|v|w|x|y|z|A|B|C|D|E|F|G|H|I|J|K|L|M|N|O|P|Q|R|S|T|U|V|W|X|Y|Z|0|1|2|3|4|5|6|7|8|9|_) ;;"
+  /9[[:space:]]*\|[[:space:]]*_\)[[:space:]]*;;/ {
+    print "      a | b | c | d | e | f | g | h | i | j | k | l | m | n | o | p | q | r | s | t | u | v | w | x | y | z | A | B | C | D | E | F | G | H | I | J | K | L | M | N | O | P | Q | R | S | T | U | V | W | X | Y | Z | 0 | 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | _) ;;"
     next
   }
   { print }
 ' "$COPY3/lib/core/i18n.sh" >"$COPY3/lib/core/i18n.new" && mv "$COPY3/lib/core/i18n.new" "$COPY3/lib/core/i18n.sh"
 _assert_mutated "$COPY3/lib/core/i18n.sh" "$TEST_ROOT/lib/core/i18n.sh"
 case "$(cat "$COPY3/lib/core/i18n.sh")" in
-  *'z|A|B|C|'*) ;;
+  *'A | B | C |'*) ;;
   *) _fail "the mutation must let the identity fast path accept uppercase letters" ;;
 esac
 

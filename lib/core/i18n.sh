@@ -85,13 +85,14 @@ _sk_i18n_fn_suffix() {
   while [ -n "$__rest" ]; do
     __ch=${__rest%"${__rest#?}"}
     case "$__ch" in
-      a|b|c|d|e|f|g|h|i|j|k|l|m|n|o|p|q|r|s|t|u|v|w|x|y|z|0|1|2|3|4|5|6|7|8|9|_) ;;
+      a | b | c | d | e | f | g | h | i | j | k | l | m | n | o | p | q | r | s | t | u | v | w | x | y | z | 0 | 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | _) ;;
       *) break ;;
     esac
     __rest=${__rest#?}
   done
   if [ -z "$__rest" ]; then
-    printf '%s' "$__d"; return 0
+    printf '%s' "$__d"
+    return 0
   fi
   printf '%s' "$__d" | tr '[:upper:]' '[:lower:]' | tr -c 'a-z0-9_' '_'
 }
