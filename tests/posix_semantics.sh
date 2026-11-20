@@ -56,7 +56,11 @@ mut_at() {
   _ma_pat=$2
   _ma_rep=$3
   _ma_out=$4
-  _ma_n=$(grep -nF "$_ma_pat" "$_ma_file" | head -n 1 | cut -d: -f1)
+  # 不用 `grep -n ... | head -n 1`：head 命中即退 ⇒ 上游 grep 被 SIGPIPE
+  # 打死（141）⇒ 调用方开了 pipefail 时整条管道误判失败（本仓库第 5 号坑）。
+  # 改成读全文再取第一行。
+  _ma_n=$(grep -nF "$_ma_pat" "$_ma_file" 2>/dev/null || true)
+  _ma_n=${_ma_n%%:*}
   if [ -z "$_ma_n" ]; then
     return 1
   fi
