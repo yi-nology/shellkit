@@ -386,7 +386,7 @@ declared=$(awk '
     seen[FILENAME] = 1
   }
 ' "$TEST_ROOT"/tests/test_*.sh | LC_ALL=C sort)
-expected_budgets="test_api_stability.sh 360
+ledger="test_api_stability.sh 360
 test_coverage_branch.sh 900
 test_fault.sh 300
 test_fault_matrix.sh 900
@@ -395,8 +395,67 @@ test_install_lifecycle.sh 900
 test_meta_gates.sh 900
 test_mutation.sh 900
 test_upgrade_crash.sh 900"
-assert_eq "$expected_budgets" "$declared" \
-  "every file with its own timeout budget must be registered in the list above"
+
+# ledger_has ENTRY —— 台账里有没有这一条（整行精确匹配，不是子串）
+ledger_has() {
+  local entry=$1 line
+  while IFS= read -r line; do
+    if [ "$line" = "$entry" ]; then
+      return 0
+    fi
+  done <<EOF
+$ledger
+EOF
+  return 1
+}
+
+# ① 声明了预算的文件，必须登记在册
+while IFS= read -r entry; do
+  [ -n "$entry" ] || continue
+  if ! ledger_has "$entry"; then
+    _fail "every file with its own timeout budget must be registered in the ledger: $entry"
+  fi
+done <<EOF
+$declared
+EOF
+
+# ② 台账里的文件若**在树里**，就必须真的声明了这个预算（不许台账过期）
+# ③ 台账里的文件若**不在树里**（coverage 工具挪走了）——不追究，但要**说出来**
+#
+# ③ 是为什么不能直接比两串：tools/coverage.sh 会把一批重文件挪出树
+# （COV_EXCLUDES）⇒ coverage 那条 job 上「树里的文件」比本地少
+# ⇒ 拿「树外的文件」去判「漏登记」就是**假红**
+# （2026-11-20 CI 实测：test_api_stability.sh 与 test_coverage_branch.sh
+# 被挪走 ⇒ 台账 9 条 vs 扫到 7 条 ⇒ coverage job 整条红）。
+# 但静默放过也不行 —— 台账要是能随便漂，这条判据就白写了 ⇒ 被挪走的要打印。
+absent=""
+while IFS= read -r entry; do
+  [ -n "$entry" ] || continue
+  set -- $entry
+  name=$1
+  if [ ! -f "$TEST_ROOT/tests/$name" ]; then
+    absent="$absent$entry "
+    continue
+  fi
+  found=""
+  while IFS= read -r d2; do
+    if [ "$d2" = "$entry" ]; then
+      found=1
+      break
+    fi
+  done <<EOF
+$declared
+EOF
+  if [ -z "$found" ]; then
+    _fail "the ledger lists a file that no longer declares that budget: $entry"
+  fi
+done <<EOF
+$ledger
+EOF
+if [ -n "$absent" ]; then
+  printf 'note: these ledger entries are not in this tree (moved out by the coverage tool): %s\n' \
+    "$absent" >&2
+fi
 
 too_big=$(printf '%s\n' "$declared" | awk '$2 > 1800 { print }')
 assert_eq "" "$too_big" "no test file may declare a budget above 1800s"

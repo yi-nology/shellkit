@@ -113,7 +113,7 @@ if [ -n "$first_wrap" ]; then
   # 是新值了）⇒ 包装器会把自己当成真命令 ⇒ 无限递归 ⇒ 判据挂死。
   real_path=$PATH
   (
-    SPAWN_LOG="$LOG" SPAWN_REAL_PATH="$real_path" PATH="$BIN:$PATH" \
+    SPAWN_LOG="$LOG" SPAWN_REAL_PATH="$real_path" PATH="$BIN:$real_path" \
       "$first_wrap" </dev/null >/dev/null 2>&1
   ) || true
   assert_contains "$(cat "$LOG")" "$first_wrap" \
@@ -127,8 +127,12 @@ fi
 # run_probe PROBE LOG [LIBROOT] —— 在计数包装器下跑探针
 run_probe() {
   local probe=$1 out=$2 libroot=${3:-$TEST_ROOT}
+  # ⚠️ PATH 的展开必须**先**取出来：同一个赋值列表里既给 PATH 赋值又展开
+  #    $PATH，shellcheck 会报 SC2097/SC2098（这条赋值只对 fork 出来的进程可见）
+  #    —— 而这里的 PATH 恰恰就是要传给子进程的，取错了判据会空转。
+  local real_path=$PATH
   : >"$out"
-  SPAWN_LOG="$out" SPAWN_REAL_PATH="$PATH" PATH="$BIN:$PATH" SK_LIB_ROOT="$libroot" \
+  SPAWN_LOG="$out" SPAWN_REAL_PATH="$real_path" PATH="$BIN:$real_path" SK_LIB_ROOT="$libroot" \
     /bin/bash "$probe" </dev/null >/dev/null 2>&1
 }
 
@@ -207,15 +211,37 @@ check_suffix_equivalence() {
   )
 }
 
-for loc in C __ambient__; do
-  if [ "$loc" = "C" ]; then
-    export LC_ALL=C
-  else
+# ── locale 必须**点名**跑，不能「碰运气」 ─────────────────────────────────
+# 这条判据的要害在**排序规则**：[a-z] 这种范围在 en_US.UTF-8 下连大写字母
+# 都算 ⇒ 快路会误判成「域名已经规范」⇒ 输出与改前的 tr 不一致
+# （2026-11-20 macOS CI 实测：/bin/bash 3.2 + en_US.UTF-8 ⇒ 大写域名原样返回）。
+# 若当前机器的 locale 恰好是 C ⇒ 同一个缺陷**完全测不出来** ⇒ 红灯只在
+# 「某些机器」上亮 ⇒ 随机红灯很快被忽略，真红灯也看不见了。
+# 所以：显式找一个 UTF-8 排序规则的 locale 并点名跑一遍；找不到就**明说**
+# 这条没跑，不许静默跳过。
+utf8_locale=""
+for cand in en_US.UTF-8 en_US.utf8 C.UTF-8 C.utf8; do
+  if LC_ALL="$cand" locale charmap 2>/dev/null | grep -qiE 'utf-?8'; then
+    utf8_locale=$cand
+    break
+  fi
+done
+if [ -z "$utf8_locale" ]; then
+  printf 'SKIP: no UTF-8 collation locale found - the collation-sensitive check did NOT run\n' >&2
+else
+  printf 'note: the collation-sensitive check runs under LC_ALL=%s\n' "$utf8_locale" >&2
+fi
+
+for loc in C "${utf8_locale:+$utf8_locale}" __ambient__; do
+  [ -n "$loc" ] || continue
+  if [ "$loc" = "__ambient__" ]; then
     unset LC_ALL
+  else
+    export LC_ALL="$loc"
   fi
   compute_expected
   if ! check_suffix_equivalence "$TEST_ROOT"; then
-    _fail "the domain suffix must stay byte-identical to the previous tr-based implementation"
+    _fail "the domain suffix must stay byte-identical to the previous tr-based implementation (locale=$loc)"
   fi
 done
 unset LC_ALL
@@ -239,8 +265,8 @@ COPY="$BIN/copy1"
 mkdir -p "$COPY"
 cp -Rp "$TEST_ROOT/lib" "$TEST_ROOT/locale" "$COPY/" || _fail "copy failed"
 awk '
-  /^  case "\$__d" in$/ { skip = 1; next }
-  skip && /^  esac$/ { skip = 0; next }
+  /^  if \[ -z "\$__rest" \]; then$/ { skip = 1; next }
+  skip && /^  fi$/ { skip = 0; next }
   skip { next }
   { print }
 ' "$COPY/lib/core/i18n.sh" >"$COPY/lib/core/i18n.new" && mv "$COPY/lib/core/i18n.new" "$COPY/lib/core/i18n.sh"
@@ -249,7 +275,7 @@ _assert_mutated "$COPY/lib/core/i18n.sh" "$TEST_ROOT/lib/core/i18n.sh"
 # 本轮真踩过：mawk 把字符串里的 \$ 原样留着 ⇒ 变异出的是字面量 \$(...)
 # ⇒ bash 根本不执行它 ⇒ 热路径没 fork ⇒ 断言报「没抓到」，看着像判据坏了。
 case "$(cat "$COPY/lib/core/i18n.sh")" in
-  *'return 0 ;;'*) _fail "the mutation must remove the identity fast path" ;;
+  *'if [ -z "$__rest" ]'*) _fail "the mutation must remove the identity fast path" ;;
 esac
 
 run_probe "$BIN/probe_t.sh" "$LOG" "$COPY"
@@ -277,24 +303,33 @@ run_probe "$BIN/probe_load.sh" "$LOG" "$COPY2"
 mut=$(cat "$LOG")
 assert_ne "" "$mut" "a platform probe that forks uname again must break the check"
 
-# ── 变异自证三：把快路与慢路对调 ⇒ 差分必须报不一致 ───────────────────
+# ── 变异自证三：让快路**接受大写** ⇒ 差分必须报不一致 ──────────────────
+# 这条变异就是 2026-11-20 macOS CI 撞上的那个真缺陷：快路的判定用
+# [a-z] 这种**范围** ⇒ 在 en_US.UTF-8 的排序规则下大写字母也算数
+# ⇒ 大写域名被误判成「已经规范」⇒ 原样返回 ⇒ 与改前的 tr 不一致。
+#
+# 为什么这条比「把快路与慢路对调」更有意义：对调只在**排序规则宽松**的
+# locale 下才露馅；而「大写被接受」在**任何 locale** 下都会让输出与
+# 改前不一致 ⇒ 这条差分判据在任何机器上都有牙齿。
 COPY3="$BIN/copy3"
 mkdir -p "$COPY3"
 cp -Rp "$TEST_ROOT/lib" "$TEST_ROOT/locale" "$COPY3/" || _fail "copy failed"
 awk '
-  /^    \*\[!a-z0-9_\]\*\) ;;$/ { print "    *[!a-z0-9_]*) printf '\''%s'\'' \"$__d\"; return 0 ;;"; next }
-  /^    \*\) printf '\''%s'\'' \"$__d\"; return 0 ;;$/ { print "    *) ;;"; next }
+  /0\|1\|2\|3\|4\|5\|6\|7\|8\|9\|_\) ;;/ {
+    print "      a|b|c|d|e|f|g|h|i|j|k|l|m|n|o|p|q|r|s|t|u|v|w|x|y|z|A|B|C|D|E|F|G|H|I|J|K|L|M|N|O|P|Q|R|S|T|U|V|W|X|Y|Z|0|1|2|3|4|5|6|7|8|9|_) ;;"
+    next
+  }
   { print }
 ' "$COPY3/lib/core/i18n.sh" >"$COPY3/lib/core/i18n.new" && mv "$COPY3/lib/core/i18n.new" "$COPY3/lib/core/i18n.sh"
 _assert_mutated "$COPY3/lib/core/i18n.sh" "$TEST_ROOT/lib/core/i18n.sh"
 case "$(cat "$COPY3/lib/core/i18n.sh")" in
-  *'*[!a-z0-9_]*) printf'*) ;;
-  *) _fail "the mutation must swap the fast path and the fallback" ;;
+  *'z|A|B|C|'*) ;;
+  *) _fail "the mutation must let the identity fast path accept uppercase letters" ;;
 esac
 
 compute_expected
 if check_suffix_equivalence "$COPY3"; then
-  _fail "the differential check must catch a broken identity fast path"
+  _fail "the differential check must catch a fast path that accepts uppercase letters"
 fi
 
 exit 0
