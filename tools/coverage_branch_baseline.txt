@@ -328,9 +328,9 @@ lib/core/i18n.sh:_sk_i18n_gettext:5
 lib/core/i18n.sh:_sk_i18n_gettext:6
 lib/core/i18n.sh:_sk_i18n_lang:1
 lib/core/i18n.sh:_sk_i18n_lang:2
-lib/core/i18n.sh:_sk_i18n_load_tables:1
 lib/core/i18n.sh:_sk_i18n_load_tables:4
 lib/core/i18n.sh:_sk_i18n_load_tables:6
+lib/core/i18n.sh:_sk_i18n_load_tables:7
 lib/core/i18n.sh:_tf:1
 lib/core/i18n.sh:_tf:2
 lib/core/lock.sh:_sk_lock_cleanup_all:1
@@ -394,7 +394,9 @@ lib/core/net.sh:net_verify:2
 lib/core/net.sh:net_wait_http:2
 lib/core/net.sh:net_wait_http:3
 lib/core/os.sh:_sk_os_detect:2
+lib/core/os.sh:_sk_os_detect:3
 lib/core/os.sh:_sk_os_detect:4
+lib/core/os.sh:_sk_os_detect:6
 lib/core/os.sh:_sk_os_pkg_family:1
 lib/core/os.sh:_sk_os_pkg_family:3
 lib/core/os.sh:_sk_os_pkg_family:4

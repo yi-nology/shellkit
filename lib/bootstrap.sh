@@ -13,7 +13,20 @@
 #   SHELLKIT_MODULES="log fs"   只加载这两个模块和它们的传递依赖
 #   i18n 恒定加载（_t 是公共依赖）
 
-SHELLKIT_HOME="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." &>/dev/null && pwd)"
+# 自己的目录用参数展开取，不 fork dirname（2026-11-20）：
+# 装载库是每个脚本的第一件事，而 macOS 上进程创建比 Linux 贵 3~4 倍
+# （bash -c true：macOS ≈10ms/次 vs Linux ≈2~3ms/次）。
+# 三步纯展开覆盖 dirname 的全部情形，且**不引入任何分支**（分支覆盖基线
+# 按「文件:函数:臂序号」记账，加臂会让基线错位）：
+#   %/*      去掉最后一段          "/a/b/bootstrap.sh" → "/a/b"
+#   :-/      空 ⇒ 根目录下的文件    "/bootstrap.sh"     → "/"
+#   %"$src"  没去掉（路径里没斜杠）⇒ 目录是当前目录   "bootstrap.sh" → ""
+__sk_src=${BASH_SOURCE[0]}
+__sk_dir=${__sk_src%/*}
+__sk_dir=${__sk_dir:-/}
+__sk_dir=${__sk_dir%"$__sk_src"}
+SHELLKIT_HOME="$(cd "${__sk_dir:-.}/.." &>/dev/null && pwd)"
+unset __sk_src __sk_dir
 export SHELLKIT_HOME
 
 SHELLKIT_DEBUG="${SHELLKIT_DEBUG:-0}"
@@ -39,7 +52,9 @@ export TEXTDOMAIN="${TEXTDOMAIN:-shellkit}"
 export TEXTDOMAINDIR="${TEXTDOMAINDIR:-$SHELLKIT_HOME/locale}"
 
 if [ -r "$SHELLKIT_HOME/VERSION" ]; then
-  SK_VERSION=$(tr -d '[:space:]' <"$SHELLKIT_HOME/VERSION")
+  # 不 fork tr：$(<file) 是 bash 的内建读法（不起子 shell），空白用展开去掉
+  SK_VERSION=$(<"$SHELLKIT_HOME/VERSION")
+  SK_VERSION=${SK_VERSION//[[:space:]]/}
 else
   SK_VERSION="dev"
 fi

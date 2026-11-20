@@ -18,6 +18,11 @@
 #
 # 断言纪律：断完整文案不断单词；临时目录名只用编号；SHELLKIT_LANG=en 由
 # test_helper.sh 统一设置。
+#
+# TEST_TIMEOUT: 900 —— 这个文件要造几十棵变异树、每棵都跑一遍守卫套件：
+# 实测 macOS 上 155 秒（Linux 20 秒）⇒ 慢机器上直接撞全局 300 秒上限 ⇒
+# 「机器慢」被误读成「测试坏了」。只放宽这一个文件（全局一改，所有文件的
+# 卡死检测都跟着变慢）。
 set -u
 . "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/test_helper.sh"
 

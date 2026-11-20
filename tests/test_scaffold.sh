@@ -264,4 +264,14 @@ out=$("$TEST_ROOT/shellkit" new "$p8" --cmd run --set "DESCRIPTION=第一行
 第二行" --yes 2>&1) || rc=$?
 assert_ne "0" "$rc" "new must fail when a template variable value contains a newline"
 assert_contains "$out" "newline" "the failure must say what is wrong"
-assert_false test -e "$p8" "the rejected project must not be created at all"
+# ⚠️ 不能写成 assert_false test -e "$p8" "说明文案"：
+#    assert_false 把**全部**参数交给被测命令 ⇒ 实际执行的是
+#    `test -e <路径> "说明文案"` ⇒ test 报
+#    「binary operator expected」并退出 2（非 0）⇒ assert_false 看到「失败」
+#    就**通过**了 ⇒ 这条断言从头到尾没有判据能力（假绿）：
+#    工程目录真的被创建出来时，它照样绿。
+#    （这条是 2026-11-20 在 CI 日志里顺出来的：Linux 上那行 test 的报错
+#    一直打在日志里，而用例一直是绿的。）
+if [ -e "$p8" ]; then
+  _fail "the rejected project must not be created at all: $p8"
+fi

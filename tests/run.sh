@@ -219,10 +219,19 @@ _run_one() {
 _run_serial_plain() {
   local test_file
   local passed=0
+  local rc=0
   for test_file in ${TEST_FILES[@]+"${TEST_FILES[@]}"}; do
     printf '\n==> %s\n' "${test_file##*/}"
-    if ! _run_one "$test_file"; then
+    rc=0
+    _run_one "$test_file" || rc=$?
+    if [ "$rc" -ne 0 ]; then
       printf '\nFAILED: %s\n' "${test_file##*/}" >&2
+      # 超时是唯一「屏幕上什么也看不出来」的失败（测试文件自己没来得及说话）
+      # ⇒ 补一句原因和**这个文件自己的**预算，别让人去猜是不是机器慢。
+      if [ "$rc" -eq 124 ] && [ -n "$TIMEOUT_BIN" ]; then
+        printf '  reason: timed out after %ss (budget for this file)\n' \
+          "$(_file_timeout "$test_file")" >&2
+      fi
       exit 1
     fi
     passed=$((passed + 1))
@@ -354,14 +363,27 @@ _elapsed_of() {
   fi
 }
 
+# _failure_message IDX RC [FILE] —— 把退出码翻译成一句人话
+#
+# 超时文案必须报**这个文件自己的**预算，不是全局那个 300：
+# 文件头里写了「# TEST_TIMEOUT: 900」的文件，撞的是它自己的 900 秒。
+# 报成 300 会把人引到「全局上限太紧，去改全局」—— 而全局一改，
+# 所有文件的卡死检测都跟着变慢（这正是「只放宽那一个文件」要避免的）。
 _failure_message() {
   local idx=$1
   local rc=$2
+  local file=${3:-}
   local err="$WORK/$idx.err"
   local msg=""
   local line
+  local budget
   if [ "$rc" -eq 124 ] && [ -n "$TIMEOUT_BIN" ]; then
-    msg="timed out after ${TEST_TIMEOUT}s"
+    budget=$(_file_timeout "$file")
+    if [ "$budget" = "$TEST_TIMEOUT" ]; then
+      msg="timed out after ${budget}s (the default budget)"
+    else
+      msg="timed out after ${budget}s (this file's own budget)"
+    fi
   fi
   if [ -f "$err" ]; then
     line=$(grep '^FAIL: ' "$err" 2>/dev/null | tail -1 || true)
@@ -482,7 +504,7 @@ _collect_cases() {
     if [ "$rc" -eq 0 ]; then
       printf 'ok\t%s\t%s\t%s\t\n' "$base" "$stem" "$class" >>"$rec"
     else
-      msg=$(_failure_message "$idx" "$rc")
+      msg=$(_failure_message "$idx" "$rc" "$file")
       printf 'notok\t%s\t%s\t%s\t%s\n' "$base" "$stem" "$class" "$msg" >>"$rec"
     fi
     return 0
@@ -512,7 +534,7 @@ _collect_cases() {
     fi
   done
 
-  msg=$(_failure_message "$idx" "$rc")
+  msg=$(_failure_message "$idx" "$rc" "$file")
   _diagnose_trace "$file" "$idx" >/dev/null
   local analysis maxline maxcase
   analysis=$(_analyze_trace "$base" "$WORK/$idx.trace" "$marker_lines")
