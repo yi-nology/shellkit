@@ -84,11 +84,13 @@ done
 d=$(tmpdir)
 mutant="$d/mutant.sh"
 cp "$POSIX_LIB" "$mutant" || _fail "cannot copy the POSIX subset"
-sed 's/Z | X) return 0 ;;/Z | X) return 1 ;;/' "$mutant" >"$mutant.new" 2>/dev/null ||
+# 变异点跟着库里的写法走（库把状态判定改成前缀匹配 `Z* | X*` 了 ⇒
+# 这里的模式必须同步，否则变异匹配不上、形状守卫直接报「变异没生效」
+sed 's/Z\* | X\*) return 0 ;;/Z* | X*) return 1 ;;/' "$mutant" >"$mutant.new" 2>/dev/null ||
   _fail "cannot build the mutant"
 mv "$mutant.new" "$mutant" || _fail "cannot replace the mutant"
 # 形状守卫：变异必须真的落到源码上（否则这一节是假通过）
-if ! grep -q 'Z | X) return 1 ;;' "$mutant"; then
+if ! grep -q 'Z\* | X\*) return 1 ;;' "$mutant"; then
   _fail "the mutation did not apply (the shape guard caught it)"
 fi
 out=$(SK_POSIX_LIB="$mutant" "$POSIX_SH" "$SMOKE" 2>&1)
