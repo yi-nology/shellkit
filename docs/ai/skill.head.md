@@ -14,6 +14,7 @@ shellkit 是 Bash 库 + 脚手架。用它，你不用再手写日志、配置�
 
 | 你要什么 | 去哪 |
 | --- | --- |
+| 这个能力库里**有没有**某个功能 | `references/capabilities.md`（全部公开函数，一行一个） |
 | 某个函数的签名与退出码 | `references/reference.md` |
 | 一段能直接抄的场景代码 | `references/cookbook.md` |
 | 这个写法在 bash 3.2 上会不会崩 | `references/bash32.md` |

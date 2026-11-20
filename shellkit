@@ -3208,7 +3208,7 @@ _sk_docs_coverage() {
 
 # _sk_docs_artifacts —— 需要生成与校验的文档产物，一行一个
 _sk_docs_artifacts() {
-  printf '%s\n' REFERENCE AGENTS TEMPLATES_AGENTS SKILL_PACK
+  printf '%s\n' REFERENCE CAPABILITIES AGENTS TEMPLATES_AGENTS SKILL_PACK
 }
 
 # _sk_docs_kind NAME —— 产物是单文件还是整目录
@@ -3224,6 +3224,7 @@ _sk_docs_kind() {
 _sk_docs_path() {
   case "$1" in
     REFERENCE) printf 'docs/REFERENCE.md' ;;
+    CAPABILITIES) printf 'docs/CAPABILITIES.md' ;;
     AGENTS) printf 'AGENTS.md' ;;
     TEMPLATES_AGENTS) printf 'templates/AGENTS.md' ;;
     SKILL_PACK) printf 'skills/shellkit' ;;
@@ -3234,6 +3235,7 @@ _sk_docs_path() {
 _sk_docs_render() {
   case "$1" in
     REFERENCE) bash "$SELF_DIR/tools/shdoc.sh" ;;
+    CAPABILITIES) bash "$SELF_DIR/tools/shdoc.sh" --index ;;
     AGENTS) bash "$SELF_DIR/tools/ai_doc.sh" repo ;;
     TEMPLATES_AGENTS) bash "$SELF_DIR/tools/ai_doc.sh" project ;;
   esac

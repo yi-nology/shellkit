@@ -60,6 +60,19 @@ function emit(fname,   i, l, brief, hidden, np, ne, ns, has_ex, params, exits, s
     header = 1
   }
 
+  # 索引模式：每个公开函数一行（函数名 + 一句话）。
+  #
+  # 为什么要另做一份：完整参考是 182 个函数的全文（两千多行）⇒ 「这个库里
+  # 有没有 X」只能靠猜或全文搜。索引是**能一眼扫完**的那一份。
+  if (capmode == 1) {
+    rest = brief
+    sub("^" fname "[[:space:]]+", "", rest)
+    printf "- `%s`", fname
+    if (rest != "") printf " %s", rest
+    printf "\n"
+    return
+  }
+
   printf "### `%s`\n\n", fname
   if (brief != "") printf "%s\n\n", brief
   if (stab != "") {
