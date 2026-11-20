@@ -80,7 +80,7 @@ fi
 mut="$work/mutated.rb"
 bash "$mutgen" --out "$mut" --version 9.9.9 --sha256 "$sha" >/dev/null 2>&1 ||
   _fail "the mutated generator must still produce a formula"
-if ( assert_contains "$(cat "$mut")" 'libexec.install "VERSION"' "mutation" ) >/dev/null 2>&1; then
+if (assert_contains "$(cat "$mut")" 'libexec.install "VERSION"' "mutation") >/dev/null 2>&1; then
   _fail "the check must go red on a formula that does not install VERSION"
 fi
 
