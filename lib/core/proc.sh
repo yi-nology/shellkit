@@ -20,9 +20,10 @@
 # （默认 ${TMPDIR:-/tmp}/shellkit-proc-<uid>，权限 700）。/tmp 是共享目录 ⇒
 # 名字必须先过校验，目录也不能是软链（软链会把 pid 文件写到别处去）。
 #
-# 边界：这一层依赖 bash 的作业控制（set -m）与 ps 的进程组字段，
-# **不进 POSIX 子集**（设备侧那套 busybox ash 用不了）——
-# 能力清单 lib/posix/capabilities.tsv 里逐条写着原因。
+# 边界：**POSIX/ash 侧另有一份同名实现**（lib/posix/shellkit-posix.sh，
+# v1.4.0 起）—— 它没有作业控制，靠 setsid 拿进程组、拿不到时只停主进程，
+# 状态从 /proc/<pid>/stat 读。两份**不要同时加载**（同名 ⇒ 后定义覆盖先定义），
+# 能力清单 lib/posix/capabilities.tsv 里逐条写着限制。
 
 # _sk_proc_dir —— 运行时目录（pid 文件与日志都在这儿）
 # @exitcode 0 成功（stdout 是目录）
@@ -63,7 +64,8 @@ _sk_proc_valid_name() {
 #
 #   ps 报不出状态时（没装 procps 的精简容器）分不出僵尸与活进程
 #   ⇒ 退化成 kill -0（判据变粗：僵尸会被当成活着，pid 文件不会自动清）。
-#   这一层不进 POSIX 子集，但它服务的就是设备侧启动脚本 —— 那些机器上的
+#   这一层的主库版不进 POSIX 子集（POSIX 侧另有同名实现），
+#   但它服务的就是设备侧启动脚本 —— 那些机器上的
 #   ps 常常只有 busybox 那点能力，所以这里**必须能退化**：不能因为
 #   「查不到状态」就把所有进程判成死了（那等于这一层在设备侧完全不可用）。
 #
