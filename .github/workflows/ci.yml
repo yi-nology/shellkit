@@ -134,8 +134,15 @@ jobs:
           busybox | sed -n '1p'
 
       # 判据本体就是一份 POSIX sh 脚本 ⇒ 同一份在 dash 与 ash 上原样跑。
+      # 两份：进程层（posix_smoke.sh）与语义分叉（posix_semantics.sh）。
+      # 语义那份专门验「同一套 API 两份实现」的分叉（锁的归属、版本比较、
+      # 重试白名单）—— 这些分叉在 macOS 上看不出来（bash 能吃 10# 扩展，
+      # dash 不能 ⇒ 设备侧直接静默返回空）。
       - name: run the POSIX judgment under busybox ash
         run: busybox ash tests/posix_smoke.sh
+
+      - name: run the POSIX semantics judgment under busybox ash
+        run: busybox ash tests/posix_semantics.sh
 
   # 发行版兼容矩阵：在容器里跑同一组门禁。
   # Ubuntu/macOS 之外再验 Debian 与 Rocky —— shellkit 的目标用户正是这类机器。

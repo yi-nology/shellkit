@@ -123,6 +123,42 @@ $_SK_POSIX_TRAP_CMDS"
   return 0
 }
 
+# _sk_posix_trap_forget COMMAND —— 从清理栈里摘掉一条命令
+#
+# 为什么需要：清理栈是「后进先出」的字符串拼接，**没有摘除能力**。
+# 于是「手动释放了锁」这件事没法告诉清理栈 ⇒ 退出时清理栈照样会跑
+# 那条 release ⇒ 而此时锁可能已经被**别人**拿到了 ⇒ 清理栈把别人持有的
+# 锁删掉 ⇒ 互斥静默失效（#171）。
+#
+# 只摘除**整行完全相同**的那一条；栈里可能有同名命令的多次登记，
+# 摘一次对应一次释放。
+_sk_posix_trap_forget() {
+  if [ "$#" -lt 1 ] || [ -z "$1" ]; then
+    return 2
+  fi
+  _sp_tf_target=$1
+  _sp_tf_kept=""
+  _sp_tf_rest=$_SK_POSIX_TRAP_CMDS
+  while [ -n "$_sp_tf_rest" ]; do
+    _sp_tf_line=$(printf '%s\n' "$_sp_tf_rest" | sed -n '1p')
+    if [ "$_sp_tf_line" = "$_sp_tf_rest" ]; then
+      _sp_tf_rest=""
+    else
+      _sp_tf_rest=$(printf '%s\n' "$_sp_tf_rest" | sed -n '2,\$p')
+    fi
+    if [ "$_sp_tf_line" != "$_sp_tf_target" ]; then
+      if [ -z "$_sp_tf_kept" ]; then
+        _sp_tf_kept=$_sp_tf_line
+      else
+        _sp_tf_kept="$_sp_tf_kept
+$_sp_tf_line"
+      fi
+    fi
+  done
+  _SK_POSIX_TRAP_CMDS=$_sp_tf_kept
+  return 0
+}
+
 # _sk_posix_trap_run —— 退出时的清理（保留原退出码）
 _sk_posix_trap_run() {
   _sp_trap_status=$?
@@ -144,6 +180,58 @@ trap_install() {
 # retry ATTEMPTS COMMAND... —— 失败重试
 #
 # 用法错（退出码 2）不重试 —— 重试一个用法错只是把同一个错误重复几遍。
+# _sk_posix_uint —— 取一个非负整数（非法时用默认值）
+_sk_posix_uint() {
+  case "${1:-}" in
+    '' | *[!0-9]*)
+      printf '%s' "${2:-0}"
+      return 0
+      ;;
+  esac
+  printf '%s' "$1"
+  return 0
+}
+
+# _sk_posix_retry_class —— 把退出码分类（success / timeout / failure）
+#
+# 与 bash core 的 _sk_retry_class 同一口径（#174）：
+# 退出码 2 在 bash core 里是「用法错」⇒ 不是可重试的失败。
+_sk_posix_retry_class() {
+  _sp_rc_code=${1:-}
+  case "$_sp_rc_code" in
+    0)
+      printf "success"
+      return 0
+      ;;
+  esac
+  if [ "$_sp_rc_code" = "${SHELLKIT_RETRY_TIMEOUT_CODE:-124}" ]; then
+    printf "timeout"
+    return 0
+  fi
+  printf "failure"
+  return 0
+}
+
+# _sk_posix_retry_allowed —— 这个退出码允许重试吗
+#
+# 与 bash core 的 _sk_retry_allowed 同一口径（#174）：
+#   SHELLKIT_RETRY_ON 非空 ⇒ 只有名单里的退出码才重试；
+#   为空 ⇒ 用法错（2）与校验错不重试（重试它们只是把同一个错误重复几遍）。
+_sk_posix_retry_allowed() {
+  _sp_ra_code=$1
+  _sp_ra_list=${SHELLKIT_RETRY_ON:-}
+  if [ -n "$_sp_ra_list" ]; then
+    case " $_sp_ra_list " in
+      *" $_sp_ra_code "*) return 0 ;;
+    esac
+    return 1
+  fi
+  case "$_sp_ra_code" in
+    2 | 3) return 1 ;;
+  esac
+  return 0
+}
+
 retry() {
   if [ "$#" -lt 2 ]; then
     log_error "usage: retry ATTEMPTS COMMAND..."
@@ -161,25 +249,49 @@ retry() {
     log_error "invalid retry count: $_sp_retry_n"
     return 2
   fi
-  _sp_retry_i=0
-  while [ "$_sp_retry_i" -lt "$_sp_retry_n" ]; do
-    "$@"
-    _sp_retry_rc=$?
+  # 退避与延迟上限（#174）：原来只有固定延迟 ⇒ 重试风暴没有上限。
+  _sp_retry_max=$(_sk_posix_uint "${SHELLKIT_RETRY_MAX_DELAY:-30}" 30)
+  _sp_retry_delay=$(_sk_posix_uint "${SHELLKIT_RETRY_DELAY:-1}" 1)
+  _sp_retry_backoff=$(_sk_posix_uint "${SHELLKIT_RETRY_BACKOFF:-2}" 2)
+  if [ "$_sp_retry_backoff" -lt 1 ]; then
+    _sp_retry_backoff=1
+  fi
+  # 首个延迟也要夹：DELAY=100 / MAX=5 时以前第一次就白等 100 秒，
+  # 「上限」看着生效、实际第一步没生效。
+  if [ "$_sp_retry_delay" -gt "$_sp_retry_max" ]; then
+    _sp_retry_delay=$_sp_retry_max
+  fi
+  _sp_retry_i=1
+  while :; do
+    _sp_retry_rc=0
+    "$@" || _sp_retry_rc=$?
+    _sp_retry_class=$(_sk_posix_retry_class "$_sp_retry_rc")
     if [ "$_sp_retry_rc" -eq 0 ]; then
       return 0
     fi
-    if [ "$_sp_retry_rc" -eq 2 ]; then
-      return "$_sp_retry_rc"
-    fi
-    _sp_retry_i=$((_sp_retry_i + 1))
     if [ "$_sp_retry_i" -ge "$_sp_retry_n" ]; then
       log_error "giving up after retries: $_sp_retry_n (exit $_sp_retry_rc)"
       return "$_sp_retry_rc"
     fi
-    log_warn "attempt failed, retrying: $_sp_retry_i/$_sp_retry_n (exit $_sp_retry_rc)"
-    sleep "${SHELLKIT_RETRY_DELAY:-1}"
+    # 不该重试的退出码（用法错 / 校验错）⇒ 立刻返回（#174）
+    if ! _sk_posix_retry_allowed "$_sp_retry_rc"; then
+      return "$_sp_retry_rc"
+    fi
+    if [ "$_sp_retry_class" = "timeout" ]; then
+      log_warn "attempt timed out, retrying: $_sp_retry_i/$_sp_retry_n (exit $_sp_retry_rc, next in ${_sp_retry_delay}s)"
+    else
+      log_warn "attempt failed, retrying: $_sp_retry_i/$_sp_retry_n (exit $_sp_retry_rc, next in ${_sp_retry_delay}s)"
+    fi
+    if [ "$_sp_retry_delay" -gt 0 ]; then
+      sleep "$_sp_retry_delay"
+    fi
+    _sp_retry_next=$((_sp_retry_delay * _sp_retry_backoff))
+    if [ "$_sp_retry_next" -gt "$_sp_retry_max" ]; then
+      _sp_retry_next=$_sp_retry_max
+    fi
+    _sp_retry_delay=$_sp_retry_next
+    _sp_retry_i=$((_sp_retry_i + 1))
   done
-  return 1
 }
 
 # ---- 文件与目录 ----
@@ -322,39 +434,233 @@ conf_get_any() {
 # ---- 版本比较（纯 POSIX 分段比较）----
 
 # ver_cmp A B —— -1 / 0 / 1
+# _sk_posix_ver_valid —— 版本号形状对不对
+#
+# 与 bash core 的 _sk_ver_valid 同一口径：核心必须以数字开头、
+# 只含数字与点；后缀非空、无空标识符、无首尾点。
+_sk_posix_ver_valid() {
+  _sp_vv_v=$1
+  _sp_vv_core=$_sp_vv_v
+  case "$_sp_vv_v" in
+    '' | *[!0-9A-Za-z.-]*) return 1 ;;
+  esac
+  case "$_sp_vv_v" in
+    [0-9]*) ;;
+    *) return 1 ;;
+  esac
+  case "$_sp_vv_v" in
+    *-*)
+      _sp_vv_core=${_sp_vv_v%%-*}
+      _sp_vv_pre=${_sp_vv_v#*-}
+      case "$_sp_vv_pre" in
+        '' | .* | *. | *..*) return 1 ;;
+      esac
+      ;;
+  esac
+  case "$_sp_vv_core" in
+    '' | *[!0-9.]*) return 1 ;;
+  esac
+  case "$_sp_vv_core" in
+    [0-9]*) return 0 ;;
+  esac
+  return 1
+}
+
+# _sk_posix_ver_field —— 取核心的第 n 段（缺省补 0）
+_sk_posix_ver_field() {
+  _sp_vf_v=$1
+  _sp_vf_n=$2
+  _sp_vf_i=0
+  while [ "$_sp_vf_i" -le "$_sp_vf_n" ]; do
+    case "$_sp_vf_v" in
+      *.*)
+        _sp_vf_part=${_sp_vf_v%%.*}
+        _sp_vf_v=${_sp_vf_v#*.}
+        ;;
+      *)
+        _sp_vf_part=$_sp_vf_v
+        _sp_vf_v=""
+        ;;
+    esac
+    if [ "$_sp_vf_i" -eq "$_sp_vf_n" ]; then
+      [ -n "$_sp_vf_part" ] || _sp_vf_part=0
+      printf '%s' "$_sp_vf_part"
+      return 0
+    fi
+    if [ -z "$_sp_vf_v" ]; then
+      printf '%s' "0"
+      return 0
+    fi
+    _sp_vf_i=$((_sp_vf_i + 1))
+  done
+  printf '%s' "0"
+  return 0
+}
+
+# _sk_posix_ver_pre_cmp —— 预发布后缀比较（点分隔的标识符逐段比）
+#
+# 数字段按数值比（去掉前导零再比，否则 08 < 9 会判错）；
+# 数字段 vs 字母段：数字段**更小**（semver 口径：1.0-alpha < 1.0-beta）；
+# 字母段按字符串比。
+_sk_posix_ver_pre_cmp() {
+  _sp_pc_a=$1
+  _sp_pc_b=$2
+  while [ -n "$_sp_pc_a" ] || [ -n "$_sp_pc_b" ]; do
+    case "$_sp_pc_a" in
+      *.*)
+        _sp_pc_x=${_sp_pc_a%%.*}
+        _sp_pc_a=${_sp_pc_a#*.}
+        ;;
+      *)
+        _sp_pc_x=$_sp_pc_a
+        _sp_pc_a=""
+        ;;
+    esac
+    case "$_sp_pc_b" in
+      *.*)
+        _sp_pc_y=${_sp_pc_b%%.*}
+        _sp_pc_b=${_sp_pc_b#*.}
+        ;;
+      *)
+        _sp_pc_y=$_sp_pc_b
+        _sp_pc_b=""
+        ;;
+    esac
+    if [ -z "$_sp_pc_x" ] && [ -n "$_sp_pc_y" ]; then
+      printf '%s' "-1"
+      return 0
+    fi
+    if [ -n "$_sp_pc_x" ] && [ -z "$_sp_pc_y" ]; then
+      printf '%s' "1"
+      return 0
+    fi
+    if [ -z "$_sp_pc_x" ]; then
+      printf '%s' "0"
+      return 0
+    fi
+    case "$_sp_pc_x" in
+      *[!0-9]*)
+        case "$_sp_pc_y" in
+          *[!0-9]*)
+            if [ "$_sp_pc_x" = "$_sp_pc_y" ]; then
+              :
+            elif [ "$_sp_pc_x" \!= "$_sp_pc_y" ]; then
+              # POSIX 不定义字符串的 < 比较（shellcheck SC3012：\< 在 POSIX sh 里
+              # 是未定义行为，dash 与 ash 的行为也不保证一致）⇒ 改用 sort 的
+              # 字典序：sort 在 POSIX 里是**指定**的（按当前 locale 的 collation）。
+              if printf '%s\n%s\n' "$_sp_pc_x" "$_sp_pc_y" | sort | head -n 1 | grep -qxF "$_sp_pc_x"; then
+                printf '%s' "-1"
+                return 0
+              fi
+              printf '%s' "1"
+              return 0
+            fi
+            ;;
+          *)
+            printf '%s' "1"
+            return 0
+            ;;
+        esac
+        ;;
+      *)
+        case "$_sp_pc_y" in
+          *[!0-9]*)
+            printf '%s' "-1"
+            return 0
+            ;;
+          *)
+            # 去前导零：**不能**用 $((10#...)) —— 那是 bash 扩展，
+            # dash / busybox ash 不认（实测报 "arithmetic expression:
+            # expecting EOF" ⇒ 整个比较静默返回空）。
+            # POSIX 的做法：把前导零剥掉；全零就是 0。
+            _sp_pc_nx=$_sp_pc_x
+            while [ "${_sp_pc_nx#0}" != "$_sp_pc_nx" ] && [ "${#_sp_pc_nx}" -gt 1 ]; do
+              _sp_pc_nx=${_sp_pc_nx#0}
+            done
+            _sp_pc_ny=$_sp_pc_y
+            while [ "${_sp_pc_ny#0}" != "$_sp_pc_ny" ] && [ "${#_sp_pc_ny}" -gt 1 ]; do
+              _sp_pc_ny=${_sp_pc_ny#0}
+            done
+            if [ "$_sp_pc_nx" -lt "$_sp_pc_ny" ]; then
+              printf '%s' "-1"
+              return 0
+            fi
+            if [ "$_sp_pc_nx" -gt "$_sp_pc_ny" ]; then
+              printf '%s' "1"
+              return 0
+            fi
+            ;;
+        esac
+        ;;
+    esac
+  done
+  printf '%s' "0"
+  return 0
+}
+
 ver_cmp() {
   if [ "$#" -lt 2 ]; then
     return 2
   fi
-  _sp_vc_a=$(printf '%s\n' "$1" | tr '.' ' ')
-  _sp_vc_b=$(printf '%s\n' "$2" | tr '.' ' ')
-  _sp_vc_i=1
-  while [ "$_sp_vc_i" -le 20 ]; do
-    _sp_vc_x=$(printf '%s\n' "$_sp_vc_a" | cut -d ' ' -f"$_sp_vc_i")
-    _sp_vc_y=$(printf '%s\n' "$_sp_vc_b" | cut -d ' ' -f"$_sp_vc_i")
-    [ -n "$_sp_vc_x" ] || _sp_vc_x=0
-    [ -n "$_sp_vc_y" ] || _sp_vc_y=0
-    case "$_sp_vc_x" in
-      *[!0-9]*)
-        return 2
-        ;;
-    esac
-    case "$_sp_vc_y" in
-      *[!0-9]*)
-        return 2
-        ;;
-    esac
-    if [ "$_sp_vc_x" -gt "$_sp_vc_y" ]; then
-      printf '%s\n' 1
-      return 0
-    fi
+  # 剥 v / V 前缀（bash core 同一口径：#173）
+  _sp_vc_a=$1
+  _sp_vc_b=$2
+  case "$_sp_vc_a" in
+    v*) _sp_vc_a=${_sp_vc_a#v} ;;
+    V*) _sp_vc_a=${_sp_vc_a#V} ;;
+  esac
+  case "$_sp_vc_b" in
+    v*) _sp_vc_b=${_sp_vc_b#v} ;;
+    V*) _sp_vc_b=${_sp_vc_b#V} ;;
+  esac
+  if ! _sk_posix_ver_valid "$_sp_vc_a" || ! _sk_posix_ver_valid "$_sp_vc_b"; then
+    return 2
+  fi
+  # 核心与预发布分开比（bash core 同一口径：#173）
+  _sp_vc_core_a=$_sp_vc_a
+  _sp_vc_core_b=$_sp_vc_b
+  _sp_vc_pre_a=""
+  _sp_vc_pre_b=""
+  case "$_sp_vc_a" in
+    *-*)
+      _sp_vc_core_a=${_sp_vc_a%%-*}
+      _sp_vc_pre_a=${_sp_vc_a#*-}
+      ;;
+  esac
+  case "$_sp_vc_b" in
+    *-*)
+      _sp_vc_core_b=${_sp_vc_b%%-*}
+      _sp_vc_pre_b=${_sp_vc_b#*-}
+      ;;
+  esac
+  _sp_vc_i=0
+  while [ "$_sp_vc_i" -lt 32 ]; do
+    _sp_vc_x=$(_sk_posix_ver_field "$_sp_vc_core_a" "$_sp_vc_i")
+    _sp_vc_y=$(_sk_posix_ver_field "$_sp_vc_core_b" "$_sp_vc_i")
     if [ "$_sp_vc_x" -lt "$_sp_vc_y" ]; then
       printf '%s\n' -1
       return 0
     fi
+    if [ "$_sp_vc_x" -gt "$_sp_vc_y" ]; then
+      printf '%s\n' 1
+      return 0
+    fi
     _sp_vc_i=$((_sp_vc_i + 1))
   done
-  printf '%s\n' 0
+  # 核心相等，接着比预发布（semver 口径：正式版 > 同核心的预发布）
+  if [ -z "$_sp_vc_pre_a" ] && [ -z "$_sp_vc_pre_b" ]; then
+    printf '%s\n' 0
+    return 0
+  fi
+  if [ -z "$_sp_vc_pre_a" ]; then
+    printf '%s\n' 1
+    return 0
+  fi
+  if [ -z "$_sp_vc_pre_b" ]; then
+    printf '%s\n' -1
+    return 0
+  fi
+  printf '%s\n' "$(_sk_posix_ver_pre_cmp "$_sp_vc_pre_a" "$_sp_vc_pre_b")"
   return 0
 }
 
@@ -401,6 +707,7 @@ lock_acquire() {
     _sp_lk_wait=$2
   fi
   _sp_lk_tries=0
+  _sp_lk_stale=0
   while :; do
     if mkdir "$_sp_lk_path" 2>/dev/null; then
       printf '%s\n' "$$" >"$_sp_lk_path/pid" 2>/dev/null || true
@@ -408,18 +715,33 @@ lock_acquire() {
       trap_install
       return 0
     fi
+    # mkdir 失败有两种原因，必须分开（#172）：
+    #   a) 锁目录已经存在 ⇒ 真的有人在持锁；
+    #   b) 建不出来（父路径不存在 / 权限不足 / 父级不是目录）
+    #      ⇒ **不是**「有人在持锁」⇒ 再重试多少次都没用。
+    # 原来这两种都落进「回收僵尸锁」分支 ⇒ mkdir 永远失败 ⇒
+    # rm -rf + sleep 1 无限循环 ⇒ **零输出**（连错都没报）⇒
+    # 设备侧脚本静默挂死。
+    if [ ! -d "$_sp_lk_path" ]; then
+      log_error "cannot create the lock directory: $_sp_lk_path"
+      return 3
+    fi
     _sp_lk_pid=$(cat "$_sp_lk_path/pid" 2>/dev/null || true)
     if [ -n "$_sp_lk_pid" ] && kill -0 "$_sp_lk_pid" 2>/dev/null; then
       log_error "another instance is running: $1 ($_sp_lk_pid)"
       return 1
     fi
-    # 僵尸锁：持有者已经没了 ⇒ 回收
-    rm -rf "$_sp_lk_path" 2>/dev/null || true
-    _sp_lk_tries=$((_sp_lk_tries + 1))
+    # 僵尸锁：持有者已经没了 ⇒ 回收（但只回收有限次）
+    if [ "$_sp_lk_stale" -lt 3 ]; then
+      _sp_lk_stale=$((_sp_lk_stale + 1))
+      rm -rf "$_sp_lk_path" 2>/dev/null || true
+      continue
+    fi
     if [ "$_sp_lk_wait" -gt 0 ] && [ "$_sp_lk_tries" -ge "$_sp_lk_wait" ]; then
       log_error "another instance is running: $1"
       return 1
     fi
+    _sp_lk_tries=$((_sp_lk_tries + 1))
     sleep 1
   done
 }
@@ -430,7 +752,23 @@ lock_release() {
     return 2
   fi
   _sp_lr_path=$(_sk_posix_lock_path "$1")
+  if [ ! -d "$_sp_lr_path" ]; then
+    # 锁已经不在了 ⇒ 但清理栈里可能还挂着一条 release ⇒ 照样摘掉，
+    # 否则退出时它还会再跑一次（那时锁可能已经被别人拿到了）。
+    _sk_posix_trap_forget "lock_release $1"
+    return 0
+  fi
+  # 只删**自己持有**的锁（#171）：
+  # 原来无条件 rm -rf ⇒ 手动释放后锁被别人拿到 ⇒ 退出清理栈再跑一次
+  # release ⇒ 把**别人**的锁删掉 ⇒ 两边都能进临界区 ⇒ 互斥静默失效。
+  _sp_lr_pid=$(cat "$_sp_lr_path/pid" 2>/dev/null || true)
+  if [ -n "$_sp_lr_pid" ] && [ "$_sp_lr_pid" != "$$" ]; then
+    log_error "the lock is held by another process: $1 (pid $_sp_lr_pid)"
+    return 3
+  fi
   rm -rf "$_sp_lr_path" 2>/dev/null || true
+  # 告诉清理栈「这条已经手工做过了」⇒ 退出时不要再跑。
+  _sk_posix_trap_forget "lock_release $1"
   return 0
 }
 
@@ -740,7 +1078,10 @@ _sk_posix_proc_spawn() {
   elif command -v nohup >/dev/null 2>&1; then
     nohup sh -c "$_sp_sp_boot" sk "$_sp_sp_pidfile" "$@" >>"$_sp_sp_logfile" 2>&1 </dev/null &
   else
-    (trap '' HUP; exec sh -c "$_sp_sp_boot" sk "$_sp_sp_pidfile" "$@") >>"$_sp_sp_logfile" 2>&1 </dev/null &
+    (
+      trap '' HUP
+      exec sh -c "$_sp_sp_boot" sk "$_sp_sp_pidfile" "$@"
+    ) >>"$_sp_sp_logfile" 2>&1 </dev/null &
   fi
   return 0
 }

@@ -60,9 +60,9 @@ git_tag	no	git 领域抽象在设备侧用不上
 git_worktree_add	no	git 领域抽象在设备侧用不上
 http_github_latest_tag	no	POSIX 子集不给 HTTP 客户端
 http_github_release_asset	no	POSIX 子集不给 HTTP 客户端
-lock_acquire	yes	-
+lock_acquire	yes	POSIX 子集提供同名版本：只删**自己持有**的锁（持有者 pid 不是自己就拒绝）；lock_acquire 建不出锁目录时立刻报错返回 3（不重试）；释放后从退出清理栈里摘掉自己那条 —— 否则退出清理会删掉别人后来拿到的锁
 lock_held	no	POSIX 子集只提供拿锁与放锁
-lock_release	yes	-
+lock_release	yes	POSIX 子集提供同名版本：只删**自己持有**的锁（持有者 pid 不是自己就拒绝）；lock_acquire 建不出锁目录时立刻报错返回 3（不重试）；释放后从退出清理栈里摘掉自己那条 —— 否则退出清理会删掉别人后来拿到的锁
 log_debug	yes	-
 log_error	yes	-
 log_info	yes	-
@@ -125,7 +125,7 @@ require_bash	no	POSIX 子集不做 root / 文件存在性这类前置条件检�
 require_cmd	no	POSIX 子集只给 die / fail
 require_file	no	POSIX 子集不做 root / 文件存在性这类前置条件检查
 require_root	no	POSIX 子集不做 root / 文件存在性这类前置条件检查
-retry	yes	-
+retry	yes	POSIX 子集提供同名版本：带退避（SHELLKIT_RETRY_DELAY / _BACKOFF / _MAX_DELAY），退出码 2 与 3 不重试；SHELLKIT_RETRY_ON 非空时只重试名单里的退出码
 retry_classify	no	POSIX 子集提供 retry
 retry_last_class	no	POSIX 子集提供 retry
 retry_last_rc	no	POSIX 子集提供 retry
@@ -190,9 +190,9 @@ vendor_dir	no	库副本落点是工程期的事，设备侧不 vendor 库
 vendor_dir_detect	no	库副本落点是工程期的事，设备侧不 vendor 库
 vendor_dir_rel	no	库副本落点是工程期的事，设备侧不 vendor 库
 vendor_dir_source	no	库副本落点是工程期的事，设备侧不 vendor 库
-ver_cmp	yes	-
-ver_eq	yes	-
-ver_gt	yes	-
-ver_lt	yes	-
+ver_cmp	yes	POSIX 子集提供同名版本：与主库同一口径（认 v 前缀、认预发布后缀、正式版 > 同核心的预发布）；非法版本号返回 2
+ver_eq	yes	POSIX 子集提供同名版本：与主库同一口径（认 v 前缀、认预发布后缀、正式版 > 同核心的预发布）；非法版本号返回 2
+ver_gt	yes	POSIX 子集提供同名版本：与主库同一口径（认 v 前缀、认预发布后缀、正式版 > 同核心的预发布）；非法版本号返回 2
+ver_lt	yes	POSIX 子集提供同名版本：与主库同一口径（认 v 前缀、认预发布后缀、正式版 > 同核心的预发布）；非法版本号返回 2
 fs_ensure_file	yes	仅 POSIX 子集提供（主库没有这个函数）
 posix_capable	yes	仅 POSIX 子集提供（主库没有这个函数）
