@@ -272,3 +272,114 @@ out=$(bash "$sig/tests/run.sh" --jobs 2 </dev/null 2>&1) || rc=$?
 assert_eq "0" "$rc" "a parallel run must not break signal handling inside the test files"
 assert_not_contains "$out" "FAILED: test_sig_int.sh" \
   "the signal fixture must pass in parallel mode"
+
+# ---------------------------------------------------------------------------
+# CASE: 单文件预算（# TEST_TIMEOUT: N）必须被真的执行
+#
+# 背景：门禁跑在共享机器上。机器一慢，「重但确定」的文件就撞上全局 300 秒
+# ⇒ 「机器慢」被误读成「测试坏了」—— 随机红灯很快就会被忽略，连「真的坏了」
+# 都看不见。机制早就有（文件头写一行「# TEST_TIMEOUT: 900」单独放宽），
+# 但没人盯着它 —— 这里把它钉住：
+#   1. 声明了 1 秒的文件必须**真的**在 1 秒左右被掐掉（不是 300 秒）；
+#   2. 超时文案必须报**这个文件自己的**预算（1s），不能报全局的 300s。
+#      报全局会让人去改全局 —— 全局一改，所有文件的卡死检测都跟着变慢。
+# ---------------------------------------------------------------------------
+if command -v timeout >/dev/null 2>&1 || command -v gtimeout >/dev/null 2>&1; then
+  slow="$d/slow"
+  mkdir -p "$slow/tests" || _fail "mkdir failed"
+  cp "$TEST_ROOT/tests/run.sh" "$slow/tests/run.sh" || _fail "copy failed"
+  # fixture 的声明行**拼出来**写，不写成本文件里的一行字面量：
+  # 否则下面那条「声明集合」扫描会把这个 fixture 也算进去（自指）。
+  {
+    printf '%s\n' '#!/usr/bin/env bash'
+    printf '# TEST_TIMEOUT: %s —— 这个文件自己的预算：1 秒。\n' 1
+    printf '%s\n' '# 睡 30 秒：预算生效的话，1 秒左右就被掐掉。' 'exec sleep 30'
+  } >"$slow/tests/test_slow_budget.sh"
+  t0=$SECONDS
+  rc=0
+  out=$(bash "$slow/tests/run.sh" --format tap --filter '*slow_budget*' </dev/null 2>&1) || rc=$?
+  elapsed=$((SECONDS - t0))
+  assert_ne "0" "$rc" "a file that exceeds its own budget must fail"
+  assert_contains "$out" "timed out after 1s" \
+    "the timeout reason must report the file's own budget"
+  assert_not_contains "$out" "timed out after 300s" \
+    "the timeout reason must not report the global budget"
+  if [ "$elapsed" -ge 20 ]; then
+    _fail "the per-file budget must be enforced (a 1s budget took ${elapsed}s)"
+  fi
+
+  # ── 变异自证：把文案改回「报全局预算」⇒ 判据必须报出来 ─────────────
+  # 判据自己先证明「它抓得住回退」：改坏的 runner 必须让上面那条断言变红。
+  mut="$d/mut"
+  mkdir -p "$mut/tests" || _fail "mkdir failed"
+  cp "$slow/tests/run.sh" "$mut/tests/run.sh" || _fail "copy failed"
+  cp "$slow/tests/test_slow_budget.sh" "$mut/tests/test_slow_budget.sh" || _fail "copy failed"
+  awk '
+    /^      msg="timed out after \$\{budget\}s \(the default budget\)"$/ {
+      print "      msg=\"timed out after \${TEST_TIMEOUT}s\""
+      next
+    }
+    /^      msg="timed out after \$\{budget\}s \(this file.s own budget\)"$/ { next }
+    { print }
+  ' "$mut/tests/run.sh" >"$mut/tests/run.new" && mv "$mut/tests/run.new" "$mut/tests/run.sh"
+  mutout=$(bash "$mut/tests/run.sh" --format tap --filter '*slow_budget*' </dev/null 2>&1) || true
+  case "$mutout" in
+    *"timed out after 1s"*)
+      _fail "the mutation (report the global budget) must break the per-file budget check"
+      ;;
+  esac
+else
+  printf 'skip: no timeout(1) on this machine; the per-file budget is not enforced here\n' >&2
+fi
+
+# ---------------------------------------------------------------------------
+# CASE: 全局默认预算不得低于 300 秒
+#
+# 300 是「慢但没坏」的底线。再往下压，正常机器上也会随机红灯 ——
+# 随机红灯会被忽略，连真的红灯都看不见了。
+# ---------------------------------------------------------------------------
+default_budget=$(awk '/^TEST_TIMEOUT="\$\{TEST_TIMEOUT:-[0-9]+\}"$/ {
+    sub(/^TEST_TIMEOUT="\$\{TEST_TIMEOUT:-/, "")
+    sub(/\}"$/, "")
+    print
+    exit
+  }' "$TEST_ROOT/tests/run.sh")
+case "$default_budget" in
+  '' | *[!0-9]*) _fail "cannot read the default TEST_TIMEOUT from tests/run.sh" ;;
+esac
+if [ "$default_budget" -lt 300 ]; then
+  _fail "the default TEST_TIMEOUT must not drop below 300s (got ${default_budget}s)"
+fi
+
+# ---------------------------------------------------------------------------
+# CASE: 声明了「自己预算」的文件必须登记在册
+#
+# 不许静默扩大：每放宽一个文件，都要有人知道、有人认。
+# 登记在下面的名单里；新增一个声明却忘了登记 ⇒ 这里红。
+# 顺带守住上限：预算再大也不能没边（卡死的文件要能被发现）。
+# ---------------------------------------------------------------------------
+declared=$(awk '
+  /^# TEST_TIMEOUT: *[0-9]/ && !seen[FILENAME] {
+    line = $0
+    sub(/^# TEST_TIMEOUT: */, "", line)
+    sub(/[^0-9].*$/, "", line)
+    name = FILENAME
+    sub(/.*\//, "", name)
+    print name " " line
+    seen[FILENAME] = 1
+  }
+' "$TEST_ROOT"/tests/test_*.sh | LC_ALL=C sort)
+expected_budgets="test_api_stability.sh 360
+test_coverage_branch.sh 900
+test_fault.sh 300
+test_fault_matrix.sh 900
+test_install.sh 900
+test_install_lifecycle.sh 900
+test_meta_gates.sh 900
+test_mutation.sh 900
+test_upgrade_crash.sh 900"
+assert_eq "$expected_budgets" "$declared" \
+  "every file with its own timeout budget must be registered in the list above"
+
+too_big=$(printf '%s\n' "$declared" | awk '$2 > 1800 { print }')
+assert_eq "" "$too_big" "no test file may declare a budget above 1800s"
