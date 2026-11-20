@@ -108,6 +108,35 @@ jobs:
             make check
           fi
 
+  # POSIX 子集在 busybox ash 上跑一遍（设备侧真正的解释器）。
+  #
+  # 为什么单独一个 job，而不是往 compat 矩阵里加一档 busybox 容器：
+  #   compat 那一档跑的是 `make check` —— 那需要 bash 与包管理器，
+  #   而 busybox 镜像两样都没有（连装 bash 的路子都没有）⇒ 加进去只会在
+  #   「装 bash」这一步失败，离病根很远。
+  #   这里要验的是**另一件事**：同一份 POSIX 判据在 ash 上过不过。
+  #
+  # 为什么用 apt 装 busybox-static，而不是 `docker run busybox`：
+  #   判据要的是 ash 这个解释器 + /proc + setsid（设备侧真正的约束），
+  #   apt 这条路不依赖 docker.io 可达（共享 runner 上镜像站经常抽风）。
+  posix-busybox:
+    name: posix subset on busybox ash
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+
+      - name: install busybox
+        run: |
+          set -euo pipefail
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq busybox-static
+          busybox | sed -n '1p'
+
+      # 判据本体就是一份 POSIX sh 脚本 ⇒ 同一份在 dash 与 ash 上原样跑。
+      - name: run the POSIX judgment under busybox ash
+        run: busybox ash tests/posix_smoke.sh
+
   # 发行版兼容矩阵：在容器里跑同一组门禁。
   # Ubuntu/macOS 之外再验 Debian 与 Rocky —— shellkit 的目标用户正是这类机器。
   compat:

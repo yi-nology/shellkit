@@ -20,6 +20,7 @@
     lib/posix/                POSIX 子集（设备侧）：busybox ash / dash 上能跑的那一小撮
                               shellkit-posix.sh（只写 POSIX 语法的库）
                               capabilities.tsv（能力清单：哪些函数设备侧有、哪些没有；机器生成）
+                              含进程层（proc_* 同名版：后台引导 / 整组停止 / 看门狗）
     templates/                shellkit new 的模板（含 __NAME__ / __CMD__ 占位符）
     tests/                    自研断言 + 逐文件执行器 + 每个模块一个测试
     tests/bats/               bats-core 用例（每个 @test 一个独立进程）；不进 make check，
@@ -45,7 +46,7 @@
     docs/shots/*.shot         截图源：每行 `$ ` 是真要跑的命令，svg 由 make shots 渲染
     examples/                 两个能直接跑的工程，测试全程走真实二进制
     site/                     VuePress 2 文档站（手写页 + docs/ 同步页；Actions 构建，产物不进 git 历史）
-    .github/workflows/        quality（15 项必需检查）/ packages / pages / release
+    .github/workflows/        quality（16 项必需检查）/ packages / pages / release
                               bench.yml = 性能基准的**定时**运行（PR 上只量不含套件的快路径）
     locale/{en,zh_CN,zh_Hant} gettext 目录，msgid 一律英文
 
@@ -98,7 +99,7 @@ busybox ash 上，混进一个 `local` 或 `[[ ]]` 不是报错，是**整个脚
 （50 个 stable 的返回码、退出码表、CLI 子命令形状），源码变了没重生成清单就红；
 新增语义未知的 `SK_*` 常量也红（宁可失败，也不静默漏写进承诺表）。
 
-`main` 有分支保护：PR 进 `main` 必须跑满 **15 个必需检查** —— 那份清单就是
+`main` 有分支保护：PR 进 `main` 必须跑满 **16 个必需检查** —— 那份清单就是
 `tools/release_gate.sh` 的 `DEFAULT_CHECKS`（job 名逐字一致；改 ci.yml 的 job 名
 要同步改两处，否则 PR 永远卡在等一个不会来的检查）。**没有 review 要求**
 （agent 驱动、链路上没有人审）；`main` 不可强推、不可删；owner 直推仍然允许
@@ -112,7 +113,7 @@ busybox ash 上，混进一个 `local` 或 `[[ ]]` 不是报错，是**整个脚
 只有真正成功应用了模板的文件才能推进基线；跳过的文件保持原基线。
 回归用例：`tests/test_upgrade.sh` 与 `tests/bats/scaffold.bats`（都要连升两次以上）。
 
-## 二十八个已经踩过的坑
+## 三十一个已经踩过的坑
 
 1. **bash 3.2 与 5 的 trap 语义不同**：子 shell 里 `trap -p EXIT`，3.2 读到空，5.x 仍打印
    父 shell 的 trap 但子 shell 退出时不执行。所以幂等不能只查 `trap -p`，看到是自己的
@@ -381,6 +382,52 @@ busybox ash 上，混进一个 `local` 或 `[[ ]]` 不是报错，是**整个脚
       切成好几段，参数个数就数错了，判据会失灵还不报错）。
       门禁自己的自测：`tests/test_assert_usage.sh`（真树合格 / 假树坏用法
       必被点名 / 合法人用不误伤 / 变异自证）。
+
+29. **整组停的那一行写法，在三种 shell 上三种结果**：
+    「kill 整个进程组」看着只有一种写法，其实是三种：
+    - `kill -TERM -- -1234`：**bash 只认这一种**；
+      busybox 报 `invalid number '--'`（它把 `--` 当成 pid 了），
+      dash 报 `Illegal number: -` ⇒ 两边都**没杀成**，退出码非 0。
+    - `kill -TERM -1234`（不带 `--`）：**busybox / dash 认**；
+      bash 会把 `-1234` 当成信号名 ⇒ 报错。
+    ⇒ 库里两种都试（先带 `--`，失败再不带），且**绝不**只靠一种写法。
+    ⚠⚠ **信号名必须带前导 `-`**（`kill -TERM`，不是 `kill TERM`）：
+      busybox 的 kill 认不带横杠的信号名（把 `TERM` 当信号），
+      而 dash 与 bash 会把它当成**一个 pid** ⇒ `TERM: Illegal number`
+      ⇒ 整组杀**根本没发生** ⇒ 进程停不掉（退出码 3），而日志里只有一行
+      被吞掉的报错。
+      ⇒ 更狠的是：这条错**只在有 setsid 的机器上才走到**
+      （macOS 没有 setsid ⇒ 走「只停主进程」的降级 ⇒ 本机永远是绿的）
+      ⇒ 判据必须在**目标环境**（busybox ash + dash）里跑，本机跑绿不算数。
+    ⚠ 同一批实测还发现：**busybox 的 `ps` 不认 `-p`**
+      （`invalid option -- 'p'`），也不认 `stat=` 的表头抑制
+      ⇒ 进程状态与进程组要读 `/proc/<pid>/stat`（Linux 上到处都有），
+      `ps` 只当兜底。
+    ⚠ 还有一条：**`setsid` 在「已经是组长」时会 fork** ⇒ 父进程拿到的
+      `$!` 是 setsid 的 pid，不是真正那条命令的 pid ⇒ pid 让**子进程自己写**
+      （exec 不改 pid ⇒ 写的必然是它）。
+    ⇒ 回归：`tests/posix_smoke.sh`（同一份判据在 dash 与 busybox ash 上跑；
+      证据是 busybox:1.36 容器里的逐条实测，不是推测）。
+30. **判据脚本里起名叫 `fail` / `die` 这类通用名 ⇒ 顶掉被测库的同名函数 ⇒ 整份判据变假绿**：
+    POSIX 子集自己有一个公开的 `fail()`（与 `die()` 一对）⇒ 判据脚本
+    在 source 之后**再定义**一个 `fail()`，被测库那份会覆盖脚本的
+    （bash 与 ash 都是后定义覆盖先定义）⇒ 脚本自己的失败计数**永远不增**
+    ⇒ 判据全绿，而失败信息只是库里打的一行错误日志（看起来像「库报了错」，
+    不是「判据抓到了缺陷」）。
+    ⇒ 判据脚本里的辅助函数必须用**独占前缀**（本轮用的是 `smoke_fail`），
+      且**不能**与被测库的公开函数重名。
+    ⇒ 这正是 `tools/check_dup_functions.sh` 门禁防的那类事故 ——
+      但那道门禁只扫 `lib/core/`，扫不到 `tests/` ⇒ 判据脚本要自己长记性。
+    ⇒ **推论**：判据脚本 source 被测库之后，要检查自己的辅助函数名有没有被顶掉
+      （或反过来：先定义、再 source 也不行 —— 后 source 的会覆盖先定义的）。
+31. **进程状态要按**前缀**认，不能精确匹配**：
+    僵尸在各家的 `ps` 里写法不一样：Linux 常见 `Z`、macOS/BSD 常见 `Z+`，
+    还有 `Z<` ⇒ 写成 `case "$st" in Z) ...` 只能认中一种 ⇒ 另一种机器上
+    僵尸被当成**活进程** ⇒ pid 文件永远清不掉、看门狗永远以为进程还在
+    （正是这一层要根治的坑）。
+    ⇒ 一律用前缀（`Z*`），并且把「各种写法」写进**不依赖平台的断言**
+      （直接喂 `_sk_posix_proc_state_is_dead "Z+"`），
+      否则判据会跟着平台的 ps 写法一起漂 —— 本机绿、CI 红。
 
 ## 本场景的验证
 

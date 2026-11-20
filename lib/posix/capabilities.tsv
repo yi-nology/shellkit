@@ -2,13 +2,13 @@
 #
 # 由 bash tools/check_posix.sh --write 生成，不要手工维护。
 #
-# 格式：函数名<TAB>POSIX 子集里有没有<TAB>没有的话为什么
+# 格式：函数名<TAB>POSIX 子集里有没有<TAB>没有的话为什么 / 有的话有什么限制
 #
 # 设备侧脚本据此判断「这条能不能用」，而不是靠试 —— 试出来的失败往往是
 # 「装上就挂」，而现场装不了 shellkit 补救。
 # 运行时也能问：posix_capable 函数名
 #
-# 主库的公开函数一共 182 个，POSIX 子集提供其中 28 个。
+# 主库的公开函数一共 182 个，POSIX 子集提供其中 32 个。
 # 另有 2 个是仅 POSIX 子集专有的（主库没有这个函数）。
 #
 # 函数名	POSIX 子集	原因
@@ -105,10 +105,10 @@ os_sed_i	no	设备侧没有包管理器，也不该动系统包
 os_sha256	no	设备侧没有包管理器，也不该动系统包
 os_sudo_ready	no	设备侧没有包管理器，也不该动系统包
 parallel_map	no	命令执行层依赖 bash 的上下文栈与脱敏规则
-proc_is_running	no	进程组与看门狗依赖 bash 的作业控制（set -m）
-proc_start	no	进程组与看门狗依赖 bash 的作业控制（set -m）
-proc_stop	no	进程组与看门狗依赖 bash 的作业控制（set -m）
-proc_watchdog	no	进程组与看门狗依赖 bash 的作业控制（set -m）
+proc_is_running	yes	POSIX 子集提供同名版本（语义与返回码一致）：没有作业控制 ⇒ 靠 setsid 拿进程组，拿不到时只停主进程；状态从 /proc/<pid>/stat 读，查不到时退化成 kill -0；与主库同名，两份不要同时加载
+proc_start	yes	POSIX 子集提供同名版本（语义与返回码一致）：没有作业控制 ⇒ 靠 setsid 拿进程组，拿不到时只停主进程；状态从 /proc/<pid>/stat 读，查不到时退化成 kill -0；与主库同名，两份不要同时加载
+proc_stop	yes	POSIX 子集提供同名版本（语义与返回码一致）：没有作业控制 ⇒ 靠 setsid 拿进程组，拿不到时只停主进程；状态从 /proc/<pid>/stat 读，查不到时退化成 kill -0；与主库同名，两份不要同时加载
+proc_watchdog	yes	POSIX 子集提供同名版本（语义与返回码一致）：没有作业控制 ⇒ 靠 setsid 拿进程组，拿不到时只停主进程；状态从 /proc/<pid>/stat 读，查不到时退化成 kill -0；与主库同名，两份不要同时加载
 profile_append	no	profile 文件格式在设备侧用不上
 profile_env	no	profile 文件格式在设备侧用不上
 profile_parse	no	profile 文件格式在设备侧用不上
