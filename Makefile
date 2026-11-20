@@ -9,7 +9,7 @@ SOURCES := shellkit install.sh repair.sh demo.sh lib/bootstrap.sh $(wildcard lib
 TEMPLATES := $(shell find templates -type f)
 SHOTS := $(wildcard docs/shots/*.shot)
 
-.PHONY: help test syntax lint lint-templates fmt messages messages-check docs docs-check versions-check check-docs cookbook-check posix-check shots examples artifact-smoke check check-fast install release release-dry site-deps site-sync site site-serve local-names-check module-count-check pipe-safety-check dup-functions-check mutation security-check api-baseline-check api-freeze-check compatibility-check bench coverage coverage-branch upgrade-matrix ident-boundary-check
+.PHONY: help test syntax lint lint-templates fmt messages messages-check docs docs-check versions-check check-docs cookbook-check posix-check shots examples artifact-smoke check check-fast install release release-dry site-deps site-sync site site-serve local-names-check module-count-check pipe-safety-check dup-functions-check mutation security-check api-baseline-check api-freeze-check compatibility-check bench coverage coverage-branch upgrade-matrix ident-boundary-check assert-usage-check
 
 help:
 	@printf '%s\n' \
@@ -21,6 +21,7 @@ help:
 	  'make local-names-check  库内部命名空间与出参保留名校验' \
 	  'make module-count-check  文档里的模块数必须与 lib/modules.txt 一致' \
 	  'make pipe-safety-check  管道里不能有会提前退出的消费者（SIGPIPE + pipefail 会误判失败）' \
+	  'make assert-usage-check  断言不许把提示文案当成 test/[ 的参数（那样断言会变成假绿）' \
 	  'make fmt         shfmt -d -i 2 -ci（只检查）' \
 	  'make messages    重新抽取 msgid 并编译 .mo' \
 	  'make messages-check  只检查 pot 与源码是否一致（缺 xgettext 时跳过）' \
@@ -209,6 +210,12 @@ dup-functions-check:
 pipe-safety-check:
 	@$(BASH) tools/check_pipe_safety.sh
 
+# 断言不许把提示文案当成被测命令的参数：assert_true / assert_false 把全部参数
+# 交给命令，多一个字符串就多一个参数 ⇒ test 报「binary operator expected」并
+# 退出 2 ⇒ assert_false 看到「失败」就通过 ⇒ 这条断言没有判据能力。
+assert-usage-check:
+	@$(BASH) tools/check_assert_usage.sh
+
 # 工作树里不能留「上一次运行被打断」的临时文件：它们被全局 gitignore 藏起来，
 # 却在「整仓拷贝」型步骤里把磁盘写满 ⇒ 门禁在别处报成假红
 check-tree-clean:
@@ -235,7 +242,7 @@ api-baseline-check:
 bench:
 	@$(BASH) tools/bench.sh
 
-check: syntax test lint module-order-check check-exitcode-docs local-names-check ident-boundary-check module-count-check pipe-safety-check check-tree-clean dup-functions-check security-check api-baseline-check api-freeze-check compatibility-check docs-check versions-check check-docs posix-check cookbook-check messages-check examples fmt
+check: syntax test lint module-order-check check-exitcode-docs local-names-check ident-boundary-check module-count-check pipe-safety-check assert-usage-check check-tree-clean dup-functions-check security-check api-baseline-check api-freeze-check compatibility-check docs-check versions-check check-docs posix-check cookbook-check messages-check examples fmt
 
 # 快通道：只跑静态门禁，不跑整套测试（tests/run.sh）与 examples。
 # 用途：改代码时的本地快速反馈 —— 完整门禁要十几分钟（套件本身占绝大部分），
@@ -243,7 +250,7 @@ check: syntax test lint module-order-check check-exitcode-docs local-names-check
 # 刻意**不**改 check 的语义：check 仍是唯一的完整门禁，CI 也只跑 check。
 # 子目标与 check 保持一致（少了 test 与 examples）—— 少一个都会变成「快通道
 # 漏检」，多一个都会变成「快通道白等」。
-check-fast: syntax lint module-order-check check-exitcode-docs local-names-check ident-boundary-check module-count-check pipe-safety-check check-tree-clean dup-functions-check security-check api-baseline-check api-freeze-check compatibility-check docs-check versions-check check-docs posix-check cookbook-check messages-check fmt
+check-fast: syntax lint module-order-check check-exitcode-docs local-names-check ident-boundary-check module-count-check pipe-safety-check assert-usage-check check-tree-clean dup-functions-check security-check api-baseline-check api-freeze-check compatibility-check docs-check versions-check check-docs posix-check cookbook-check messages-check fmt
 
 install:
 	./shellkit install-self --prefix $(PREFIX)/usr
