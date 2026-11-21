@@ -350,6 +350,30 @@ _yes_note_for() {
     ver_cmp | ver_eq | ver_gt | ver_lt)
       printf '%s' "POSIX 子集提供同名版本：与主库同一口径（认 v 前缀、认预发布后缀、正式版 > 同核心的预发布）；非法版本号返回 2"
       ;;
+    die | fail)
+      printf '%s' "POSIX 子集提供同名版本：与主库同一口径（**先退出码、后消息** —— 形如 die 3 「消息」；退出码非法按用法错退 2）。曾写成「先消息、后退出码」⇒ 同一份调用在设备侧退出码变成 255"
+      ;;
+    log_debug | log_info | log_warn | log_error | log_ok | log_section)
+      printf '%s' "POSIX 子集提供同名版本：与主库同一口径（收**全部**参数；OK 的标签是 \" OK \"；小节标题是 \"==> 标题\"；log_error 同时记下 SK_ERRMSG）"
+      ;;
+    status_emit | status_extra | status_is_machine | status_state_valid | status_version)
+      printf '%s' "POSIX 子集提供同名版本：与主库同一口径（human 模式用 %b 解释转义、缺参不报错；机器模式输出 STATE/VERSION/EXTRA 行）"
+      ;;
+    trap_push | trap_install)
+      printf '%s' "POSIX 子集提供同名版本：与主库同一口径（trap_push 登记**整条命令含参数**、缺参数报错退 2；trap_install 不链调用方的 EXIT handler）；**清理栈不按层隔离**（POSIX sh 没有可靠的子 shell 判定 ⇒ 父进程登记的清理条目在子 shell 退出时仍会被执行）"
+      ;;
+    fs_ensure_dir)
+      printf '%s' "POSIX 子集提供同名版本：与主库同一口径（缺参数报用法错退 2；带 MODE 时 chmod 失败也不报错）"
+      ;;
+    net_verify)
+      printf '%s' "POSIX 子集提供同名版本：与主库同一口径（期望值为空单独报错退 5，不当成校验通过）"
+      ;;
+    conf_get_any)
+      printf '%s' "POSIX 子集提供同名版本：与主库同一口径（默认值可省；键名非法打印默认值并退 2）"
+      ;;
+    conf_init)
+      printf '%s' "POSIX 子集只支持 env 格式（KEY=VALUE）：--format dotenv **显式拒绝**退 2（默默当 env 解析会让取到的值悄悄不同）"
+      ;;
   esac
   return 0
 }

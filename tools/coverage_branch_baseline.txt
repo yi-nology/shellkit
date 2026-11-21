@@ -164,7 +164,6 @@ lib/core/config.sh:conf_disable:5
 lib/core/config.sh:conf_disable:8
 lib/core/config.sh:conf_disable:9
 lib/core/config.sh:conf_get:1
-lib/core/config.sh:conf_get_any:1
 lib/core/config.sh:conf_init:10
 lib/core/config.sh:conf_init:13
 lib/core/config.sh:conf_init:14
@@ -344,7 +343,6 @@ lib/core/lock.sh:lock_acquire:2
 lib/core/lock.sh:lock_held:1
 lib/core/lock.sh:lock_release:2
 lib/core/log.sh:_sk_color_on:1
-lib/core/log.sh:_sk_color_on:2
 lib/core/log.sh:_sk_err_abs_path:1
 lib/core/log.sh:_sk_err_abs_path:4
 lib/core/log.sh:_sk_err_ctx_push:2
@@ -357,7 +355,6 @@ lib/core/log.sh:_sk_json_escape:1
 lib/core/log.sh:_sk_json_escape:2
 lib/core/log.sh:_sk_json_escape:3
 lib/core/log.sh:_sk_log_file_error:1
-lib/core/log.sh:_sk_log_threshold:2
 lib/core/log.sh:_sk_log_timestamp:1
 lib/core/log.sh:_sk_log_timestamp:2
 lib/core/log.sh:_sk_secret_key_name:2
@@ -390,7 +387,6 @@ lib/core/net.sh:net_download:13
 lib/core/net.sh:net_download:2
 lib/core/net.sh:net_download:4
 lib/core/net.sh:net_download:9
-lib/core/net.sh:net_verify:2
 lib/core/net.sh:net_wait_http:2
 lib/core/net.sh:net_wait_http:3
 lib/core/os.sh:_sk_os_detect:2
@@ -700,7 +696,7 @@ lib/core/trap.sh:_sk_trap_run_sig:3
 lib/core/trap.sh:_sk_trap_slot:5
 lib/core/trap.sh:trap_cleanup:1
 lib/core/trap.sh:trap_cleanup:5
-lib/core/trap.sh:trap_install:1
+lib/core/trap.sh:trap_install:2
 lib/core/vendor.sh:_sk_vendor_dir_canon:2
 lib/core/vendor.sh:_sk_vendor_dir_canon:3
 lib/core/vendor.sh:_sk_vendor_dir_canon:4
