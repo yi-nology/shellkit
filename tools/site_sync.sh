@@ -137,6 +137,11 @@ _emit_page "$DOCS/JSON.md" "$SITE/guide/json.md" || _die 'failed to write guide/
 _emit_page "$DOCS/SECURITY.md" "$SITE/guide/security.md" || _die 'failed to write guide/security.md'
 _emit_page "$DOCS/POSIX.md" "$SITE/guide/posix.md" || _die 'failed to write guide/posix.md'
 
+# 变更记录的真相源是**仓库根目录的 CHANGELOG.md** —— 它由 tools/release.sh 在
+# 每次发版时自动追加，站点照旧只做投影：手抄一份到 site/ 必然在下一次发版时过期，
+# 而且没有任何门禁会发现分叉（与 docs/ 同一口径）。
+_emit_page "$ROOT/CHANGELOG.md" "$SITE/guide/changelog.md" || _die 'failed to write guide/changelog.md'
+
 # ---------- 2. API 参考：总览 + 每模块一页 ----------
 
 __nfunc=$(grep -c '^### `' "$DOCS/REFERENCE.md")
@@ -212,6 +217,8 @@ _en_notice "$SITE/en/guide/compatibility.md" 'Compatibility policy' 'compatibili
   'What counts as a breaking change, how long a deprecation must be announced, and which public functions carry no compatibility promise.'
 _en_notice "$SITE/en/guide/releasing.md" 'Releasing' 'releasing' \
   'How a release happens: one command bumps the version, regenerates artifacts, runs the gates, commits, tags and pushes.'
+_en_notice "$SITE/en/guide/changelog.md" 'Changelog' 'changelog' \
+  'Every release in one list: version, date and the commits that shipped it, newest first. Generated from CHANGELOG.md, which tools/release.sh appends to at each release.'
 _en_notice "$SITE/en/guide/man.md" 'Man pages' 'man' \
   'How shellkit man builds man pages: section 1 from the CLI registry, one page per library module from the module list and the doc comments.'
 _en_notice "$SITE/en/guide/json.md" 'Machine-readable output' 'json' \
