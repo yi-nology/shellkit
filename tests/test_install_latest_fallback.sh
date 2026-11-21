@@ -93,6 +93,15 @@ assert_contains "$(cat "$log")" "https://github.com/yi-nology/shellkit/releases/
 
 # --------------------------------------------------------------------------
 # 用例 3：两条路都不通 ⇒ 非 0，且不许硬凑一个版本号出来
+#
+# ★ 退出码也要断，而且是**断具体的那个码**：API 那一问**失败**（403 ⇒ curl -f
+#   退 22）且重定向也没给出版本号 ⇒ 这是「网络/接口层失败」⇒ 4（SK_NET），
+#   不是 5（SK_VERIFY）。仓库的退出码约定是「4 = 网络失败，重试可能有用；
+#   5 = 校验失败，重试同一个地址永远不会成功」（docs/API-FREEZE.md；
+#   install.sh 头部也写着「4 网络 / 5 校验」）。
+#   两类失败被抹平成一个 ⇒ 调用方的重试与告警都跟着走错 —— 而这恰恰是
+#   「给一条主路径加一条兜底路径」时最容易顺手弄丢的东西（实测 2026-11-21：
+#   加了兜底之后网络失败被报成 5，主路径的 4 整个丢了）。
 # --------------------------------------------------------------------------
 export FAKE_REDIRECT_HEADERS='HTTP/1.1 404 Not Found
 '
@@ -100,6 +109,7 @@ export FAKE_HEAD_EXIT=0
 _run_install "$TEST_ROOT/install.sh"
 assert_ne "0" "$rc" "no version at all must not look like success"
 assert_eq "" "$out" "no version must be printed"
+assert_eq "4" "$rc" "a failing API request must report a network failure (4), not a verification failure (5)"
 
 # --------------------------------------------------------------------------
 # 用例 3b：重定向这一问**本身**失败（断网 / 被墙）⇒ 同样不许硬凑版本号
@@ -108,7 +118,26 @@ export FAKE_HEAD_EXIT=22
 _run_install "$TEST_ROOT/install.sh"
 assert_ne "0" "$rc" "a failing redirect request must not look like success"
 assert_eq "" "$out" "no version must be printed"
+assert_eq "4" "$rc" "two failing requests must still report a network failure (4)"
 export FAKE_HEAD_EXIT=0
+
+# --------------------------------------------------------------------------
+# 用例 3c：API **答了**（200）但内容里没有版本号 ⇒ 这是「校验失败」，退 5
+#
+# 与用例 3 的区别只有一处：API 那一步是成功的（拿到了响应体），只是响应体里
+# 没有 tag_name（落地页 HTML、被限流的 JSON、字段改了名……）。
+# ⇒ 服务器答了 ⇒ 不是网络问题 ⇒ 5；两类必须能分开，否则「地址给不出版本」
+#   与「断网」在调用方眼里是一回事。
+# --------------------------------------------------------------------------
+export FAKE_API_BODY='{"message":"Not Found"}'
+export FAKE_API_EXIT=0
+export FAKE_REDIRECT_HEADERS='HTTP/1.1 404 Not Found
+'
+export FAKE_HEAD_EXIT=0
+_run_install "$TEST_ROOT/install.sh"
+assert_ne "0" "$rc" "an API without a version must not look like success"
+assert_eq "" "$out" "no version must be printed"
+assert_eq "5" "$rc" "an API that answers without a version must report a verification failure (5)"
 
 # --------------------------------------------------------------------------
 # 用例 4：demo.sh 同样要能走重定向（查不到版本就没法生成演示工程）
@@ -129,6 +158,17 @@ if [ -f "$TEST_ROOT/demo.sh" ]; then
     bash "$TEST_ROOT/demo.sh" >"$work/demo.out" 2>"$work/demo.err" || rc=$?
   assert_contains "$(cat "$log")" "https://github.com/yi-nology/shellkit/releases/latest" \
     "demo.sh must fall back to the redirect as well"
+  # demo.sh 的退出码约定与 install.sh 同一套（脚本头部写着「4 网络 / 5 校验」）：
+  # 两条路都问不到 ⇒ 4（网络失败），不是 5。
+  export FAKE_API_BODY='{"message":"API rate limit exceeded"}'
+  export FAKE_API_EXIT=22
+  export FAKE_REDIRECT_HEADERS='HTTP/1.1 404 Not Found
+'
+  rc=0
+  PATH="$work/bin:$PATH" FAKE_CURL_LOG="$log" FAKE_API_BODY="$FAKE_API_BODY" \
+    FAKE_API_EXIT="$FAKE_API_EXIT" FAKE_REDIRECT_HEADERS="$FAKE_REDIRECT_HEADERS" \
+    bash "$TEST_ROOT/demo.sh" >"$work/demo.out" 2>"$work/demo.err" || rc=$?
+  assert_eq "4" "$rc" "demo.sh must report a network failure (4), not a verification failure (5)"
 else
   printf 'NA: demo.sh is not in this tree (the coverage copy does not carry it) — the demo.sh case is skipped\n'
 fi
@@ -156,7 +196,7 @@ assert_contains "$(cat "$log")" "-H Authorization: Bearer secret-token" \
   "the token must be sent as an Authorization header"
 
 # --------------------------------------------------------------------------
-# 变异自证：把重定向兜底改回去（只剩 API），判据必须变红
+# 变异自证 1：把重定向兜底改回去（只剩 API），判据必须变红
 # --------------------------------------------------------------------------
 d=$(tmpdir)
 cp "$TEST_ROOT/install.sh" "$d/install.sh"
@@ -167,5 +207,38 @@ export FAKE_API_EXIT=22
 _run_install "$d/install.sh"
 assert_ne "8.8.8" "$out" "dropping the redirect fallback must break the check"
 assert_ne "0" "$rc" "without the fallback the rate-limited case must fail"
+
+# --------------------------------------------------------------------------
+# 变异自证 2：把两类失败抹平成一类（网络失败也报 5），判据必须变红
+#
+# 这正是 2026-11-21 实际发生的那个回归：给「查最新版本」加了兜底路径之后，
+# 两条路都失败时一律 die 5 —— 主路径原本的 4（网络失败）整个丢了。
+# 后果不是「退出码不好看」：4 = 重试可能有用，5 = 重试无用 —— 抹平之后
+# 调用方会把断网当成「这个版本号不可信」。
+#
+# 变异做在**调用点**上（把 "$?" 换回写死的 "$SK_VERIFY"）：那一行是普通文本，
+# 覆盖率插桩只会往分支臂里插计数器，不会改写它 ⇒ 插桩副本里同样成立。
+# --------------------------------------------------------------------------
+d2=$(tmpdir)
+cp "$TEST_ROOT/install.sh" "$d2/install.sh"
+python3 - "$d2/install.sh" <<'PY'
+import sys
+p = sys.argv[1]
+s = open(p, encoding="utf-8").read()
+old = 'both failed)" "$?"'
+new = 'both failed)" "$SK_VERIFY"'
+if old not in s:
+    sys.stderr.write("mutation anchor not found\n")
+    sys.exit(1)
+open(p, "w", encoding="utf-8").write(s.replace(old, new))
+PY
+export FAKE_API_BODY='{"message":"API rate limit exceeded"}'
+export FAKE_API_EXIT=22
+export FAKE_REDIRECT_HEADERS='HTTP/1.1 404 Not Found
+'
+export FAKE_HEAD_EXIT=0
+_run_install "$d2/install.sh"
+assert_eq "5" "$rc" "collapsing the two failure kinds must show up as 5 (the defect) instead of 4"
+assert_ne "4" "$rc" "the network failure must no longer be reported as 4 once the distinction is gone"
 
 exit 0

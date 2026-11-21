@@ -104,19 +104,34 @@ latest_via_redirect() {
 #
 # 两道取法：① release API（带 token ⇒ 5000 次/小时）；② /releases/latest 的
 # 重定向（不吃配额）。①失败或没取到 tag 时走 ②。
+#
+# 退出码（**两类失败不许抹平成一个**）：
+#   0 取到了版本号；
+#   4 网络/接口层失败 —— 两条路都**没拿到东西**（连不上、超时、403/404）；
+#   5 服务器答了但没给版本号（落地页 HTML、被限流的 JSON、字段改了名）。
+# ★ 为什么 4 与 5 要分开：脚本头部写明的约定是「4 网络 / 5 校验」——
+#   加了兜底路径之后若一律报 5，「断网」就被说成「这个版本号不可信」。
 latest_version() {
   local __dir=${1:-} __tag=""
+  local __api_failed=0
   if [ -n "$__dir" ] && fetch_release_api "$RELEASE_API" "$__dir/release.json"; then
     # 取第一行匹配，但不让 head 提前退出把 sed 打死（SIGPIPE → 141）
     __tag=$(sed -n 's/.*"tag_name"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' "$__dir/release.json")
     __tag=${__tag%%$'\n'*}
+  else
+    # 这一问**没拿到东西**：可能是连不上（网络），也可能是 403/404（服务器答了，
+    # 只是没给版本）。先记下来 —— 两条路都没结果时，用它决定退 4 还是退 5。
+    __api_failed=1
   fi
   if [ -n "$__tag" ]; then
     printf '%s' "${__tag#v}"
     return 0
   fi
-  latest_via_redirect || return 1
-  return 0
+  latest_via_redirect && return 0
+  if [ "$__api_failed" = "1" ]; then
+    return "$SK_NET"
+  fi
+  return "$SK_VERIFY"
 }
 
 # sha256 FILE —— 三种工具里挑一个能用的，输出纯十六进制串
@@ -176,8 +191,10 @@ trap 'rm -rf "${tmp:?}"' EXIT INT TERM
 
 ver=$want_version
 if [ -z "$ver" ]; then
+  # "$?" 就是 latest_version 的退出码：网络/接口层失败是 4，服务器答了但没给
+  # 版本号是 5 —— 两类要分开（脚本头部的退出码约定），不能一律报 5。
   ver=$(latest_version "$tmp") ||
-    die "cannot determine the latest version (API $RELEASE_API and redirect $RELEASE_LATEST both failed)" "$SK_VERIFY"
+    die "cannot determine the latest version (API $RELEASE_API and redirect $RELEASE_LATEST both failed)" "$?"
 fi
 
 base="${RELEASE_BASE%/}/v$ver"
