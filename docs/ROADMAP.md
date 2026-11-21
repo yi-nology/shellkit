@@ -346,6 +346,26 @@ Homebrew tap 已回填 1.4.1；本机 CLI 与 claude / codex / mcode 三处 skil
 `[ -n "$list" ]` 恒真 ⇒ 干净的工程也被拦；以及名单用换行拼时少了开头的换行 ⇒
 第一个成员永远匹配不上。两者在这一版里各踩了一次。
 
+**结果**：v1.5.0（`6945a4d`，PR #177）已发布 —— 17 项资产（含 `.deb` / `.rpm`）全部签名，
+`tools/verify_release.sh v1.5.0` 逐份验签通过（rc=0）；发布流水线三个 job 全绿；
+Homebrew tap 已回填 1.5.0；本机 CLI 与 claude / codex / mcode 三处 skill 已升到 1.5.0。
+
+两个真实工程都已升到 1.5.0，并各自跑过自己的门禁：
+
+| 工程 | 升级 | 验证 |
+|---|---|---|
+| `~/unix_script` | 0.17.0 → 1.5.0（`vendor/shellkit.upstream` 钉到 v1.5.0 的提交） | static 309/0/0、routing 614/0/2；`tools/check_vendor.sh` 含 L2 上游比对 ok；CI 28 个 job 全绿（含「vendor 一致性 / 上游钉扎」） |
+| `~/tools` | 0.15.0 → 1.5.0（版本钉四处 + `NOTICE` 来源信息同步，`vendor/.sha256` 重算 59 条） | `make check` 全过（syntax 29 个文件 / test 18 个文件 / lint / vendor-check） |
+
+⇒ #161 的另一半（「用户拿不到新能力」）在真实工程上闭环了：体检拦的是**新引入**的撞名，
+本来就撞的（`~/unix_script` 的 `die` / `fail` / `registry_scan`）只提示 ⇒ 两个工程都能无阻塞升级。
+
+发版过程中被本机拦下的两条：① macOS 的 `.DS_Store` 让 `tools/release.sh` 的
+「工作树必须干净」检查判脏（`git status --porcelain` 含未跟踪文件）⇒ 已把 `.DS_Store`
+加进 `.gitignore`（容器里没有 macOS 的全局 gitignore 时必现）；② 容器里发版最后一步
+push 失败（容器无 GitHub 凭据）⇒ 提交与 tag 留在本地、由本机补推即可，
+`make check` 的结论不受影响。
+
 
 ## 三、战略取舍
 
