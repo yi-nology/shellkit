@@ -983,44 +983,88 @@ _sk_shadow_has() {
   return 1
 }
 
+# _sk_shadow_parse_line LINE ROOT —— 把 grep 的一行输出拆成 "名字<TAB>相对路径:行号"
+#
+# grep -n -H 多文件时的输出是 "路径:行号:内容"。这里只做字符串切分，不 fork。
+# 路径里带 ':' 的工程目录会被切错 —— 那是极少见的情形，测试目录不会这样。
+#
+# @exitcode 0 成功（stdout 一行）
+_sk_shadow_parse_line() {
+  local __line=$1 __root=$2 __file __rest __lineno __name
+  __file=${__line%%:*}
+  __rest=${__line#*:}
+  __lineno=${__rest%%:*}
+  __rest=${__rest#*:}
+  __name=${__rest%%(*}
+  printf '%s\t%s:%s\n' "$__name" "${__file#"$__root"/}" "$__lineno"
+}
+
 # _sk_shadow_lib_fns LIBDIR —— 列出一份库副本的**公开**函数
 #
 # 每行 "名字<TAB>相对路径:行号"。只认顶层定义（下划线开头的私有函数不算）：
 # 工程自己写一个 _sk_xxx 的概率极低，真撞上了也不该拦着人家升级。
-# @exitcode 0 成功（stdout 每行一条）；1 目录读不到
+#
+# 三个要点：
+#
+#   * **一次 find + 一次 grep**（不给每个文件 fork 一次 grep）：
+#     macOS 上一次 fork ≈ 43ms，工程里几十个 .sh 文件就是好几秒。
+#   * **退出码固定 0**：结果为空是常态，不是错误。以前这个退出码由管道末端的
+#     grep 决定，而 grep「没匹配」返回 1 ⇒ 「扫完了、一个都没撞」被当成
+#     「扫不动」，调用方于是**静默放行**（体检形同虚设）；更糟的是那个退出码
+#     取决于 find 输出的**最后一个**文件有没有匹配 ⇒ 同一份代码换个文件系统
+#     （ext4 哈希序 vs APFS 创建序）就换一种行为：本机绿、CI 红。
+#   * **LC_ALL=C**：名字的判定用 [a-z] 这种范围，而范围按 locale 的排序规则
+#     解释 —— 在 en_US.UTF-8 下 [a-z] 连大写都算（坑 26）。
+#
+# @exitcode 0 成功（stdout 每行一条）
 _sk_shadow_lib_fns() {
-  local __libdir=$1 __f __line __rest __name
-  [ -d "$__libdir/core" ] || return 1
-  for __f in "$__libdir"/core/*.sh; do
-    [ -f "$__f" ] || continue
-    grep -n -E '^[a-z][a-z0-9_]*\(\)' "$__f" 2>/dev/null |
-      while IFS=: read -r __line __rest; do
-        [ -n "$__line" ] || continue
-        __name=${__rest%%(*}
-        [ -n "$__name" ] || continue
-        printf '%s\t%s:%s\n' "$__name" "${__f#"$__libdir"/}" "$__line"
+  local __libdir=$1
+  (
+    set +o pipefail
+    # LC_ALL=C：范围 [a-z] 按 locale 的排序规则解释，en_US.UTF-8 下连大写都算。
+    # 不能写成「-exec LC_ALL=C grep」—— find 不走 shell，会把 LC_ALL=C 当命令名。
+    export LC_ALL=C
+    find "$__libdir/core" -type f -name '*.sh' \
+      -exec grep -n -H -E '^[a-z][a-z0-9_]*\(' {} + 2>/dev/null |
+      while IFS= read -r __line; do
+        _sk_shadow_parse_line "$__line" "$__libdir"
       done
-  done
+    exit 0
+  )
+  return 0
 }
 
 # _sk_shadow_project_fns DIR REL —— 列出工程自己定义的函数
 #
-# 每行 "名字<TAB>相对路径:行号"。副本目录（REL）与 .git 要排除：
-# 副本里的函数是**库的**，不是工程的 —— 不排除的话每次都会把整库报成撞名。
-# @exitcode 0 成功；1 目录读不到
+# 每行 "名字<TAB>相对路径:行号"。要排除三种「不是工程的」文件：
+#
+#   * 副本目录（REL）：副本里的函数是**库的**，不是工程的；
+#   * 换名残骸（.shellkit-new / .shellkit-old）：那是库的**上一份副本**，
+#     同样不是工程的代码。不排除的话，换名被中断过的工程会被自己的旧副本
+#     判成「撞了一整库」⇒ 升级被误挡（恢复流程直接走不通）；
+#   * .git：里面可能有从别处拷来的脚本。
+#
+# @exitcode 0 成功（stdout 每行一条）
 _sk_shadow_project_fns() {
-  local __dir=$1 __rel=$2 __abs __f __line __rest __name
-  __abs=$(cd "$__dir" 2>/dev/null && pwd -P) || return 1
-  find "$__abs" -type f -name '*.sh' -not -path "$__abs/$__rel/*" -not -path "$__abs/.git/*" 2>/dev/null |
-    while IFS= read -r __f; do
-      grep -n -E '^[a-z_][a-z0-9_]*\(\)' "$__f" 2>/dev/null |
-        while IFS=: read -r __line __rest; do
-          [ -n "$__line" ] || continue
-          __name=${__rest%%(*}
-          [ -n "$__name" ] || continue
-          printf '%s\t%s:%s\n' "$__name" "${__f#"$__abs"/}" "$__line"
-        done
-    done
+  local __dir=$1 __rel=$2 __parent
+  __parent=${__rel%/*}
+  (
+    set +o pipefail
+    # LC_ALL=C：范围 [a-z] 按 locale 的排序规则解释，en_US.UTF-8 下连大写都算。
+    # 不能写成「-exec LC_ALL=C grep」—— find 不走 shell，会把 LC_ALL=C 当命令名。
+    export LC_ALL=C
+    find "$__dir" -type f -name '*.sh' \
+      -not -path "$__dir/$__rel/*" \
+      -not -path "$__dir/$__parent/.shellkit-new/*" \
+      -not -path "$__dir/$__parent/.shellkit-old/*" \
+      -not -path "$__dir/.git/*" \
+      -exec grep -n -H -E '^[a-z_][a-z0-9_]*\(' {} + 2>/dev/null |
+      while IFS= read -r __line; do
+        _sk_shadow_parse_line "$__line" "$__dir"
+      done
+    exit 0
+  )
+  return 0
 }
 
 # _sk_shadow_guard DIR REL [ALLOW] —— 同步前的同名体检
@@ -1040,17 +1084,17 @@ _sk_shadow_guard() {
   local __dir=$1 __rel=$2 __allow=${3:-0}
   local __own __new __old __own_names="|" __old_names="|"
   local __hit=0 __fresh=0
-  local __name __ofile __lfile __n2 __f2 __abs __dest
-  # 副本落点要用绝对路径：DIR 可能是相对路径，而下面的判断要读副本里的文件。
-  __abs=$(cd "$__dir" 2>/dev/null && pwd -P) || return 0
-  __dest="$__abs/$__rel"
-  __own=$(_sk_shadow_project_fns "$__abs" "$__rel") || return 0
-  [ -n "$__own" ] || return 0
-  __new=$(_sk_shadow_lib_fns "$SELF_DIR/lib") || return 0
-  [ -n "$__new" ] || return 0
+  local __name __ofile __lfile __n2 __f2 __dest
+  # 副本落点：DIR 可能是相对路径，下面的判断按同一个相对路径读副本里的文件。
+  __dest="$__dir/$__rel"
+  # 扫描函数的退出码固定 0（结果为空是常态，不是错误），所以这里不必判状态。
+  # 以前那句「|| return 0」正是把「扫完了、一个都没撞」当成「扫不动」而放行 ——
+  # 体检于是形同虚设，而且放不放行取决于 find 输出的最后一个文件（CI 红、本机绿）。
+  __own=$(_sk_shadow_project_fns "$__dir" "$__rel")
+  __new=$(_sk_shadow_lib_fns "$SELF_DIR/lib")
   __old=""
   if [ -d "$__dest/lib/core" ]; then
-    __old=$(_sk_shadow_lib_fns "$__dest/lib" 2>/dev/null) || __old=""
+    __old=$(_sk_shadow_lib_fns "$__dest/lib")
   fi
   while IFS=$'\t' read -r __name __ofile; do
     [ -n "$__name" ] || continue

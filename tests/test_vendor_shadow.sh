@@ -70,7 +70,27 @@ out=$(bash "$TEST_ROOT/shellkit" vendor "$p4" 2>&1) && rc=0 || rc=$?
 assert_eq 0 "$rc" "a project without collisions syncs cleanly"
 assert_not_contains "$out" "name collision" "a clean project gets no collision report"
 
-# ---- 5. 变异自证：把守卫改坏 ⇒ 新引入的撞名不再拦 ----
+# ---- 5. 换名残骸不是「工程的代码」⇒ 不能被当成撞名 ----
+#
+# 换名（vendor/.shellkit-new → vendor/shellkit）被打断时，盘上会留下
+# .shellkit-new 与 .shellkit-old 两个目录 —— 里面装的是**库的副本**，
+# 不是工程自己的代码。不排除它们，体检就会把整库报成撞名 ⇒ 升级被误挡
+# （恢复流程直接走不通：副本还没恢复就被挡在门外）。
+p6="$work/p6"
+mkdir -p "$p6/lib" "$p6/vendor"
+printf 'my_own_helper() { :; }\n' >"$p6/lib/mine.sh"
+# 换名被打断后的盘上状态：旧副本挪到 .shellkit-old，新副本还停在 .shellkit-new
+# （两个目录里装的都是**完整的库副本**，与真被中断时一样）
+mkdir -p "$p6/vendor/.shellkit-old"
+for __f in lib locale templates VERSION shellkit repair.sh; do
+  cp -R "$TEST_ROOT/$__f" "$p6/vendor/.shellkit-old/" || _fail "cannot stage the leftovers"
+done
+cp -R "$p6/vendor/.shellkit-old" "$p6/vendor/.shellkit-new"
+out=$(bash "$TEST_ROOT/shellkit" vendor "$p6" 2>&1) && rc=0 || rc=$?
+assert_eq 0 "$rc" "the swap leftovers must not block the sync"
+assert_not_contains "$out" "name collision" "the leftovers are the library's copy, not the project's code"
+
+# ---- 6. 变异自证：把守卫改坏 ⇒ 新引入的撞名不再拦 ----
 #
 # 守卫要是形同虚设，上面第 1 条就只是一句断言而已：真正的同步根本不会停。
 # 这里造一份「守卫被改坏」的 CLI（同 SELF_DIR，库还在）再跑一遍：
