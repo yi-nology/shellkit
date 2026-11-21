@@ -66,8 +66,8 @@ trap - EXIT
 # 子 shell 里**不**链调用方的 EXIT handler。
 # 理由：子 shell 里 trap_install 若把调用方的 EXIT handler 链进来，子 shell 退出时
 # 就会替父进程执行它 ⇒ 父进程还在跑，它的临时目录已经被删了 ⇒ 后续写文件直接
-# "No such file or directory"（bash 5 才复现：3.2 在子 shell 里 trap -p 读不到
-# 完整形态，捕获根本不会发生）。
+# "No such file or directory"。命令替换这种写法在 bash 3.2 与 5 上**都会**中招
+# （bash 自己不执行继承来的 trap，是库里捕获后 eval 才执行的）。
 out=$(
   trap 'echo user-exit' EXIT
   trap_push 'echo pushed'

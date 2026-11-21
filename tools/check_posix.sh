@@ -360,7 +360,7 @@ _yes_note_for() {
       printf '%s' "POSIX 子集提供同名版本：与主库同一口径（human 模式用 %b 解释转义、缺参不报错；机器模式输出 STATE/VERSION/EXTRA 行）"
       ;;
     trap_push | trap_install)
-      printf '%s' "POSIX 子集提供同名版本：与主库同一口径（trap_push 登记**整条命令含参数**、缺参数报错退 2；trap_install 不链调用方的 EXIT handler）"
+      printf '%s' "POSIX 子集提供同名版本：与主库同一口径（trap_push 登记**整条命令含参数**、缺参数报错退 2；trap_install 不链调用方的 EXIT handler）；**清理栈不按层隔离**（POSIX sh 没有可靠的子 shell 判定 ⇒ 父进程登记的清理条目在子 shell 退出时仍会被执行）"
       ;;
     fs_ensure_dir)
       printf '%s' "POSIX 子集提供同名版本：与主库同一口径（缺参数报用法错退 2；带 MODE 时 chmod 失败也不报错）"
