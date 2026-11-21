@@ -39,7 +39,8 @@ done
 printf '%s\n' "$*" >>"$FAKE_CURL_LOG"
 if [ "$head" = "1" ]; then
   printf "%s" "$FAKE_REDIRECT_HEADERS"
-  exit 0
+  # 重定向这一问本身也可以失败（断网 / 被墙）⇒ 那条臂也要有判据
+  exit "${FAKE_HEAD_EXIT:-0}"
 fi
 if [ -n "$ofile" ]; then printf "%s" "$FAKE_API_BODY" >"$ofile"; fi
 exit "$FAKE_API_EXIT"
@@ -95,9 +96,19 @@ assert_contains "$(cat "$log")" "https://github.com/yi-nology/shellkit/releases/
 # --------------------------------------------------------------------------
 export FAKE_REDIRECT_HEADERS='HTTP/1.1 404 Not Found
 '
+export FAKE_HEAD_EXIT=0
 _run_install "$TEST_ROOT/install.sh"
 assert_ne "0" "$rc" "no version at all must not look like success"
 assert_eq "" "$out" "no version must be printed"
+
+# --------------------------------------------------------------------------
+# 用例 3b：重定向这一问**本身**失败（断网 / 被墙）⇒ 同样不许硬凑版本号
+# --------------------------------------------------------------------------
+export FAKE_HEAD_EXIT=22
+_run_install "$TEST_ROOT/install.sh"
+assert_ne "0" "$rc" "a failing redirect request must not look like success"
+assert_eq "" "$out" "no version must be printed"
+export FAKE_HEAD_EXIT=0
 
 # --------------------------------------------------------------------------
 # 用例 4：demo.sh 同样要能走重定向（查不到版本就没法生成演示工程）
@@ -121,6 +132,28 @@ if [ -f "$TEST_ROOT/demo.sh" ]; then
 else
   printf 'NA: demo.sh is not in this tree (the coverage copy does not carry it) — the demo.sh case is skipped\n'
 fi
+
+# --------------------------------------------------------------------------
+# 用例 5：有 token ⇒ 请求带 Authorization 头（认证请求配额 5000 次/小时）
+#
+# 这条不是可有可无：带不带 token 决定 API 配额是 60 还是 5000 次/小时，
+# 而「带 token 的那条路」此前一条判据都没有 —— 坏了没人知道。
+# --------------------------------------------------------------------------
+export FAKE_API_BODY='{"tag_name":"v9.9.9"}'
+export FAKE_API_EXIT=0
+export FAKE_HEAD_EXIT=0
+export FAKE_REDIRECT_HEADERS='HTTP/1.1 302 Found
+location: https://github.com/yi-nology/shellkit/releases/tag/v8.8.8
+'
+: >"$log"
+rc=0
+out=$(PATH="$work/bin:$PATH" FAKE_CURL_LOG="$log" FAKE_API_BODY="$FAKE_API_BODY" \
+  FAKE_API_EXIT="$FAKE_API_EXIT" FAKE_REDIRECT_HEADERS="$FAKE_REDIRECT_HEADERS" \
+  GH_TOKEN=secret-token \
+  bash "$TEST_ROOT/install.sh" --check --prefix "$prefix" 2>"$work/err5.txt") || rc=$?
+assert_eq "9.9.9" "$out" "install.sh --check must report the latest version with a token"
+assert_contains "$(cat "$log")" "-H Authorization: Bearer secret-token" \
+  "the token must be sent as an Authorization header"
 
 # --------------------------------------------------------------------------
 # 变异自证：把重定向兜底改回去（只剩 API），判据必须变红
