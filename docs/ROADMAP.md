@@ -464,6 +464,10 @@ push 失败（容器无 GitHub 凭据）⇒ 提交与 tag 留在本地、由本�
 | `install.sh` 查版本那一问**超时 900 秒** | 未认证路径复用了 `fetch` 的 `--max-time 900`（下载 tarball 用它合理，查版本不合理）⇒ 主路径「连上了但没有响应」时，兜底那条路要等 15 分钟才轮得到 | 改 `fetch_release_api` 会动到它的分支臂编号 ⇒ 覆盖率基线要重生成；与上面两条一起放到 minor 那版更划算 |
 | `_sk_upgrade_journal_write` 里 `__keep` 没声明 local | 赋值落在**全局**上（同一文件里 `_sk_own_sync` 的 `__keep` 是 local，两处不互相污染）⇒ 当前无害，但这是个雷：将来谁在全局读 `__keep` 就会踩到 | 纯清理、零风险，但与本版主题无关 ⇒ 不混进同一个 patch |
 
+**结果**：v1.6.1（tag → `81413c9`，PR #179 / #180）已发布 —— 17 项资产（含 `.deb` / `.rpm`）全部签名，
+`tools/verify_release.sh v1.6.1` 逐份验签通过（rc=0），`tools/release_selfcheck.sh v1.6.1
+--require-packages` 也通过（rc=0），`releases/latest` 已指向 v1.6.1；Homebrew tap 已回填
+1.6.1（`bda73f9`）；本机 CLI 与 claude / codex / mcode 三处 skill 已升到 1.6.1。
 ## 三、战略取舍
 
 **值得继续投入**：Bash 工程标准化 —— 让运维、部署、安装与自动化脚本具备一致的
