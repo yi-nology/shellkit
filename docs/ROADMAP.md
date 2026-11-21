@@ -1,7 +1,8 @@
 # ShellKit 路线图：三层架构与版本验收状态
 
-状态：2026-11-21 更新（当前已发布 **v1.4.0**：POSIX/ash 侧的进程与看门狗原语 ——
-设备侧那一层终于不用手写了；标签、17 项资产与系统包全部验签通过）。
+状态：2026-11-21 更新（当前已发布 **v1.4.1**：POSIX 子集与 bash core 的语义分叉 ——
+同一套 API 写成两份实现，**差集就是缺陷清单**：本轮对拍挖出并修掉四条真分叉，
+外加一个只有真解释器才暴露的静默失效；17 项资产与系统包全部验签通过）。
 本文是**方向**，不是承诺 ——
 每个版本的退出条件写清楚，条件不满足就不进下一个版本（见「迭代节奏」）。
 
@@ -40,6 +41,7 @@
 | v0.26.1 | 系统包 job 的两处附产品：签名工具与补签前提 | `packages` job 自装 minisign；`sign_release.sh --file` 点名模式不再要求 `SHA256SUMS` 整份齐全（`tests/test_release_signing_tool.sh` 盯着签名 job） |
 | v0.27.0 | 1.0 契约批：兼容承诺 + 全量分级 + 取消重跑 + 发布自检 + 矩阵 lifecycle | `docs/COMPATIBILITY.md` + `compatibility-check`；162 个公开函数 50 stable / 112 experimental、豁免名单为空；`tests/test_release_gate_cancelled.sh`；`tools/release_selfcheck.sh` + 不可选 self-check job；`upgrade_matrix` lifecycle 一格 |
 | v1.0.0-rc.1 | 预发布版本语义（semver 后缀）+ RC 真实验证 | `lib/core/ver.sh` 接受并排序 `x.y.z-pre`；`tools/rc_check.sh`（对输入工程只读、先复制再跑）+ `--test-cmd`；tag 含 `-` ⇒ `--prerelease` 不占 `latest`；RPM 预发布拆 `Version`/`Release` |
+| v1.4.1 | POSIX 子集与 bash core 的语义分叉（#171~#174）：同一套 API 两份实现，差集就是缺陷清单 | 锁的归属（`lock_release` 不摘别人的锁）、建锁失败不再无限循环、`ver_cmp` 认 v 前缀与预发布后缀、`retry` 补回白名单/退避上限/退出码分类；判据 `tests/posix_semantics.sh`（同一份 POSIX sh 脚本在 dash 与 busybox ash 上原样跑）+ 四条负对照 |
 | v1.4.0 | POSIX/ash 侧的进程与看门狗原语（#162）：设备侧那一层终于进子集 | `lib/posix/shellkit-posix.sh` 的 `proc_start`/`proc_stop`/`proc_is_running`/`proc_watchdog`（同名同语义、返回码一致）；能力清单这四条 yes + 写清限制；判据 `tests/posix_smoke.sh`（**同一份 POSIX sh 脚本**在 dash 与 busybox ash 上原样跑，CI 必需检查「posix subset on busybox ash」）+ 三处变异自证 |
 | v1.1.0 | skill 旧副本的升级通道（#140）：无所有权基线时不再静默不更新 | 措辞区分「用户改过」与「无所有权基线」；装完核对 `VERSION`，没跟上退 5 并点名 N 个文件 + `--force` 逃逸口；「装不成」仍是 3 |
 
@@ -288,7 +290,7 @@ shellkit 补救 ⇒ 那边的脚本必须是**最保守**的那一份。#144 交
 ⇒ 判据脚本里的辅助函数必须用**独占前缀**，且不能与被测库的公开函数重名。
 
 
-### v1.4.1 —— POSIX 子集与 bash core 的语义分叉（#171 / #172 / #173 / #174）
+### v1.4.1 —— POSIX 子集与 bash core 的语义分叉（#171 / #172 / #173 / #174，已发布 2026-11-21）
 
 同一套 API 写成两份实现时，**差集就是缺陷清单**。v1.4.0 交付了进程层之后，
 POSIX 子集与 bash core 的重叠面变大 ⇒ 用「同一题问两份实现、把输出并排贴在一起」
@@ -307,6 +309,11 @@ bash 扩展）—— macOS 的 bash 上一切正常（本机全绿），dash 上
 
 判据 `tests/posix_semantics.sh`（一份**只用 POSIX sh 语法**的脚本 ⇒ 同一份在 dash
 与 busybox ash 上原样跑），四条都有**负对照**：把缺陷造回去，判据全部变红。
+
+**结果**：v1.4.1（`35d81a7`，PR #176）已发布 —— 17 项资产（含 `.deb` / `.rpm`）全部签名，
+`tools/verify_release.sh v1.4.1` 逐份验签通过（rc=0）；发布后自检
+`tools/release_selfcheck.sh v1.4.1 --require-packages` 通过；CI 16/16 全绿；
+Homebrew tap 已回填 1.4.1；本机 CLI 与 claude / codex / mcode 三处 skill 已升到 1.4.1。
 
 ## 三、战略取舍
 
