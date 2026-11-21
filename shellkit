@@ -110,7 +110,10 @@ SK_TPL_DIR="$SELF_DIR/templates"
 # update 的两个端点：可用环境变量指向镜像或内网发布源
 SHELLKIT_RELEASE_API="${SHELLKIT_RELEASE_API:-https://api.github.com/repos/yi-nology/shellkit/releases/latest}"
 SHELLKIT_RELEASE_BASE="${SHELLKIT_RELEASE_BASE:-https://github.com/yi-nology/shellkit/releases/download}"
-export SHELLKIT_RELEASE_API SHELLKIT_RELEASE_BASE
+# 未认证 API 配额是 60 次/小时每个 IP —— 共享出口很容易用光。
+# 这条是 /releases/latest 的重定向地址，不吃 API 配额，查不到时拿它兜底。
+SHELLKIT_RELEASE_LATEST="${SHELLKIT_RELEASE_LATEST:-https://github.com/yi-nology/shellkit/releases/latest}"
+export SHELLKIT_RELEASE_API SHELLKIT_RELEASE_BASE SHELLKIT_RELEASE_LATEST
 
 # 库没加载起来时下面这套注册跑不了（cli 模块可能压根没进来），
 # 所以整块挂在 SK_BOOTSTRAP_OK 上：降级路径自己收尾。
@@ -5273,7 +5276,10 @@ _sk_update_run() {
     log_info "$(_t 'checking for a newer version')"
     # 用 net_json 取版本号，而不是用 sed 去正则抠 JSON ——
     # 上游换一个 forge 或改一下字段顺序，那行正则就静默失配了。
-    __tag=$(net_json GET "$SHELLKIT_RELEASE_API" --path tag_name 2>/dev/null) || {
+    # 用库里的取法（带 token + /releases/latest 重定向兜底），而不是裸打 API：
+    # 未认证 API 配额是 60 次/小时每个 IP，共享出口很容易用光 ⇒ 升级路径直接断。
+    # 文案不改（改 msgid 要重生成三套翻译表），两条路都失败时由 log_debug 说明。
+    __tag=$(_sk_http_latest_tag "$SHELLKIT_RELEASE_API" "$SHELLKIT_RELEASE_LATEST" 2>/dev/null) || {
       log_error "$(_t 'cannot read the latest version from the release API')"
       return "$SK_VERIFY"
     }

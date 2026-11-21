@@ -236,6 +236,41 @@ unstub() {
   return 0
 }
 
+# stub_out_function FILE FUNC —— 把文件里某个函数的**整个函数体**换成「直接 return 1」
+#
+# 为什么要有它：覆盖率跑会把源文件**插桩**（if / case / || 的分支臂里插计数器）
+# ⇒ 按原文写的变异锚点在插桩后的文件里根本匹配不上 ⇒ 变异自证自己先红，
+# 判据就变成了「测插桩」而不是「测缺陷」。
+# ⇒ 变异按**函数边界**做：找 `FUNC() {` 到行首单独的 `}`，整段换掉 ⇒ 与插桩无关。
+#
+# 用法：stub_out_function "$d/install.sh" latest_via_redirect
+stub_out_function() {
+  python3 - "$1" "$2" <<'PY'
+import sys
+
+path, fn = sys.argv[1], sys.argv[2]
+lines = open(path, encoding='utf-8').read().split("\n")
+out, i, done = [], 0, False
+while i < len(lines):
+    if lines[i].startswith(fn + "() {"):
+        j = i + 1
+        while j < len(lines) and lines[j] != "}":
+            j += 1
+        out.append(fn + "() {")
+        out.append("  return 1")
+        out.append("}")
+        i = j + 1
+        done = True
+        continue
+    out.append(lines[i])
+    i += 1
+if not done:
+    sys.stderr.write("function not found: %s\n" % fn)
+    sys.exit(1)
+open(path, "w", encoding="utf-8").write("\n".join(out))
+PY
+}
+
 stub_reset() {
   local __n
   for __n in $_SK_STUB_NAMES; do

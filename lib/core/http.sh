@@ -628,6 +628,76 @@ _sk_http_github_asset() {
   return 0
 }
 
+# _sk_http_latest_tag API_URL PAGE_URL —— 最新 release 的 tag（带 v 前缀）；失败返回非 0
+#
+# 两道取法，按顺序试：
+#   ① API：字段是 JSON 里的 tag_name。带了 GH_TOKEN / GITHUB_TOKEN 就是认证请求
+#      （配额 5000 次/小时），没带是 **60 次/小时每个 IP**。
+#   ② 重定向：https://github.com/<repo>/releases/latest 会 302 到
+#      .../releases/tag/vX.Y.Z ⇒ **不吃 API 配额**。
+#
+# 为什么要有第 ② 道：共享出口 IP（公司 NAT、云主机、CI runner）很容易把未认证配额
+# 用光 —— 于是「查最新版本」失败 ⇒ `shellkit update` 直接不可用，而用户此时正想升级。
+# 实测 2026-11-21（发 v1.6.0 时本机撞上）：x-ratelimit-remaining: 0 ⇒ 403。
+_sk_http_latest_tag() {
+  local __api=${1:-} __page=${2:-} __tag="" __token=""
+  local -a __hdrs=()
+  if [ -z "$__api" ] && [ -z "$__page" ]; then
+    return "$SK_USAGE"
+  fi
+  __token=${GH_TOKEN:-${GITHUB_TOKEN:-}}
+  if [ -n "$__token" ]; then
+    __hdrs[${#__hdrs[@]}]="--header"
+    __hdrs[${#__hdrs[@]}]="Authorization: Bearer $__token"
+  fi
+  if [ -n "$__api" ]; then
+    __tag=$(net_json GET "$__api" --path tag_name ${__hdrs[@]+"${__hdrs[@]}"} 2>/dev/null) || __tag=""
+  fi
+  if [ -n "$__tag" ]; then
+    printf '%s' "$__tag"
+    return 0
+  fi
+  log_debug "the release API did not answer; trying the /releases/latest redirect"
+  if [ -z "$__page" ]; then
+    return "$SK_VERIFY"
+  fi
+  _sk_http_latest_tag_via_redirect "$__page" || return $?
+  return 0
+}
+
+# _sk_http_latest_tag_via_redirect PAGE_URL —— 从 /releases/latest 的重定向里取 tag
+_sk_http_latest_tag_via_redirect() {
+  local __page=${1:-} __head="" __tag=""
+  net_request HEAD "$__page" --timeout 30 --connect-timeout 10 >/dev/null 2>&1 || return $?
+  __head=$SK_HTTP_HEADERS
+  __tag=$(_sk_http_redirect_tag "$__head") || return $?
+  printf '%s' "$__tag"
+  return 0
+}
+
+# _sk_http_redirect_tag HEADERS —— 从响应头里取 /releases/tag/<tag> 的 <tag>
+#
+# 为什么自己扫而不让 curl 直接给 redirect_url：net_request 已经把响应头收进
+# SK_HTTP_HEADERS 了，直接用它不多一次请求。
+_sk_http_redirect_tag() {
+  local __h=${1:-} __line="" __loc="" __tag=""
+  while IFS= read -r __line || [ -n "$__line" ]; do
+    case "$__line" in
+      [Ll][Oo][Cc][Aa][Tt][Ii][Oo][Nn]:*) __loc=${__line#*:} ;;
+    esac
+  done <<SK_HTTP_REDIRECT_HEADERS
+$__h
+SK_HTTP_REDIRECT_HEADERS
+  __loc=$(printf '%s' "$__loc" | tr -d '\r' | sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//')
+  case "$__loc" in
+    */tag/*) __tag=${__loc##*/tag/} ;;
+    *) return 1 ;;
+  esac
+  [ -n "$__tag" ] || return 1
+  printf '%s' "$__tag"
+  return 0
+}
+
 # http_github_latest_tag REPO —— 最新 release 的 tag（去掉 v/V 前缀）
 # @brief 查询失败时输出空串并返回 0 —— 调用方把它当「没有新版本」处理。
 # @param REPO 形如 owner/repo

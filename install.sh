@@ -29,6 +29,11 @@ SK_VERIFY=5
 PROG=install.sh
 RELEASE_API="${SHELLKIT_RELEASE_API:-https://api.github.com/repos/yi-nology/shellkit/releases/latest}"
 RELEASE_BASE="${SHELLKIT_RELEASE_BASE:-https://github.com/yi-nology/shellkit/releases/download}"
+# 未认证的 release API 配额是 60 次/小时**每个 IP** —— 共享出口（公司 NAT、云主机、
+# CI runner）很容易把它用光 ⇒ 403 ⇒ **新用户连装都装不上**（实测 2026-11-21）。
+# 这条是 /releases/latest 的重定向地址，**不吃 API 配额**，查不到时拿它兜底。
+RELEASE_LATEST="${SHELLKIT_RELEASE_LATEST:-https://github.com/yi-nology/shellkit/releases/latest}"
+RELEASE_TOKEN="${GH_TOKEN:-${GITHUB_TOKEN:-}}"
 
 say() { printf '%s\n' "$*" >&2; }
 ok() { printf '[ OK ] %s\n' "$*" >&2; }
@@ -60,6 +65,85 @@ fetch() {
     die "curl or wget is required to download" "$SK_PRECOND"
   fi
   return 0
+}
+# fetch_release_api URL DEST —— 取 release API 的 JSON；带了 token 就是认证请求
+#
+# 未认证的 API 配额是 60 次/小时每个 IP；认证请求是 5000 次/小时。
+fetch_release_api() {
+  local __url=$1 __dest=$2
+  if [ -z "$RELEASE_TOKEN" ]; then
+    fetch "$__url" "$__dest"
+    return $?
+  fi
+  if command -v curl >/dev/null 2>&1; then
+    curl -fsSL --connect-timeout 15 --max-time 60 -H "Authorization: Bearer $RELEASE_TOKEN" \
+      -o "$__dest" "$__url" || return 1
+  elif command -v wget >/dev/null 2>&1; then
+    wget -q -T 60 -t 2 --header="Authorization: Bearer $RELEASE_TOKEN" \
+      -O "$__dest" "$__url" || return 1
+  else
+    die "curl or wget is required to download" "$SK_PRECOND"
+  fi
+  return 0
+}
+
+# latest_via_redirect —— 从 /releases/latest 的重定向里取版本号（不带 v）
+#
+# 为什么需要它：查「最新版本」这件事**根本不需要 API**。/releases/latest 会
+# 302 到 .../releases/tag/vX.Y.Z ⇒ 从 Location 头里就能拿到版本号，
+# 而这条路**不吃 API 配额**（实测 2026-11-21：配额用光时只有它还能走通）。
+latest_via_redirect() {
+  local __out="" __tag=""
+  if command -v curl >/dev/null 2>&1; then
+    __out=$(curl -sI --connect-timeout 15 --max-time 60 "$RELEASE_LATEST" 2>/dev/null || true)
+  elif command -v wget >/dev/null 2>&1; then
+    __out=$(wget -q -S --max-redirect=0 --timeout=60 -O /dev/null "$RELEASE_LATEST" 2>&1 || true)
+  else
+    return 1
+  fi
+  # 取第一行匹配，但不让 head 提前退出把 sed 打死（SIGPIPE → 141）
+  __tag=$(printf '%s\n' "$__out" |
+    sed -n 's/.*[Ll][Oo][Cc][Aa][Tt][Ii][Oo][Nn]:[[:space:]]*.*\/tag\/\([^/[:space:]]*\).*/\1/p' |
+    sed -n '1p')
+  [ -n "$__tag" ] || return 1
+  printf '%s' "${__tag#v}"
+  return 0
+}
+
+# latest_version DIR —— 最新版本号（不带 v），打印到 stdout
+#
+# 两道取法：① release API（带 token ⇒ 5000 次/小时）；② /releases/latest 的
+# 重定向（不吃配额）。①失败或没取到 tag 时走 ②。
+#
+# 退出码（**两类失败不许抹平成一个**）：
+#   0 取到了版本号；
+#   4 网络/接口层失败 —— 两条路都**没拿到东西**（连不上、超时、403/404）；
+#   5 服务器答了但没给版本号（落地页 HTML、被限流的 JSON、字段改了名）。
+# ★ 为什么 4 与 5 要分开：仓库的退出码约定是「4 = 网络失败，重试可能有用；
+#   5 = 校验失败，重试同一个地址永远不会成功」（docs/API-FREEZE.md）。
+#   加了兜底路径之后若一律报 5，「断网」就被说成「这个版本号不可信」——
+#   调用方的重试与告警都跟着走错。这是「加一条兜底」时最容易顺手弄丢的东西。
+latest_version() {
+  local __dir=${1:-} __tag=""
+  local __api_failed=0
+  if [ -n "$__dir" ] && fetch_release_api "$RELEASE_API" "$__dir/release.json"; then
+    # 取第一行匹配，但不让 head 提前退出把 sed 打死（SIGPIPE → 141）
+    __tag=$(sed -n 's/.*"tag_name"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' "$__dir/release.json")
+    __tag=${__tag%%$'\n'*}
+  else
+    # 这一问**没拿到东西**：可能是连不上（网络），也可能是 403/404（服务器答了，
+    # 只是没给版本）。先记下来 —— 两条路都没结果时，用它决定退 4 还是退 5。
+    __api_failed=1
+  fi
+  if [ -n "$__tag" ]; then
+    printf '%s' "${__tag#v}"
+    return 0
+  fi
+  latest_via_redirect && return 0
+  if [ "$__api_failed" = "1" ]; then
+    return "$SK_NET"
+  fi
+  return "$SK_VERIFY"
 }
 
 # sha256 FILE —— 三种工具里挑一个能用的，输出纯十六进制串
@@ -108,6 +192,7 @@ usage() {
   VERSION                同 --version
   SHELLKIT_RELEASE_API   取最新版本号的端点（默认 GitHub release API）
   SHELLKIT_RELEASE_BASE  release 资产前缀，走镜像时换这个
+  SHELLKIT_RELEASE_LATEST 查最新版本的备用端点（/releases/latest 重定向，不吃 API 配额）
   SHELLKIT_MINISIGN_PUBKEY      配了就验 minisign 签名（公钥 base64 串）
   SHELLKIT_MINISIGN_PUBKEY_FILE 同上，用 .pub 文件路径（两者都给时优先前者）
 
@@ -202,12 +287,10 @@ if [ "$mode" = check ]; then
   fi
   tmp=$(mktemp -d "${TMPDIR:-/tmp}/shellkit-check.XXXXXX") || die "cannot create a temporary directory" "$SK_ERR"
   trap 'rm -rf "${tmp:?}"' EXIT INT TERM
-  fetch "$RELEASE_API" "$tmp/release.json" || die "cannot reach the release API: $RELEASE_API" "$SK_NET"
-  # 取第一行匹配，但不让 head 提前退出把 sed 打死（SIGPIPE → 141）
-  tag=$(sed -n 's/.*"tag_name"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' "$tmp/release.json")
-  tag=${tag%%$'\n'*}
-  latest=${tag#v}
-  [ -n "$latest" ] || die "cannot read the version from $RELEASE_API" "$SK_VERIFY"
+  # "$?" 就是 latest_version 的退出码：网络/接口层失败是 4，服务器答了但没给
+  # 版本号是 5 —— 两类要分开（docs/API-FREEZE.md 的退出码约定），不能一律报 5。
+  latest=$(latest_version "$tmp") ||
+    die "cannot determine the latest version (API $RELEASE_API and redirect $RELEASE_LATEST both failed)" "$?"
   # stdout 只给数据：这一行就是脚本能拿去做判断的东西
   printf '%s\n' "$latest"
   if [ -z "$cur" ]; then
@@ -234,12 +317,8 @@ else
   tmp=$(mktemp -d "${TMPDIR:-/tmp}/shellkit-install.XXXXXX") || die "cannot create a temporary directory" "$SK_ERR"
   trap 'rm -rf "${tmp:?}"' EXIT INT TERM
   if [ -z "$ver" ]; then
-    fetch "$RELEASE_API" "$tmp/release.json" || die "cannot reach the release API: $RELEASE_API" "$SK_NET"
-    # 取第一行匹配，但不让 head 提前退出把 sed 打死（SIGPIPE → 141）
-    tag=$(sed -n 's/.*"tag_name"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' "$tmp/release.json")
-    tag=${tag%%$'\n'*}
-    ver=${tag#v}
-    [ -n "$ver" ] || die "cannot read the version from $RELEASE_API" "$SK_VERIFY"
+    ver=$(latest_version "$tmp") ||
+      die "cannot determine the latest version (API $RELEASE_API and redirect $RELEASE_LATEST both failed)" "$?"
   fi
   base="${RELEASE_BASE%/}/v$ver"
   say "downloading shellkit $ver"
