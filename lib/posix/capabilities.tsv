@@ -8,7 +8,7 @@
 # 「装上就挂」，而现场装不了 shellkit 补救。
 # 运行时也能问：posix_capable 函数名
 #
-# 主库的公开函数一共 182 个，POSIX 子集提供其中 32 个。
+# 主库的公开函数一共 184 个，POSIX 子集提供其中 32 个。
 # 另有 2 个是仅 POSIX 子集专有的（主库没有这个函数）。
 #
 # 函数名	POSIX 子集	原因
@@ -16,6 +16,7 @@ archive_extract	no	POSIX 子集未实现（模块 archive.sh）
 archive_list	no	POSIX 子集未实现（模块 archive.sh）
 ask	no	交互在无人值守的设备侧用不上
 ask_choice	no	交互在无人值守的设备侧用不上
+ask_multi	no	交互在无人值守的设备侧用不上
 ask_yn	no	交互在无人值守的设备侧用不上
 cli_cmd	no	CLI 框架与 man 页是开发期的事，设备侧不生成
 cli_completion_script	no	CLI 框架与 man 页是开发期的事，设备侧不生成
@@ -154,6 +155,7 @@ status_version	yes	-
 str_contains	no	POSIX 子集用 printf / tr 就够，不单独移植
 str_ends_with	no	POSIX 子集用 printf / tr 就够，不单独移植
 str_lower	no	POSIX 子集用 printf / tr 就够，不单独移植
+str_parse_indices	no	选区串是交互层的输入，设备侧用不上
 str_repeat	no	POSIX 子集用 printf / tr 就够，不单独移植
 str_starts_with	no	POSIX 子集用 printf / tr 就够，不单独移植
 str_suggest	no	POSIX 子集用 printf / tr 就够，不单独移植

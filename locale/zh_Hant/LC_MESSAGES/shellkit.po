@@ -4,7 +4,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: shellkit\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-11-19 17:43+0800\n"
+"POT-Creation-Date: 2026-11-21 09:00+0800\n"
 "PO-Revision-Date: 2026-11-08 00:00+0800\n"
 "Last-Translator: shellkit contributors\n"
 "Language-Team: shellkit contributors\n"
@@ -439,6 +439,15 @@ msgstr "預設"
 msgid "invalid choice"
 msgstr "無效的選擇"
 
+msgid "invalid count"
+msgstr "候選項總數非法"
+
+msgid "default value is not a valid selection"
+msgstr "預設選區不是合法的選區"
+
+msgid "invalid selection"
+msgstr "選區非法"
+
 msgid "circular dependency detected"
 msgstr "檢測到循環依賴"
 
@@ -678,6 +687,30 @@ msgstr "庫副本在別的位置"
 
 msgid "point shellkit at it instead of creating a second copy"
 msgstr "把 shellkit 指過去，而不是再建一份"
+
+msgid "this sync introduces a name collision with the library"
+msgstr "這次同步引入了與庫同名的函式"
+
+msgid "the project defines it at"
+msgstr "工程側定義於"
+
+msgid "the library defines it at"
+msgstr "庫側定義於"
+
+msgid ""
+"whichever is sourced last wins; rename the project function, or re-run with "
+"--allow-shadow to sync anyway"
+msgstr ""
+"誰後被 source 誰生效；請把工程裡的那個改名，或加 --allow-shadow 強行同步"
+
+msgid "name collision with the library, allowed by --allow-shadow"
+msgstr "與庫同名（已用 --allow-shadow 放行）"
+
+msgid "the project defines a function with the same name as the library"
+msgstr "工程裡定義了與庫同名的函式"
+
+msgid "whichever is sourced last wins"
+msgstr "誰後被 source 誰生效"
 
 msgid "refusing to write outside the project directory"
 msgstr "拒絕寫到工程目錄之外"

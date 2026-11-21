@@ -20,7 +20,7 @@ _sk_check_out_name() {
   case "${1:-}" in
     __ans | __answer | __arg | __buf | __choices | __confirm_ans | __count | \
       __default | __hint | __i | __idx | __long | __msg | __n | __opt | \
-      __opt_var | __out | __prompt | __rc | __s | __short | __start | \
+      __opt_var | __out | __parsed | __prompt | __rc | __s | __short | __start | \
       __timeout | __tries | __v | __val | __var)
       log_error "$(_t 'reserved variable name'): ${1:-}"
       return "$SK_USAGE"
@@ -249,5 +249,112 @@ str_suggest() {
   done
   [ -n "$__best" ] || return 1
   printf '%s' "$__best"
+  return 0
+}
+
+# str_parse_indices INPUT MAX —— 把「选区串」解析成编号列表
+# @brief 输入形如 1 / 1,3 / 2-5 / 1,3,5-8（可混合、乱序、重复；逗号后可带空格）。
+# @brief 输出是**去重升序**的编号列表（空格分隔），便于按序号取候选项。
+# @brief 区间写成 2-5 ⇒ 2 3 4 5；区间逆序（5-2）、越界（大于 MAX）、非数字一律判错。
+# @param INPUT 选区串
+# @param MAX 候选项总数（编号从 1 到 MAX）
+# @exitcode 0 解析成功（stdout 是去重升序的编号列表，空格分隔）
+# @exitcode 1 输入非法：空 / 空段 / 非数字 / 区间逆序 / 越界
+# @exitcode 2 参数错（参数个数不对，或 MAX 不是正整数）
+# @stability experimental
+str_parse_indices() {
+  local __input=${1:-} __max=${2:-}
+  local __rest __tok __lo __hi __n __i __j __prev __tmp __dup __more __out=""
+  local -a __sel=()
+  _sk_need_args "$#" 2 "str_parse_indices INPUT MAX" || return $?
+  case "$__max" in
+    '' | *[!0-9]*) return "$SK_USAGE" ;;
+  esac
+  [ "$__max" -ge 1 ] || return "$SK_USAGE"
+  [ -n "$__input" ] || return 1
+  __rest=$__input
+  while :; do
+    case "$__rest" in
+      *,*)
+        __tok=${__rest%%,*}
+        __rest=${__rest#*,}
+        __more=1
+        ;;
+      *)
+        __tok=$__rest
+        __rest=""
+        __more=0
+        ;;
+    esac
+    # 去首尾空格：用户手打 "1, 3, 5-8" 是常态
+    __tok=${__tok#"${__tok%%[![:space:]]*}"}
+    __tok=${__tok%"${__tok##*[![:space:]]}"}
+    [ -n "$__tok" ] || return 1
+    case "$__tok" in
+      *-*)
+        __lo=${__tok%%-*}
+        __hi=${__tok#*-}
+        case "$__lo" in '' | *[!0-9]*) return 1 ;; esac
+        case "$__hi" in '' | *[!0-9]*) return 1 ;; esac
+        # 10# 前缀：去掉前导零（08 是 8，不是八进制）
+        __lo=$((10#$__lo))
+        __hi=$((10#$__hi))
+        [ "$__lo" -le "$__hi" ] || return 1
+        __n=$__lo
+        while [ "$__n" -le "$__hi" ]; do
+          [ "$__n" -le "$__max" ] || return 1
+          __dup=0
+          for __i in "${__sel[@]+"${__sel[@]}"}"; do
+            if [ "$__i" = "$__n" ]; then
+              __dup=1
+              break
+            fi
+          done
+          if [ "$__dup" != "1" ]; then
+            __sel[${#__sel[@]}]=$__n
+          fi
+          __n=$((__n + 1))
+        done
+        ;;
+      *)
+        case "$__tok" in *[!0-9]*) return 1 ;; esac
+        __n=$((10#$__tok))
+        [ "$__n" -ge 1 ] || return 1
+        [ "$__n" -le "$__max" ] || return 1
+        __dup=0
+        for __i in "${__sel[@]+"${__sel[@]}"}"; do
+          if [ "$__i" = "$__n" ]; then
+            __dup=1
+            break
+          fi
+        done
+        if [ "$__dup" != "1" ]; then
+          __sel[${#__sel[@]}]=$__n
+        fi
+        ;;
+    esac
+    [ "$__more" = "1" ] || break
+  done
+  [ "${#__sel[@]}" -gt 0 ] || return 1
+  # 插入排序：选中项通常只有几个 ⇒ O(k²) 足够，且零 fork
+  __i=1
+  while [ "$__i" -lt "${#__sel[@]}" ]; do
+    __j=$__i
+    while [ "$__j" -gt 0 ]; do
+      __prev=$((__j - 1))
+      if [ "${__sel[__prev]}" -le "${__sel[__j]}" ]; then
+        break
+      fi
+      __tmp=${__sel[__prev]}
+      __sel[__prev]=${__sel[__j]}
+      __sel[__j]=$__tmp
+      __j=$__prev
+    done
+    __i=$((__i + 1))
+  done
+  for __i in "${__sel[@]+"${__sel[@]}"}"; do
+    __out="$__out${__out:+ }$__i"
+  done
+  printf '%s\n' "$__out"
   return 0
 }

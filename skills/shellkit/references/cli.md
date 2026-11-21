@@ -21,7 +21,7 @@
 
 | 命令 | 用法 | 说明 |
 | --- | --- | --- |
-| `shellkit vendor` | `vendor <dir> [--check] [--force]` | sync the library into an existing project |
+| `shellkit vendor` | `vendor <dir> [--check] [--force] [--allow-shadow]` | sync the library into an existing project |
 
 ## documentation
 

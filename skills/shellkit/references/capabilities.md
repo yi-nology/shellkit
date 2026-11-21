@@ -31,6 +31,7 @@
 - `str_ends_with` STR SUFFIX —— 后缀匹配；用返回码而不是布尔值
 - `str_repeat` VAR COUNT STRING —— 把字符串重复 N 次写进变量
 - `str_suggest` 距离相同时取先给的那个；没有候选时返回 1。
+- `str_parse_indices` 区间写成 2-5 ⇒ 2 3 4 5；区间逆序（5-2）、越界（大于 MAX）、非数字一律判错。
 ## validate
 
 - `validate_not_empty` VALUE —— 非空校验；失败原因写进 SK_VALIDATE_ERR
@@ -194,6 +195,7 @@
 - `ask` VAR PROMPT [DEFAULT] [TIMEOUT] —— 问一个问题，把答案写进 VAR；超时或 EOF 回退默认值   VAR 不能用库内部出参链路上的局部变量名（见 _sk_check_out_name），否则会静默失效。
 - `ask_yn` VAR PROMPT [DEFAULT=y] [TIMEOUT] —— 结果写入 y 或 n
 - `ask_choice` VAR PROMPT "a|b|c" [DEFAULT] [TIMEOUT] —— 多选一；超时或 EOF 回退默认值
+- `ask_multi` （空格分隔，如 "1 3 5"），不是候选项的内容 —— 按序号取内容是调用方的事。
 - `confirm` PROMPT [DEFAULT=n] [TIMEOUT] —— 只返回码
 ## cli
 
