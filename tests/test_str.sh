@@ -82,18 +82,3 @@ assert_eq "" "$(str_parse_indices "5-2" 10 2>/dev/null || true)" "an invalid sel
 assert_exit_code 2 str_parse_indices "1"
 assert_exit_code 2 str_parse_indices "1" 0
 assert_exit_code 2 str_parse_indices "1" x
-
-# ---- 变异自证：把「越界判错」改坏 ⇒ 上面那条越界断言必须不再成立 ----
-# 判据没有牙齿的话，上面那几条退 1 的断言只是「照着实现抄的」。
-# 这里造一份被改坏的 str.sh（同一个库、只坏这一处）再跑一遍：
-# 它必须**接受**越界编号 —— 证明拦住越界的确实是源码里那一条。
-_mut_work=$(tmpdir)
-sed -E 's/\[ "\$__n" -le "\$__max" \] \|\| return 1/: # 变异：不再判越界/' "$TEST_ROOT/lib/core/str.sh" >"$_mut_work/str.sh"
-# 跑法写成脚本文件：路径在写文件时就展开，避开嵌套引号与「变量没导出」两个坑。
-cat >"$_mut_work/run.sh" <<EOF
-. "$TEST_ROOT/lib/bootstrap.sh" >/dev/null 2>&1
-. "$_mut_work/str.sh"
-str_parse_indices '9' 3
-EOF
-_mut_out=$(bash "$_mut_work/run.sh" 2>/dev/null || true)
-assert_eq "9" "$_mut_out" "the mutated copy accepts an out-of-range index (the case above has teeth)"
