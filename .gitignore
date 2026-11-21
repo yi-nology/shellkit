@@ -29,3 +29,9 @@ id_ed25519
 # 本机工作文档（设计稿、批次清单），不进分发包也不进文档门禁
 .superpowers/
 
+# macOS 桌面元数据：Finder 会随手在仓库里生成 .DS_Store。
+# 它会让 tools/release.sh 的「工作树必须干净」检查（git status --porcelain 含未跟踪文件）
+# 直接判脏 ⇒ macOS 上发版永远起不来，且报错信息与真实原因（一个 6 KB 的元数据文件）
+# 完全对不上。
+.DS_Store
+
