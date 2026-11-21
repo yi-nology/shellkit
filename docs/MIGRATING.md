@@ -993,3 +993,16 @@ EXIT handler。此前链了 ⇒ 子 shell 退出时替父进程执行父进程�
 
 判据：`tests/test_posix_parity.sh`（两侧逐字对拍，29 个用例）与
 `tests/test_trap_subshell.sh`（子 shell 不得提前收尾）。
+
+### 1.6.1 → 1.7.0：会改变结果的行为变化
+
+| 变化 | 以前 | 现在 | 你会在哪里撞到 |
+|---|---|---|---|
+| `shellkit update` 查不到最新版本时的退出码 | 一律 `5`（校验失败）—— 断网也被说成「这个版本号不可信」 | 与 `install.sh` / `demo.sh` 同一口径分类：**没拿到东西**（连不上 / 超时 / 4xx / 5xx）⇒ `4`（重试可能有用）；**拿到了回答但里面没有版本号** ⇒ `5`（重试无用）；没有 jq/python3 解析不了回答且兜底也不通 ⇒ `3` | 用退出码决定重试策略的脚本：`4` 该重试，`5` 该换地址或人工介入 |
+| `shellkit update` 的可选验签 | 只有 sha256；`SHA256SUMS` 与包走**同一个下载通道**，签名在升级路径上等于没用 | 配了 `SHELLKIT_MINISIGN_PUBKEY[_FILE]` 就与 `install.sh` 同口径验 `SHA256SUMS.minisig` 与 tarball 签名：验不过或缺签名资产 ⇒ `5`；配了公钥但机器上没有 minisign ⇒ `3` | 高保障环境跑 `shellkit update`：以前配了公钥升级也不验，现在验；**没配公钥的默认路径一个字节不变** |
+| `install.sh` / `demo.sh` 查最新版本那一问的超时 | 复用 `fetch` 的 `--max-time 900`（那是给下载 tarball 定的） | `fetch_release_api` 自己的 `--max-time 60`，与重定向那一问同口径 | 网络挂起时：以前主路径要卡 15 分钟才轮到 `/releases/latest` 兜底，现在 60 秒就转过去 |
+
+回归判据：`tests/test_update_exitcode.sh`（4 与 5 必须分得开；变异自证：把透传改回写死的
+`5` ⇒ 用例变红）、`tests/test_update_signature.sh`（没配公钥一次都不调 minisign、坏签名退 5、
+缺 minisign 退 3；变异自证：把「配了公钥就验签」关掉 ⇒ 用例变红）、
+`tests/test_install_latest_fallback.sh`（超时不许是 900 秒；变异自证：改回 900 ⇒ 变红）。

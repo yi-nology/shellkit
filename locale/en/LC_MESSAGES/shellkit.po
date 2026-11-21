@@ -4,7 +4,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: shellkit\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-11-21 09:00+0800\n"
+"POT-Creation-Date: 2026-11-21 22:04+0800\n"
 "PO-Revision-Date: 2026-11-08 00:00+0800\n"
 "Last-Translator: shellkit contributors\n"
 "Language-Team: shellkit contributors\n"
@@ -1273,6 +1273,21 @@ msgid "current version"
 msgstr ""
 
 msgid "latest version"
+msgstr ""
+
+msgid "minisign is required to verify signatures"
+msgstr ""
+
+msgid "missing or unreachable signature"
+msgstr ""
+
+msgid "signature verification failed for SHA256SUMS (minisign)"
+msgstr ""
+
+msgid "signature verification failed for shellkit tarball (minisign)"
+msgstr ""
+
+msgid "signature verified"
 msgstr ""
 
 msgid "no checksum for this release"

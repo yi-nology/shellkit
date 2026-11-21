@@ -113,6 +113,29 @@ net_download() {
   return 0
 }
 
+# _sk_sig_pub_configured —— 是否配了验签公钥（SHELLKIT_MINISIGN_PUBKEY[_FILE] 任一）
+#
+# 为什么是内部原语：验签的**语义**只有一份（TRUST.md 定的口径），install.sh 是
+# 独立进程抄了一份，库内调用方（cmd_update）用这份 —— 不进公开 API 面，
+# 将来口径要改只改这里。
+_sk_sig_pub_configured() {
+  [ -n "${SHELLKIT_MINISIGN_PUBKEY:-}" ] || [ -n "${SHELLKIT_MINISIGN_PUBKEY_FILE:-}" ]
+}
+
+# _sk_sig_verify FILE —— 验 FILE 同目录 <FILE>.minisig 的 minisign 签名
+#
+# 公钥来源与优先级和 install.sh 逐字一致（都给时 base64 串优先，见 docs/TRUST.md）。
+# 前置（minisign 存在、配了公钥）由调用方先挡 —— 这里只负责「验，然后给退出码」。
+# 返回码：0 通过 / 1 不通过（minisign 自己的退出码原样透传）。
+_sk_sig_verify() {
+  local __file=${1:-}
+  if [ -n "${SHELLKIT_MINISIGN_PUBKEY:-}" ]; then
+    minisign -Vm "$__file" -P "$SHELLKIT_MINISIGN_PUBKEY" -q >/dev/null 2>&1
+  else
+    minisign -Vm "$__file" -p "$SHELLKIT_MINISIGN_PUBKEY_FILE" -q >/dev/null 2>&1
+  fi
+}
+
 # net_wait_port HOST PORT [TIMEOUT] —— 等端口可连；超时返回 SK_NET(4)
 # @exitcode 0 端口已就绪
 # @exitcode 2 参数错

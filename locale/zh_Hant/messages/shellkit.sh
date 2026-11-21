@@ -416,6 +416,11 @@ _sk_msg_lookup_shellkit() {
     'cannot read the latest version from the release API') printf '%s' '無法從 release API 讀出最新版本' ;;
     'current version') printf '%s' '目前版本：' ;;
     'latest version') printf '%s' '最新版本：' ;;
+    'minisign is required to verify signatures') printf '%s' '驗簽需要 minisign' ;;
+    'missing or unreachable signature') printf '%s' '簽名資產缺失或下載失敗' ;;
+    'signature verification failed for SHA256SUMS (minisign)') printf '%s' 'SHA256SUMS 的簽名校驗失敗（minisign）' ;;
+    'signature verification failed for shellkit tarball (minisign)') printf '%s' 'shellkit 壓縮檔的簽名校驗失敗（minisign）' ;;
+    'signature verified') printf '%s' '簽名校驗通過' ;;
     'no checksum for this release') printf '%s' '該版本沒有校驗和：' ;;
     'no checksum provided, skipping verification') printf '%s' '沒有提供校驗和，跳過校驗：' ;;
     'cannot extract archive') printf '%s' '無法解包：' ;;

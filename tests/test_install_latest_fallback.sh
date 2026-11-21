@@ -79,6 +79,15 @@ assert_contains "$(cat "$log")" "api.github.com/repos/yi-nology/shellkit/release
   "the API must be asked for the version"
 assert_not_contains "$(cat "$log")" "https://github.com/yi-nology/shellkit/releases/latest" \
   "the redirect must not be used when the API answers"
+# 查版本这一问不许复用 fetch 的 900 秒超时（那是给下载 tarball 定的）：
+# 主路径挂起时要白等 15 分钟才轮到兜底 —— 等于把兜底路径废掉。
+# ⚠️ 断言要收窄到**查版本那一问的行**：--check 流程里没有别的下载，但 demo.sh
+# 拿到版本号之后会**合法地**用 900 秒去下载 tarball —— 整份日志断言会把它误伤。
+api_line=$(awk '/api\.github\.com/ { print; exit }' "$log")
+assert_contains "$api_line" "--max-time 60" \
+  "the version question must use a bounded timeout"
+assert_not_contains "$api_line" "--max-time 900" \
+  "the version question must not reuse the 900s download timeout"
 
 # --------------------------------------------------------------------------
 # 用例 2：API 被限流（403 ⇒ curl -f 退 22）⇒ 必须靠重定向兜底
@@ -158,6 +167,12 @@ if [ -f "$TEST_ROOT/demo.sh" ]; then
     bash "$TEST_ROOT/demo.sh" >"$work/demo.out" 2>"$work/demo.err" || rc=$?
   assert_contains "$(cat "$log")" "https://github.com/yi-nology/shellkit/releases/latest" \
     "demo.sh must fall back to the redirect as well"
+  # demo.sh 与 install.sh 是同源的 fetch_release_api —— 超时口径也要一致。
+  # 同样收窄到查版本那一行：demo 拿到版本号后会用 fetch(900s) 下载 tarball，
+  # 那是它的本职，不是缺陷。
+  demo_api_line=$(awk '/api\.github\.com/ { print; exit }' "$log")
+  assert_not_contains "$demo_api_line" "--max-time 900" \
+    "demo.sh must not reuse the 900s download timeout for the version question"
   # demo.sh 的退出码约定与 install.sh 同一套（脚本头部写着「4 网络 / 5 校验」）：
   # 两条路都问不到 ⇒ 4（网络失败），不是 5。
   export FAKE_API_BODY='{"message":"API rate limit exceeded"}'
@@ -207,6 +222,32 @@ export FAKE_API_EXIT=22
 _run_install "$d/install.sh"
 assert_ne "8.8.8" "$out" "dropping the redirect fallback must break the check"
 assert_ne "0" "$rc" "without the fallback the rate-limited case must fail"
+
+# --------------------------------------------------------------------------
+# 变异自证 3：把 fetch_release_api 的超时改回 900 秒，判据必须变红
+#
+# 变异按函数边界切片（同 stub_out_function 的口径：函数名行到行首的 }），
+# 只把该函数里的 --max-time 60 换成 900 —— 参数字符串不是分支臂，
+# 覆盖率插桩不会改写它。
+# --------------------------------------------------------------------------
+d3=$(tmpdir)
+cp "$TEST_ROOT/install.sh" "$d3/install.sh"
+python3 - "$d3/install.sh" <<'PY'
+import sys
+p = sys.argv[1]
+lines = open(p, encoding="utf-8").read().split("\n")
+start = next(i for i, l in enumerate(lines) if l.startswith("fetch_release_api() {"))
+end = next(i for i in range(start + 1, len(lines)) if lines[i] == "}")
+for i in range(start, end + 1):
+    lines[i] = lines[i].replace("--max-time 60", "--max-time 900")
+open(p, "w", encoding="utf-8").write("\n".join(lines))
+PY
+export FAKE_API_BODY='{"tag_name":"v9.9.9"}'
+export FAKE_API_EXIT=0
+_run_install "$d3/install.sh"
+mut_api_line=$(awk '/api\.github\.com/ { print; exit }' "$log")
+assert_contains "$mut_api_line" "--max-time 900" \
+  "reintroducing the 900s timeout must show up in the request (the defect)"
 
 # --------------------------------------------------------------------------
 # 变异自证 2：把两类失败抹平成一类（网络失败也报 5），判据必须变红

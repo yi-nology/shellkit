@@ -4,7 +4,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: shellkit\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-11-21 09:00+0800\n"
+"POT-Creation-Date: 2026-11-21 22:04+0800\n"
 "PO-Revision-Date: 2026-11-08 00:00+0800\n"
 "Last-Translator: shellkit contributors\n"
 "Language-Team: shellkit contributors\n"
@@ -1279,6 +1279,21 @@ msgstr "当前版本："
 
 msgid "latest version"
 msgstr "最新版本："
+
+msgid "minisign is required to verify signatures"
+msgstr "验签需要 minisign"
+
+msgid "missing or unreachable signature"
+msgstr "签名资产缺失或下载失败"
+
+msgid "signature verification failed for SHA256SUMS (minisign)"
+msgstr "SHA256SUMS 的签名校验失败（minisign）"
+
+msgid "signature verification failed for shellkit tarball (minisign)"
+msgstr "shellkit 压缩包的签名校验失败（minisign）"
+
+msgid "signature verified"
+msgstr "签名校验通过"
 
 msgid "no checksum for this release"
 msgstr "该版本没有校验和："
