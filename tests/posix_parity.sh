@@ -53,7 +53,10 @@ printf 'hello\n' >"$_pp_tmp/known"
 
 # ---- 输出压成一行（换行 → '|'），便于逐行比对 ----
 _pp_flat() {
-  _pp_flat_v=$(tr '\n' '|' <"$1")
+  # 外部工具自己的诊断**不算**库的行为：sha256sum 的报错措辞各家不同
+  # （GNU 说 "No such file or directory"，busybox 说 "can't open"）
+  # ⇒ 过滤掉，只比库自己的输出与退出码。
+  _pp_flat_v=$(grep -v -e '^sha256sum:' -e '^shasum:' "$1" 2>/dev/null | tr '\n' '|')
   case "$_pp_flat_v" in
     *'|') _pp_flat_v=${_pp_flat_v%|} ;;
   esac
