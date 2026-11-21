@@ -113,4 +113,13 @@ for n in 1 2 3 4 5 6 7 8; do
   assert_contains "$out" "0 updated, 0 added, 0 left alone" "no file may stay frozen after the recovery (n=$n)"
 done
 
+# ---- 形状守卫：_sk_upgrade_journal_write 必须把 __keep 声明成 local ----
+# __keep 是这个函数里的工作变量；漏了 local 就写到**全局**上 —— 当前没有别人从
+# 全局读它（同文件里 _sk_own_sync 的 __keep 自己是 local），所以行为无害，但这是
+# 个雷：将来谁在全局读 __keep 就会拿到升级日志的残留值。行为测不出来（今天它
+# 恰好没人读），用形状守卫钉住：函数体里必须有一行声明 __keep 的 local。
+jn_local=$(awk '/^_sk_upgrade_journal_write\(\) \{/,/^\}/' "$TEST_ROOT/shellkit" |
+  grep -c 'local .*__keep' || true)
+assert_eq "1" "$jn_local" "_sk_upgrade_journal_write must declare __keep as local"
+
 exit 0

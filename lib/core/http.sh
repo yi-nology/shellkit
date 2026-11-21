@@ -628,7 +628,7 @@ _sk_http_github_asset() {
   return 0
 }
 
-# _sk_http_latest_tag API_URL PAGE_URL —— 最新 release 的 tag（带 v 前缀）；失败返回非 0
+# _sk_http_latest_tag API_URL PAGE_URL —— 最新 release 的 tag（带 v 前缀）
 #
 # 两道取法，按顺序试：
 #   ① API：字段是 JSON 里的 tag_name。带了 GH_TOKEN / GITHUB_TOKEN 就是认证请求
@@ -639,8 +639,21 @@ _sk_http_github_asset() {
 # 为什么要有第 ② 道：共享出口 IP（公司 NAT、云主机、CI runner）很容易把未认证配额
 # 用光 —— 于是「查最新版本」失败 ⇒ `shellkit update` 直接不可用，而用户此时正想升级。
 # 实测 2026-11-21（发 v1.6.0 时本机撞上）：x-ratelimit-remaining: 0 ⇒ 403。
+#
+# 退出码（**两类失败不许抹平成一个**，与 install.sh / demo.sh 同口径 —— 坑表 44）：
+#   0 取到了 tag；
+#   2 两个端点都没给（用法错）；
+#   3 没有 minisign 之类的前置不在这条路上 —— 这里是「没有 jq/python3 解析不了
+#     API 的回答」，而重定向那条路不需要解析器；
+#   4 没拿到东西（连不上 / 超时 / 4xx / 5xx：重试可能有用）；
+#   5 拿到了回答但里面没有版本号（重试同一个地址永远不会成功）。
+#
+# 为什么用 net_request 两步走而不是 net_json 一步到位：命令替换是**子 shell**，
+# SK_HTTP_CODE 带不回来 —— 而「403 配额用光」（重试有用）与「200 没有 tag_name」
+# （重试无用）必须按状态码分开（坑 42/44：退出码要单独判）。
 _sk_http_latest_tag() {
   local __api=${1:-} __page=${2:-} __tag="" __token=""
+  local __api_failed=0 __precond=0 __rc=0 __code=""
   local -a __hdrs=()
   if [ -z "$__api" ] && [ -z "$__page" ]; then
     return "$SK_USAGE"
@@ -651,7 +664,27 @@ _sk_http_latest_tag() {
     __hdrs[${#__hdrs[@]}]="Authorization: Bearer $__token"
   fi
   if [ -n "$__api" ]; then
-    __tag=$(net_json GET "$__api" --path tag_name ${__hdrs[@]+"${__hdrs[@]}"} 2>/dev/null) || __tag=""
+    # 状态码不算错误（net_request 的约定）⇒ 成功返回后再按 SK_HTTP_CODE 分类
+    if net_request GET "$__api" ${__hdrs[@]+"${__hdrs[@]}"} 2>/dev/null; then
+      __code=$SK_HTTP_CODE
+      case "$__code" in
+        2??)
+          __rc=0
+          __tag=$(_sk_http_json_extract "$SK_HTTP_BODY" tag_name 2>/dev/null) || __rc=$?
+          # 3 = 没有 jq/python3：回答是拿到了，只是解析不了 ⇒ 前置条件
+          if [ "$__rc" -eq "$SK_PRECOND" ]; then
+            __precond=1
+          fi
+          ;;
+        *)
+          # 4xx/5xx：服务器答了，但答的不是我们问的东西（403 配额用光、404 端点没了）
+          __api_failed=1
+          ;;
+      esac
+    else
+      # 连不上 / 超时 / URL 坏：网络层就没拿到东西
+      __api_failed=1
+    fi
   fi
   if [ -n "$__tag" ]; then
     printf '%s' "$__tag"
@@ -659,10 +692,28 @@ _sk_http_latest_tag() {
   fi
   log_debug "the release API did not answer; trying the /releases/latest redirect"
   if [ -z "$__page" ]; then
+    if [ "$__precond" = "1" ]; then
+      return "$SK_PRECOND"
+    fi
+    if [ "$__api_failed" = "1" ]; then
+      return "$SK_NET"
+    fi
     return "$SK_VERIFY"
   fi
-  _sk_http_latest_tag_via_redirect "$__page" || return $?
-  return 0
+  __rc=0
+  _sk_http_latest_tag_via_redirect "$__page" || __rc=$?
+  if [ "$__rc" -eq 0 ]; then
+    return 0
+  fi
+  # 兜底那条路的失败原因也要分类：没有 curl 是前置条件（3），其余按「主路径
+  # 有没有拿到东西」判 —— 与 install.sh 的 latest_version 逐条对账过。
+  if [ "$__precond" = "1" ] || [ "$__rc" -eq "$SK_PRECOND" ]; then
+    return "$SK_PRECOND"
+  fi
+  if [ "$__api_failed" = "1" ]; then
+    return "$SK_NET"
+  fi
+  return "$SK_VERIFY"
 }
 
 # _sk_http_latest_tag_via_redirect PAGE_URL —— 从 /releases/latest 的重定向里取 tag

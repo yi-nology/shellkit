@@ -59,18 +59,25 @@ fetch() {
 # fetch_release_api URL DEST —— 取 release API 的 JSON；带了 token 就是认证请求
 #
 # 未认证的 API 配额是 60 次/小时每个 IP；认证请求是 5000 次/小时。
+# 超时**不复用 fetch 的 900 秒**：那是给下载 tarball 定的，而这一问只是「查个
+# 版本号」—— 主路径卡 900 秒才轮到 /releases/latest 兜底，等于把兜底路径废掉
+# （网络挂起时要白等 15 分钟）。一律 60 秒，与重定向那一问同口径。
 fetch_release_api() {
   local __url=$1 __dest=$2
-  if [ -z "$RELEASE_TOKEN" ]; then
-    fetch "$__url" "$__dest"
-    return $?
-  fi
   if command -v curl >/dev/null 2>&1; then
-    curl -fsSL --connect-timeout 15 --max-time 60 -H "Authorization: Bearer $RELEASE_TOKEN" \
-      -o "$__dest" "$__url" || return 1
+    if [ -n "$RELEASE_TOKEN" ]; then
+      curl -fsSL --connect-timeout 15 --max-time 60 -H "Authorization: Bearer $RELEASE_TOKEN" \
+        -o "$__dest" "$__url" || return 1
+    else
+      curl -fsSL --connect-timeout 15 --max-time 60 -o "$__dest" "$__url" || return 1
+    fi
   elif command -v wget >/dev/null 2>&1; then
-    wget -q -T 60 -t 2 --header="Authorization: Bearer $RELEASE_TOKEN" \
-      -O "$__dest" "$__url" || return 1
+    if [ -n "$RELEASE_TOKEN" ]; then
+      wget -q -T 60 -t 2 --header="Authorization: Bearer $RELEASE_TOKEN" \
+        -O "$__dest" "$__url" || return 1
+    else
+      wget -q -T 60 -t 2 -O "$__dest" "$__url" || return 1
+    fi
   else
     die "curl or wget is required to download" "$SK_PRECOND"
   fi

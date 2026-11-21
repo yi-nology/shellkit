@@ -468,6 +468,30 @@ push 失败（容器无 GitHub 凭据）⇒ 提交与 tag 留在本地、由本�
 `tools/verify_release.sh v1.6.1` 逐份验签通过（rc=0），`tools/release_selfcheck.sh v1.6.1
 --require-packages` 也通过（rc=0），`releases/latest` 已指向 v1.6.1；Homebrew tap 已回填
 1.6.1（`bda73f9`）；本机 CLI 与 claude / codex / mcode 三处 skill 已升到 1.6.1。
+
+### v1.7.0 —— 升级链加固（验签 + 退出码口径 + 兜底超时）
+
+**触发**：v1.6.1 收口复核时把「发版链 / 升级链」又过了一遍，四条缺口全是**同源**的：
+主路径修好了，兜底路径与另一条入口没跟上 —— 上面「四条不在这一版范围」的清单就是它。
+
+| 缺口 | 现状 | 修法 |
+|---|---|---|
+| `shellkit update` **不验 minisign 签名** | `install.sh` 配了公钥就验两个 `.minisig`；`update` 只有 sha256 —— 而 `SHA256SUMS` 与包走**同一个下载通道**，中间人可以一起换掉 ⇒ 签名在升级路径上等于没用（库里连验签原语都没有） | 库里加**内部**原语 `_sk_sig_pub_configured` / `_sk_sig_verify`（`net.sh`，不进公开 API 面），接到 `_sk_update_run`：验不过 / 缺签名资产 ⇒ 5，配了公钥但没有 minisign ⇒ 3；**没配公钥 ⇒ 行为不变** |
+| `shellkit update` 把**网络失败**也报成 5 | v1.6.1 给 `install.sh` / `demo.sh` 修回了 4/5 区分，CLI 却把 `_sk_http_latest_tag` 的返回码一律压成 5 ⇒ 三条入口口径不一致 | `_sk_http_latest_tag` 改**两步走**：`net_request` 在父 shell 里拿 `SK_HTTP_CODE`（命令替换是子 shell，状态码带不回来 —— 坑 42），按状态码分类：4xx/5xx 或连不上 ⇒ 4；200 没 `tag_name` ⇒ 5；没有解析器 ⇒ 3；`cmd_update` 原样透传 |
+| `install.sh` / `demo.sh` 查版本复用 **900 秒**超时 | 下载 tarball 用 `--max-time 900` 合理，查版本不合理 ⇒ 主路径挂起时兜底要白等 15 分钟才轮到 | `fetch_release_api` 自己的 60 秒（与重定向那一问同口径）；两处同源函数一起改 |
+| `_sk_upgrade_journal_write` 的 `__keep` 漏成全局 | 赋值落在**全局**上；当前没人从全局读它 ⇒ 无害，但是个雷 | 补 `local`；行为测不出来 ⇒ **形状守卫**钉在 `tests/test_upgrade_crash.sh` |
+
+**判据先行**（四份，全部先红后绿，三份带变异自证）：`test_update_exitcode`（4 与 5 分开）、
+`test_update_signature`、`test_install_latest_fallback`（超时 60 + demo 同口径）、
+`test_upgrade_crash`（`__keep` 形状守卫）。
+
+⚠️ 写判据时踩到两处，记下来：
+① **`--check` 在解析出版本号之后就返回** —— 拿它测验签永远走不到验签段，
+   第一次跑全绿不是「实现了」，是**判据没咬住**（真机复现才定位到：curl 日志里只有
+   一问、一个下载都没有）；
+② 假 curl 对**不带 `-w` 的下载调用**也打了状态码 ⇒ `"200"` 混进被测命令的 stdout
+   把断言搅黄 —— 假命令要按**调用形态**分派（带不带 `-w`），只按 URL 分派不够。
+
 ## 三、战略取舍
 
 **值得继续投入**：Bash 工程标准化 —— 让运维、部署、安装与自动化脚本具备一致的

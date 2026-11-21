@@ -1846,7 +1846,7 @@ _sk_upgrade_journal_match() {
 # 那个内容了，永远匹配不上），丢掉。这样反复升级失败也不会把日志
 # 积成一条长尾巴：每个文件最多留一条旧记录加本轮的新记录。
 _sk_upgrade_journal_write() {
-  local __dir=${1:-} __tpl=${2:-} __i=0 __rel __act __old __new __cur __txt="" __file
+  local __dir=${1:-} __tpl=${2:-} __i=0 __rel __act __old __new __cur __txt="" __file __keep=""
   __file=$(_sk_upgrade_journal_file "$__dir")
   while [ "$__i" -lt "${#_SK_UPGRADE_JRELS[@]}" ]; do
     __rel=${_SK_UPGRADE_JRELS[$__i]}
@@ -5257,6 +5257,7 @@ cmd_uninstall_self() {
 _sk_update_run() {
   local __prefix=$1 __from=$2 __sum=$3 __check=$4 __force=$5 __tmp=$6
   local __dest __ver="" __tgz="" __sumfile="" __src="" __cur="" __tag="" __iargs
+  local __rc=0 __sig=""
 
   __dest="$(_sk_install_dest "$__prefix")"
   if [ -f "$__dest/VERSION" ]; then
@@ -5279,9 +5280,12 @@ _sk_update_run() {
     # 用库里的取法（带 token + /releases/latest 重定向兜底），而不是裸打 API：
     # 未认证 API 配额是 60 次/小时每个 IP，共享出口很容易用光 ⇒ 升级路径直接断。
     # 文案不改（改 msgid 要重生成三套翻译表），两条路都失败时由 log_debug 说明。
+    # 退出码原样透传：_sk_http_latest_tag 已经把「没拿到东西(4)」与「答了没版本(5)」
+    # 分开（与 install.sh / demo.sh 同口径，坑 44）—— 这里再压成 5 就白分了。
     __tag=$(_sk_http_latest_tag "$SHELLKIT_RELEASE_API" "$SHELLKIT_RELEASE_LATEST" 2>/dev/null) || {
+      __rc=$?
       log_error "$(_t 'cannot read the latest version from the release API')"
-      return "$SK_VERIFY"
+      return "$__rc"
     }
     __ver=${__tag#v}
     if [ -z "$__ver" ]; then
@@ -5302,6 +5306,34 @@ _sk_update_run() {
     net_download "${SHELLKIT_RELEASE_BASE%/}/v$__ver/shellkit-$__ver.tar.gz" "$__tgz" || return $?
     __sumfile="$__tmp/SHA256SUMS"
     net_download "${SHELLKIT_RELEASE_BASE%/}/v$__ver/SHA256SUMS" "$__sumfile" || return $?
+    # 可选验签（与 install.sh 同口径，docs/TRUST.md）：配了公钥就先锚「清单与包
+    # 是我们发的」，再信 sha256 —— sha256 只防「下载没被改」，防不住清单和包被
+    # 一起换掉。没配公钥 ⇒ 一个字节都不多做，默认行为不变。
+    if _sk_sig_pub_configured; then
+      if ! command -v minisign >/dev/null 2>&1; then
+        log_error "$(_t 'minisign is required to verify signatures'): SHELLKIT_MINISIGN_PUBKEY"
+        return "$SK_PRECOND"
+      fi
+      __sig="$__tmp/SHA256SUMS.minisig"
+      net_download "${SHELLKIT_RELEASE_BASE%/}/v$__ver/SHA256SUMS.minisig" "$__sig" || {
+        log_error "$(_t 'missing or unreachable signature'): $__sig"
+        return "$SK_VERIFY"
+      }
+      _sk_sig_verify "$__sumfile" || {
+        log_error "$(_t 'signature verification failed for SHA256SUMS (minisign)')"
+        return "$SK_VERIFY"
+      }
+      __sig="$__tmp/shellkit-$__ver.tar.gz.minisig"
+      net_download "${SHELLKIT_RELEASE_BASE%/}/v$__ver/shellkit-$__ver.tar.gz.minisig" "$__sig" || {
+        log_error "$(_t 'missing or unreachable signature'): $__sig"
+        return "$SK_VERIFY"
+      }
+      _sk_sig_verify "$__tgz" || {
+        log_error "$(_t 'signature verification failed for shellkit tarball (minisign)'): shellkit-$__ver.tar.gz"
+        return "$SK_VERIFY"
+      }
+      log_ok "$(_t 'signature verified'): SHA256SUMS, shellkit-$__ver.tar.gz"
+    fi
     __sum=$(awk -v n="shellkit-$__ver.tar.gz" '$2==n{print $1}' "$__sumfile")
     if [ -z "$__sum" ]; then
       log_error "$(_t 'no checksum for this release'): $__sumfile"
