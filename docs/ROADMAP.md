@@ -376,7 +376,7 @@ push 失败（容器无 GitHub 凭据）⇒ 提交与 tag 留在本地、由本�
 |---|---|
 | 差分对拍门禁：同一份调用在两边跑，退出码 + stdout + stderr 必须**逐字**一致 | `tests/posix_parity.sh`（纯 POSIX sh 的探针，按主库口径写调用）+ `tests/test_posix_parity.sh`（门禁）：29 个用例、绝对期望表（防「两边一起漂」）、两条变异自证、dash / busybox ash 解释器对拍 |
 | POSIX 子集与主库对齐 | 差分门禁绿；`lib/posix/capabilities.tsv` 的备注写清每条的差异（为什么没有 / 有什么限制） |
-| 主库：子 shell 里的 `trap_install` 不再替父进程收尾 | `tests/test_trap_subshell.sh`：调用方的 EXIT 清理不得在子 shell 退出时提前执行 + 变异自证（把判定改坏 ⇒ 缺陷必须复现） |
+| 主库：子 shell 里的 `trap_install` 不再替父进程收尾 | `tests/test_trap_subshell.sh`：**三个场景**（调用方自设的 EXIT handler / 父进程装过 trap 后继承来的那份 / 父进程入栈后继承来的清理条目）× **三条变异自证**（守卫、继承状态的两道防线、清理栈的层级过滤）；每个场景跑在**独立进程**里（父进程那一步必须是顶层 shell，否则继承层根本不存在 ⇒ 断言恒绿） |
 
 挖出来并修掉的分叉：
 
@@ -394,12 +394,22 @@ push 失败（容器无 GitHub 凭据）⇒ 提交与 tag 留在本地、由本�
    ⇒ 现在显式拒绝不支持的格式，而不是默默当 env 解析（默默解析会让取到的值悄悄不同）。
 8. **主库的真缺陷**：`trap_install` 在**子 shell** 里把调用方的 EXIT handler 链进来
    ⇒ 子 shell 退出时替父进程执行父进程的清理 ⇒ 父进程还在跑，它的临时目录已经被删了
-   （后续写文件直接 "No such file or directory"）。**只在 bash 5 复现** ——
-   bash 3.2 在子 shell 里 `trap -p` 读不到完整形态，恰好躲过。
-   第二层：`_SK_TRAP_SAVED_EXIT` 是普通变量 ⇒ 子 shell 继承 ⇒ 光「不捕获」也不够，
-   继承来的那份也**不能执行**。
+   （后续写文件直接 "No such file or directory"）。
+   **命令替换形态下 bash 3.2 与 5 都会复现**（子 shell 里 `trap -p` 两版都读到完整形态
+   ⇒ 都会捕获）；括号子 shell 形态下只有 bash 5 复现（3.2 在那里读到空）。
+   ⇒ 判据一律用命令替换：那是两个版本都会中招的写法，断言在两边都有牙齿。
+   **继承状态有两层**：① 调用方自设的 EXIT handler（`_SK_TRAP_SAVED_EXIT`）；
+   ② **库里清理栈里的条目**（`_SK_TRAP_CMDS`，普通数组 ⇒ 子 shell 继承一份副本）。
+   第一版修法只堵了「不捕获」，且把「清继承状态」写在捕获分支里 ⇒ 父进程自己装过
+   一次 trap 时子 shell 走不到那条分支 ⇒ **缺陷照旧复现**（实测：加了守卫仍 DELETED）。
+   ⇒ 修法：每条清理动作与调用方 handler 都记「归属层级」，清理时只执行**本层**的；
+   子 shell 里既不捕获、也不执行继承来的那份。
+   ⇒ 另有两处跨版本陷阱：**`BASHPID` 只有 bash 4+ 才有**（用它判「在不在子 shell」
+   ⇒ bash 3.2 上守卫静默失效 ⇒ 本机绿 / macOS CI 红）；
+   **bash 3.2 执行「函数型」EXIT handler 时会把 `BASH_SUBSHELL` 复位成 0**
+   ⇒ 层级必须在正常执行路径上取、存下来用，处理器里不能现读。
 
-⇒ 坑表新增第 37、38 条；迁移说明见 `docs/MIGRATING.md` 的 1.5.0 → 1.6.0 一节。
+⇒ 坑表新增第 37、38、39、40、41 条；迁移说明见 `docs/MIGRATING.md` 的 1.5.0 → 1.6.0 一节。
 
 
 ## 三、战略取舍
