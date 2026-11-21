@@ -62,23 +62,28 @@ rc=$?
 assert_ne 0 "$rc" "the old scan leaks the pipeline status (the contract assert has teeth)"
 assert_eq "" "$out" "the old scan still finds nothing in a project without functions"
 
-# ---- 变异二：现实现里兜底的三处一起去掉 ⇒ 退出码又由管道决定 ----
+# ---- 变异二：让扫描返回非 0 ⇒ 契约断言必须红 ----
+#
+# 老实现里，扫描的退出码就是 grep「没匹配」返回的 1 一路传上来的。
+# 这里直接把它变成 1：**不依赖 find 的退出码**（GNU 与 BSD 的 find 在
+# 「-exec 的命令返回非 0」时退出码不一样 ⇒ 拿它当判据会变成平台相关）——
+# 要判的是「扫描返回非 0 时，契约断言必须红」。
+
 awk '/^_sk_shadow_parse_line\(\)/{f=1} /^_sk_shadow_guard\(\)/{f=0} f' \
   "$TEST_ROOT/shellkit" >"$work/fns.sh"
 if [ ! -s "$work/fns.sh" ]; then
   _fail "cannot extract the scan helpers from the CLI"
 fi
 # 末尾那行 return 0 要**删掉**（不是换成 :）—— 换成 : 反而把状态清成 0，
-# 泄漏就看不见了。删掉之后，函数的状态就是子 shell 的状态，也就是管道的状态。
-sed -e 's/^    set \+o pipefail$/    :/' \
-  -e 's/^    exit 0$/    exit $?/' \
+# 状态就看不见了。删掉之后，函数的状态就是子 shell 的状态。
+sed -e 's/^    exit 0$/    exit 1/' \
   -e '/^  return 0$/d' \
   "$work/fns.sh" >"$work/fns-mut.sh"
 # shellcheck source=/dev/null
 . "$work/fns-mut.sh"
 out=$(_sk_shadow_project_fns "$plain" "vendor/shellkit")
 rc=$?
-assert_ne 0 "$rc" "without the three guards the status leaks again (the contract assert has teeth)"
+assert_ne 0 "$rc" "a scan that returns non-zero must break the contract (the contract assert has teeth)"
 
 # ---- 变异三：残骸又被当成工程的代码 ----
 sed -e '/\.shellkit-old/d' "$work/fns.sh" >"$work/fns-mut2.sh"
