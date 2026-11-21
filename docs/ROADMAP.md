@@ -492,6 +492,18 @@ push 失败（容器无 GitHub 凭据）⇒ 提交与 tag 留在本地、由本�
 ② 假 curl 对**不带 `-w` 的下载调用**也打了状态码 ⇒ `"200"` 混进被测命令的 stdout
    把断言搅黄 —— 假命令要按**调用形态**分派（带不带 `-w`），只按 URL 分派不够。
 
+**结果**：v1.7.0（tag → `35961ae`，PR #181）已发布 —— 17 项资产（含 `.deb` / `.rpm`）全部签名，
+`tools/verify_release.sh v1.7.0` 逐份验签通过（rc=0），`tools/release_selfcheck.sh v1.7.0
+--require-packages` 也通过（rc=0），`releases/latest` 已指向 v1.7.0；Homebrew tap 已回填
+1.7.0（`6606a1e`）；本机 CLI 与 claude / codex / mcode 三处 skill 已升到 1.7.0。
+
+⚠️ 发版窗口记一笔环境事故：测试容器镜像被清理后按印象重建，**漏装 curl** ⇒
+`make examples` 里 `fetch-release` 报「curl or wget is required」—— 而示例的判据
+`assert_stdout_empty` 只看 stdout、**吞掉退出码与 stderr**，失败直到下一条断言
+（`current should be 1.0.0`）才暴露。补上 `curl wget zip` 后一次通过。
+⇒ 教训：重建环境要按「套件实际用到的工具」对账，别按印象装；判据吞掉的失败
+会把根因推到离现场两步远的地方。
+
 ## 三、战略取舍
 
 **值得继续投入**：Bash 工程标准化 —— 让运维、部署、安装与自动化脚本具备一致的
