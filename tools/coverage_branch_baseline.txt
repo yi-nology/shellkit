@@ -696,7 +696,7 @@ lib/core/trap.sh:_sk_trap_run_sig:3
 lib/core/trap.sh:_sk_trap_slot:5
 lib/core/trap.sh:trap_cleanup:1
 lib/core/trap.sh:trap_cleanup:5
-lib/core/trap.sh:trap_install:1
+lib/core/trap.sh:trap_install:2
 lib/core/vendor.sh:_sk_vendor_dir_canon:2
 lib/core/vendor.sh:_sk_vendor_dir_canon:3
 lib/core/vendor.sh:_sk_vendor_dir_canon:4
