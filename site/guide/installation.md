@@ -14,7 +14,7 @@ sha256 只证明「下载没被改」，证明不了「这个包是 shellkit 发
 
 # 2) 离线验签：先下载、先验，最后才执行任何脚本
 #    需要 minisign：brew install minisign / apt-get install -y minisign
-VERSION=1.5.0
+VERSION=1.6.0
 base="https://github.com/yi-nology/shellkit/releases/download/v$VERSION"
 work=$(mktemp -d) && cd "$work" || exit 1
 for f in "shellkit-$VERSION.tar.gz" install.sh SHA256SUMS shellkit.minisign.pub; do
@@ -87,7 +87,7 @@ curl -fsSL https://github.com/yi-nology/shellkit/releases/latest/download/demo.s
 curl -fsSL https://github.com/yi-nology/shellkit/releases/latest/download/install.sh | PREFIX="$HOME/.local" bash
 
 # 钉版本
-curl -fsSL https://github.com/yi-nology/shellkit/releases/latest/download/install.sh | VERSION=1.5.0 bash
+curl -fsSL https://github.com/yi-nology/shellkit/releases/latest/download/install.sh | VERSION=1.6.0 bash
 
 # 内网镜像：<base>/v<version>/<asset>
 curl -fsSL https://github.com/yi-nology/shellkit/releases/latest/download/install.sh | SHELLKIT_RELEASE_BASE=https://mirror.example/shellkit bash
@@ -126,7 +126,7 @@ fi
 `update` 会下载并校验 sha256，通过之后才替换。离线或内网环境给定本地包：
 
 ```bash
-shellkit update --from shellkit-1.5.0.tar.gz --sha256 "$SUM"
+shellkit update --from shellkit-1.6.0.tar.gz --sha256 "$SUM"
 ```
 
 ## 卸载
