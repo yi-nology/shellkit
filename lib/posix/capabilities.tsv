@@ -32,22 +32,22 @@ conf_disable	no	POSIX 子集只给 conf_init 与 conf_get_any
 conf_file	no	POSIX 子集只给 conf_init 与 conf_get_any
 conf_format	no	POSIX 子集只给 conf_init 与 conf_get_any
 conf_get	no	POSIX 子集只给 conf_init 与 conf_get_any（无「配置层」这一层）
-conf_get_any	yes	-
+conf_get_any	yes	POSIX 子集提供同名版本：与主库同一口径（默认值可省；键名非法打印默认值并退 2）
 conf_has	no	POSIX 子集只给 conf_init 与 conf_get_any（无「配置层」这一层）
-conf_init	yes	-
+conf_init	yes	POSIX 子集只支持 env 格式（KEY=VALUE）：--format dotenv **显式拒绝**退 2（默默当 env 解析会让取到的值悄悄不同）
 conf_keys	no	POSIX 子集只给 conf_init 与 conf_get_any（无「配置层」这一层）
 conf_load_dotenv	no	POSIX 子集只给 conf_init 与 conf_get_any
 conf_set	no	POSIX 子集只给 conf_init 与 conf_get_any（无「配置层」这一层）
 conf_source	no	POSIX 子集只给 conf_init 与 conf_get_any
 conf_unset	no	POSIX 子集只给 conf_init 与 conf_get_any
 confirm	no	交互在无人值守的设备侧用不上
-die	yes	-
-fail	yes	-
+die	yes	POSIX 子集提供同名版本：与主库同一口径（**先退出码、后消息** —— 形如 die 3 「消息」；退出码非法按用法错退 2）。曾写成「先消息、后退出码」⇒ 同一份调用在设备侧退出码变成 255
+fail	yes	POSIX 子集提供同名版本：与主库同一口径（**先退出码、后消息** —— 形如 die 3 「消息」；退出码非法按用法错退 2）。曾写成「先消息、后退出码」⇒ 同一份调用在设备侧退出码变成 255
 fs_atomic_copy	no	原子写 / 备份 / 符号链接在设备侧用不上
 fs_atomic_write	no	原子写 / 备份 / 符号链接在设备侧用不上
 fs_backup	no	原子写 / 备份 / 符号链接在设备侧用不上
 fs_ensure_block	no	POSIX 子集只给 fs_ensure_dir / fs_ensure_file
-fs_ensure_dir	yes	-
+fs_ensure_dir	yes	POSIX 子集提供同名版本：与主库同一口径（缺参数报用法错退 2；带 MODE 时 chmod 失败也不报错）
 fs_ensure_line	no	POSIX 子集只给 fs_ensure_dir / fs_ensure_file
 fs_ensure_symlink	no	原子写 / 备份 / 符号链接在设备侧用不上
 fs_tmp_init	no	POSIX 子集只给 fs_ensure_dir / fs_ensure_file
@@ -64,12 +64,12 @@ http_github_release_asset	no	POSIX 子集不给 HTTP 客户端
 lock_acquire	yes	POSIX 子集提供同名版本：只删**自己持有**的锁（持有者 pid 不是自己就拒绝）；lock_acquire 建不出锁目录时立刻报错返回 3（不重试）；释放后从退出清理栈里摘掉自己那条 —— 否则退出清理会删掉别人后来拿到的锁
 lock_held	no	POSIX 子集只提供拿锁与放锁
 lock_release	yes	POSIX 子集提供同名版本：只删**自己持有**的锁（持有者 pid 不是自己就拒绝）；lock_acquire 建不出锁目录时立刻报错返回 3（不重试）；释放后从退出清理栈里摘掉自己那条 —— 否则退出清理会删掉别人后来拿到的锁
-log_debug	yes	-
-log_error	yes	-
-log_info	yes	-
-log_ok	yes	-
-log_section	yes	-
-log_warn	yes	-
+log_debug	yes	POSIX 子集提供同名版本：与主库同一口径（收**全部**参数；OK 的标签是 " OK "；小节标题是 "==> 标题"；log_error 同时记下 SK_ERRMSG）
+log_error	yes	POSIX 子集提供同名版本：与主库同一口径（收**全部**参数；OK 的标签是 " OK "；小节标题是 "==> 标题"；log_error 同时记下 SK_ERRMSG）
+log_info	yes	POSIX 子集提供同名版本：与主库同一口径（收**全部**参数；OK 的标签是 " OK "；小节标题是 "==> 标题"；log_error 同时记下 SK_ERRMSG）
+log_ok	yes	POSIX 子集提供同名版本：与主库同一口径（收**全部**参数；OK 的标签是 " OK "；小节标题是 "==> 标题"；log_error 同时记下 SK_ERRMSG）
+log_section	yes	POSIX 子集提供同名版本：与主库同一口径（收**全部**参数；OK 的标签是 " OK "；小节标题是 "==> 标题"；log_error 同时记下 SK_ERRMSG）
+log_warn	yes	POSIX 子集提供同名版本：与主库同一口径（收**全部**参数；OK 的标签是 " OK "；小节标题是 "==> 标题"；log_error 同时记下 SK_ERRMSG）
 man_count_functions	no	CLI 框架与 man 页是开发期的事，设备侧不生成
 man_module_page	no	CLI 框架与 man 页是开发期的事，设备侧不生成
 man_modules	no	CLI 框架与 man 页是开发期的事，设备侧不生成
@@ -80,7 +80,7 @@ net_escape_json	no	POSIX 子集不给 HTTP 客户端
 net_json	no	POSIX 子集只给下载与校验，不给 HTTP 客户端与就绪探测
 net_request	no	POSIX 子集只给下载与校验，不给 HTTP 客户端与就绪探测
 net_sha256	yes	-
-net_verify	yes	-
+net_verify	yes	POSIX 子集提供同名版本：与主库同一口径（期望值为空单独报错退 5，不当成校验通过）
 net_wait_http	no	POSIX 子集只给下载与校验，不给 HTTP 客户端与就绪探测
 net_wait_port	no	POSIX 子集只给下载与校验，不给 HTTP 客户端与就绪探测
 os_arch	no	设备侧没有包管理器，也不该动系统包
@@ -147,11 +147,11 @@ scaffold_run_hook	no	模板生成是开发期的事，设备侧不生成工程
 scaffold_vars_get	no	模板生成是开发期的事，设备侧不生成工程
 scaffold_vars_list	no	模板生成是开发期的事，设备侧不生成工程
 scaffold_vars_set	no	模板生成是开发期的事，设备侧不生成工程
-status_emit	yes	-
-status_extra	yes	-
-status_is_machine	yes	-
-status_state_valid	yes	-
-status_version	yes	-
+status_emit	yes	POSIX 子集提供同名版本：与主库同一口径（human 模式用 %b 解释转义、缺参不报错；机器模式输出 STATE/VERSION/EXTRA 行）
+status_extra	yes	POSIX 子集提供同名版本：与主库同一口径（human 模式用 %b 解释转义、缺参不报错；机器模式输出 STATE/VERSION/EXTRA 行）
+status_is_machine	yes	POSIX 子集提供同名版本：与主库同一口径（human 模式用 %b 解释转义、缺参不报错；机器模式输出 STATE/VERSION/EXTRA 行）
+status_state_valid	yes	POSIX 子集提供同名版本：与主库同一口径（human 模式用 %b 解释转义、缺参不报错；机器模式输出 STATE/VERSION/EXTRA 行）
+status_version	yes	POSIX 子集提供同名版本：与主库同一口径（human 模式用 %b 解释转义、缺参不报错；机器模式输出 STATE/VERSION/EXTRA 行）
 str_contains	no	POSIX 子集用 printf / tr 就够，不单独移植
 str_ends_with	no	POSIX 子集用 printf / tr 就够，不单独移植
 str_lower	no	POSIX 子集用 printf / tr 就够，不单独移植
@@ -175,10 +175,10 @@ svc_restart	no	systemd / launchd 的服务单元在设备侧不存在
 svc_start	no	systemd / launchd 的服务单元在设备侧不存在
 svc_stop	no	systemd / launchd 的服务单元在设备侧不存在
 trap_cleanup	no	POSIX 子集只做「退出时执行」，没有清理栈管理接口
-trap_install	yes	-
+trap_install	yes	POSIX 子集提供同名版本：与主库同一口径（trap_push 登记**整条命令含参数**、缺参数报错退 2；trap_install 不链调用方的 EXIT handler）
 trap_list	no	POSIX 子集只做「退出时执行」，没有清理栈管理接口
 trap_pop	no	POSIX 子集只做「退出时执行」，没有清理栈管理接口
-trap_push	yes	-
+trap_push	yes	POSIX 子集提供同名版本：与主库同一口径（trap_push 登记**整条命令含参数**、缺参数报错退 2；trap_install 不链调用方的 EXIT handler）
 validate_abs_path	no	输入校验在 POSIX 子集里用 case 就够
 validate_enum	no	输入校验在 POSIX 子集里用 case 就够
 validate_ip	no	输入校验在 POSIX 子集里用 case 就够

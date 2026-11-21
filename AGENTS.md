@@ -113,7 +113,7 @@ busybox ash 上，混进一个 `local` 或 `[[ ]]` 不是报错，是**整个脚
 只有真正成功应用了模板的文件才能推进基线；跳过的文件保持原基线。
 回归用例：`tests/test_upgrade.sh` 与 `tests/bats/scaffold.bats`（都要连升两次以上）。
 
-## 三十五个已经踩过的坑
+## 三十八个已经踩过的坑
 
 1. **bash 3.2 与 5 的 trap 语义不同**：子 shell 里 `trap -p EXIT`，3.2 读到空，5.x 仍打印
    父 shell 的 trap 但子 shell 退出时不执行。所以幂等不能只查 `trap -p`，看到是自己的
@@ -487,6 +487,32 @@ busybox ash 上，混进一个 `local` 或 `[[ ]]` 不是报错，是**整个脚
     * `2>/dev/null` **不能放在表达式中间**：`find … -name '*.sh' 2>/dev/null -not -path X`
       ⇒ 重定向把表达式截断了 ⇒ 后面的 `-not`/`-exec` 被当成**路径**
       ⇒ find 报错、一条都扫不到。⇒ 重定向一律放在表达式**末尾**。
+
+37. **同名两份实现，要靠「差分对拍」下结论，不是靠读代码**：
+    * 读代码看出来的是「**看起来**不一样」；对拍出来的才是「真的不一样」。
+      本轮差点判错两次：`net_sha256` 看着分叉（一边管道退出码、一边显式判错），
+      实测两边**一致**（缺文件时都退 0、输出都为空）；`trap_push` 的栈序看着分叉
+      （主库像 FIFO、POSIX 像 LIFO），实测**两边都是 LIFO**。
+    * 真正分叉的那几条，恰恰是读代码时容易「觉得应该没问题」的地方
+      （`die` 的参数序、`log_*` 收几个参数）⇒ 只读代码会漏。
+    * ⇒ 判据形态：`tests/posix_parity.sh` 是**同一份调用**（按主库口径写），
+      两边各跑一遍，退出码 + stdout + stderr **逐字**比对；再加一张绝对期望表
+      （防「两边一起漂」），再加变异自证（改坏一侧必须被抓到），
+      再加解释器对拍（dash / busybox ash 与 sh 必须一致）。
+
+38. **子 shell 里链调用方的 EXIT handler ⇒ 替父进程收尾**：
+    * bash 5 的子 shell 里 `trap -p` **读得到**父 shell 的完整 handler
+      （`trap -- '...' EXIT`；bash 3.2 读不到 ⇒ 恰好躲过 ⇒ 缺陷只在 bash 5 复现）。
+      坑表第 1 条说「5.x 看得见、但子 shell 退出时不执行」—— 那是 **bash 自己**的行为；
+      库里把 handler 链进来再 `eval`，就等于**替 bash 执行了它**。
+    * 后果：调用方 `trap 'rm -rf "$work"' EXIT`，随后在子 shell 里调了任何会走到
+      `trap_install` 的函数（`lock_acquire` / `fs_tmp_init` / `proc_*`）
+      ⇒ 子 shell 退出时把父进程的 `$work` 删了 ⇒ 父进程后续写文件直接
+      "No such file or directory"。
+    * 还有第二层：`_SK_TRAP_SAVED_EXIT` 是**普通变量**，子 shell 会继承
+      ⇒ 光「不捕获」不够，继承来的那份也**不能执行**（否则照样提前收尾）。
+    * ⇒ 修法：子 shell 里既不捕获、也不执行继承来的那份；判据在
+      `tests/test_trap_subshell.sh`（含变异自证：把判定改坏 ⇒ 缺陷必须复现）。
 
 ## 本场景的验证
 

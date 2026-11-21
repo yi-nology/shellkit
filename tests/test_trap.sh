@@ -51,14 +51,30 @@ assert_contains "$out" "1 echo b" "trap_list shows index 1"
 # 无参数
 assert_exit_code 2 trap_push
 
-# 链式保留调用方已有的 EXIT trap
+# 链式保留调用方已有的 EXIT trap —— 在**顶层 shell** 里测。
+# 为什么不在 $( ) 里测：子 shell 里**不**链调用方的 EXIT handler（见下一条）——
+# 链了会在子 shell 退出时替父进程收尾（父进程的临时目录被提前删掉）。
+trap 'echo user-exit' EXIT
+trap_push 'echo pushed'
+trap_install
+# trap_cleanup 必须在**测试自己的 shell** 里跑：放进 $( ) 会在子 shell 里清状态，
+# 父 shell 的 _SK_TRAP_SAVED_EXIT 清不掉 ⇒ 泄漏到下一条用例（测试自己骗自己）。
+trap_cleanup >"$d/chained.txt" 2>&1
+assert_eq $'pushed\nuser-exit' "$(cat "$d/chained.txt")" "chained user EXIT trap runs after pushed cleanups"
+trap - EXIT
+
+# 子 shell 里**不**链调用方的 EXIT handler。
+# 理由：子 shell 里 trap_install 若把调用方的 EXIT handler 链进来，子 shell 退出时
+# 就会替父进程执行它 ⇒ 父进程还在跑，它的临时目录已经被删了 ⇒ 后续写文件直接
+# "No such file or directory"（bash 5 才复现：3.2 在子 shell 里 trap -p 读不到
+# 完整形态，捕获根本不会发生）。
 out=$(
   trap 'echo user-exit' EXIT
   trap_push 'echo pushed'
   trap_install
   exit 0
 )
-assert_eq $'pushed\nuser-exit' "$out" "chained user EXIT trap runs after pushed cleanups"
+assert_eq "pushed" "$out" "a subshell must not chain the caller's EXIT handler"
 
 # trap_install 可重复调用，不会重复执行
 out=$(

@@ -254,6 +254,29 @@ _sk_trap_on_hup() {
   exit 129
 }
 
+# _sk_trap_in_subshell —— 当前是不是在子 shell 里
+#
+# 为什么需要：子 shell 里 trap_install 若把**调用方**的 EXIT handler 链进来，
+# 子 shell 退出时就会替调用方执行它 ⇒ 调用方的清理（删临时目录、释放锁）
+# 在父进程还在跑的时候就先发生了一次。
+#
+# 现场（bash 5 才复现）：调用方 `trap 'rm -rf "$work"' EXIT`，随后在子 shell 里
+# 调了任何会走到 trap_install 的函数（lock_acquire / fs_tmp_init / proc_*）
+# ⇒ 子 shell 退出时把调用方的 work 目录删了 ⇒ 父进程后续写文件直接
+# "No such file or directory"。
+#
+# 怎么判：bash 4+ 有 BASHPID（当前进程的真实 pid）；顶层 shell 里 BASHPID == $$，
+# 子 shell 里 BASHPID != $$（$$ 永远是顶层那个 shell 的 pid）。
+# bash 3.2 没有 BASHPID ⇒ 判「不在子 shell」—— 但 3.2 在子 shell 里 `trap -p`
+# 读到的不是 "trap -- " 开头的完整形态，_sk_trap_capture 本来就不会捕获
+# ⇒ 3.2 上没有这个问题，不需要这条判断。
+_sk_trap_in_subshell() {
+  case "${BASHPID:-}" in
+    '' | "$$") return 1 ;;
+  esac
+  return 0
+}
+
 # trap_install —— 安装 EXIT / INT / TERM / HUP 处理器；可重复调用
 #
 # 幂等性不能用标志位：子 shell 会继承变量，却不会继承「会执行」的 trap，
@@ -276,7 +299,22 @@ trap_install() {
     case "${_SK_TRAP_CUR:-}" in
       # 自己的处理器（含子 shell 残影）不算调用方的 handler，否则清理会自噬
       *_sk_trap_on_*) ;;
-      *) _sk_trap_capture "$__sig" ;;
+      *)
+        # 子 shell 里**不**链调用方的 EXIT handler（见 _sk_trap_in_subshell）：
+        # 链了就会在子 shell 退出时替调用方执行 ⇒ 调用方的临时目录在父进程
+        # 还在跑的时候被删掉，后续写文件直接 "No such file or directory"。
+        if [ "$__sig" = "EXIT" ] && _sk_trap_in_subshell; then
+          # 继承来的那一份也**不能执行**：_SK_TRAP_SAVED_EXIT 是普通变量，
+          # 子 shell 会继承它 ⇒ 父进程保存的 handler 会在子 shell 退出时被跑掉
+          # （父进程还活着，它的临时目录就被删了）。
+          # 清掉的是子 shell 自己那份副本 ⇒ 父进程那份不受影响，
+          # 父进程退出时照常执行它。
+          _SK_TRAP_SAVED_EXIT=""
+          _SK_TRAP_HAD_EXIT=0
+          continue
+        fi
+        _sk_trap_capture "$__sig"
+        ;;
     esac
   done
   _sk_trap_read_done

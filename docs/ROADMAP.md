@@ -366,6 +366,41 @@ Homebrew tap 已回填 1.5.0；本机 CLI 与 claude / codex / mcode 三处 skil
 push 失败（容器无 GitHub 凭据）⇒ 提交与 tag 留在本地、由本机补推即可，
 `make check` 的结论不受影响。
 
+### v1.6.0 —— 同名两份实现的全面对拍 + 子 shell 里的 trap 语义
+
+**触发**：v1.4.1 用「同一套 API 两份实现，差集就是缺陷清单」的方法挖出 4 条分叉
+（lock ×2 / ver_cmp / retry），但那只覆盖了 POSIX 子集 32 个同名函数里的 **4 个** ⇒
+剩下二十来个从没对拍过。本轮把这套方法补齐，顺带挖出一条**主库**的真缺陷。
+
+| 交付 | 判据 |
+|---|---|
+| 差分对拍门禁：同一份调用在两边跑，退出码 + stdout + stderr 必须**逐字**一致 | `tests/posix_parity.sh`（纯 POSIX sh 的探针，按主库口径写调用）+ `tests/test_posix_parity.sh`（门禁）：29 个用例、绝对期望表（防「两边一起漂」）、两条变异自证、dash / busybox ash 解释器对拍 |
+| POSIX 子集与主库对齐 | 差分门禁绿；`lib/posix/capabilities.tsv` 的备注写清每条的差异（为什么没有 / 有什么限制） |
+| 主库：子 shell 里的 `trap_install` 不再替父进程收尾 | `tests/test_trap_subshell.sh`：调用方的 EXIT 清理不得在子 shell 退出时提前执行 + 变异自证（把判定改坏 ⇒ 缺陷必须复现） |
+
+挖出来并修掉的分叉：
+
+1. **`die` / `fail` 参数序反了**：POSIX 子集是 `die 消息 [码]`，主库是 `die 码 消息`
+   ⇒ 同一份 `die 3 "boom"` 在设备侧退 **255** 并报
+   `exit: boom: numeric argument required`（主库退 3）。
+2. **`log_*` 只收第一个参数** ⇒ 多参数消息的后半截被**静默丢掉**。
+3. **`log_ok` 的标签**是 `[OK]`（主库 `[ OK ]`）；**`log_section`** 是 `== 标题 ==`
+   （主库 `==> 标题`）⇒ 同一份脚本在两边跑，日志长得不一样。
+4. **`status_emit`** 用 `%s` 打印（主库 `%b` ⇒ 转义被当字面量），且缺参时退 2（主库退 0）。
+5. **`trap_push` 只存第一个参数** ⇒ `trap_push rm -rf /tmp/x` 登记的只剩 `rm`，
+   退出时执行的是错的命令。
+6. **`net_verify` 期望值为空**时不单独报错 ⇒ 「文件不存在 + 没配校验和」会被判成**校验通过**。
+7. **`conf_get_any` 强制两个参数**（主库允许省略默认值）；**`conf_init` 不认 `--format`**
+   ⇒ 现在显式拒绝不支持的格式，而不是默默当 env 解析（默默解析会让取到的值悄悄不同）。
+8. **主库的真缺陷**：`trap_install` 在**子 shell** 里把调用方的 EXIT handler 链进来
+   ⇒ 子 shell 退出时替父进程执行父进程的清理 ⇒ 父进程还在跑，它的临时目录已经被删了
+   （后续写文件直接 "No such file or directory"）。**只在 bash 5 复现** ——
+   bash 3.2 在子 shell 里 `trap -p` 读不到完整形态，恰好躲过。
+   第二层：`_SK_TRAP_SAVED_EXIT` 是普通变量 ⇒ 子 shell 继承 ⇒ 光「不捕获」也不够，
+   继承来的那份也**不能执行**。
+
+⇒ 坑表新增第 37、38 条；迁移说明见 `docs/MIGRATING.md` 的 1.5.0 → 1.6.0 一节。
+
 
 ## 三、战略取舍
 

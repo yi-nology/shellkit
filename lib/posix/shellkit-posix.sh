@@ -26,6 +26,9 @@
 #
 #     if posix_capable net_download; then ... fi
 
+# 最近一次 log_error 的内容，供调用方在退出前读取（与主库同名同义）
+SK_ERRMSG=""
+
 # ---- 日志（stdout 只给数据，日志一律 stderr）----
 
 # _sk_posix_log_rank LEVEL —— 级别序号（数字大 = 更严重）
@@ -55,57 +58,94 @@ _sk_posix_log() {
 # log_info MESSAGE —— 普通信息
 log_info() {
   _sk_posix_should_log info || return 0
-  _sk_posix_log INFO "${1:-}"
+  _sk_posix_log INFO "$*"
 }
 
 # log_ok MESSAGE —— 成功
 log_ok() {
   _sk_posix_should_log info || return 0
-  _sk_posix_log OK "${1:-}"
+  _sk_posix_log " OK " "$*"
 }
 
 # log_warn MESSAGE —— 警告
 log_warn() {
   _sk_posix_should_log warn || return 0
-  _sk_posix_log WARN "${1:-}"
+  _sk_posix_log WARN "$*"
 }
 
-# log_error MESSAGE —— 错误
+# log_error MESSAGE... —— 错误
+#
+# 与主库同一口径：收**全部**参数（主库是 "$*"），并把最后一条错误记进
+# SK_ERRMSG（供调用方在退出前读取）。
 log_error() {
+  # 公开变量：供调用方在退出前读取最后一条错误（与主库同名同义）
+  # shellcheck disable=SC2034
+  SK_ERRMSG="$*"
   _sk_posix_should_log error || return 0
-  _sk_posix_log ERROR "${1:-}"
+  _sk_posix_log ERROR "$*"
 }
 
 # log_debug MESSAGE —— 调试信息（默认级别 info ⇒ 不打印）
 log_debug() {
   _sk_posix_should_log debug || return 0
-  _sk_posix_log DEBUG "${1:-}"
+  _sk_posix_log DEBUG "$*"
 }
 
 # log_section TITLE —— 小节标题
+#
+# 与主库同一形态：空行 + "==> 标题"（主库是 "==> %s"，这里曾写成 "== %s =="）
+# ⇒ 同一份脚本在两边跑，日志长得不一样。
 log_section() {
-  printf '\n== %s ==\n' "${1:-}" >&2
+  _sk_posix_should_log info || return 0
+  printf '\n==> %s\n' "${1:-}" >&2
 }
 
 # ---- 失败与前置条件 ----
 
-# fail MESSAGE [CODE] —— 报错并返回（不退出）
+# fail CODE MESSAGE... —— 报错并返回（不退出）
+#
+# 与主库**同一口径**：先退出码、后消息（主库是 `fail 3 "boom"`）。
+# 曾经写成 `fail MESSAGE [CODE]` ⇒ 同一份调用在设备侧把 "3" 当消息、
+# 把 "boom" 当退出码 ⇒ `return boom` 报 "numeric argument required"，
+# 退出码变成 255（不是 3）—— 静默的退出码漂移。
 fail() {
-  _sp_fail_code=1
-  if [ "$#" -ge 2 ]; then
-    _sp_fail_code=$2
+  _sp_fail_code=${1:-}
+  if [ "$#" -gt 0 ]; then
+    shift
   fi
-  log_error "${1:-}"
+  case "$_sp_fail_code" in
+    '' | *[!0-9]*)
+      log_error "invalid exit code: ${_sp_fail_code:-<empty>}"
+      return 2
+      ;;
+  esac
+  if [ "$_sp_fail_code" -gt 255 ]; then
+    log_error "invalid exit code: $_sp_fail_code"
+    return 2
+  fi
+  log_error "$*"
   return "$_sp_fail_code"
 }
 
-# die MESSAGE [CODE] —— 报错并退出
+# die CODE MESSAGE... —— 报错并退出
+#
+# 与主库同一口径：先退出码、后消息（主库是 `die 3 "boom"`）。
 die() {
-  _sp_die_code=1
-  if [ "$#" -ge 2 ]; then
-    _sp_die_code=$2
+  _sp_die_code=${1:-}
+  if [ "$#" -gt 0 ]; then
+    shift
   fi
-  log_error "${1:-}"
+  case "$_sp_die_code" in
+    '' | *[!0-9]*)
+      log_error "invalid exit code: ${_sp_die_code:-<empty>}"
+      exit 2
+      ;;
+  esac
+  if [ "$_sp_die_code" -gt 255 ]; then
+    log_error "invalid exit code: $_sp_die_code"
+    exit 2
+  fi
+  log_error "$*"
   exit "$_sp_die_code"
 }
 
@@ -113,12 +153,16 @@ die() {
 
 _SK_POSIX_TRAP_CMDS=""
 
-# trap_push COMMAND —— 登记一条退出时要执行的命令（后进先出）
+# trap_push COMMAND [ARG...] —— 登记一条退出时要执行的命令（后进先出）
+#
+# 与主库同一口径：存**整条命令**（主库存 "$*"）。曾只存 "$1" ⇒
+# `trap_push rm -rf /tmp/x` 只登记了 "rm"，参数全丢 ⇒ 退出时执行的是错的命令。
 trap_push() {
   if [ "$#" -lt 1 ] || [ -z "$1" ]; then
+    log_error "trap_push requires a command"
     return 2
   fi
-  _SK_POSIX_TRAP_CMDS="$1
+  _SK_POSIX_TRAP_CMDS="$*
 $_SK_POSIX_TRAP_CMDS"
   return 0
 }
@@ -298,7 +342,9 @@ retry() {
 
 # fs_ensure_dir DIR [MODE] —— 建目录（已存在就算成功）
 fs_ensure_dir() {
+  # 与主库同一口径：缺参数时报用法错（主库退 2 并打印用法行）
   if [ "$#" -lt 1 ] || [ -z "$1" ]; then
+    log_error "Usage: fs_ensure_dir DIR [MODE]"
     return 2
   fi
   if [ -d "$1" ]; then
@@ -348,6 +394,12 @@ net_verify() {
   if [ "$#" -lt 2 ]; then
     return 2
   fi
+  # 期望值为空要单独报（与主库同一口径）：否则「文件不存在 + 没配校验和」
+  # 会因为「算出来的也是空」而被判成**校验通过**。
+  if [ -z "$2" ]; then
+    log_error "no checksum configured for: $1"
+    return 5
+  fi
   _sp_v_sum=$(net_sha256 "$1") || {
     log_error "cannot compute checksum for: $1"
     return 5
@@ -385,10 +437,51 @@ _SK_POSIX_CONF=""
 
 # conf_init FILE —— 指定配置文件
 conf_init() {
-  if [ "$#" -lt 1 ] || [ -z "$1" ]; then
+  # 与主库的差异（有意为之，capabilities.tsv 里写明）：主库支持 dotenv 格式，
+  # POSIX 子集只支持 env 风格（KEY=VALUE）⇒ 不支持的格式**显式拒绝**（退 2），
+  # 而不是默默当 env 解析 —— 默默当 env 解析 ⇒ 取到的值悄悄不同。
+  _sp_ci_file=""
+  _sp_ci_format=auto
+  while [ "$#" -gt 0 ]; do
+    case "$1" in
+      --format)
+        if [ "$#" -lt 2 ]; then
+          log_error "Usage: conf_init FILE [--format env]"
+          return 2
+        fi
+        _sp_ci_format=$2
+        shift 2
+        ;;
+      --format=*)
+        _sp_ci_format=${1#--format=}
+        shift
+        ;;
+      -*)
+        log_error "Usage: conf_init FILE [--format env]"
+        return 2
+        ;;
+      *)
+        if [ -n "$_sp_ci_file" ]; then
+          log_error "Usage: conf_init FILE [--format env]"
+          return 2
+        fi
+        _sp_ci_file=$1
+        shift
+        ;;
+    esac
+  done
+  if [ -z "$_sp_ci_file" ]; then
+    log_error "Usage: conf_init FILE [--format env]"
     return 2
   fi
-  _SK_POSIX_CONF=$1
+  case "$_sp_ci_format" in
+    auto | env) ;;
+    *)
+      log_error "unsupported configuration format: $_sp_ci_format (the POSIX subset supports env only)"
+      return 2
+      ;;
+  esac
+  _SK_POSIX_CONF=$_sp_ci_file
   return 0
 }
 
@@ -402,11 +495,14 @@ _sk_posix_valid_name() {
 
 # conf_get_any KEY DEFAULT —— 取配置值
 conf_get_any() {
-  if [ "$#" -lt 2 ]; then
+  # 与主库同一口径：默认值可省（主库 `conf_get_any KEY` 退 0 并打印空行）。
+  # 曾强制两个参数 ⇒ 同一个调用在设备侧退 2。
+  if [ "$#" -lt 1 ]; then
     return 2
   fi
+  _sp_c_default=${2:-}
   if ! _sk_posix_valid_name "$1"; then
-    printf '%s\n' "$2"
+    printf '%s\n' "$_sp_c_default"
     return 2
   fi
   # 环境变量优先。用 printenv 而不是 eval 间接引用：POSIX 没有 ${!var}，
@@ -427,7 +523,7 @@ conf_get_any() {
       esac
     done <"$_SK_POSIX_CONF"
   fi
-  printf '%s\n' "$2"
+  printf '%s\n' "$_sp_c_default"
   return 0
 }
 
@@ -791,13 +887,14 @@ status_state_valid() {
 
 # status_emit STATE HUMAN_MSG —— 输出状态
 status_emit() {
-  if [ "$#" -lt 1 ]; then
-    return 2
-  fi
+  # 与主库同一口径：state 与 human 两个参数，缺参不报错（主库退 0），
+  # human 文案用 %b 打印（解释 \n \t 这类转义）。曾用 %s ⇒ 转义被当字面量。
+  _sp_se_state=${1:-}
+  _sp_se_human=${2:-}
   if status_is_machine; then
-    printf 'STATE=%s\n' "$1"
+    printf 'STATE=%s\n' "$_sp_se_state"
   else
-    printf '%s\n' "${2:-$1}"
+    printf '%b\n' "$_sp_se_human"
   fi
   return 0
 }

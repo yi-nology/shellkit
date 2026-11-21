@@ -956,3 +956,32 @@ HEAD 的祖先，于是仍然失败。这一层用 `git fetch --deepen=N` 把边
 而这类**纯逻辑、UI 无关**的原语正是库该干的活。
 两个函数都**零 fork**：选区通常只有几个，插入排序 O(k²) 足够。
 交互层（`ask_multi`）不在 POSIX 子集里 —— 设备侧是无人值守的，交互用不上。
+
+### 1.5.0 → 1.6.0：POSIX 子集与主库对齐 + 子 shell 里的 trap 语义（设备侧行为变化）
+
+**一、POSIX 子集（设备侧）**：这一版把 POSIX 子集与主库的同名函数**逐字对齐**。
+设备侧脚本照着主库写、或者在两边之间搬运代码，是这套子集本来的用法；
+「同名不同义」会让同一份调用在设备侧**静默**跑出别的结果。
+
+| 函数 | 1.5.0 的行为 | 1.6.0 的行为（= 主库口径） |
+|---|---|---|
+| `die` / `fail` | `die 消息 [码]` ⇒ `die 3 "boom"` 退 255 并报 `exit: boom: numeric argument required` | `die 码 消息...` ⇒ `die 3 "boom"` 退 3；退出码非法按用法错退 2 |
+| `log_debug` / `log_info` / `log_warn` / `log_error` / `log_ok` / `log_section` | 只收**第一个**参数 ⇒ 多参数消息的后半截被丢掉；`log_ok` 标签是 `[OK]`；`log_section` 是 `== 标题 ==` | 收**全部**参数；`[ OK ]`；`==> 标题`；`log_error` 同时记下 `SK_ERRMSG` |
+| `status_emit` | 人类模式用 `%s` 打印（`\n` 当字面量），缺参退 2 | 用 `%b`（解释转义），缺参退 0 |
+| `trap_push` | 只登记**第一个参数** ⇒ `trap_push rm -rf /tmp/x` 登记的只剩 `rm` | 登记**整条命令**（含参数）；缺参数报错退 2 |
+| `net_verify` | 期望值为空时不单独报错 ⇒ 「文件不存在 + 没配校验和」会被判成**校验通过** | 期望值为空单独报错退 5 |
+| `conf_get_any` | 强制两个参数（主库允许省略默认值） | 默认值可省 |
+| `conf_init` | 默默忽略 `--format` | 只支持 env 格式；`--format dotenv` **显式拒绝**退 2（默默当 env 解析会让取到的值悄悄不同） |
+
+设备侧脚本里写过 `die "出错了" 3` 的，请改成 `die 3 "出错了"`；
+用过 `trap_push rm -rf /somewhere` 的，升级后登记的才是完整命令（此前丢参数）。
+
+**二、主库（子 shell 语义）**：`trap_install` 在**子 shell** 里不再链调用方的
+EXIT handler。此前链了 ⇒ 子 shell 退出时替父进程执行父进程的清理
+⇒ 父进程还在跑，它的临时目录已经被删了（后续写文件直接 "No such file or directory"）。
+顶层 shell 里的链式行为**不变**（调用方的 EXIT trap 仍在清理栈之后执行）。
+若你的脚本**故意**在子 shell 里设 EXIT trap 再调用会装 trap 的库函数，
+请改为在子 shell 内部自己收尾。
+
+判据：`tests/test_posix_parity.sh`（两侧逐字对拍，29 个用例）与
+`tests/test_trap_subshell.sh`（子 shell 不得提前收尾）。
