@@ -411,6 +411,11 @@ push 失败（容器无 GitHub 凭据）⇒ 提交与 tag 留在本地、由本�
 
 ⇒ 坑表新增第 37、38、39、40、41 条；迁移说明见 `docs/MIGRATING.md` 的 1.5.0 → 1.6.0 一节。
 
+**结果**：v1.6.0（tag → `86011a0f`，PR #178）已发布 —— 17 项资产（含 `.deb` / `.rpm`）全部签名，
+`tools/verify_release.sh v1.6.0` 逐份验签通过（rc=0），`tools/release_selfcheck.sh v1.6.0
+--require-packages` 也通过（rc=0），`releases/latest` 已指向 v1.6.0；Homebrew tap 已回填
+1.6.0（`b5a6c04`）；本机 CLI 与 claude / codex / mcode 三处 skill 已升到 1.6.0。
+
 **本轮审计里发现、但**不在**这一版范围的三条**（按仓库规矩记在「计划」里，不写成已完成）：
 
 | 候选 | 现状 | 为什么这版不做 |
@@ -419,6 +424,45 @@ push 失败（容器无 GitHub 凭据）⇒ 提交与 tag 留在本地、由本�
 | CLI 本体约 470 条未覆盖分支（1227 条里占 38%） | `shellkit` 主 CLI 的分支覆盖明显偏低；`lib/core/archive.sh` 另有 68 条 | 本轮已把 POSIX 对拍与 trap 判据补齐；CLI 的分支补齐是独立一批，量太大不宜混在语义变更里 |
 | `archive` 模块进 POSIX 子集 | `archive_extract` / `archive_list` 只在 bash 侧 | 设备侧解包要面对的路径穿越/软链语义要在 ash 上**实测**（busybox 的 tar 与 unzip 行为不同）⇒ 不能凭 bash 侧结论照抄 |
 
+
+### v1.6.1 —— 发版链自身的失败处理（两处静默失效 + 一处配额断路）
+
+**触发**：v1.6.0 的发版窗口里，本机连着撞上两件事 —— 容器里跑发版脚本**瞬间**失败，
+屏幕上只有 git 的裸 fatal；随后 `shellkit update` 报「读不到最新版本」。两件都不是
+「运气不好」，是发版链上**少了一条判据**。
+
+| 现象 | 根因 | 修法 |
+|---|---|---|
+| 容器里 `tools/release.sh` 瞬间退出 128，屏幕上只有 `fatal: ambiguous argument 'HEAD'` | 容器与宿主共用同一个 `.git`；宿主刚做的 `git pull` 触发后台 `git gc --auto` 重写 `refs/heads/`，而 Docker 的 bind mount 带目录缓存 ⇒ 容器读到了「旧 ref 已删、新 packed-refs 还没生效」的那一瞬 | 环境竞态没法在库里根治，但脚本必须给出**能指导下一步**的诊断：所有 git 调用过 `_git_fail`，失败时先打 git 的 stderr 原话，再按我们自己的退出码表判（0/1/2/3/5，表格写进 `docs/RELEASING.md`） |
+| `git status` 失败被**静默当成「工作树干净」**，发版照跑 | `[ -n "$(git status --porcelain)" ]` 里命令替换把退出码吞了：git 失败 ⇒ 空串 ⇒ 判定成「干净」⇒ 在**状态未知**的工作树上提交并打 tag | 退出码单独判：先 `if ! OUT=$(cmd)` 再判 `$OUT`；失败直接退 3，且工作树一个字都不许动 |
+| push 失败退的是 git 的退出码，而文档写的是 1 | `set -e` 直接带走 git 的退出码（凭据/网络类 128、rejected 1 —— 两个值都出现过） | push 失败统一退 1，与文档对上 |
+| `shellkit update` 报「读不到最新版本」 | 它打的是 api.github.com 的**未认证**请求，配额 60 次/小时**每个 IP** ⇒ 共享出口很容易用光（这次就撞上：403）；而同一个库里本来就有 token-aware 的实现，CLI 绕过了它 | 查最新版本改成两道：API（带 token ⇒ 5000/小时）→ `/releases/latest` 的**重定向**兜底（**不吃配额**）；真机自证：把 API 地址指向 404 端点，`update --check` 仍解析出 1.6.0 |
+
+⚠️ 合并前复核时又抓到一处**这一版自己引入的**语义回归：给「查最新版本」加了兜底之后，
+`install.sh` / `demo.sh` 在两条路都失败时一律退 5 —— 而改前「API 那一问失败」退的是 4
+（网络失败）。退出码约定是「4 = 网络失败，重试可能有用；5 = 校验失败，重试同一个地址
+永远不会成功」（`docs/API-FREEZE.md`）⇒ 抹平之后调用方把「断网」当成「这个版本号不可信」，
+重试逻辑与告警都跟着走错。已修回：API 那一步**没拿到东西** ⇒ 4；服务器答了但内容里没有
+版本号 ⇒ 5；相对 main 的行为**逐条对账后完全一致**，只有「兜底成功」是新路径。
+判据补了三条（退出码必须是 4 / 必须是 5 / demo.sh 同样），外加一条变异自证
+（把调用点的 `"$?"` 换回写死的 `"$SK_VERIFY"` ⇒ 用例必须变红 —— 实测报
+「expected <4>, got <5>」）。教训写进坑表第 44 条。
+⇒ 坑表新增第 42、43、44 条；判据是 `tests/test_release_preflight.sh`（沙箱 + PATH 上的假 git
+把三种失败稳定造出来）与 `tests/test_update_latest_tag.sh`（假 curl 按 URL 分派两种响应），
+两条都带**变异自证**。
+
+⚠️ 写第一条判据时踩了一次：变异锚点只改了检查的一半（留下一个不成对的 `if`），
+脚本变成语法错误退 `2` —— 而「退出码不是 3」那条断言照样绿 ⇒ **判据要成对**：
+一条说「退出码对」，另一条必须说「工作树有没有被动过」。
+
+**本轮审计里发现、但**不在**这一版范围的四条**（按仓库规矩记在「计划」里，不写成已完成）：
+
+| 候选 | 现状 | 为什么这版不做 |
+|---|---|---|
+| `shellkit update` **不验 minisign 签名** | `install.sh` 配了 `SHELLKIT_MINISIGN_PUBKEY` 就验 `SHA256SUMS.minisig` 与 tarball 签名；`update` 这条路**只有 sha256**，而 `SHA256SUMS` 与包走同一个下载通道 ⇒ 签名在升级路径上等于没用（库里连验签原语都没有，`lib/` 里搜不到 minisign） | 要先在库里加一个**内部**验签原语（`_sk_*`，不进公开 API 面）并接到 `cmd_update` 上 ⇒ 新功能，值一个 minor |
+| `shellkit update` 把**网络失败**也报成 5 | `cmd_update` 把 `_sk_http_latest_tag` 的 4 压成 5（`install.sh` / `demo.sh` 修好之后是 4）⇒ 三条入口的退出码口径不一致 | 改它就是**改公开可观察的退出码** ⇒ 按 `docs/COMPATIBILITY.md` 必须走 minor + 迁移表，不能塞进一个 patch |
+| `install.sh` 查版本那一问**超时 900 秒** | 未认证路径复用了 `fetch` 的 `--max-time 900`（下载 tarball 用它合理，查版本不合理）⇒ 主路径「连上了但没有响应」时，兜底那条路要等 15 分钟才轮得到 | 改 `fetch_release_api` 会动到它的分支臂编号 ⇒ 覆盖率基线要重生成；与上面两条一起放到 minor 那版更划算 |
+| `_sk_upgrade_journal_write` 里 `__keep` 没声明 local | 赋值落在**全局**上（同一文件里 `_sk_own_sync` 的 `__keep` 是 local，两处不互相污染）⇒ 当前无害，但这是个雷：将来谁在全局读 `__keep` 就会踩到 | 纯清理、零风险，但与本版主题无关 ⇒ 不混进同一个 patch |
 
 ## 三、战略取舍
 
