@@ -125,24 +125,8 @@ assert_stub_args curl "-H Authorization: Bearer secret-token"
 # --------------------------------------------------------------------------
 d=$(tmpdir)
 cp "$TEST_ROOT/lib/core/http.sh" "$d/http.sh"
-python3 - "$d/http.sh" <<'PY'
-import sys
-p = sys.argv[1]
-s = open(p, encoding='utf-8').read()
-old = '''  log_debug "the release API did not answer; trying the /releases/latest redirect"
-  if [ -z "$__page" ]; then
-    return "$SK_VERIFY"
-  fi
-  _sk_http_latest_tag_via_redirect "$__page" || return $?
-  return 0
-'''
-new = '''  return "$SK_VERIFY"
-'''
-if old not in s:
-    sys.stderr.write('mutation anchor not found\n')
-    sys.exit(1)
-open(p, 'w', encoding='utf-8').write(s.replace(old, new, 1))
-PY
+# 把兜底函数整个换成「永远失败」—— 按函数边界做，与覆盖率插桩无关
+stub_out_function "$d/http.sh" _sk_http_latest_tag_via_redirect
 export FAKE_API_BODY='{"message":"API rate limit exceeded"}'
 export FAKE_API_HEADERS='HTTP/1.1 403 Forbidden
 '

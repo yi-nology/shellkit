@@ -127,22 +127,8 @@ fi
 # --------------------------------------------------------------------------
 d=$(tmpdir)
 cp "$TEST_ROOT/install.sh" "$d/install.sh"
-python3 - "$d/install.sh" <<'PY'
-import sys
-p = sys.argv[1]
-s = open(p, encoding='utf-8').read()
-old = '''  latest_via_redirect || return 1
-  return 0
-}
-'''
-new = '''  return 1
-}
-'''
-if old not in s:
-    sys.stderr.write('mutation anchor not found\n')
-    sys.exit(1)
-open(p, 'w', encoding='utf-8').write(s.replace(old, new, 1))
-PY
+# 把兜底函数整个换成「永远失败」—— 按函数边界做，与覆盖率插桩无关
+stub_out_function "$d/install.sh" latest_via_redirect
 export FAKE_API_BODY='{"message":"API rate limit exceeded"}'
 export FAKE_API_EXIT=22
 _run_install "$d/install.sh"
