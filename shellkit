@@ -127,7 +127,7 @@ if [ "$SK_BOOTSTRAP_OK" -eq 1 ]; then
   cli_cmd doctor "$(_t 'check the runtime environment')" "doctor [--dir DIR] [--json]"
   cli_cmd list "$(_t 'list templates and library modules')" "list"
   cli_group "$(_t 'existing projects')"
-  cli_cmd vendor "$(_t 'sync the library into an existing project')" "vendor <dir> [--check] [--force]"
+  cli_cmd vendor "$(_t 'sync the library into an existing project')" "vendor <dir> [--check] [--force] [--allow-shadow]"
   cli_group "$(_t 'documentation')"
   cli_cmd docs "$(_t 'regenerate the API reference')" "docs [--check]"
   cli_cmd man "$(_t 'generate man pages')" "man [--out DIR]"
@@ -970,6 +970,207 @@ _sk_vendor_relocate_guard() {
   return 3
 }
 
+# _sk_shadow_has NAME LIST —— LIST（| 分隔的名单）里有没有 NAME
+#
+# 纯 bash 的模式匹配，不 fork grep：名字集合要过几百次，
+# 每次 fork 一 grep 在 macOS 上是几十秒量级的浪费。
+# 名单用 | 分隔（前后都有分隔符）⇒ 第一个成员也能被模式匹配到。
+# @exitcode 0 有；1 没有
+_sk_shadow_has() {
+  case "$2" in
+    *"|$1|"*) return 0 ;;
+  esac
+  return 1
+}
+
+# _sk_shadow_parse_line LINE ROOT —— 把 grep 的一行输出拆成 "名字<TAB>相对路径:行号"
+#
+# grep -n -H 多文件时的输出是 "路径:行号:内容"。这里只做字符串切分，不 fork。
+# 路径里带 ':' 的工程目录会被切错 —— 那是极少见的情形，测试目录不会这样。
+#
+# @exitcode 0 成功（stdout 一行）
+_sk_shadow_parse_line() {
+  local __line=$1 __root=$2 __file __rest __lineno __name
+  __file=${__line%%:*}
+  __rest=${__line#*:}
+  __lineno=${__rest%%:*}
+  __rest=${__rest#*:}
+  __name=${__rest%%(*}
+  printf '%s\t%s:%s\n' "$__name" "${__file#"$__root"/}" "$__lineno"
+}
+
+# _sk_shadow_lib_fns LIBDIR —— 列出一份库副本的**公开**函数
+#
+# 每行 "名字<TAB>相对路径:行号"。只认顶层定义（下划线开头的私有函数不算）：
+# 工程自己写一个 _sk_xxx 的概率极低，真撞上了也不该拦着人家升级。
+#
+# 三个要点：
+#
+#   * **一次 find + 一次 grep**（不给每个文件 fork 一次 grep）：
+#     macOS 上一次 fork ≈ 43ms，工程里几十个 .sh 文件就是好几秒。
+#   * **退出码固定 0**：结果为空是常态，不是错误。以前这个退出码由管道末端的
+#     grep 决定，而 grep「没匹配」返回 1 ⇒ 「扫完了、一个都没撞」被当成
+#     「扫不动」，调用方于是**静默放行**（体检形同虚设）；更糟的是那个退出码
+#     取决于 find 输出的**最后一个**文件有没有匹配 ⇒ 同一份代码换个文件系统
+#     （ext4 哈希序 vs APFS 创建序）就换一种行为：本机绿、CI 红。
+#   * **LC_ALL=C**：名字的判定用 [a-z] 这种范围，而范围按 locale 的排序规则
+#     解释 —— 在 en_US.UTF-8 下 [a-z] 连大写都算（坑 26）。
+#
+# @exitcode 0 成功（stdout 每行一条）
+_sk_shadow_lib_fns() {
+  local __libdir=$1
+  (
+    set +o pipefail
+    # LC_ALL=C：范围 [a-z] 按 locale 的排序规则解释，en_US.UTF-8 下连大写都算。
+    # 不能写成「-exec LC_ALL=C grep」—— find 不走 shell，会把 LC_ALL=C 当命令名。
+    export LC_ALL=C
+    find "$__libdir/core" -type f -name '*.sh' \
+      -exec grep -n -H -E '^[a-z][a-z0-9_]*\(' {} + 2>/dev/null |
+      while IFS= read -r __line; do
+        _sk_shadow_parse_line "$__line" "$__libdir"
+      done
+    exit 0
+  )
+  return 0
+}
+
+# _sk_shadow_project_fns DIR REL —— 列出工程自己定义的函数
+#
+# 每行 "名字<TAB>相对路径:行号"。要排除三种「不是工程的」文件：
+#
+#   * 副本目录（REL）：副本里的函数是**库的**，不是工程的；
+#   * 换名残骸（.shellkit-new / .shellkit-old）：那是库的**上一份副本**，
+#     同样不是工程的代码。不排除的话，换名被中断过的工程会被自己的旧副本
+#     判成「撞了一整库」⇒ 升级被误挡（恢复流程直接走不通）；
+#   * .git：里面可能有从别处拷来的脚本。
+#
+# @exitcode 0 成功（stdout 每行一条）
+_sk_shadow_project_fns() {
+  local __dir=$1 __rel=$2 __parent
+  __parent=${__rel%/*}
+  (
+    set +o pipefail
+    # LC_ALL=C：范围 [a-z] 按 locale 的排序规则解释，en_US.UTF-8 下连大写都算。
+    # 不能写成「-exec LC_ALL=C grep」—— find 不走 shell，会把 LC_ALL=C 当命令名。
+    export LC_ALL=C
+    find "$__dir" -type f -name '*.sh' \
+      -not -path "$__dir/$__rel/*" \
+      -not -path "$__dir/$__parent/.shellkit-new/*" \
+      -not -path "$__dir/$__parent/.shellkit-old/*" \
+      -not -path "$__dir/.git/*" \
+      -exec grep -n -H -E '^[a-z_][a-z0-9_]*\(' {} + 2>/dev/null |
+      while IFS= read -r __line; do
+        _sk_shadow_parse_line "$__line" "$__dir"
+      done
+    exit 0
+  )
+  return 0
+}
+
+# _sk_shadow_guard DIR REL [ALLOW] —— 同步前的同名体检
+#
+# 库每加一个公开函数，就可能与工程里同名的那份撞上。两份定义**语义不同**时，
+# 谁生效取决于「谁后被 source」—— 加载顺序一变，工程的行为就静默变了
+# （菜单空、模块扫不到、退出码还是 0）。
+#
+# 只拦「**这次同步新引入**」的撞名：本来就撞的（工程早就这么写着）不该被升级挡住，
+# 但要点名提示。ALLOW=1 时连新引入的也不拦（用户自己拍板）。
+#
+# 判空用标志位（__hit / __fresh），不用「名单字符串非空」——
+# 名单带分隔符，空名单也是非空字符串 ⇒ 拿它判空会恒真（坑：空集合当成有）。
+#
+# @exitcode 0 可以继续；5 有新引入的撞名（fail-closed，副本一个字节都没动）
+_sk_shadow_guard() {
+  local __dir=$1 __rel=$2 __allow=${3:-0}
+  local __own __new __old __own_names="|" __old_names="|"
+  local __hit=0 __fresh=0
+  local __name __ofile __lfile __n2 __f2 __dest
+  # 副本落点：DIR 可能是相对路径，下面的判断按同一个相对路径读副本里的文件。
+  __dest="$__dir/$__rel"
+  # 扫描函数的退出码固定 0（结果为空是常态，不是错误），所以这里不必判状态。
+  # 以前那句「|| return 0」正是把「扫完了、一个都没撞」当成「扫不动」而放行 ——
+  # 体检于是形同虚设，而且放不放行取决于 find 输出的最后一个文件（CI 红、本机绿）。
+  __own=$(_sk_shadow_project_fns "$__dir" "$__rel")
+  __new=$(_sk_shadow_lib_fns "$SELF_DIR/lib")
+  __old=""
+  if [ -d "$__dest/lib/core" ]; then
+    __old=$(_sk_shadow_lib_fns "$__dest/lib")
+  fi
+  while IFS=$'\t' read -r __name __ofile; do
+    [ -n "$__name" ] || continue
+    __own_names="$__own_names$__name|"
+  done <<EOF
+$__own
+EOF
+  while IFS=$'\t' read -r __name __lfile; do
+    [ -n "$__name" ] || continue
+    __old_names="$__old_names$__name|"
+  done <<EOF
+$__old
+EOF
+  while IFS=$'\t' read -r __name __lfile; do
+    [ -n "$__name" ] || continue
+    _sk_shadow_has "$__name" "$__own_names" || continue
+    __hit=1
+    _sk_shadow_has "$__name" "$__old_names" || __fresh=1
+  done <<EOF
+$__new
+EOF
+  [ "$__hit" = "1" ] || return 0
+  if [ "$__fresh" = "1" ]; then
+    if [ "$__allow" != "1" ]; then
+      log_error "$(_t 'this sync introduces a name collision with the library')"
+      while IFS=$'\t' read -r __name __lfile; do
+        [ -n "$__name" ] || continue
+        _sk_shadow_has "$__name" "$__own_names" || continue
+        _sk_shadow_has "$__name" "$__old_names" && continue
+        __ofile=""
+        __lfile=""
+        while IFS=$'\t' read -r __n2 __f2; do
+          [ "$__n2" = "$__name" ] || continue
+          __ofile=$__f2
+          break
+        done <<EOF2
+$__own
+EOF2
+        while IFS=$'\t' read -r __n2 __f2; do
+          [ "$__n2" = "$__name" ] || continue
+          __lfile=$__f2
+          break
+        done <<EOF2
+$__new
+EOF2
+        printf '  %s\n' "$__name"
+        printf '    %s: %s\n' "$(_t 'the project defines it at')" "$__ofile"
+        printf '    %s: %s\n' "$(_t 'the library defines it at')" "$__lfile"
+      done <<EOF
+$__new
+EOF
+      log_info "$(_t 'whichever is sourced last wins; rename the project function, or re-run with --allow-shadow to sync anyway')"
+      return 5
+    fi
+    log_warn "$(_t 'name collision with the library, allowed by --allow-shadow')"
+    while IFS=$'\t' read -r __name __lfile; do
+      [ -n "$__name" ] || continue
+      _sk_shadow_has "$__name" "$__own_names" || continue
+      _sk_shadow_has "$__name" "$__old_names" && continue
+      printf '  %s\n' "$__name"
+    done <<EOF
+$__new
+EOF
+    return 0
+  fi
+  log_warn "$(_t 'the project defines a function with the same name as the library')"
+  while IFS=$'\t' read -r __name __lfile; do
+    [ -n "$__name" ] || continue
+    _sk_shadow_has "$__name" "$__own_names" || continue
+    printf '  %s\n' "$__name"
+  done <<EOF
+$__new
+EOF
+  log_info "$(_t 'whichever is sourced last wins')"
+  return 0
+}
 # _sk_vendor_dir_config_write DIR —— 把非默认落点写进工程，让工程自描述
 #
 # 为什么写：副本装在 third_party/shellkit，而这个工程下次跑 doctor / upgrade
@@ -3084,7 +3285,7 @@ cmd_man() {
 # ---------- vendor ----------
 
 cmd_vendor() {
-  local __dir="" __check=0 __force=0 __dest __stale=0 __x __rel
+  local __dir="" __check=0 __force=0 __shadow=0 __dest __stale=0 __x __rel
   while [ "$#" -gt 0 ]; do
     case "$1" in
       -h | --help)
@@ -3096,6 +3297,9 @@ cmd_vendor() {
         ;;
       --force)
         __force=1
+        ;;
+      --allow-shadow)
+        __shadow=1
         ;;
       --?*)
         log_error "$(_t 'unknown option'): $1"
@@ -3128,6 +3332,11 @@ cmd_vendor() {
   # 副本在别处、而这里要新建一份 ⇒ 拒绝。静默新建是最坏的一种：它会在仓根
   # 造出一个新的 vendor/，把 Go 仓推进 inconsistent vendoring（退出码还是 0）。
   _sk_vendor_relocate_guard "$__dir" || return "$SK_PRECOND"
+
+  # 同名体检：库这一版新加的公开函数，会不会撞上工程里自己写的那个？
+  # 撞上了，两份定义的语义不同，谁生效取决于加载顺序 ⇒ 行为会静默变。
+  # 这里在**动副本之前**就把它摆出来：新引入的撞名直接退 5（副本一个字节没动）。
+  _sk_shadow_guard "$__dir" "$__rel" "$__shadow" || return "$SK_VERIFY"
 
   if [ "$__check" = "1" ]; then
     for __x in lib locale templates VERSION shellkit tests/test_helper.sh tests/run.sh; do

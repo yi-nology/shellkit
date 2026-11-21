@@ -514,6 +514,9 @@ _exclude_reason() {
     test_meta_gates.sh)
       printf '%s' "mutates literal source text; branch instrumentation rewrites the lines its mutators match"
       ;;
+    test_str_mutation.sh)
+      printf '%s' "mutates literal source text; branch instrumentation rewrites the lines its mutators match"
+      ;;
     *)
       printf '%s' "inspects the source tree"
       ;;
@@ -524,7 +527,7 @@ _exclude_reason() {
 # test_meta_gates 只在分支模式排除（它的变异器按字面量匹配源码行，分支插桩会改写那些行）。
 COV_EXCLUDES="test_coverage.sh test_coverage_branch.sh test_api_baseline.sh test_api_stability.sh test_ai_docs.sh test_local_names.sh test_module_count.sh test_pipe_safety.sh"
 if [ "$MODE" = "branch" ]; then
-  COV_EXCLUDES="$COV_EXCLUDES test_meta_gates.sh"
+  COV_EXCLUDES="$COV_EXCLUDES test_meta_gates.sh test_str_mutation.sh"
 fi
 
 for __f in $COV_EXCLUDES; do

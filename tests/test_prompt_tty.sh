@@ -132,3 +132,13 @@ printf "\nRC=%s\n" "$__rc"'
 _write_runner "$body_confirm"
 raw=$(_pty_run "n" "$READY")
 assert_eq "1" "$(_pty_value RC "$raw")" "confirm must exit 1 when the user answers n"
+
+# CASE: ask_multi 先收到非法选区 ⇒ 提示并重试，第二次输入合法才算数
+body_multi='printf "PTY-READY\n"
+ask_multi V "Pick" 5
+# 取值助手只吃一个词 ⇒ 这里把空格换成逗号再打出来（编号集合本身是空格分隔的）
+printf "\nV=%s\n" "$(printf "%s" "$V" | tr " " ",")"'
+_write_runner "$body_multi"
+raw=$(_pty_run "abc
+1,3" "$READY")
+assert_eq "1,3" "$(_pty_value V "$raw")" "ask_multi must reject an invalid selection and take the next valid one"

@@ -172,6 +172,10 @@ _reason_for() {
       printf '%s' "POSIX 子集用 printf / tr 就够，不单独移植"
       return 0
       ;;
+    str_parse_indices)
+      printf '%s' "选区串是交互层的输入，设备侧用不上"
+      return 0
+      ;;
     trap_pop | trap_list | trap_cleanup)
       printf '%s' "POSIX 子集只做「退出时执行」，没有清理栈管理接口"
       return 0
@@ -188,7 +192,7 @@ _reason_for() {
       printf '%s' "POSIX 子集只给 conf_init 与 conf_get_any（无「配置层」这一层）"
       return 0
       ;;
-    ask | ask_yn | ask_choice | confirm)
+    ask | ask_yn | ask_choice | ask_multi | confirm)
       printf '%s' "交互在无人值守的设备侧用不上"
       return 0
       ;;

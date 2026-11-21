@@ -63,3 +63,31 @@ assert_eq "3" "$(_str_edit_distance abc '')" "edit distance against an empty str
 assert_eq "3" "$(_str_edit_distance '' abc)" "edit distance from an empty string"
 assert_eq "1" "$(_str_edit_distance abc abd)" "edit distance of one substitution"
 assert_eq "3" "$(_str_edit_distance kitten sitting)" "edit distance of a classic pair"
+
+# ---- 选区串解析（v1.5.0 新增） ----
+assert_eq "1" "$(str_parse_indices 1 5)" "a single index"
+assert_eq "1 3" "$(str_parse_indices "1,3" 5)" "two indices"
+assert_eq "2 3 4 5" "$(str_parse_indices "2-5" 5)" "a range expands"
+assert_eq "1 3 5 6 7 8" "$(str_parse_indices "1,3,5-8" 10)" "mixed input"
+assert_eq "1 2" "$(str_parse_indices " 2 , 1 , 2 " 5)" "spaces trimmed, duplicates dropped, output sorted"
+assert_eq "8" "$(str_parse_indices "08" 10)" "a leading zero is not octal"
+# 非法输入一律退 1（且没有输出）
+assert_exit_code 1 str_parse_indices "5-2" 10
+assert_exit_code 1 str_parse_indices "9" 3
+assert_exit_code 1 str_parse_indices "a" 3
+assert_exit_code 1 str_parse_indices "1,,2" 3
+assert_exit_code 1 str_parse_indices "" 3
+assert_eq "" "$(str_parse_indices "5-2" 10 2>/dev/null || true)" "an invalid selection prints nothing"
+# 参数错：个数不对 / MAX 不是正整数
+assert_exit_code 2 str_parse_indices "1"
+assert_exit_code 2 str_parse_indices "1" 0
+assert_exit_code 2 str_parse_indices "1" x
+
+# 边界：每一个「非法」都要单独判错（区间逆序、越界、0、空段、非数字、空端点）
+assert_exit_code 1 str_parse_indices "0" 4
+assert_exit_code 1 str_parse_indices "3-6" 4
+assert_exit_code 1 str_parse_indices "1-" 4
+assert_exit_code 1 str_parse_indices "-1" 4
+assert_exit_code 1 str_parse_indices "a-b" 4
+assert_exit_code 1 str_parse_indices "0-0" 4
+assert_eq "1 2 3" "$(str_parse_indices "1-3,2" 4)" "a range plus a duplicate is deduplicated"

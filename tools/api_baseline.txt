@@ -15,11 +15,12 @@
 #   分级            stable=承诺稳定 / experimental=暂不承诺（源码注释 @stability 的投影）
 #                   没写注解的按 experimental 落盘；是否已声明看 tools/stability_exempt.txt
 #
-baseline-version: 1.1.0
+baseline-version: 1.4.1
 archive_extract	0,2,3,5	active	-	probe	0,2,3,5	-	experimental
 archive_list	0,2,3,5	active	1.2.0	probe	0,2,3,5	-	experimental
 ask	0,1,2,3	active	-	probe	0,3	-	stable
 ask_choice	0,1,2,3	active	-	probe	0,3	-	stable
+ask_multi	0,1,2,3	active	-	probe	0,2,3	-	experimental
 ask_yn	0,1,2,3	active	-	probe	0,3	-	stable
 cli_cmd	0,2	active	-	probe	0	-	experimental
 cli_completion_script	0,2	active	-	probe	0	-	experimental
@@ -158,6 +159,7 @@ status_version	0	active	-	probe	0	-	experimental
 str_contains	0,1	active	-	probe	0,1	-	experimental
 str_ends_with	0,1	active	-	probe	0,1	-	experimental
 str_lower	0,2	active	-	probe	0	-	experimental
+str_parse_indices	0,1,2	active	-	probe	0,1,2	-	experimental
 str_repeat	0,2	active	-	probe	0	-	experimental
 str_starts_with	0,1	active	-	probe	0,1	-	experimental
 str_suggest	0,1	active	-	probe	0,1	-	experimental

@@ -66,3 +66,24 @@ assert_exit_code 3 ask __not_reserved "Q" 2>/dev/null
 
 # 私有读行函数也不能让目标名撞上自己的局部变量
 assert_exit_code 2 _sk_read_line __buf "" </dev/null
+
+# ---- 多选（v1.5.0 新增） ----
+v=""
+ask_multi v "Pick" 5 "1,3" 2>/dev/null
+assert_eq "1 3" "$v" "ask_multi returns the normalized selection"
+v=""
+ask_multi v "Pick" 5 "2-4" 2>/dev/null
+assert_eq "2 3 4" "$v" "ask_multi expands a range"
+v=""
+ask_multi v "Pick" 5 "3,1,3" 2>/dev/null
+assert_eq "1 3" "$v" "ask_multi drops duplicates and sorts"
+# 默认选区非法 ⇒ 用法错（等于没有默认值）
+assert_exit_code 2 ask_multi v "Pick" 5 "9" 2>/dev/null
+assert_exit_code 2 ask_multi v "Pick" 5 "5-2" 2>/dev/null
+# 参数错：变量名非法 / COUNT 非法 / 撞上出参保留名
+assert_exit_code 2 ask_multi "bad-name" "Pick" 5 "1" 2>/dev/null
+assert_exit_code 2 ask_multi v "Pick" 0 "1" 2>/dev/null
+assert_exit_code 2 ask_multi v "Pick" x "1" 2>/dev/null
+assert_exit_code 2 ask_multi __var "Pick" 5 "1" 2>/dev/null
+# 非交互且没有默认值 ⇒ 3（前置条件）
+assert_exit_code 3 ask_multi v "Pick" 5 2>/dev/null

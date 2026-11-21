@@ -144,6 +144,9 @@ _sk_msg_lookup_shellkit() {
     'default value is not one of the choices') printf '%s' '默认值不在备选项里' ;;
     'default') printf '%s' '默认' ;;
     'invalid choice') printf '%s' '无效的选择' ;;
+    'invalid count') printf '%s' '候选项总数非法' ;;
+    'default value is not a valid selection') printf '%s' '默认选区不是合法的选区' ;;
+    'invalid selection') printf '%s' '选区非法' ;;
     'circular dependency detected') printf '%s' '检测到循环依赖' ;;
     'missing dependency') printf '%s' '缺失依赖' ;;
     'usage: retry ATTEMPTS COMMAND...') printf '%s' '用法: retry 次数 命令...' ;;
@@ -224,6 +227,13 @@ _sk_msg_lookup_shellkit() {
     'both copies are broken, nothing was removed, reinstall shellkit') printf '%s' '两份副本都不完整；什么都没删，请重装 shellkit' ;;
     'the vendored library is at a different location') printf '%s' '库副本在别的位置' ;;
     'point shellkit at it instead of creating a second copy') printf '%s' '把 shellkit 指过去，而不是再建一份' ;;
+    'this sync introduces a name collision with the library') printf '%s' '这次同步引入了与库同名的函数' ;;
+    'the project defines it at') printf '%s' '工程侧定义于' ;;
+    'the library defines it at') printf '%s' '库侧定义于' ;;
+    'whichever is sourced last wins; rename the project function, or re-run with --allow-shadow to sync anyway') printf '%s' '谁后被 source 谁生效；请把工程里的那个改名，或加 --allow-shadow 强行同步' ;;
+    'name collision with the library, allowed by --allow-shadow') printf '%s' '与库同名（已用 --allow-shadow 放行）' ;;
+    'the project defines a function with the same name as the library') printf '%s' '工程里定义了与库同名的函数' ;;
+    'whichever is sourced last wins') printf '%s' '谁后被 source 谁生效' ;;
     'refusing to write outside the project directory') printf '%s' '拒绝写到工程目录之外' ;;
     'syncing') printf '%s' '正在同步' ;;
     'the vendor directory is a symlink, refusing to install') printf '%s' 'vendor 目录是符号链接，拒绝安装' ;;

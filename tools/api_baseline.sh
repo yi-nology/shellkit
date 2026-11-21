@@ -467,6 +467,7 @@ str_starts_with	0,1	str_starts_with abc ab || exit 81; str_starts_with abc bc; p
 str_ends_with	0,1	str_ends_with abc bc || exit 81; str_ends_with abc ab; prc=$?; [ "$prc" = 1 ] || exit 82; exit 0
 str_repeat	0	pv=""; str_repeat pv 3 ab || exit 81; [ "$pv" = "ababab" ] || exit 82; exit 0
 str_suggest	0,1	[ "$(str_suggest depoy deploy)" = "deploy" ] || exit 81; str_suggest depoy; prc=$?; [ "$prc" = 1 ] || exit 82; exit 0
+str_parse_indices	0,1,2	[ "$(str_parse_indices "1,3,5-7" 8)" = "1 3 5 6 7" ] || exit 81; str_parse_indices "9" 3 >/dev/null; prc=$?; [ "$prc" = 1 ] || exit 82; str_parse_indices "1" >/dev/null; prc=$?; [ "$prc" = 2 ] || exit 83; exit 0
 validate_not_empty	0,1	validate_not_empty x || exit 81; validate_not_empty ""; prc=$?; [ "$prc" = 1 ] || exit 82; exit 0
 validate_single_line	0,1	validate_single_line "a" || exit 81; validate_single_line "$(printf 'a\nb')"; prc=$?; [ "$prc" = 1 ] || exit 82; exit 0
 validate_key	0,1	validate_key Abc_1 || exit 81; validate_key "1abc"; prc=$?; [ "$prc" = 1 ] || exit 82; exit 0
@@ -492,6 +493,7 @@ log_error	0	log_error probe >/dev/null 2>&1 || exit 81; exit 0
 log_debug	0	log_debug probe >/dev/null 2>&1 || exit 81; exit 0
 log_section	0	log_section probe >/dev/null 2>&1 || exit 81; exit 0
 fail	0,2,7	fail 7 probe >/dev/null 2>&1; prc=$?; [ "$prc" = 7 ] || exit 82; fail bad probe >/dev/null 2>&1; prc=$?; [ "$prc" = 2 ] || exit 83; exit 0
+ask_multi	0,2,3	ask_multi 1bad pick 3 >/dev/null 2>&1; prc=$?; [ "$prc" = 2 ] || exit 81; ask_multi mv pick 3 >/dev/null 2>&1; prc=$?; { [ "$prc" = 0 ] || [ "$prc" = 3 ]; } || exit 82; exit 0
 require_cmd	0,3	require_cmd sh || exit 81; require_cmd sk-no-such-cmd-here; prc=$?; [ "$prc" = 3 ] || exit 82; exit 0
 require_root	0,3	require_root; prc=$?; { [ "$prc" = 0 ] || [ "$prc" = 3 ]; } || exit 81; exit 0
 require_file	0,3	printf 'x' > require_file-f; require_file require_file-f || exit 81; require_file require_file-missing; prc=$?; [ "$prc" = 3 ] || exit 82; exit 0

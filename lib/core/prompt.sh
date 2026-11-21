@@ -191,6 +191,62 @@ ask_choice() {
   _sk_ask_choice_raw "$__var" "$__prompt" "$__choices" "$__default" "$__timeout"
 }
 
+# ask_multi VAR PROMPT COUNT [DEFAULT] [TIMEOUT] —— 多选；把选中的**编号**写进 VAR
+# @brief 调用方自己打印编号列表（1..COUNT），本函数只负责收输入、解析、重试。
+# @brief 输入形如 1 / 1,3 / 2-5 / 1,3,5-8；VAR 里写的是**去重升序的编号**
+# @brief （空格分隔，如 "1 3 5"），不是候选项的内容 —— 按序号取内容是调用方的事。
+# @param VAR 出参变量名
+# @param PROMPT 提示语
+# @param COUNT 候选项总数（编号从 1 到 COUNT）
+# @param DEFAULT 默认选区（同一套格式）；超时、EOF、非交互时用它
+# @param TIMEOUT 读入超时秒数
+# @exitcode 0 拿到合法选区
+# @exitcode 2 参数错（变量名非法、撞上内部保留名、COUNT 非法），或连续三次都不是合法选区
+# @exitcode 3 非交互且没有默认值，或超时且没有默认值
+# @exitcode 1 输入被意外关闭
+# @stability experimental
+ask_multi() {
+  local __var=${1:-} __prompt=${2:-} __count=${3:-} __default=${4:-} __timeout=${5:-}
+  local __ans="" __tries=0 __msg __parsed
+  _sk_need_args "$#" 3 "ask_multi VAR PROMPT COUNT [DEFAULT] [TIMEOUT]" || return $?
+  if ! _sk_is_name "$__var"; then
+    log_error "$(_t 'invalid variable name'): $__var"
+    return "$SK_USAGE"
+  fi
+  _sk_check_out_name "$__var" || return $?
+  case "$__count" in
+    '' | *[!0-9]*)
+      log_error "$(_t 'invalid count'): $__count"
+      return "$SK_USAGE"
+      ;;
+  esac
+  [ "$__count" -ge 1 ] || {
+    log_error "$(_t 'invalid count'): $__count"
+    return "$SK_USAGE"
+  }
+  # 默认值也必须是合法选区：非法默认值等于没有默认值
+  if [ -n "$__default" ]; then
+    if ! str_parse_indices "$__default" "$__count" >/dev/null; then
+      log_error "$(_t 'default value is not a valid selection'): $__default"
+      return "$SK_USAGE"
+    fi
+  fi
+  __msg=$__prompt
+  if [ -n "$__default" ]; then
+    __msg="$__msg ($(_t 'default'): $__default) "
+  fi
+  while [ "$__tries" -lt 3 ]; do
+    __tries=$((__tries + 1))
+    _sk_ask_raw __ans "$__msg" "$__default" "$__timeout" || return $?
+    if __parsed=$(str_parse_indices "$__ans" "$__count"); then
+      printf -v "$__var" '%s' "$__parsed"
+      return 0
+    fi
+    log_warn "$(_t 'invalid selection'): $__ans"
+  done
+  return "$SK_USAGE"
+}
+
 # confirm PROMPT [DEFAULT=n] [TIMEOUT] —— 只返回码
 # @exitcode 0 用户答 y
 # @exitcode 1 用户答 n
