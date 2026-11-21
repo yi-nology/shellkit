@@ -89,8 +89,36 @@ fi
 
 cd "$ROOT"
 
+# git 的失败不许原样漏出去。三个坑都实测过：
+#   · HEAD 解析不出来 ⇒ 原来直接漏 git 的 128 + "fatal: ambiguous argument 'HEAD'"
+#     —— 操作者既不知道这个退出码是什么意思，也不知道下一步做什么
+#     （真因：容器与宿主共用同一个 .git 时，宿主刚做的 git pull/gc 让 HEAD 短暂不可见）；
+#   · git status 失败 ⇒ 命令替换把退出码吞掉、得到空串 ⇒ 判定成「工作树干净」
+#     ⇒ 发版照跑 —— 这是**静默失效**，比报错危险得多；
+#   · push 被拒 ⇒ docs/RELEASING.md 的退出码表写的是 1，代码却退 git 的 128。
+#
+# 现在所有 git 调用都过 _git_fail：拿到 git 的 stderr 原话，判成我们自己的退出码。
+_GIT_ERR=$(mktemp "${TMPDIR:-/tmp}/shellkit-git.XXXXXX") || _die "mktemp failed" 1
+trap 'rm -f "$_GIT_ERR"' EXIT
+
+_git_fail() {
+  local __cmd=$1
+  local __code=${2:-1}
+  printf '[release] ERROR: %s failed\n' "$__cmd" >&2
+  if [ -s "$_GIT_ERR" ]; then
+    sed -n '1,8p' "$_GIT_ERR" | sed 's/^/[release]   /' >&2
+  fi
+  if [ "$__code" = "3" ]; then
+    printf '[release] the repository is not in a releasable state; fix it before releasing\n' >&2
+    printf '[release] if you just ran git pull/gc/clone this may be an environment race (seen when a container shares the same .git): wait, then retry\n' >&2
+  fi
+  exit "$__code"
+}
+
 # 先赋值再比较：把 `|| true` 塞进 [ ] 里的 $( ) 会让 shellcheck 0.11 的解析器报 SC1073
-TOP=$(git rev-parse --show-toplevel 2>/dev/null || true)
+if ! TOP=$(git rev-parse --show-toplevel 2>"$_GIT_ERR"); then
+  _git_fail "git rev-parse --show-toplevel" 3
+fi
 if [ "$TOP" != "$ROOT" ]; then
   _die "not a git checkout: $ROOT" 3
 fi
@@ -103,12 +131,17 @@ CUR="$(tr -d '[:space:]' <VERSION)"
 
 _ver_gt "$VER" "$CUR" || _die "new version $VER must be greater than current $CUR" 2
 
-HEAD_BRANCH="$(git rev-parse --abbrev-ref HEAD)"
+if ! HEAD_BRANCH=$(git rev-parse --abbrev-ref HEAD 2>"$_GIT_ERR"); then
+  _git_fail "git rev-parse --abbrev-ref HEAD" 3
+fi
 if [ "$HEAD_BRANCH" != "$BRANCH" ]; then
   _die "release runs on $BRANCH, current branch is $HEAD_BRANCH" 3
 fi
 
-if [ -n "$(git status --porcelain)" ]; then
+if ! STATUS_OUT=$(git status --porcelain 2>"$_GIT_ERR"); then
+  _git_fail "git status --porcelain" 3
+fi
+if [ -n "$STATUS_OUT" ]; then
   _die "working tree is dirty; commit or stash first (git status --short)" 3
 fi
 
@@ -136,7 +169,7 @@ _changelog_add() {
   # 且 GA 发版时跳过预发布 tag（RC 与 GA 常常是同一批功能）。
   # 实现见 tools/changelog_prev.sh —— 单独成文件是为了能直接测它。
   __prev=$(bash "$ROOT/tools/changelog_prev.sh" "$__ver") || __prev=""
-  __date=$(git log -1 --format=%ad --date=short)
+  __date=$(git log -1 --format=%ad --date=short 2>"$_GIT_ERR") || _git_fail "git log -1" 3
   __tmp=$(mktemp "${TMPDIR:-/tmp}/shellkit-changelog.XXXXXX") || _die 'mktemp failed' 1
   {
     printf '## %s — %s\n\n' "$__ver" "$__date"
@@ -218,13 +251,13 @@ bash tools/check_versions.sh
 _say "running make check (this is the long part)"
 if ! env -u VERSION -u MAKEFLAGS -u MFLAGS make check; then
   if [ "$DRY" = "1" ]; then
-    git checkout -- .
+    git checkout -- . 2>"$_GIT_ERR" || _git_fail "git checkout -- ." 5
   fi
   _die "make check failed; fix it before releasing" 5
 fi
 
 if [ "$DRY" = "1" ]; then
-  git checkout -- .
+  git checkout -- . 2>"$_GIT_ERR" || _git_fail "git checkout -- ." 5
   _say "dry run finished: every step passed, working tree restored"
   _say "next: bash tools/release.sh $VER"
   exit 0
@@ -233,14 +266,16 @@ fi
 # ---------- 7. 提交、打 tag、推 ----------
 
 _say "committing"
-git add -A
-git commit -m "chore(release): $VER" >/dev/null
-git tag -a "v$VER" -m "shellkit $VER"
+git add -A 2>"$_GIT_ERR" || _git_fail "git add -A" 5
+git commit -m "chore(release): $VER" >/dev/null 2>"$_GIT_ERR" || _git_fail "git commit" 5
+git tag -a "v$VER" -m "shellkit $VER" 2>"$_GIT_ERR" || _git_fail "git tag" 5
 
 if [ "$PUSH" = "1" ]; then
   _say "pushing $BRANCH and v$VER"
-  git push origin "HEAD:$BRANCH"
-  git push origin "v$VER"
+  # push 失败退 1（docs/RELEASING.md 的退出码表）：tag 没推上去 ⇒
+  # release.yml 没被触发 ⇒ 不会留下半个 Release。
+  git push origin "HEAD:$BRANCH" 2>"$_GIT_ERR" || _git_fail "git push origin HEAD:$BRANCH" 1
+  git push origin "v$VER" 2>"$_GIT_ERR" || _git_fail "git push origin v$VER" 1
 else
   _say "skipped the push (--no-push); push by hand:"
   printf '    git push origin %s\n    git push origin v%s\n' "$BRANCH" "$VER" >&2
