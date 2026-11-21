@@ -79,10 +79,23 @@ gh run list --workflow=release.yml --limit 1
 
 ### 判据在哪
 
-- `tools/release.sh` 第 2 步：`v<version>` 已存在 ⇒ 退 `3`（所以恢复必须先删本地 tag）；
-- 第 11 步 push 失败 ⇒ 整个发版退 `1`，**不会**留下半个 Release（tag 没推 = `release.yml` 没被触发）；
+`tools/release.sh` 的退出码 —— **git 自己的 128 不会漏出来**：
+
+| 码 | 含义 |
+| --- | --- |
+| `0` | 发布成功（本地 commit 与 tag 都已落地） |
+| `1` | push 被远端拒收（tag 没推上去 ⇒ `release.yml` 没被触发 ⇒ 不会留下半个 Release） |
+| `2` | 参数用法错误：版本号格式不对，或不大于当前 `VERSION` |
+| `3` | 仓库状态不对：不是 git checkout / `HEAD` 解析不出来 / 不在 `main` 上 / 工作树脏 / `v<version>` 已存在 |
+| `5` | 本地门禁没过（`make check` 失败）或本地生成步骤失败 |
+
+- 第 2 步：`v<version>` 已存在 ⇒ 退 `3`（所以恢复必须先删本地 tag）；
+- 第 11 步 push 失败 ⇒ 退 `1`（原来退的是 git 的 128，见下面 v1.6.0 那次事故）；
 - 发布之后用 `gh release view "v$version" --json isDraft,assets` 与
   `bash tools/release_selfcheck.sh "v$version" --require-packages` 确认资产真的在。
+
+**所有 git 调用都过 `_git_fail`**：失败时先把 git 的 stderr 原话打出来，再按上表判退出码。
+这不是洁癖 —— 见下面那次事故。
 
 ## 发版窗口：2026-11-18 / v1.1.0 —— 一次发布，四次连环事故
 
@@ -128,6 +141,45 @@ git push origin v1.1.0                # 重新推 ⇒ release.yml 由 tag 触发
 ⇒ 提交前先确认 `git rev-parse --abbrev-ref HEAD`；发现分支被别人动过就**用独立 worktree**
 （`git worktree add --detach`）做自己的提交 —— 不要在共享工作树里切分支：切分支会把别人
 正在写的分支从他们脚下抽走。
+
+## 发版窗口：2026-11-21 / v1.6.0 —— 一行报错，牵出三个静默失效
+
+容器里跑 `tools/release.sh 1.6.0`，脚本**瞬间**死了，屏幕上只有一行：
+
+```
+fatal: ambiguous argument 'HEAD': unknown revision or path not in the working tree.
+```
+
+退出码 128。重跑一次同样的命令就过了 —— 典型的「偶发」，也正是最容易被放过的一类。
+查下来是三件事叠在一起：
+
+1. **报错本身：git 解析不出 `HEAD`**。`git rev-parse --abbrev-ref HEAD` 在 HEAD 指向的
+   分支 ref 不可见时就是这个报错（unborn HEAD 与 ref 丢失都会这样）。
+   真因在环境：容器与宿主共用同一个 `.git`，宿主刚做过的 `git pull` 会触发后台
+   `git gc --auto` 重写 `refs/heads/`，而 Docker 的 bind mount 带目录缓存 ——
+   容器恰好读到了「旧 ref 已删、新 packed-refs 还没生效」的那个瞬间。
+   ⇒ 库这一侧没法根治环境竞态，但**脚本必须给出能指导下一步的诊断**：
+   以前它把 git 的 128 与裸 fatal 原样漏给操作者；现在退 `3`，并说清
+   「仓库状态不对」+「刚做过 git pull/gc/clone 可能是环境竞态，等稳定后重试」。
+
+2. **`git status` 失败被静默当成「工作树干净」**（这条比报错危险得多）。
+   `[ -n "$(git status --porcelain)" ]` 里，命令替换把退出码吞掉：git 失败 ⇒ 空串 ⇒
+   判定成「干净」⇒ 发版照跑 ⇒ 可能在一个**状态未知**的工作树上提交并打 tag。
+   ⇒ 现在 `git status` 失败直接退 `3`，且工作树一个字都不许动。
+
+3. **push 失败退的是 git 的退出码，而文档写的是 1**。本文档的退出码表从 v1.1.0 起
+   就写着「push 失败 ⇒ 退 1」，代码却一直是 `set -e` 直接带走 git 的退出码
+   （凭据/网络类失败是 128，rejected 是 1 —— 两个值都出现过）。
+   ⇒ 现在 push 失败统一退 `1`，与文档对上。
+
+判据：`tests/test_release_preflight.sh`。用 PATH 上的**假 git** 把三种失败稳定造出来
+（真 git 造不出来 —— 竞态没法复现，判据会变成偶发绿），
+每条判据都带**变异自证**：把修复改回去，用例必须变红。
+
+> ⚠️ 写这条测试时踩了一次：变异锚点只改了检查的一半（留下一个不成对的 `if`），
+> 脚本变成语法错误退 `2` —— 而「退出码不是 3」那条断言照样绿。
+> ⇒ **判据要成对**：一条断言说「退出码对」，另一条必须说「工作树有没有被动过」。
+> 只断退出码，会被语法错误蒙过去。
 
 ## `main` 的保护规则（2026-11-18 起）
 
