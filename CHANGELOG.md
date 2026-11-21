@@ -2,6 +2,12 @@
 本文件由 `tools/release.sh` 在发版时自动追加，已发布的小节不要手改。
 最新的在最前面。每一条对应一个提交 —— 要看「为什么」而不是「改了什么」，读 `docs/MIGRATING.md`。
 
+## 1.5.0 — 2026-11-21
+
+deea7a5 docs(roadmap): 记上 v1.4.1 已发布与验收结果
+be09a1b feat(vendor,str): 升级不许静默改行为 + 选区原语（v1.5.0）
+618dc2b chore: 忽略 macOS 的 .DS_Store（否则发版门禁永远判脏）
+
 ## 1.4.1 — 2026-11-21
 
 b34eca3 docs(roadmap): 记上 v1.4.0 已发布与验收结果
