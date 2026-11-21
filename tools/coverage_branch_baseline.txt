@@ -542,6 +542,7 @@ lib/core/prompt.sh:_sk_ask_yn_raw:3
 lib/core/prompt.sh:_sk_ask_yn_raw:4
 lib/core/prompt.sh:_sk_read_line:9
 lib/core/prompt.sh:ask_choice:2
+lib/core/prompt.sh:ask_multi:1
 lib/core/prompt.sh:ask_yn:2
 lib/core/prompt.sh:confirm:1
 lib/core/prompt.sh:confirm:2
@@ -656,6 +657,7 @@ lib/core/str.sh:_sk_uint:2
 lib/core/str.sh:str_ends_with:1
 lib/core/str.sh:str_lower:2
 lib/core/str.sh:str_lower:4
+lib/core/str.sh:str_parse_indices:14
 lib/core/str.sh:str_repeat:2
 lib/core/str.sh:str_repeat:4
 lib/core/str.sh:str_starts_with:1
@@ -924,6 +926,11 @@ shellkit:_sk_proj_lock_name:1
 shellkit:_sk_proj_lock_name:2
 shellkit:_sk_render:1
 shellkit:_sk_render:2
+shellkit:_sk_shadow_guard:10
+shellkit:_sk_shadow_guard:12
+shellkit:_sk_shadow_guard:13
+shellkit:_sk_shadow_guard:15
+shellkit:_sk_shadow_guard:4
 shellkit:_sk_skill_client_record:1
 shellkit:_sk_skill_client_record:3
 shellkit:_sk_skill_client_record:4
@@ -1219,5 +1226,5 @@ shellkit:cmd_upgrade:82
 shellkit:cmd_upgrade:89
 shellkit:cmd_upgrade:92
 shellkit:cmd_vendor:1
-shellkit:cmd_vendor:4
-shellkit:cmd_vendor:6
+shellkit:cmd_vendor:5
+shellkit:cmd_vendor:7
