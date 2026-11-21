@@ -302,6 +302,8 @@ str_parse_indices() {
         [ "$__lo" -le "$__hi" ] || return 1
         __n=$__lo
         while [ "$__n" -le "$__hi" ]; do
+          # 区间里的每一个编号都要合法：0 不是编号，越界也不是
+          [ "$__n" -ge 1 ] || return 1
           [ "$__n" -le "$__max" ] || return 1
           __dup=0
           for __i in "${__sel[@]+"${__sel[@]}"}"; do
@@ -335,7 +337,8 @@ str_parse_indices() {
     esac
     [ "$__more" = "1" ] || break
   done
-  [ "${#__sel[@]}" -gt 0 ] || return 1
+  # 走到这里选区一定非空：每个被接受的记号都至少贡献一个编号
+  # （空输入在上面就退了，0 与越界也各自被挡）。
   # 插入排序：选中项通常只有几个 ⇒ O(k²) 足够，且零 fork
   __i=1
   while [ "$__i" -lt "${#__sel[@]}" ]; do

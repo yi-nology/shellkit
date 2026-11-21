@@ -82,3 +82,12 @@ assert_eq "" "$(str_parse_indices "5-2" 10 2>/dev/null || true)" "an invalid sel
 assert_exit_code 2 str_parse_indices "1"
 assert_exit_code 2 str_parse_indices "1" 0
 assert_exit_code 2 str_parse_indices "1" x
+
+# 边界：每一个「非法」都要单独判错（区间逆序、越界、0、空段、非数字、空端点）
+assert_exit_code 1 str_parse_indices "0" 4
+assert_exit_code 1 str_parse_indices "3-6" 4
+assert_exit_code 1 str_parse_indices "1-" 4
+assert_exit_code 1 str_parse_indices "-1" 4
+assert_exit_code 1 str_parse_indices "a-b" 4
+assert_exit_code 1 str_parse_indices "0-0" 4
+assert_eq "1 2 3" "$(str_parse_indices "1-3,2" 4)" "a range plus a duplicate is deduplicated"
