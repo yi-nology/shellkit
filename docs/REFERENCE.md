@@ -4,7 +4,7 @@
 
 log_info MSG... —— 普通信息
 
-**稳定性**：experimental
+**稳定性**：stable
 
 **退出码**
 
@@ -14,7 +14,7 @@ log_info MSG... —— 普通信息
 
 log_ok MSG... —— 成功；单独用 " OK " 是为了和四字母级别对齐
 
-**稳定性**：experimental
+**稳定性**：stable
 
 **退出码**
 
@@ -24,7 +24,7 @@ log_ok MSG... —— 成功；单独用 " OK " 是为了和四字母级别对齐
 
 log_warn MSG... —— 警告，不中断
 
-**稳定性**：experimental
+**稳定性**：stable
 
 **退出码**
 
@@ -34,7 +34,7 @@ log_warn MSG... —— 警告，不中断
 
 log_error MSG... —— 输出错误（stderr），并把最后一条错误记进 SK_ERRMSG
 
-**稳定性**：experimental
+**稳定性**：stable
 
 **退出码**
 
@@ -44,7 +44,7 @@ log_error MSG... —— 输出错误（stderr），并把最后一条错误记�
 
 log_debug MSG... —— 仅在 SHELLKIT_DEBUG=1 或 SHELLKIT_LOG_LEVEL=debug 时输出
 
-**稳定性**：experimental
+**稳定性**：stable
 
 **退出码**
 
@@ -54,7 +54,7 @@ log_debug MSG... —— 仅在 SHELLKIT_DEBUG=1 或 SHELLKIT_LOG_LEVEL=debug 时
 
 log_section TITLE —— 分段标题，带前导空行 json 模式下什么都不输出：JSON 行是给采集器消费的，标题没有 level 语义， 混进去会破坏「一行一条记录」的约定。文本模式保持原样。
 
-**稳定性**：experimental
+**稳定性**：stable
 
 **退出码**
 
@@ -1102,7 +1102,7 @@ status_state_valid STATE —— 状态码是否在有限集里
 
 status_emit STATE HUMAN_MSG —— 输出状态   人类模式用 printf %b：文案里的颜色是 ESC[... 这样的**字面转义序列**，   用 %s 会原样打印 —— 颜色会变成一堆反斜杠文本。
 
-**稳定性**：experimental
+**稳定性**：stable
 
 **退出码**
 
@@ -1275,7 +1275,7 @@ profile_env MODULE_TAB_KV PREFIX —— 把键值对变成环境变量赋值（�
 
 scaffold_vars_set KEY VALUE —— 设一个模板变量
 
-**稳定性**：experimental
+**稳定性**：stable
 
 **退出码**
 
@@ -1507,7 +1507,7 @@ net_sha256 FILE —— 文件的 sha256；两种工具都没有时返回 1
 
 net_verify FILE SHA256 —— 校验文件的 sha256；对不上返回 SK_VERIFY(5)
 
-**稳定性**：experimental
+**稳定性**：stable
 
 **退出码**
 
@@ -1611,7 +1611,7 @@ METHOD 不区分大小写；请求完成返回 0，状态码不算错误。
 
 优先 jq，其次 python3；都没有时走内置降级路径。
 
-**稳定性**：experimental
+**稳定性**：stable
 
 **参数**
 
@@ -1839,7 +1839,7 @@ ask_choice VAR PROMPT "a|b|c" [DEFAULT] [TIMEOUT] —— 多选一；超时或 E
 
 （空格分隔，如 "1 3 5"），不是候选项的内容 —— 按序号取内容是调用方的事。
 
-**稳定性**：experimental
+**稳定性**：stable
 
 **参数**
 
@@ -1987,7 +1987,7 @@ cli_opts ARGS... —— 按 cli_opt 注册的规则解析子命令选项；剩�
 
 man_modules —— 输出模块名，一行一个
 
-**稳定性**：experimental
+**稳定性**：stable
 
 **退出码**
 
@@ -1997,7 +1997,7 @@ man_modules —— 输出模块名，一行一个
 
 man_page —— 输出 shellkit(1) 的 roff 正文
 
-**稳定性**：experimental
+**稳定性**：stable
 
 **退出码**
 
@@ -2007,7 +2007,7 @@ man_page —— 输出 shellkit(1) 的 roff 正文
 
 man_module_page MODULE —— 输出某模块第 3 节的 roff 正文
 
-**稳定性**：experimental
+**稳定性**：stable
 
 **退出码**
 
@@ -2029,7 +2029,7 @@ man_write_all DIR —— 把所有页面写进 DIR
 
 man_count_functions —— 公开函数总数
 
-**稳定性**：experimental
+**稳定性**：stable
 
 **退出码**
 
@@ -2086,7 +2086,7 @@ vendor_dir_detect PROJECT_DIR —— 工程里「别处」的库副本   扫一�
 
 proc_start NAME COMMAND... —— 后台拉起一个进程组 脱离终端：nohup 忽略 SIGHUP + 标准输入接 /dev/null + 作业控制让它自带进程组。 pid 文件：$DIR/NAME.pid（原子写）。日志：$DIR/NAME.log（**追加**，不截断 —— 截断会把上次的现场抹掉，出事时没得查）。
 
-**稳定性**：experimental
+**稳定性**：stable
 
 **退出码**
 
@@ -2099,7 +2099,7 @@ proc_start NAME COMMAND... —— 后台拉起一个进程组 脱离终端：noh
 
 proc_stop NAME —— 停掉整个进程组 只 kill 主进程 ⇒ 子进程残留、端口还占着 —— 这是手写最常见的坑。 这里先给整组 TERM，留收尾的时间；还在就 KILL 整组。 「整组停」有两条硬约束（判据在 _sk_proc_group_of，只此一处）：   目标得自己就是组长，且那个组不是**我们自己的组** ——   否则 kill -- -PGID 会把调用方一起杀掉（静默自杀，退出码 143）。   满足不了就退化成只杀那个 pid（宁可留子进程，也不能自杀）。
 
-**稳定性**：experimental
+**稳定性**：stable
 
 **退出码**
 
@@ -2111,7 +2111,7 @@ proc_stop NAME —— 停掉整个进程组 只 kill 主进程 ⇒ 子进程残�
 
 proc_is_running NAME —— 探活 僵尸 pid 文件会被清掉：文件还在、进程早没了 —— 手写看门狗最常见的另一种坑 （探活永远失败，但没人清理，重启就一直起不来）。
 
-**稳定性**：experimental
+**稳定性**：stable
 
 **退出码**
 
@@ -2124,7 +2124,7 @@ proc_is_running NAME —— 探活 僵尸 pid 文件会被清掉：文件还在�
 
 proc_watchdog [--interval SEC] [--max-backoff SEC] [--max-restarts N] NAME COMMAND... 看门狗：进程挂了拉起来，带退避。 退避：连续失败时按 1→2→4… 翻倍（上限 --max-backoff）—— 没有退避的重启是**风暴**：进程起来就崩 ⇒ 无限循环重启，把机器打满。 进程连续活过几个周期 ⇒ 退避归零（不是一直用最大退避）。 --max-restarts N：连续 N 次拉起失败就放弃并返回非 0（0 = 不限）。 无人值守设备上「放弃了」必须有人看得见，所以放弃时是**非 0 退出**。
 
-**稳定性**：experimental
+**稳定性**：stable
 
 **退出码**
 
@@ -2138,7 +2138,7 @@ proc_watchdog [--interval SEC] [--max-backoff SEC] [--max-restarts N] NAME COMMA
 
 git_default_branch REPO —— 解析默认分支 顺序：origin/HEAD 的符号引用（正常 clone 都有）→ 本地已有的 origin/main 或 origin/master → 远端只有一个分支时就是它 → 多个远端分支且认不出 ⇒ 报歧义。 认不出就报错，不猜 —— 猜错了的代价是「拉错分支」。 只看 origin 这一个远端：默认分支是「这个仓的」概念，多远端时猜哪个远端 同样是猜 —— 与其猜，不如让调用方显式指定分支名。
 
-**稳定性**：experimental
+**稳定性**：stable
 
 **退出码**
 
@@ -2149,7 +2149,7 @@ git_default_branch REPO —— 解析默认分支 顺序：origin/HEAD 的符号
 
 git_is_dirty REPO —— 脏仓守卫 有未提交改动（含未跟踪文件）⇒ 退出码 1，stdout 是 porcelain 摘要。 未跟踪文件也算脏：另一个会话刚建的文件，被 pull 冲掉一样是事故。
 
-**稳定性**：experimental
+**稳定性**：stable
 
 **退出码**
 
@@ -2161,7 +2161,7 @@ git_is_dirty REPO —— 脏仓守卫 有未提交改动（含未跟踪文件）
 
 git_tag REPO —— 取版本号（浅克隆安全） 浅克隆里 git describe --tags 会退化成哈希 ⇒ 产物版本变成 (devel)。 三层回退：   1) HEAD 上的精确 tag；   2) 浅克隆且拿不到 ⇒ 补取 tag（tag 跟不下来是浅克隆的常态）；   3) 还是拿不到 ⇒ 补深度（--deepen）：tag 指向的是**祖先**提交时，      只补 tag 不够 —— 浅边界把祖先链截断了，describe 仍认不出这个 tag      是不是 HEAD 的祖先，于是仍然失败。 第 2、3 步要联网；不想联网就设 SHELLKIT_GIT_NO_FETCH=1。 都取不到时退到「最近的可达 tag」：那个 tag **可能在祖先上**（HEAD 已经 往前走了几个提交）—— 它是这条提交链的版本号，不是 HEAD 自己的版本号。
 
-**稳定性**：experimental
+**稳定性**：stable
 
 **退出码**
 
@@ -2172,7 +2172,7 @@ git_tag REPO —— 取版本号（浅克隆安全） 浅克隆里 git describe 
 
 git_fetch REPO BRANCH —— 受控取数 脏仓直接拒绝：同机并行会话的工作不能被无声冲掉（我们被冲掉过两次）。 只取不改工作树，但仍然守脏仓 —— 「干净才动」是这一族函数的统一口径。
 
-**稳定性**：experimental
+**稳定性**：stable
 
 **退出码**
 
@@ -2185,7 +2185,7 @@ git_fetch REPO BRANCH —— 受控取数 脏仓直接拒绝：同机并行会�
 
 git_fast_forward REPO BRANCH —— 只快进，绝不丢本地提交 能快进 ⇒ merge --ff-only；不能快进（本地有分叉）⇒ **明确报错，不动工作树**。 「快进 vs 强制重置」的区别就在这里：强制重置会丢本地提交，所以它另有 一个名字更直白的函数（git_reset_hard），要的人自己明说。 **只快进当前工作树所在的分支**：本地已有这个分支、而 HEAD 不在它上面时， 明确报错、不动工作树。不这么判的后果是「把 origin/main 合进当前分支」还 返回 0 —— 调用方以为快进了 main，其实被合进去的是另一个分支， 两边的提交也搅在了一起（假成功比报错坏得多）。
 
-**稳定性**：experimental
+**稳定性**：stable
 
 **退出码**
 
@@ -2198,7 +2198,7 @@ git_fast_forward REPO BRANCH —— 只快进，绝不丢本地提交 能快进 
 
 git_reset_hard REPO REF —— 显式的破坏性重置 会丢本地提交 —— 名字里就写着 hard，调用方必须自己确认过。 想要「不丢」的语义就用 git_fast_forward。
 
-**稳定性**：experimental
+**稳定性**：stable
 
 **退出码**
 
@@ -2211,7 +2211,7 @@ git_reset_hard REPO REF —— 显式的破坏性重置 会丢本地提交 —�
 
 git_worktree_add REPO PATH BRANCH [START_POINT] —— 检出到工作树 多仓并行改动的标准做法：每个改动一个工作树，互不干扰， 也不会把别人的工作区冲掉（这正是脏仓守卫要防的那类事故）。 PATH 不能落在仓里：工作树建在仓内 ⇒ 主仓多出一堆未跟踪文件 ⇒ 主仓**永久变脏** ⇒ 脏仓守卫把取数与快进全锁死（而且没人知道为什么）。也不能是软链， 父目录必须已经存在（git 自己也要求）。 BRANCH 本地已有 ⇒ 检出那个分支（此时不能再给 START_POINT）；没有 ⇒ 新建并跟住。
 
-**稳定性**：experimental
+**稳定性**：stable
 
 **退出码**
 
@@ -2226,7 +2226,7 @@ git_worktree_add REPO PATH BRANCH [START_POINT] —— 检出到工作树 多仓
 
 archive_list ARCHIVE —— 打印归档里的成员清单（相对路径，每行一个） 只读不解：不写盘、不建目录。用来「先看看包里有什么」再决定解不解。
 
-**稳定性**：experimental
+**稳定性**：stable
 
 **退出码**
 
@@ -2239,7 +2239,7 @@ archive_list ARCHIVE —— 打印归档里的成员清单（相对路径，每�
 
 archive_extract ARCHIVE DEST [EXPECTED_SHA256] —— 安全解包 解到 DEST（不存在就建）。流程：   1. 校验魔数，认出格式；   2. 可选：先核对 sha256（给了就必须对上，对不上一个字节都不解）；   3. 查成员名的路径穿越 —— 归档里带穿越路径时**连解都不解**；   4. 查归档里声明的软链 —— 绝对目标**连解都不解**；   5. 解到**暂存目录**（不是直接解到 DEST）；   6. 扫解出来的文件系统，软链兜底再查一遍（这一遍是权威判据）；   7. 全通过才**整体换**进 DEST。 解之前还要查一件事：**结尾标记**。tar 流末尾必须有两块 512 字节的零， 缺了就是被截断了。GNU tar 读到 EOF 就当「归档到此为止」、照样退出 0 ⇒ 截断的包会被静默解成「只有前几个成员的包」⇒ 半份内容被装上，而调用方 拿到的是成功。查结尾标记 ⇒ 结论与 tar 的实现无关（bsdtar 更严、GNU tar 更松，同一份包在两边给出不同答案本身就是缺陷）。 为什么先解到暂存目录：tar 解到一半失败（磁盘满、成员损坏）时， 直接解到目标目录会留下**半份内容** —— 而调用方看到的是「目录存在了」。 半份内容比没有更危险：脚本会接着往下跑，读到截断的二进制。 为什么第 7 步是「整体换」而不是「逐项搬」：逐项搬在中途失败时， 目标目录会停在新旧混合的状态（前面几项已经进去了）。整体换是两次 rename —— 目标目录要么是旧的、要么是新的，不会混。 覆盖语义：包里有的路径以包为准；包里没有的旧文件保留。 目标目录是软链或不是目录时一律拒绝（不顺着软链写，也不覆盖普通文件）。 已知边界：解包只保证「**包里的东西**逃不出去」，不保证「目标目录本来 就干净」—— 调用方自己放在目标目录里的软链是它自己的数据，覆盖安装 后会原样保留（指向归档之外也照样保留）。要清就自己先清一遍。 目标目录是只读（555）时：新内容照常装上去，目录权限也照原样保留； 但**旧文件搬不回去**（那个目录不可写）⇒ 退 5 并把旧目录的位置报出来。 root 不受权限限制 ⇒ 那种环境里旧文件能搬回去 ⇒ 退 0。 进程被强杀可能留下两处残留，都能安全处理：   - `<目标目录的父目录>/.shellkit-extract.XXXXXX`：暂存目录（可能半份）；   - `<目标目录的父目录>/.shellkit-old.XXXXXX`：换上去的瞬间被挪开的旧目录     —— 这一处是**旧目标目录本身**，目标目录此刻可能整个不存在，     把它改名搬回去即可恢复。   - `<目标目录>/.shellkit-stage.XXXXXX`：父目录不可写时的降级暂存目录     —— 它落在**目标目录里面**，强杀后残留会出现在用户的安装目录里。             旧内容没搬回去，或目标目录权限没能还原
 
-**稳定性**：experimental
+**稳定性**：stable
 
 **退出码**
 

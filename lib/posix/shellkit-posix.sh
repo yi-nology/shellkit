@@ -1487,6 +1487,67 @@ proc_watchdog() {
   return "$_sp_w_rc"
 }
 
+# ---- 平台探测与前置检查（与主库同名同义）----
+
+# SK_OS / SK_ARCH —— 与主库同名同义。主库用 \$OSTYPE 零 fork；设备侧没有可靠
+# 的 OSTYPE 口径 ⇒ 装载时各 fork 一次 uname（只在 source 这份库时跑一次）。
+_sk_posix_os_detect() {
+  case "$(uname -s 2>/dev/null)" in
+    linux* | Linux*) SK_OS=linux ;;
+    darwin* | Darwin*) SK_OS=darwin ;;
+    *) SK_OS=other ;;
+  esac
+  case "$(uname -m 2>/dev/null)" in
+    arm64* | aarch64*) SK_ARCH=aarch64 ;;
+    x86_64* | amd64*) SK_ARCH=x86_64 ;;
+    *) SK_ARCH=other ;;
+  esac
+}
+_sk_posix_os_detect
+
+# os_name —— linux | darwin | other
+os_name() { printf '%s\n' "$SK_OS"; }
+
+# os_arch —— x86_64 | aarch64 | other
+os_arch() { printf '%s\n' "$SK_ARCH"; }
+
+# os_is_root —— 当前是否以 root 身份运行（id -u 为 0 ⇒ 0，否则 1）
+os_is_root() {
+  if [ "$(id -u 2>/dev/null)" = "0" ]; then
+    return 0
+  fi
+  return 1
+}
+
+# os_has_cmd CMD... —— 零参数退 2；任一命令缺失退 1（与主库同口径，不记 SK_ERRMSG）
+os_has_cmd() {
+  if [ "$#" -lt 1 ]; then
+    log_error "Usage: os_has_cmd CMD..."
+    return 2
+  fi
+  for _sp_c in "$@"; do
+    if ! command -v "$_sp_c" >/dev/null 2>&1; then
+      return 1
+    fi
+  done
+  return 0
+}
+
+# require_cmd CMD... —— 零参数退 2；缺命令退 3 并记 SK_ERRMSG（与主库同口径）
+require_cmd() {
+  if [ "$#" -lt 1 ]; then
+    log_error "Usage: require_cmd CMD..."
+    return 2
+  fi
+  for _sp_c in "$@"; do
+    if ! command -v "$_sp_c" >/dev/null 2>&1; then
+      log_error "Required command not found: $_sp_c"
+      return 3
+    fi
+  done
+  return 0
+}
+
 # ---- 能力查询 ----
 
 # posix_capable NAME —— 这个函数在 POSIX 子集里能用吗

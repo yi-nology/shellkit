@@ -136,6 +136,29 @@ _pp_case_net_verify_missing() { net_verify "$_pp_tmp/nope" "deadbeef"; }
 _pp_case_conf_get_any_one_arg() { conf_get_any SK_PARITY_PROBE_KEY; }
 _pp_case_conf_get_any_bad_key() { conf_get_any "bad-key" "dflt"; }
 
+# ---- os / 前置检查：同名同义；id() 函数注入让 root 判定在任何机器上都可判 ----
+# 为什么是函数不是 PATH 假 id（2026-11-22 CI 实证）：PATH 里的假 id 在
+# busybox-static（applet 解析优先于 PATH）上被内置 id 盖掉 ⇒ busybox 腿
+# 永远 notroot、sh 腿 root ⇒ 对拍必红。POSIX 命令解析顺序是
+# 函数 → 内置/applet → PATH，函数在三处都赢；且 os_is_root 的
+# $(id -u) 是命令替换（子 shell），子 shell 继承函数定义。
+_pp_case_os_name_ok() { os_name; }
+_pp_case_os_arch_ok() { os_arch; }
+_pp_case_os_is_root_as_root() {
+  id() { printf '0\n'; }
+  if os_is_root; then printf 'root'; else printf 'notroot'; fi
+}
+_pp_case_os_is_root_as_user() {
+  id() { printf '1000\n'; }
+  if os_is_root; then printf 'root'; else printf 'notroot'; fi
+}
+_pp_case_os_has_cmd_present() { os_has_cmd sh; }
+_pp_case_os_has_cmd_missing() { os_has_cmd shellkit-no-such-cmd-xyz; }
+_pp_case_os_has_cmd_noargs() { os_has_cmd; }
+_pp_case_require_cmd_present() { require_cmd sh; }
+_pp_case_require_cmd_missing() { require_cmd shellkit-no-such-cmd-xyz; }
+_pp_case_require_cmd_noargs() { require_cmd; }
+
 for _pp_name in \
   die_code die_msg_only die_code_zero \
   fail_code fail_msg_only fail_noargs \
@@ -145,6 +168,9 @@ for _pp_name in \
   trap_push_noargs trap_push_args trap_push_order \
   fs_ensure_dir_noargs fs_ensure_dir_ok \
   net_sha256_missing net_verify_empty net_verify_missing \
-  conf_get_any_one_arg conf_get_any_bad_key; do
+  conf_get_any_one_arg conf_get_any_bad_key \
+  os_name_ok os_arch_ok os_is_root_as_root os_is_root_as_user \
+  os_has_cmd_present os_has_cmd_missing os_has_cmd_noargs \
+  require_cmd_present require_cmd_missing require_cmd_noargs; do
   _pp_run "$_pp_name"
 done

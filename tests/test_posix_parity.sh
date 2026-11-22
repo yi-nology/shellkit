@@ -62,6 +62,16 @@ net_verify_empty	5
 net_verify_missing	5
 conf_get_any_one_arg	0
 conf_get_any_bad_key	2
+os_name_ok	0
+os_arch_ok	0
+os_is_root_as_root	0
+os_is_root_as_user	0
+os_has_cmd_present	0
+os_has_cmd_missing	1
+os_has_cmd_noargs	2
+require_cmd_present	0
+require_cmd_missing	3
+require_cmd_noargs	2
 PARITY_EOF
 
 # ------------------------------------------------------------------
@@ -162,4 +172,4 @@ for __sh in dash busybox; do
   fi
 done
 
-echo "OK: POSIX 子集与 bash core 的 29 个用例逐字一致"
+echo "OK: POSIX 子集与 bash core 的 39 个用例逐字一致"

@@ -60,7 +60,7 @@ _sk_git_describe() {
 #
 # @exitcode 0 成功（stdout 是分支名）
 # @exitcode 3 解析不出来（不是 git 仓 / 远端分支有歧义 / 没有远端）
-# @stability experimental
+# @stability stable
 git_default_branch() {
   local __repo="${1:-}" __ref __found="" __count=0
   _sk_git_need_repo "$__repo" || return $?
@@ -110,7 +110,7 @@ EOF
 # @exitcode 0 干净
 # @exitcode 1 有未提交改动
 # @exitcode 3 不是 git 仓
-# @stability experimental
+# @stability stable
 git_is_dirty() {
   local __repo="${1:-}" __out
   _sk_git_need_repo "$__repo" || return $?
@@ -141,7 +141,7 @@ git_is_dirty() {
 #
 # @exitcode 0 成功（stdout 是 tag；HEAD 上没有精确 tag 时是最近的可达 tag）
 # @exitcode 3 拿不到（不是 git 仓 / 没有 tag / 浅克隆且不允许联网）
-# @stability experimental
+# @stability stable
 git_tag() {
   local __repo="${1:-}" __tag="" __shallow="false" __deepen=""
   _sk_git_need_repo "$__repo" || return $?
@@ -185,7 +185,7 @@ git_tag() {
 # @exitcode 2 用法错
 # @exitcode 3 脏仓 / 不是 git 仓
 # @exitcode 1 git 自己失败
-# @stability experimental
+# @stability stable
 git_fetch() {
   local __repo="${1:-}" __branch="${2:-}"
   _sk_git_need_repo "$__repo" || return $?
@@ -216,7 +216,7 @@ git_fetch() {
 # @exitcode 2 用法错
 # @exitcode 3 脏仓 / 不能快进 / 远端分支不存在 / HEAD 不在目标分支上
 # @exitcode 1 git 自己失败
-# @stability experimental
+# @stability stable
 git_fast_forward() {
   local __repo="${1:-}" __branch="${2:-}" __remote __head
   _sk_git_need_repo "$__repo" || return $?
@@ -265,7 +265,7 @@ git_fast_forward() {
 # @exitcode 2 用法错
 # @exitcode 3 不是 git 仓
 # @exitcode 1 git 自己失败
-# @stability experimental
+# @stability stable
 git_reset_hard() {
   local __repo="${1:-}" __ref="${2:-}"
   _sk_git_need_repo "$__repo" || return $?
@@ -292,7 +292,7 @@ git_reset_hard() {
 # @exitcode 2 用法错
 # @exitcode 3 不是 git 仓 / 路径不合法（落在仓里 / 是软链 / 父目录不存在）
 # @exitcode 1 git 自己失败
-# @stability experimental
+# @stability stable
 git_worktree_add() {
   local __repo="${1:-}" __path="${2:-}" __branch="${3:-}" __start="${4:-}"
   local __base="HEAD" __abs __pdir __wt __top __common __bare __b1 __b2 __b

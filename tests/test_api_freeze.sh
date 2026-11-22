@@ -38,7 +38,15 @@ _run() {
 rc=0
 out=$(bash "$SCRIPT" --check 2>&1) || rc=$?
 assert_eq "0" "$rc" "the freeze gate must be green on the current tree"
-assert_contains "$out" "50 个 stable" "the gate must report the stable count"
+# stable 的数量从源码现算，不手抄（与下面 exp_n 同一纪律）。
+# 手抄的数字在下一次晋升后必然过期 —— 本断言曾写死「50 个 stable」，
+# Task 4 的 50 → 78 晋升后立刻假红：门禁是绿的，红的是这行手抄件。
+stab_n=0
+for __f in "$TEST_ROOT"/lib/core/*.sh; do
+  __n=$(grep -c '@stability stable' "$__f") || __n=0
+  stab_n=$((stab_n + __n))
+done
+assert_contains "$out" "$stab_n 个 stable" "the gate must report the stable count"
 assert_contains "$(cat "$DOC")" "冻结基线：v1.0.0" \
   "the freeze document must carry the fixed 1.x baseline (it must not drift with each release)"
 assert_contains "$(cat "$DOC")" "\`fs_atomic_write\`" "a known stable function must be listed"
@@ -90,11 +98,18 @@ assert_contains "$out" "fs_atomic_write" "the diff must name the drifted functio
 # CASE 3: 把一个 experimental 晋升成 stable（承诺面扩大）⇒ 红
 d=$(tmpdir)
 _copy_tree "$d" || _fail "cannot create the tree copy"
-awk -F'\t' -v OFS='\t' '$1 == "log_info" { $8 = "stable" } { print }' \
+# 晋升对象从基线现选，不手抄（曾写死 log_info —— Task 4 把它升成 stable 后
+# 变异成了 no-op ⇒ 门禁保持绿 ⇒ 本用例静默失去判据能力）。
+__promote=$(awk -F'\t' '$8 == "experimental" { print $1; exit }' "$d/tools/api_baseline.txt")
+[ -n "$__promote" ] || _fail "no experimental function left in the baseline to promote"
+awk -F'\t' -v OFS='\t' -v fn="$__promote" '$1 == fn { $8 = "stable" } { print }' \
   "$d/tools/api_baseline.txt" >"$d/tools/ab.new" && mv "$d/tools/ab.new" "$d/tools/api_baseline.txt"
+# 形状守卫：变异必须真的改到分级列（no-op 时门禁保持绿，期望 5 会把假绿当真）
+assert_eq "stable" "$(awk -F'\t' -v fn="$__promote" '$1 == fn { print $8 }' "$d/tools/api_baseline.txt")" \
+  "the promotion mutation must actually change the level column"
 _run "$d" --check
 assert_eq "5" "$rc" "promoting an experimental function must fail the freeze gate"
-assert_contains "$out" "log_info" "the diff must name the promoted function"
+assert_contains "$out" "$__promote" "the diff must name the promoted function"
 
 # CASE 4: 语义未知的 SK_* 常量 ⇒ 3（宁可失败，也不静默漏写）
 d=$(tmpdir)

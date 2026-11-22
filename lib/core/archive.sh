@@ -361,7 +361,7 @@ _sk_archive_is_truncated() {
 # @exitcode 2 参数错
 # @exitcode 3 归档不存在、格式认不出，或缺 tar/unzip
 # @exitcode 5 归档列不出成员（包本身坏了）
-# @stability experimental
+# @stability stable
 archive_list() {
   local __f=${1:-} __kind __tmp __rc=0
   _sk_need_args "$#" 1 "archive_list ARCHIVE" || return $?
@@ -450,7 +450,7 @@ archive_list() {
 # @exitcode 3 归档不存在、格式认不出，缺 tar/unzip，或目标目录不可用
 # @exitcode 5 校验和不匹配，成员列不出来，归档里有不安全路径 / 软链，解包失败，
 #             旧内容没搬回去，或目标目录权限没能还原
-# @stability experimental
+# @stability stable
 archive_extract() {
   local __f=${1:-} __dest=${2:-} __expect=${3:-} __kind __work="" __meta __stage __old
   local __list __targets __links __bad __rel __link __target __member __dir __parent __mode __missing

@@ -208,6 +208,14 @@ _reason_for() {
       printf '%s' "设备侧没有包管理器，也不该动系统包"
       return 0
       ;;
+    os_sha256 | os_md5)
+      printf '%s' "哈希由子集里的 net_sha256 提供，不重复开第二个入口"
+      return 0
+      ;;
+    os_sed_i)
+      printf '%s' "原地改文件不进子集：设备侧改系统文件应当显式、可审"
+      return 0
+      ;;
     run | run_concurrent | parallel_map)
       printf '%s' "命令执行层依赖 bash 的上下文栈与脱敏规则"
       return 0
@@ -253,7 +261,7 @@ _reason_for() {
       printf '%s' "POSIX 子集提供日志六件套"
       ;;
     error.sh)
-      printf '%s' "POSIX 子集只给 die / fail"
+      printf '%s' "POSIX 子集只给 die / fail / require_cmd"
       ;;
     str.sh)
       printf '%s' "POSIX 子集用 printf / tr 就够，不单独移植"
@@ -271,7 +279,7 @@ _reason_for() {
       printf '%s' "命令执行层依赖 bash 的上下文栈与脱敏规则"
       ;;
     os.sh)
-      printf '%s' "设备侧没有包管理器，也不该动系统包"
+      printf '%s' "POSIX 子集只给 os_name / os_arch / os_is_root / os_has_cmd（平台感知与命令前置检查）；系统包、桌面与发行版探测不进子集"
       ;;
     svc.sh)
       printf '%s' "systemd / launchd 的服务单元在设备侧不存在"
@@ -373,6 +381,18 @@ _yes_note_for() {
       ;;
     conf_init)
       printf '%s' "POSIX 子集只支持 env 格式（KEY=VALUE）：--format dotenv **显式拒绝**退 2（默默当 env 解析会让取到的值悄悄不同）"
+      ;;
+    os_name | os_arch)
+      printf '%s' "POSIX 子集提供同名版本：与主库同一口径（linux|darwin|other、x86_64|aarch64|other；主库装载时用 \$OSTYPE 零 fork，设备侧装载时 fork 一次 uname）"
+      ;;
+    os_is_root)
+      printf '%s' "POSIX 子集提供同名版本：与主库同一口径（id -u 为 0 ⇒ 0，否则 1）"
+      ;;
+    os_has_cmd)
+      printf '%s' "POSIX 子集提供同名版本：与主库同一口径（零参数退 2；任一命令缺失退 1）"
+      ;;
+    require_cmd)
+      printf '%s' "POSIX 子集提供同名版本：与主库同一口径（零参数退 2；缺命令退 3 并记 SK_ERRMSG）"
       ;;
   esac
   return 0

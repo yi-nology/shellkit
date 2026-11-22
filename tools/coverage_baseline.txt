@@ -2,7 +2,6 @@
 # 由 bash tools/coverage.sh --write-baseline 生成，不要手工维护。
 # 棘轮规则：这里面的函数一旦被覆盖，CI 就要求把它移出（防覆盖回退）。
 man_count_functions
-os_is_root
 os_pkg_install
 os_pkg_update
 require_root

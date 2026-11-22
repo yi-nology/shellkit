@@ -15,7 +15,7 @@ net_sha256() {
 # @exitcode 0 校验通过
 # @exitcode 2 参数错
 # @exitcode 5 校验和不匹配，或算不出校验和
-# @stability experimental
+# @stability stable
 net_verify() {
   local __file=${1:-} __expect=${2:-} __actual
   _sk_need_args "$#" 2 "net_verify FILE SHA256" || return $?

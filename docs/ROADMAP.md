@@ -149,7 +149,7 @@ v0.24.0 暴露的缺口是：源码矩阵全绿、系统包构建也全绿，但
 > 所以它们随 **v0.25.0** 一起发布（`ce23822`，13 项资产、全部签名）。本节的「Planned」清单一律按
 > 实际代码状态维护，不靠版本号表达进度。
 
-当前 162 个公开函数里 50 个是 Stable。目标不是把所有函数都升 Stable（那会锁死演进），
+当前 184 个公开函数里 78 个是 Stable。目标不是把所有函数都升 Stable（那会锁死演进），
 而是把核心能力钉死：Filesystem、Config、Run、Lock、Retry、Error、Validate、OS、CLI。
 
 | 交付 | 判据 |
@@ -503,6 +503,38 @@ push 失败（容器无 GitHub 凭据）⇒ 提交与 tag 留在本地、由本�
 （`current should be 1.0.0`）才暴露。补上 `curl wget zip` 后一次通过。
 ⇒ 教训：重建环境要按「套件实际用到的工具」对账，别按印象装；判据吞掉的失败
 会把根因推到离现场两步远的地方。
+
+### v1.8.0 —— 承诺兑现与口径修正（计划）
+
+全景扫描（A 质量纵深 5 项 / B 扩面 4 项 / C DX 3 项 / D 顺手 1 项）之后，本版取「把已承诺的做扎实」，三个目标：
+
+| 目标 | 判据 |
+|---|---|
+| **设备侧前置批**：能力清单口径修正（os_* 的「包管理器」套话）+ 5 个前置/平台小原语进 POSIX 子集（`os_name` / `os_arch` / `os_is_root` / `os_has_cmd` / `require_cmd`） | `tests/posix_parity.sh` 同名对拍（新增 10 用例，绝对期望表 + 解释器对拍，39 个用例）；`tests/test_posix_reasons.sh`（理由口径断言 + 变异自证：理由表改回套话必须红） |
+| **弃用机器判据**：COMPATIBILITY 承诺的「弃用满一个 minor」过去零门禁 | `tools/check_deprecation.sh`（`make deprecation-check` 进 check）：注解 ↔ 台账 ↔ 迁移表 ↔ 移除窗口四向对账；`tests/test_deprecation_gate.sh` 十条夹具双向 + 两处变异自证（含规则 (d) 反向与悬空注解红覆盖）；空状态合法（当前 0 个弃用 = 已武装无目标） |
+| **stable 扩充**：28 个三条件候选全升（50 → 78 stable） | 既有三道门禁：`api-baseline-check` / `api-freeze-check` / `compatibility-check`；MIGRATING 有 1.7.0 → 1.8.0 承诺扩张段 |
+
+设计文档：`docs/superpowers/specs/2026-11-22-v1.8.0-contract-depth-design.md`。
+
+### 覆盖率长跑（立项，首批后置）
+
+CLI 与核心模块的分支缺口量太大，不混进语义变更版（v1.6.0 审计的结论）。按批推进、每批独立 PR：
+
+| 批次 | 目标 | 当前缺口（`tools/coverage_branch_baseline.txt` 实测） |
+|---|---|---|
+| 1 | `shellkit` CLI，按子命令组切（install/update/vendor / scaffold/upgrade / doctor/repair …） | 471 |
+| 2 | `lib/core/os.sh` + `http.sh` | 79 + 58 |
+| 3 | `lib/core/archive.sh` + `proc.sh` | 68 + 56 |
+| 4 | `config.sh` + `run.sh` + 长尾（scaffold 44 / fs 42 / install.sh 45 / repair.sh 34 / git 27 …） | 53 + 51 + … |
+
+纪律（每批必须全部满足）：
+
+1. 一个批次 = 一个独立 PR，**只加测试、不动语义**；
+2. 不与语义变更混批；
+3. 基线在与 CI runner 同环境重生成（坑 16：基线是运行时结论）；
+4. 批末白名单行数必须**下降**（棘轮双向：已覆盖的必须移出）。
+
+**首批不进 v1.8.0**（立项但后置）。
 
 ## 三、战略取舍
 

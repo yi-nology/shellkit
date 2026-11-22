@@ -67,7 +67,7 @@
                   # pipe-safety-check + assert-usage-check +
                   # check-tree-clean + dup-functions-check +
                   # security-check +
-                  # api-baseline-check + api-freeze-check + compatibility-check +
+                  # api-baseline-check + api-freeze-check + compatibility-check + deprecation-check +
                   # docs-check + versions-check + check-docs + posix-check +
                   # cookbook-check +
                   # messages-check + examples + fmt，CI 也是这组
@@ -96,7 +96,7 @@ busybox ash 上，混进一个 `local` 或 `[[ ]]` 不是报错，是**整个脚
 （现场装不了 shellkit 补救）。它同时对账能力清单 `lib/posix/capabilities.tsv` ——
 清单与源码漂了就红。
 `api-freeze-check` 拦的是「承诺面悄悄变了」：`docs/API-FREEZE.md` 是 1.0 的快照
-（50 个 stable 的返回码、退出码表、CLI 子命令形状），源码变了没重生成清单就红；
+（78 个 stable 的返回码、退出码表、CLI 子命令形状），源码变了没重生成清单就红；
 新增语义未知的 `SK_*` 常量也红（宁可失败，也不静默漏写进承诺表）。
 
 `main` 有分支保护：PR 进 `main` 必须跑满 **16 个必需检查** —— 那份清单就是
