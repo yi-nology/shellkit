@@ -2,6 +2,13 @@
 本文件由 `tools/release.sh` 在发版时自动追加，已发布的小节不要手改。
 最新的在最前面。每一条对应一个提交 —— 要看「为什么」而不是「改了什么」，读 `docs/MIGRATING.md`。
 
+## 1.8.0 — 2026-11-23
+
+bb14cc4 docs(roadmap): 记上 v1.7.0 已发布（含发版窗口的镜像缺 curl 事故一笔）
+ba6ec95 chore(site): 撤回误入库的生成页（changelog 由 site_sync 投影，.gitignore 随 PR #182 生效）
+c526008 feat(site): 站点加「变更记录」页 —— 每次发版改了什么一眼能看全 (#182)
+e488414 feat(posix,api): v1.8.0 承诺兑现与口径修正 —— 设备侧前置批 + 弃用门禁 + stable 扩充 (#183)
+
 ## 1.7.0 — 2026-11-21
 
 4c5cbfd docs(roadmap): 记上 v1.6.1 已发布
