@@ -198,7 +198,7 @@ else
   _fail "the --out file was not written"
 fi
 
-# 覆盖数字合理：162 个公开函数，test_str.sh 只覆盖 str 那一块 ⇒ 覆盖率是几十个百分点
+# 覆盖数字合理：公开函数有一百多个，test_str.sh 只覆盖 str 那一块 ⇒ 覆盖率是几十个百分点
 # （不是 0 也不是 100）。
 pct=$(printf '%s\n' "$out" | awk '/^covered /{gsub(/[()%]/, "", $3); print $3}')
 case "$pct" in

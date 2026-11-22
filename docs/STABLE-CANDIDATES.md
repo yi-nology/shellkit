@@ -1,6 +1,7 @@
 # Stable 候选清单（首批，已定稿）
 
-状态：**已定稿（2026-11-13）**。这是 issue #79 的后续动作 —— 分级机制（`@stability` 注解、
+状态：**已定稿（2026-11-13）**；分级计数随 v1.8.0 更新（见下方「当前口径」）。
+这是 issue #79 的后续动作 —— 分级机制（`@stability` 注解、
 三规则门禁、豁免名单）已经合入。本文按约定的三条标准筛出首批候选，
 **「推荐」列的 37 个已全部合入 `@stability stable`**；「可选」列的 9 个按原判断
 留 experimental（工具/周边能力，承诺成本低但没必要第一天就背上）。
@@ -14,16 +15,21 @@
 3. **返回码齐全**：源码注释里 `@exitcode` 齐全，且探针实测断言的返回码
    全部落在承诺集合内（逐条核对过，零不一致）。
 
-口径：162 个公开函数 → 134 个有探针 → 80 个在 MIGRATING 出现过 → **46 个交集**。
+口径（**本文定稿时的快照，2026-11-13**）：162 个公开函数 → 134 个有探针 →
+80 个在 MIGRATING 出现过 → **46 个交集**。
 未入选的 116 个：88 个「有探针但 MIGRATING 没记录」、34 个「MIGRATING 有记录但
 没探针」、另有少量两者皆无 —— 都不是不合格，是**证据还不够**，可后续补。
+
+> **当前口径（2026-11-23 更新）**：公开函数 **184** 个 —— `stable` **78** /
+> `experimental` **106**（以 `tools/api_baseline.txt` 与 `docs/COMPATIBILITY.md`
+> 为准）。本文以下是 2026-11-13 的**定稿快照**，历史数字不改。
 
 ## 勾选结果
 
 「推荐」列 37 个全部入选（勾选列 `x`），「可选」列 9 个留 experimental（`-`）。
 已执行：源码加 `@stability stable` → 从 `tools/stability_exempt.txt` 移出
 → `bash tools/api_baseline.sh --write-baseline` → `./shellkit docs` 重生成文档投影。
-基线分级列现为 37 stable / 125 experimental，REFERENCE 恰好 37 处「稳定性：stable」。
+基线分级列当时为 37 stable / 125 experimental，REFERENCE 恰好 37 处「稳定性：stable」。
 
 「建议」列是我的推荐：**推荐** = 核心路径、被 scaffold/upgrade/install 反复依赖；
 **可选** = 满足三条件但属于工具/周边能力，承诺成本低、也可先留 experimental。
@@ -152,8 +158,9 @@ v0.24.x 把 fs / config / lock 的**失败语义**逐一收口、并被故障注
 | config | `conf_init` `conf_get_any` `conf_has` `conf_keys` `conf_file` `conf_format` | 写失败不再清空配置：`test_fault_matrix.sh` 的 `config` 行 4 格 |
 | lock | `lock_held` `lock_release` | 回收语义由 `exec.lock` 判据钉住（pid 缺失可回收、活着的持有者绝不回收） |
 
-现状（v0.27.0 收口后）：**50 stable / 112 experimental**（162 个公开函数），
+v0.27.0 收口时的状态：**50 stable / 112 experimental**（162 个公开函数），
 `tools/stability_exempt.txt` **已清空** —— 每个公开函数都有等级，一个不漏。
+现口径见本文开头的「当前口径」块（184 / 78 / 106）。
 口径与「什么算破坏性变更」见 `docs/COMPATIBILITY.md`，由 `tools/check_compatibility.sh` 对账。
 落地：源码加 `@stability stable` → 移出豁免名单 → `bash tools/api_baseline.sh --write-baseline` → `./shellkit docs`。
 下一批建议按路线图 v0.26.0 继续：`os_*`、`error` 系（`die` / `fail` / `require_*`）、`net_*`。

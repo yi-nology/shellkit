@@ -77,7 +77,7 @@ assert_contains "$GATE_OUT" "zz_probe_fn" "the gate must name the function"
 
 # CASE 3: 一个**已经写了注解**的函数被列进豁免名单 ⇒ 红（必须移出名单）
 #
-# v0.27.0 起豁免名单是空的（162 个公开函数全部有等级），所以不能再用「名单里
+# v0.27.0 起豁免名单是空的（每个公开函数都有等级），所以不能再用「名单里
 # 现成的一条」当素材 —— 自己造一个：先写注解，再把名字塞进名单。
 d=$(tmpdir)
 _copy_repo "$d" || _fail "cannot create the repo copy"
