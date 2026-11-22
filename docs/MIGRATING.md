@@ -1006,3 +1006,21 @@ EXIT handler。此前链了 ⇒ 子 shell 退出时替父进程执行父进程�
 `5` ⇒ 用例变红）、`tests/test_update_signature.sh`（没配公钥一次都不调 minisign、坏签名退 5、
 缺 minisign 退 3；变异自证：把「配了公钥就验签」关掉 ⇒ 用例变红）、
 `tests/test_install_latest_fallback.sh`（超时不许是 900 秒；变异自证：改回 900 ⇒ 变红）。
+
+### 1.7.0 → 1.8.0：experimental 升 stable（承诺扩张，只加不改）
+
+| 变化 | 以前 | 现在 | 你会在哪里撞到 |
+|---|---|---|---|
+| 下列 28 个函数的承诺等级 | `experimental`（签名、返回码、产出物都可能在下个版本变） | `stable`（行为、返回码在兼容范围内保持不变；此后的变化须 major / 0.x 走 minor + 迁移表） | 依赖这些函数的脚本：升级时它们的行为变化会被门禁拦下并要求迁移说明 |
+
+升为 stable 的 28 个（三条件实测通过：探针 ✓ / MIGRATING 有记录 ✓ / 探针断言 ⊆ 承诺返回码 ✓，2026-11-22 逐个程序化核对）：
+`archive_extract`、`archive_list`、`ask_multi`、`git_default_branch`、
+`git_fast_forward`、`git_fetch`、`git_is_dirty`、`git_reset_hard`、
+`git_tag`、`git_worktree_add`、`log_debug`、`log_error`、`log_info`、
+`log_ok`、`log_section`、`log_warn`、`man_count_functions`、
+`man_module_page`、`man_modules`、`man_page`、`net_escape_json`、
+`net_verify`、`proc_is_running`、`proc_start`、`proc_stop`、
+`proc_watchdog`、`scaffold_vars_set`、`status_emit`。
+
+判据：`api-baseline-check` / `api-freeze-check` / `compatibility-check` 三道既有门禁全绿（无需新门禁）。
+

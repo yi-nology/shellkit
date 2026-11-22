@@ -504,7 +504,7 @@ net_json() {
 # @param TEXT 原始文本
 # @exitcode 0 转义成功
 # @see net_json
-# @stability experimental
+# @stability stable
 net_escape_json() {
   local __text=${1:-} __out="" __rc
   if command -v jq >/dev/null 2>&1; then

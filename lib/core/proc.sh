@@ -162,7 +162,7 @@ _sk_proc_pid_file() {
 # @exitcode 2 用法错（名字非法 / 没有命令）
 # @exitcode 3 前置条件不满足（已经在跑 / 运行目录不可用 / 命令不存在）
 # @exitcode 1 拉起失败（命令自己起不来）
-# @stability experimental
+# @stability stable
 proc_start() {
   local __name="${1:-}" __dir __pidfile __logfile __pid __pgid __had_m=0
   _sk_need_args "$#" 2 "proc_start NAME COMMAND..." || return $?
@@ -248,7 +248,7 @@ proc_start() {
 # @exitcode 0 已停（或本来就没在跑）
 # @exitcode 2 用法错
 # @exitcode 3 停不掉（TERM 与 KILL 之后还在）
-# @stability experimental
+# @stability stable
 proc_stop() {
   local __name="${1:-}" __dir __pidfile __pid __pgid __i=0 __alive=0
   _sk_need_args "$#" 1 "proc_stop NAME" || return $?
@@ -324,7 +324,7 @@ proc_stop() {
 # @exitcode 1 没在跑（僵尸 pid 文件会被清掉）
 # @exitcode 2 用法错
 # @exitcode 3 运行目录不可用
-# @stability experimental
+# @stability stable
 proc_is_running() {
   local __name="${1:-}" __dir __pidfile __pid
   _sk_need_args "$#" 1 "proc_is_running NAME" || return $?
@@ -358,7 +358,7 @@ proc_is_running() {
 # @exitcode 0 被信号停掉（正常退出）
 # @exitcode 2 用法错
 # @exitcode 1 放弃（连续拉起失败超过上限）
-# @stability experimental
+# @stability stable
 proc_watchdog() {
   local __interval=5 __maxbackoff=60 __maxrestarts=0 __name __dir __pid
   local __backoff=1 __consec=0 __up=0 __rc=0

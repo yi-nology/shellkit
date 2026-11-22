@@ -5,8 +5,8 @@
 > `cli_cmd` 注册生成 —— **不要手改**。
 >
 > 冻结基线：v1.0.0（1.x 内不变；变更必须走 minor + docs/MIGRATING.md）
-> 承诺面：50 个 `@stability stable` 公开函数 + 退出码表 + CLI 子命令形状。
-> 其余 134 个 `@stability experimental` 函数**不在兼容承诺内**（见 `docs/COMPATIBILITY.md`）。
+> 承诺面：78 个 `@stability stable` 公开函数 + 退出码表 + CLI 子命令形状。
+> 其余 106 个 `@stability experimental` 函数**不在兼容承诺内**（见 `docs/COMPATIBILITY.md`）。
 
 ## 冻结口径（1.x）
 
@@ -30,6 +30,17 @@
 单次调用实际可能返回的码集合见下表的「承诺返回码」列；不在该列里的码不承诺。
 
 ## 按模块（stable 函数）
+
+### log
+
+| 函数 | 承诺返回码 | 探针 | 说明 |
+|---|---|---|---|
+| `log_debug` | 0 | probe | 仅在 SHELLKIT_DEBUG=1 或 SHELLKIT_LOG_LEVEL=debug 时输出 |
+| `log_error` | 0 | probe | 输出错误（stderr），并把最后一条错误记进 SK_ERRMSG |
+| `log_info` | 0 | probe | 普通信息 |
+| `log_ok` | 0 | probe | 成功；单独用 " OK " 是为了和四字母级别对齐 |
+| `log_section` | 0 | probe | 分段标题，带前导空行 |
+| `log_warn` | 0 | probe | 警告，不中断 |
 
 ### error
 
@@ -87,6 +98,12 @@
 | `ver_gt` | 0,1,2 | probe | A 是否比 B 新 |
 | `ver_lt` | 0,1,2 | probe | A 是否比 B 旧 |
 
+### status
+
+| 函数 | 承诺返回码 | 探针 | 说明 |
+|---|---|---|---|
+| `status_emit` | 0 | probe | 输出状态 |
+
 ### registry
 
 | 函数 | 承诺返回码 | 探针 | 说明 |
@@ -97,6 +114,12 @@
 | `registry_scan` | 0 | probe | 扫描清单文件并建立索引 |
 | `registry_topo` | 0,1 | probe | 全体拓扑序（空格分隔） |
 | `registry_visible` | 0,1 | probe | 条目在当前平台是否可见 |
+
+### scaffold
+
+| 函数 | 承诺返回码 | 探针 | 说明 |
+|---|---|---|---|
+| `scaffold_vars_set` | 0,2 | probe | 设一个模板变量 |
 
 ### retry
 
@@ -111,6 +134,18 @@
 | `lock_acquire` | 0,2,3 | probe | 0 成功；SK_PRECOND 被占用/超时；SK_USAGE 名字非法 |
 | `lock_held` | 0,1,2 | probe | 返回码判断是否被占；被占时 stdout 输出持有者 pid |
 | `lock_release` | 0,2,3 | probe | 只释放自己持有的锁 |
+
+### net
+
+| 函数 | 承诺返回码 | 探针 | 说明 |
+|---|---|---|---|
+| `net_verify` | 0,2,5 | probe | 校验文件的 sha256；对不上返回 SK_VERIFY(5) |
+
+### http
+
+| 函数 | 承诺返回码 | 探针 | 说明 |
+|---|---|---|---|
+| `net_escape_json` | 0 | probe | 把任意文本转义成合法的 JSON 字符串字面量（含双引号），打印到 stdout。 |
 
 ### config
 
@@ -135,6 +170,7 @@
 |---|---|---|---|
 | `ask` | 0,1,2,3 | probe | 问一个问题，把答案写进 VAR；超时或 EOF 回退默认值 |
 | `ask_choice` | 0,1,2,3 | probe | 多选一；超时或 EOF 回退默认值 |
+| `ask_multi` | 0,1,2,3 | probe | 多选；把选中的**编号**写进 VAR |
 | `ask_yn` | 0,1,2,3 | probe | 结果写入 y 或 n |
 | `confirm` | 0,1,2,3 | probe | 只返回码 |
 
@@ -145,6 +181,43 @@
 | `cli_opt` | 0,2 | probe | 注册一个选项；第四个参数为 1 表示这个选项要吃值 |
 | `cli_opts` | 0,2 | probe | 按 cli_opt 注册的规则解析子命令选项；剩余位置参数进 SK_OPTS_LEFT |
 | `cli_run` | 0,1,2,其他 | probe | 分发入口：吃全局选项后按名字找同名 cmd_ 前缀的函数 |
+
+### man
+
+| 函数 | 承诺返回码 | 探针 | 说明 |
+|---|---|---|---|
+| `man_count_functions` | 0 | probe | 公开函数总数 |
+| `man_module_page` | 0,2 | probe | 输出某模块第 3 节的 roff 正文 |
+| `man_modules` | 0 | probe | 输出模块名，一行一个 |
+| `man_page` | 0 | probe | 输出 shellkit(1) 的 roff 正文 |
+
+### proc
+
+| 函数 | 承诺返回码 | 探针 | 说明 |
+|---|---|---|---|
+| `proc_is_running` | 0,1,2,3 | probe | 探活 |
+| `proc_start` | 0,1,2,3 | probe | 后台拉起一个进程组 |
+| `proc_stop` | 0,2,3 | probe | 停掉整个进程组 |
+| `proc_watchdog` | 0,1,2 | probe | proc_watchdog [--interval SEC] [--max-backoff SEC] [--max-restarts N] NAME COMMAND... |
+
+### git
+
+| 函数 | 承诺返回码 | 探针 | 说明 |
+|---|---|---|---|
+| `git_default_branch` | 0,3 | probe | 解析默认分支 |
+| `git_fast_forward` | 0,1,2,3 | probe | 只快进，绝不丢本地提交 |
+| `git_fetch` | 0,1,2,3 | probe | 受控取数 |
+| `git_is_dirty` | 0,1,3 | probe | 脏仓守卫 |
+| `git_reset_hard` | 0,1,2,3 | probe | 显式的破坏性重置 |
+| `git_tag` | 0,3 | probe | 取版本号（浅克隆安全） |
+| `git_worktree_add` | 0,1,2,3 | probe | 检出到工作树 |
+
+### archive
+
+| 函数 | 承诺返回码 | 探针 | 说明 |
+|---|---|---|---|
+| `archive_extract` | 0,2,3,5 | probe | 安全解包 |
+| `archive_list` | 0,2,3,5 | probe | 打印归档里的成员清单（相对路径，每行一个） |
 
 ## CLI 形状（承诺子命令与参数形状）
 

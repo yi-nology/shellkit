@@ -1,8 +1,8 @@
 # 分级豁免名单（issue #79 / v0.27.0）
 #
 # 这个名单记的是「**还没有** @stability 注解的公开函数」。
-# v0.27.0 起它必须是**空的**：162 个公开函数全部显式声明了分级
-# （50 stable / 112 experimental），一个不漏 —— 具体编号见 docs/COMPATIBILITY.md。
+# v0.27.0 起它必须是**空的**：184 个公开函数全部显式声明了分级
+# （78 stable / 106 experimental），一个不漏 —— 具体编号见 docs/COMPATIBILITY.md。
 #
 # 棘轮规则（双向，坑 15 的口径）：
 #   1. 源码里没有 @stability 的公开函数必须出现在这里 —— 新函数第一天就要求

@@ -15,12 +15,12 @@
 #   分级            stable=承诺稳定 / experimental=暂不承诺（源码注释 @stability 的投影）
 #                   没写注解的按 experimental 落盘；是否已声明看 tools/stability_exempt.txt
 #
-baseline-version: 1.4.1
-archive_extract	0,2,3,5	active	-	probe	0,2,3,5	-	experimental
-archive_list	0,2,3,5	active	1.2.0	probe	0,2,3,5	-	experimental
+baseline-version: 1.7.0
+archive_extract	0,2,3,5	active	-	probe	0,2,3,5	-	stable
+archive_list	0,2,3,5	active	1.2.0	probe	0,2,3,5	-	stable
 ask	0,1,2,3	active	-	probe	0,3	-	stable
 ask_choice	0,1,2,3	active	-	probe	0,3	-	stable
-ask_multi	0,1,2,3	active	-	probe	0,2,3	-	experimental
+ask_multi	0,1,2,3	active	-	probe	0,2,3	-	stable
 ask_yn	0,1,2,3	active	-	probe	0,3	-	stable
 cli_cmd	0,2	active	-	probe	0	-	experimental
 cli_completion_script	0,2	active	-	probe	0	-	experimental
@@ -56,35 +56,35 @@ fs_ensure_line	0,1,2	active	-	probe	0	-	stable
 fs_ensure_symlink	0,1,2	active	-	probe	0	-	stable
 fs_tmp_init	0,1	active	-	probe	0	-	stable
 fs_tmpdir	0,1	active	-	probe	0	-	stable
-git_default_branch	0,3	active	-	probe	0,3	-	experimental
-git_fast_forward	0,1,2,3	active	-	probe	0,1,2,3	-	experimental
-git_fetch	0,1,2,3	active	-	probe	0,1,2,3	-	experimental
-git_is_dirty	0,1,3	active	-	probe	0,1,3	-	experimental
-git_reset_hard	0,1,2,3	active	-	probe	0,1,2,3	-	experimental
-git_tag	0,3	active	-	probe	0,3	-	experimental
-git_worktree_add	0,1,2,3	active	-	probe	0,1,2,3	-	experimental
+git_default_branch	0,3	active	-	probe	0,3	-	stable
+git_fast_forward	0,1,2,3	active	-	probe	0,1,2,3	-	stable
+git_fetch	0,1,2,3	active	-	probe	0,1,2,3	-	stable
+git_is_dirty	0,1,3	active	-	probe	0,1,3	-	stable
+git_reset_hard	0,1,2,3	active	-	probe	0,1,2,3	-	stable
+git_tag	0,3	active	-	probe	0,3	-	stable
+git_worktree_add	0,1,2,3	active	-	probe	0,1,2,3	-	stable
 http_github_latest_tag	0,2	active	-	skip	-	需要网络	experimental
 http_github_release_asset	0,2	active	-	skip	-	需要网络	experimental
 lock_acquire	0,2,3	active	-	probe	0	-	stable
 lock_held	0,1,2	active	-	probe	0,1	-	stable
 lock_release	0,2,3	active	-	probe	0	-	stable
-log_debug	0	active	-	probe	0	-	experimental
-log_error	0	active	-	probe	0	-	experimental
-log_info	0	active	-	probe	0	-	experimental
-log_ok	0	active	-	probe	0	-	experimental
-log_section	0	active	-	probe	0	-	experimental
-log_warn	0	active	-	probe	0	-	experimental
-man_count_functions	0	active	-	probe	0	-	experimental
-man_module_page	0,2	active	-	probe	0	-	experimental
-man_modules	0	active	-	probe	0	-	experimental
-man_page	0	active	-	probe	0	-	experimental
+log_debug	0	active	-	probe	0	-	stable
+log_error	0	active	-	probe	0	-	stable
+log_info	0	active	-	probe	0	-	stable
+log_ok	0	active	-	probe	0	-	stable
+log_section	0	active	-	probe	0	-	stable
+log_warn	0	active	-	probe	0	-	stable
+man_count_functions	0	active	-	probe	0	-	stable
+man_module_page	0,2	active	-	probe	0	-	stable
+man_modules	0	active	-	probe	0	-	stable
+man_page	0	active	-	probe	0	-	stable
 man_write_all	0,3	active	-	skip	-	一次要渲染 24 页 man（本机实测 86 秒），太慢	experimental
 net_download	0,1,2,3,4,5	active	-	skip	-	需要网络（会真的下载文件）	experimental
-net_escape_json	0	active	-	probe	0	-	experimental
+net_escape_json	0	active	-	probe	0	-	stable
 net_json	0,2,3,4,5	active	-	skip	-	需要网络	experimental
 net_request	0,2,3,4	active	-	skip	-	需要网络	experimental
 net_sha256	0,1,2	active	-	probe	0	-	experimental
-net_verify	0,2,5	active	-	probe	0,5	-	experimental
+net_verify	0,2,5	active	-	probe	0,5	-	stable
 net_wait_http	0,2,3,4	active	-	skip	-	需要网络（还会逐秒 sleep 等 HTTP）	experimental
 net_wait_port	0,2,4	active	-	skip	-	需要网络（还会逐秒 sleep 等端口）	experimental
 os_arch	0	active	-	probe	0	-	experimental
@@ -110,10 +110,10 @@ os_sed_i	0,其他	active	-	probe	0	-	experimental
 os_sha256	0,1,2	active	-	probe	0	-	experimental
 os_sudo_ready	0,3	active	-	skip	-	可能要交互输入 sudo 口令	experimental
 parallel_map	0,2,其他	active	-	probe	0	-	experimental
-proc_is_running	0,1,2,3	active	-	probe	0,1,2,3	-	experimental
-proc_start	0,1,2,3	active	-	probe	0,1,2,3	-	experimental
-proc_stop	0,2,3	active	-	probe	0,2,3	-	experimental
-proc_watchdog	0,1,2	active	-	probe	0,1,2	-	experimental
+proc_is_running	0,1,2,3	active	-	probe	0,1,2,3	-	stable
+proc_start	0,1,2,3	active	-	probe	0,1,2,3	-	stable
+proc_stop	0,2,3	active	-	probe	0,2,3	-	stable
+proc_watchdog	0,1,2	active	-	probe	0,1,2	-	stable
 profile_append	0,1,2	active	-	probe	0	-	experimental
 profile_env	0	active	-	probe	0	-	experimental
 profile_parse	0	active	-	probe	0	-	experimental
@@ -150,8 +150,8 @@ scaffold_render	0,1,2	active	-	probe	0	-	experimental
 scaffold_run_hook	0,1,2	active	-	probe	0	-	experimental
 scaffold_vars_get	0,1	active	-	probe	0	-	experimental
 scaffold_vars_list	0	active	-	probe	0	-	experimental
-scaffold_vars_set	0,2	active	-	probe	0	-	experimental
-status_emit	0	active	-	probe	0	-	experimental
+scaffold_vars_set	0,2	active	-	probe	0	-	stable
+status_emit	0	active	-	probe	0	-	stable
 status_extra	0	active	-	probe	0	-	experimental
 status_is_machine	0,1	active	-	probe	0,1	-	experimental
 status_state_valid	0,1	active	-	probe	0,1	-	experimental

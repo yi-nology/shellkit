@@ -83,7 +83,7 @@ _sk_scaffold_store_get() {
 # scaffold_vars_set KEY VALUE —— 设一个模板变量
 # @exitcode 0 设置成功
 # @exitcode 2 变量名非法，或值里有换行（变量表一行一个，装不下多行值）
-# @stability experimental
+# @stability stable
 scaffold_vars_set() {
   local __key=${1:-} __value=${2:-}
   if ! validate_key "$__key"; then

@@ -204,7 +204,7 @@ ask_choice() {
 # @exitcode 2 参数错（变量名非法、撞上内部保留名、COUNT 非法），或连续三次都不是合法选区
 # @exitcode 3 非交互且没有默认值，或超时且没有默认值
 # @exitcode 1 输入被意外关闭
-# @stability experimental
+# @stability stable
 ask_multi() {
   local __var=${1:-} __prompt=${2:-} __count=${3:-} __default=${4:-} __timeout=${5:-}
   local __ans="" __tries=0 __msg __parsed

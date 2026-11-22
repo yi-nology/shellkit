@@ -47,7 +47,7 @@ status_state_valid() {
 #   人类模式用 printf %b：文案里的颜色是 ESC[... 这样的**字面转义序列**，
 #   用 %s 会原样打印 —— 颜色会变成一堆反斜杠文本。
 # @exitcode 0 总是成功
-# @stability experimental
+# @stability stable
 status_emit() {
   local __state=${1:-} __human=${2:-}
   if _sk_status_is_machine; then
