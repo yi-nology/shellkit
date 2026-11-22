@@ -136,6 +136,32 @@ _pp_case_net_verify_missing() { net_verify "$_pp_tmp/nope" "deadbeef"; }
 _pp_case_conf_get_any_one_arg() { conf_get_any SK_PARITY_PROBE_KEY; }
 _pp_case_conf_get_any_bad_key() { conf_get_any "bad-key" "dflt"; }
 
+# ---- os / 前置检查：同名同义；假 id 注入让 root 判定在任何机器上都可判 ----
+_pp_fake_id() {
+  # $1 = 假 id 的输出；造一个可执行的 id 放进 PATH（只影响本用例的子 shell）
+  mkdir -p "$_pp_tmp/bin_$1"
+  printf '#!/bin/sh\nprintf "%%s\\n" "%s"\n' "$1" >"$_pp_tmp/bin_$1/id"
+  chmod +x "$_pp_tmp/bin_$1/id"
+}
+_pp_case_os_name_ok() { os_name; }
+_pp_case_os_arch_ok() { os_arch; }
+_pp_case_os_is_root_as_root() {
+  _pp_fake_id 0
+  PATH="$_pp_tmp/bin_0:$PATH"
+  if os_is_root; then printf 'root'; else printf 'notroot'; fi
+}
+_pp_case_os_is_root_as_user() {
+  _pp_fake_id 1000
+  PATH="$_pp_tmp/bin_1000:$PATH"
+  if os_is_root; then printf 'root'; else printf 'notroot'; fi
+}
+_pp_case_os_has_cmd_present() { os_has_cmd sh; }
+_pp_case_os_has_cmd_missing() { os_has_cmd shellkit-no-such-cmd-xyz; }
+_pp_case_os_has_cmd_noargs() { os_has_cmd; }
+_pp_case_require_cmd_present() { require_cmd sh; }
+_pp_case_require_cmd_missing() { require_cmd shellkit-no-such-cmd-xyz; }
+_pp_case_require_cmd_noargs() { require_cmd; }
+
 for _pp_name in \
   die_code die_msg_only die_code_zero \
   fail_code fail_msg_only fail_noargs \
@@ -145,6 +171,9 @@ for _pp_name in \
   trap_push_noargs trap_push_args trap_push_order \
   fs_ensure_dir_noargs fs_ensure_dir_ok \
   net_sha256_missing net_verify_empty net_verify_missing \
-  conf_get_any_one_arg conf_get_any_bad_key; do
+  conf_get_any_one_arg conf_get_any_bad_key \
+  os_name_ok os_arch_ok os_is_root_as_root os_is_root_as_user \
+  os_has_cmd_present os_has_cmd_missing os_has_cmd_noargs \
+  require_cmd_present require_cmd_missing require_cmd_noargs; do
   _pp_run "$_pp_name"
 done
