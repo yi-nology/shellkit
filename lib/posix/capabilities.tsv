@@ -83,16 +83,16 @@ net_sha256	yes	-
 net_verify	yes	POSIX 子集提供同名版本：与主库同一口径（期望值为空单独报错退 5，不当成校验通过）
 net_wait_http	no	POSIX 子集只给下载与校验，不给 HTTP 客户端与就绪探测
 net_wait_port	no	POSIX 子集只给下载与校验，不给 HTTP 客户端与就绪探测
-os_arch	yes	-
-os_desktop_env	no	设备侧没有包管理器，也不该动系统包
-os_distro_family	no	设备侧没有包管理器，也不该动系统包
-os_distro_id	no	设备侧没有包管理器，也不该动系统包
-os_distro_name	no	设备侧没有包管理器，也不该动系统包
-os_has_cmd	yes	-
-os_is_desktop	no	设备侧没有包管理器，也不该动系统包
-os_is_root	yes	-
-os_md5	no	设备侧没有包管理器，也不该动系统包
-os_name	yes	-
+os_arch	yes	POSIX 子集提供同名版本：与主库同一口径（linux|darwin|other、x86_64|aarch64|other；主库装载时用 $OSTYPE 零 fork，设备侧装载时 fork 一次 uname）
+os_desktop_env	no	POSIX 子集只给 os_name / os_arch / os_is_root / os_has_cmd（平台感知与命令前置检查）；系统包、桌面与发行版探测不进子集
+os_distro_family	no	POSIX 子集只给 os_name / os_arch / os_is_root / os_has_cmd（平台感知与命令前置检查）；系统包、桌面与发行版探测不进子集
+os_distro_id	no	POSIX 子集只给 os_name / os_arch / os_is_root / os_has_cmd（平台感知与命令前置检查）；系统包、桌面与发行版探测不进子集
+os_distro_name	no	POSIX 子集只给 os_name / os_arch / os_is_root / os_has_cmd（平台感知与命令前置检查）；系统包、桌面与发行版探测不进子集
+os_has_cmd	yes	POSIX 子集提供同名版本：与主库同一口径（零参数退 2；任一命令缺失退 1）
+os_is_desktop	no	POSIX 子集只给 os_name / os_arch / os_is_root / os_has_cmd（平台感知与命令前置检查）；系统包、桌面与发行版探测不进子集
+os_is_root	yes	POSIX 子集提供同名版本：与主库同一口径（id -u 为 0 ⇒ 0，否则 1）
+os_md5	no	哈希由子集里的 net_sha256 提供，不重复开第二个入口
+os_name	yes	POSIX 子集提供同名版本：与主库同一口径（linux|darwin|other、x86_64|aarch64|other；主库装载时用 $OSTYPE 零 fork，设备侧装载时 fork 一次 uname）
 os_pkg_install	no	设备侧没有包管理器，也不该动系统包
 os_pkg_install_root	no	设备侧没有包管理器，也不该动系统包
 os_pkg_installed	no	设备侧没有包管理器，也不该动系统包
@@ -101,9 +101,9 @@ os_pkg_manager_full	no	设备侧没有包管理器，也不该动系统包
 os_pkg_remove_root	no	设备侧没有包管理器，也不该动系统包
 os_pkg_update	no	设备侧没有包管理器，也不该动系统包
 os_pkg_update_root	no	设备侧没有包管理器，也不该动系统包
-os_release_field	no	设备侧没有包管理器，也不该动系统包
-os_sed_i	no	设备侧没有包管理器，也不该动系统包
-os_sha256	no	设备侧没有包管理器，也不该动系统包
+os_release_field	no	POSIX 子集只给 os_name / os_arch / os_is_root / os_has_cmd（平台感知与命令前置检查）；系统包、桌面与发行版探测不进子集
+os_sed_i	no	原地改文件不进子集：设备侧改系统文件应当显式、可审
+os_sha256	no	哈希由子集里的 net_sha256 提供，不重复开第二个入口
 os_sudo_ready	no	设备侧没有包管理器，也不该动系统包
 parallel_map	no	命令执行层依赖 bash 的上下文栈与脱敏规则
 proc_is_running	yes	POSIX 子集提供同名版本（语义与返回码一致）：没有作业控制 ⇒ 靠 setsid 拿进程组，拿不到时只停主进程；状态从 /proc/<pid>/stat 读，查不到时退化成 kill -0；与主库同名，两份不要同时加载
@@ -123,7 +123,7 @@ registry_scan_multi	no	注册表机制依赖 bash 的关联数组
 registry_topo	no	注册表机制依赖 bash 的关联数组
 registry_visible	no	注册表机制依赖 bash 的关联数组
 require_bash	no	POSIX 子集不做 root / 文件存在性这类前置条件检查
-require_cmd	yes	-
+require_cmd	yes	POSIX 子集提供同名版本：与主库同一口径（零参数退 2；缺命令退 3 并记 SK_ERRMSG）
 require_file	no	POSIX 子集不做 root / 文件存在性这类前置条件检查
 require_root	no	POSIX 子集不做 root / 文件存在性这类前置条件检查
 retry	yes	POSIX 子集提供同名版本：带退避（SHELLKIT_RETRY_DELAY / _BACKOFF / _MAX_DELAY），退出码 2 与 3 不重试；SHELLKIT_RETRY_ON 非空时只重试名单里的退出码
