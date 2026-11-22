@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
-# 弃用门禁的判据：双向（合规放行 / 违规拦下）+ 变异自证（窗口判断改坏 ⇒
-# 「不满窗口必须拦下」那条变绿 ⇒ 本用例红）。夹具全部建在临时目录，
-# 一个 @deprecated 都不会进 lib/。
+# 弃用门禁的判据：双向（合规放行 / 违规拦下）+ 两处变异自证（窗口判断改坏 ⇒
+# 「不满窗口必须拦下」变绿；规则 (d) 的 _fail 改坏 ⇒ 「反向缺失必须拦下」变绿
+# ⇒ 本用例红）。夹具全部建在临时目录，一个 @deprecated 都不会进 lib/。
 . "$(cd "$(dirname "$0")" && pwd)/test_helper.sh"
 
 ROOT="$TEST_ROOT"
@@ -100,5 +100,43 @@ fi
 SHELLKIT_CHECK_ROOT="$t4" bash "$mut" >"$t4/mout" 2>"$t4/merr"
 rc=$?
 assert_eq 0 "$rc" "窗口判断改坏后不满窗口的移除被放行 —— 正说明原判断承重"
+
+# 9) 规则 (d) 反向：基线里有、源码删了、台账没登记移除 ⇒ 拦下
+t9="$(tmpdir)"
+_mk_tree "$t9"
+printf '' >"$t9/lib/core/foo.sh"
+SHELLKIT_CHECK_ROOT="$t9" bash "$GATE" >"$t9/out" 2>"$t9/err"
+rc=$?
+assert_eq 5 "$rc" "规则 (d) 反向缺失必须拦下（退 5）"
+assert_contains "$(cat "$t9/err")" "必须登记它的移除版本" "报错要指出反向台账缺失"
+
+# 9a) 悬空注解：foo.sh 只有一行注解、没有函数定义 ⇒ 拦下
+t9a="$(tmpdir)"
+_mk_tree "$t9a"
+printf '# @deprecated 1.7.0 —— 后面没有紧邻定义\n' >"$t9a/lib/core/foo.sh"
+SHELLKIT_CHECK_ROOT="$t9a" bash "$GATE" >"$t9a/out" 2>"$t9a/err"
+rc=$?
+assert_eq 5 "$rc" "悬空注解必须拦下（退 5）"
+assert_contains "$(cat "$t9a/err")" "悬空注解" "报错要指出悬空注解"
+
+# 9b) 注解跨空行存活：注解 + 空行 + 定义、台账没登记 ⇒ 拦下。提取器不许把
+# 空行当成「非注释内容」把注解吃掉 —— 吃掉就等于规则 (a) 对这条注解失明。
+t9b="$(tmpdir)"
+_mk_tree "$t9b"
+printf '# 说明\n# @deprecated 1.7.0 —— 用 bar 代替\n\nfoo() { :; }\n' >"$t9b/lib/core/foo.sh"
+SHELLKIT_CHECK_ROOT="$t9b" bash "$GATE" >"$t9b/out" 2>"$t9b/err"
+rc=$?
+assert_eq 5 "$rc" "空行不许吃掉注解：没有台账必须拦下（退 5）"
+assert_contains "$(cat "$t9b/err")" "没有它的台账行" "注解要穿过空行到达规则 (a)"
+
+# 10) 变异自证二：把规则 (d) 的 _fail 整行删掉 ⇒ 9 必须从「拦下」变「放行」
+mut2="$d/gate-mutant-d.sh"
+sed 's|_fail "$__fn 在基线里但源码里已经没有了 —— tools/deprecated.txt 必须登记它的移除版本"|:|' "$GATE" >"$mut2"
+if cmp -s "$GATE" "$mut2"; then
+  _fail "变异没落到源码上（规则 (d) 没变）—— 判据自己坏了"
+fi
+SHELLKIT_CHECK_ROOT="$t9" bash "$mut2" >"$t9/mout" 2>"$t9/merr"
+rc=$?
+assert_eq 0 "$rc" "规则 (d) 改坏后反向缺失被放行 —— 正说明反向对账承重"
 
 echo "OK: 弃用门禁双向判据 + 变异自证通过"

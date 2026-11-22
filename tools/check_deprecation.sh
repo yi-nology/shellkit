@@ -13,7 +13,7 @@
 #   d) 反向：基线里有、源码里没有的函数，台账必须登记了移除版本。
 #
 # 空状态（零注解、台账只有头注释）是**合法**的：门禁已武装、没有目标。
-# 判据能力由 tests/test_deprecation_gate.sh 双向 + 变异自证证明。
+# 判据能力由 tests/test_deprecation_gate.sh 双向 + 两处变异自证证明。
 #
 #   bash tools/check_deprecation.sh    # 0 通过；5 不合格；2 用法错
 set -u
@@ -96,8 +96,10 @@ ANN="$WORK/ann.tsv"
 BASE_NAMES="$WORK/base.list"
 
 # ---- 源码里的 @deprecated 注解：函数名<TAB>版本 ----
-# 注解行与定义之间允许夹说明注释；隔了非注释内容 ⇒ 悬空（单独报）。
+# 注解行与定义之间允许夹说明注释与空行；隔了非注释内容 ⇒ 悬空（单独报）；
+# 悬空不许跨文件：文件 N 结尾的悬空注解在文件 N 的 FNR==1 边界就报出来。
 awk '
+  FNR == 1 && pending { print "__DANGLING__\t" ver; pending = 0 }
   /^# @deprecated[ \t]+[0-9]/ { ver = $3; pending = 1; next }
   /^[A-Za-z_][A-Za-z0-9_]*\(\)[ \t]*\{/ && pending {
     name = $0
@@ -107,7 +109,8 @@ awk '
     next
   }
   pending && /^#/ { next }
-  pending { pending = 0 }
+  pending && /^[ \t]*$/ { next }
+  pending { print "__DANGLING__\t" ver; pending = 0 }
   END { if (pending) print "__DANGLING__\t" ver }
 ' "$ROOT"/lib/core/*.sh >"$ANN" || exit 5
 
