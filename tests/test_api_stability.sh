@@ -169,12 +169,26 @@ assert_eq "0" "$rc" "the compatibility gate must be green on the current tree"
 # 7a. 文档里手抄的分级数量与源码对不上 ⇒ 红（数字会过期，必须有判据）
 d2=$(tmpdir)
 _copy_repo "$d2" || _fail "cannot create the repo copy"
-awk '{ if ($0 ~ /\| `stable` \|/) sub(/\| 50 个 \|/, "| 49 个 |"); print }' \
+# 变异目标从文档现算，不手抄（手抄的 | 50 个 | 在 50 → 78 晋升后 sub 没命中 ⇒
+# 文档没被改坏 ⇒ 门禁保持绿 ⇒ 本用例静默失去判据能力）。
+__cur=$(awk -F'|' '$2 ~ /`stable`/ { v = $4; gsub(/[^0-9]/, "", v); print v }' \
+  "$d2/docs/COMPATIBILITY.md")
+[ -n "$__cur" ] || _fail "cannot read the stable count from docs/COMPATIBILITY.md"
+__wrong=$((__cur - 1))
+cp "$d2/docs/COMPATIBILITY.md" "$d2/docs/COMPATIBILITY.orig"
+awk -v wrong="$__wrong" '{ if ($0 ~ /\| `stable` \|/) sub(/\| [0-9]+ 个 \|/, "| " wrong " 个 |"); print }' \
   "$d2/docs/COMPATIBILITY.md" >"$d2/docs/COMPATIBILITY.tmp" && mv "$d2/docs/COMPATIBILITY.tmp" "$d2/docs/COMPATIBILITY.md"
+# 形状守卫：注入必须真的落地 —— 锚点没命中时门禁会保持绿，
+# 「期望 5」那条断言会把假绿当真（这正是手抄 50 踩过的坑）。
+if cmp -s "$d2/docs/COMPATIBILITY.orig" "$d2/docs/COMPATIBILITY.md"; then
+  _fail "the stable-count mutation did not change docs/COMPATIBILITY.md"
+fi
+assert_contains "$(grep -F '| `stable` |' "$d2/docs/COMPATIBILITY.md")" "| $__wrong 个 |" \
+  "the mutation must land on the stable row only"
 rc=0
 out=$(bash "$d2/tools/check_compatibility.sh" 2>&1) || rc=$?
 assert_eq "5" "$rc" "a wrong stable count in the policy must fail the gate"
-assert_contains "$out" "says 49 stable" "the gate must name the wrong number"
+assert_contains "$out" "says $__wrong stable" "the gate must name the wrong number"
 
 # 7b. 把一个已分级函数的注解摘掉、再塞进豁免名单 ⇒ api_baseline 的规则一放行
 #     （这正是名单存在的目的），但兼容门禁必须红：文档说「每个公开函数都有等级」，
