@@ -9,7 +9,7 @@ SOURCES := shellkit install.sh repair.sh demo.sh lib/bootstrap.sh $(wildcard lib
 TEMPLATES := $(shell find templates -type f)
 SHOTS := $(wildcard docs/shots/*.shot)
 
-.PHONY: help test syntax lint lint-templates fmt messages messages-check docs docs-check versions-check check-docs cookbook-check posix-check shots examples artifact-smoke check check-fast install release release-dry site-deps site-sync site site-serve local-names-check module-count-check pipe-safety-check dup-functions-check mutation security-check api-baseline-check api-freeze-check compatibility-check bench coverage coverage-branch upgrade-matrix ident-boundary-check assert-usage-check
+.PHONY: help test syntax lint lint-templates fmt messages messages-check docs docs-check versions-check check-docs cookbook-check posix-check shots examples artifact-smoke check check-fast install release release-dry site-deps site-sync site site-serve local-names-check module-count-check pipe-safety-check dup-functions-check mutation security-check api-baseline-check api-freeze-check compatibility-check deprecation-check bench coverage coverage-branch upgrade-matrix ident-boundary-check assert-usage-check
 
 help:
 	@printf '%s\n' \
@@ -32,7 +32,7 @@ help:
   'make cookbook-check  文档里说的场景数要与 Cookbook 实际场景数一致' \
 	  'make shots       按 docs/shots/*.shot 真跑命令并渲染 SVG 截图' \
 	  'make examples    跑 examples/ 下每个工程的测试' \
-	  'make check       完整门禁：syntax / test / lint / module-order-check / check-exitcode-docs / local-names-check / ident-boundary-check / module-count-check / pipe-safety-check / check-tree-clean / dup-functions-check / security-check / api-baseline-check / api-freeze-check / compatibility-check / docs-check / versions-check / check-docs / posix-check / cookbook-check / messages-check / examples / fmt' \ \
+	  'make check       完整门禁：syntax / test / lint / module-order-check / check-exitcode-docs / local-names-check / ident-boundary-check / module-count-check / pipe-safety-check / check-tree-clean / dup-functions-check / security-check / api-baseline-check / api-freeze-check / compatibility-check / deprecation-check / docs-check / versions-check / check-docs / posix-check / cookbook-check / messages-check / examples / fmt' \ \
 	  'make check-fast  快通道：只跑静态门禁（= check 去掉 test 与 examples），几十秒出结果' \
 	  'make bats-check  跑 bats 用例（tests/bats，每个 @test 一个独立进程）' \
 	  'make coverage    公开函数级覆盖率（带白名单棘轮，不进 check）' \
@@ -41,6 +41,7 @@ help:
   'make security-check  安全边界的机器判据（路径/软链/权限/脱敏/锁/原子写）' \
   'make api-baseline-check  公开 API 行为基线（返回码或函数集变了就红）' \
   'make api-freeze-check  API 冻结清单与源码一致（stable 集合 / 返回码 / CLI 形状）' \
+  'make deprecation-check  弃用承诺机器判据（注解 / 台账 / 迁移表 / 满一个 minor）' \
   'make compatibility-check  兼容承诺文档与源码一致（分级齐全、豁免名单为空、数量对账）' \
   'make bench        性能基准：记录与对比基线（不进 check，CI 里只出报告）' \
 	  'make release VERSION=x.y.z  发版：升版本→重生成产物→门禁→commit→tag→push' \
@@ -234,6 +235,10 @@ compatibility-check:
 api-freeze-check:
 	@$(BASH) tools/api_freeze.sh --check
 
+# 弃用承诺必须兑现：@deprecated 注解 ↔ 台账 ↔ 迁移表 ↔ 满一个 minor 的窗口
+deprecation-check:
+	@$(BASH) tools/check_deprecation.sh
+
 api-baseline-check:
 	@$(BASH) tools/api_baseline.sh
 
@@ -242,7 +247,7 @@ api-baseline-check:
 bench:
 	@$(BASH) tools/bench.sh
 
-check: syntax test lint module-order-check check-exitcode-docs local-names-check ident-boundary-check module-count-check pipe-safety-check assert-usage-check check-tree-clean dup-functions-check security-check api-baseline-check api-freeze-check compatibility-check docs-check versions-check check-docs posix-check cookbook-check messages-check examples fmt
+check: syntax test lint module-order-check check-exitcode-docs local-names-check ident-boundary-check module-count-check pipe-safety-check assert-usage-check check-tree-clean dup-functions-check security-check api-baseline-check api-freeze-check compatibility-check deprecation-check docs-check versions-check check-docs posix-check cookbook-check messages-check examples fmt
 
 # 快通道：只跑静态门禁，不跑整套测试（tests/run.sh）与 examples。
 # 用途：改代码时的本地快速反馈 —— 完整门禁要十几分钟（套件本身占绝大部分），
@@ -250,7 +255,7 @@ check: syntax test lint module-order-check check-exitcode-docs local-names-check
 # 刻意**不**改 check 的语义：check 仍是唯一的完整门禁，CI 也只跑 check。
 # 子目标与 check 保持一致（少了 test 与 examples）—— 少一个都会变成「快通道
 # 漏检」，多一个都会变成「快通道白等」。
-check-fast: syntax lint module-order-check check-exitcode-docs local-names-check ident-boundary-check module-count-check pipe-safety-check assert-usage-check check-tree-clean dup-functions-check security-check api-baseline-check api-freeze-check compatibility-check docs-check versions-check check-docs posix-check cookbook-check messages-check fmt
+check-fast: syntax lint module-order-check check-exitcode-docs local-names-check ident-boundary-check module-count-check pipe-safety-check assert-usage-check check-tree-clean dup-functions-check security-check api-baseline-check api-freeze-check compatibility-check deprecation-check docs-check versions-check check-docs posix-check cookbook-check messages-check fmt
 
 install:
 	./shellkit install-self --prefix $(PREFIX)/usr

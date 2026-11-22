@@ -67,7 +67,7 @@
                   # pipe-safety-check + assert-usage-check +
                   # check-tree-clean + dup-functions-check +
                   # security-check +
-                  # api-baseline-check + api-freeze-check + compatibility-check +
+                  # api-baseline-check + api-freeze-check + compatibility-check + deprecation-check +
                   # docs-check + versions-check + check-docs + posix-check +
                   # cookbook-check +
                   # messages-check + examples + fmt，CI 也是这组
